@@ -5,6 +5,43 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Claude-Compatible API Gateway Tested Successfully
+
+**Agent role:** project-engineer
+**Session goal:** Record successful Claude-compatible API gateway compatibility test and update all related documentation.
+
+**Test confirmed:**
+- Base URL: `https://aiprimetech.io`
+- Endpoint: `/v1/messages`
+- Auth format: `Authorization: Bearer <token>` (HTTP Header Auth)
+- Working model ID: `claude-sonnet-4-6`
+- Non-working model ID: `claude-sonnet-4.6` — returned "No available accounts" (dot notation rejected)
+- Test request succeeded — response included a valid content array with a message response
+
+**Parsing requirements identified:**
+- Response may include a `thinking` content item before the text item
+- n8n Code node must select `content` item where `type == "text"` — do not blindly use `content[0].text`
+- System prompt must explicitly forbid markdown/code fences — otherwise Claude may wrap JSON in backtick blocks
+
+**Credential configuration for n8n:**
+- Credential name: `Claude API - Marketing Scout`
+- Type: HTTP Header Auth
+- Header: `Authorization`, value: `Bearer <token>`
+- API key stored only in n8n credential manager — never committed to Git
+
+**Files updated:**
+- `docs/AGENT_LOG.md` — this entry
+- `docs/DECISIONS.md` — added DEC-018: Claude-compatible gateway auth and model ID format
+- `docs/NEXT_ACTIONS.md` — Workflow 02 pre-steps updated with gateway test results and parsing warnings
+- `tools/TOOLS.md` — Claude API entry updated with gateway URL, model ID, auth format, and parsing notes
+- `modules/marketing-scout-v0/SYSTEM_PROMPT.md` — added gateway compatibility note and updated parsing code snippet
+
+**Decisions recorded:** DEC-018
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
 ## 2026-06-04 — Workflow 01 Executed Successfully; Google Sheets Integration Confirmed
 
 **Agent role:** project-engineer

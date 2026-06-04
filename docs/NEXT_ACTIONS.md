@@ -105,11 +105,23 @@ Workflows are built incrementally — no external APIs until the platform is ver
 
 **Goal:** replace the hardcoded Code node values with a real Claude API call; verify that n8n can send one competitor record to Claude and receive structured JSON back.
 
+**Gateway test confirmed 2026-06-05:**
+- Base URL: `https://aiprimetech.io`, endpoint `/v1/messages`
+- Auth: `Authorization: Bearer <token>` — use HTTP Header Auth in n8n
+- Working model ID: `claude-sonnet-4-6` (hyphen — dot notation rejected)
+- n8n credential name: `Claude API - Marketing Scout`
+
+- [ ] Create n8n credential: HTTP Header Auth, name `Claude API - Marketing Scout`, header `Authorization`, value `Bearer <token>`
 - [ ] Guide to be written: `docs/N8N_WORKFLOW_02_CLAUDE_API_RU.md`
 - [ ] JSON to be generated: `n8n/workflows/02_claude_api_single_record.json`
-- [ ] Create Claude API credential in n8n: HTTP Header Auth, key `x-api-key`
 - [ ] Use system prompt from `modules/marketing-scout-v0/SYSTEM_PROMPT.md`
-- [ ] Parse Claude response: `{{ $json.content[0].text }}` → JSON.parse → downstream fields
+- [ ] Parse Claude response — **select content item where `type == "text"`**; do not use `content[0].text` (thinking blocks may appear first):
+  ```javascript
+  const content = $json.content.find(c => c.type === 'text');
+  const parsed = JSON.parse(content.text);
+  return [{ json: { ...$json, ...parsed } }];
+  ```
+- [ ] Confirm system prompt includes "no markdown, no code fences" instruction — otherwise JSON.parse will fail on backtick-wrapped output
 - [ ] No Apify, no Google Sheets in this workflow — Claude API only
 
 #### Workflow 10 — Full Pipeline _(after credentials are set up)_

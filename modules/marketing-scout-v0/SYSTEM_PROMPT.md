@@ -3,7 +3,8 @@
 **Version:** v1.0
 **Status:** Draft
 **Module:** marketing-scout-v0
-**Model target:** claude-sonnet-4-6
+**Model target:** `claude-sonnet-4-6` (hyphen notation — confirmed working with gateway at `https://aiprimetech.io`)
+**Gateway compatibility:** confirmed 2026-06-05 — see DEC-018
 
 ---
 
@@ -128,13 +129,23 @@ Platform: {platform}
 Text: {text_context}
 ```
 
-After the Claude API node, add a `Code` node or `Set` node that parses the response:
+After the Claude API node, add a `Code` node that parses the response.
+
+**Important:** Do not use `content[0].text` — the response may include a `thinking` content block
+before the text block. Always find the item by type:
+
 ```javascript
-const raw = $json.content[0].text;
-const parsed = JSON.parse(raw);
+const content = $json.content.find(c => c.type === 'text');
+const parsed = JSON.parse(content.text);
 return [{ json: { ...$json, ...parsed } }];
 ```
+
 This merges the Claude analysis fields with the existing item fields for downstream nodes.
+
+**Important:** If the system prompt does not explicitly forbid markdown and code fences,
+Claude may return output wrapped in triple-backtick blocks, which will cause `JSON.parse` to throw.
+The prompt text above already contains the instruction `No explanation, no markdown, no preamble` —
+do not remove it.
 
 ## Prompt Evaluation
 

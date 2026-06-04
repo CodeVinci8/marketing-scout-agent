@@ -61,12 +61,19 @@ All tools available or planned for the Marketing Scout ecosystem.
 ## AI Analysis
 
 ### Claude API
-- **Status:** Available
+- **Status:** Active — gateway compatibility confirmed 2026-06-05
 - **Role:** Analyzes scraped content — classifies intent, scores lead signals and content ideas,
   extracts structured fields
-- **Model:** claude-sonnet (default for pipeline; claude-haiku for high-volume cheap runs)
-- **Integration:** n8n HTTP node with JSON body
-- **Notes:** System prompt defined in `modules/marketing-scout-v0/SYSTEM_PROMPT.md`.
+- **Gateway base URL:** `https://aiprimetech.io`
+- **Endpoint:** `/v1/messages`
+- **Auth format:** `Authorization: Bearer <token>` — HTTP Header Auth in n8n
+- **Working model ID:** `claude-sonnet-4-6` (hyphen notation — `claude-sonnet-4.6` with a dot returns "No available accounts")
+- **n8n credential name:** `Claude API - Marketing Scout`
+- **Integration:** n8n HTTP Request node with JSON body
+- **Response parsing:** select content item where `type == "text"` — do not use `content[0].text`; thinking blocks may appear before the text block
+- **Prompt requirement:** system prompt must explicitly forbid markdown and code fences; otherwise output may be wrapped in backticks, breaking JSON.parse
+- **System prompt:** `modules/marketing-scout-v0/SYSTEM_PROMPT.md`
+- **See:** DEC-018
 
 ---
 

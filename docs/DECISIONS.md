@@ -5,6 +5,26 @@ Most recent first.
 
 ---
 
+## DEC-018 — Claude API Gateway: Auth Format, Model ID, and Response Parsing
+
+**Date:** 2026-06-05
+**Context:** The project uses a Claude-compatible API gateway at `https://aiprimetech.io` rather than the official Anthropic endpoint. A compatibility test was run from the VPS to confirm auth format, model ID naming, and response structure.
+**Decision:**
+- Base URL: `https://aiprimetech.io`, endpoint `/v1/messages`
+- Auth: `Authorization: Bearer <token>` (HTTP Header Auth in n8n)
+- Working model ID: `claude-sonnet-4-6` (hyphen-dot notation — `claude-sonnet-4.6` with a literal dot returns "No available accounts")
+- n8n credential name: `Claude API - Marketing Scout`
+- Response parsing: do NOT use `content[0].text` — the response may include a `thinking` block before the text block. Always select the content item where `type == "text"`:
+  ```javascript
+  const content = $json.content.find(c => c.type === 'text');
+  const parsed = JSON.parse(content.text);
+  ```
+- System prompt must include an explicit instruction to return raw JSON only — no markdown, no code fences. Without this, Claude may wrap output in triple-backtick blocks that break `JSON.parse`.
+- API key must remain only in the n8n credential manager — never committed to any project file.
+**Alternatives considered:** Official Anthropic endpoint (available as fallback — same auth format, same model IDs).
+
+---
+
 ## DEC-017 — Google Sheets Headers: Single Row 1, Horizontal Only
 
 **Date:** 2026-06-04
