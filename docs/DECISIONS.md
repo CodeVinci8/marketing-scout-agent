@@ -5,6 +5,31 @@ Most recent first.
 
 ---
 
+## DEC-014 — Execution Pruning Enabled at Launch
+
+**Date:** 2026-06-04
+**Context:** VPS disk is tight (~1.4G free, 86% used after n8n launch). n8n stores execution
+history in its SQLite database by default, which grows unboundedly.
+**Decision:** Execution pruning configured in `n8n.env` at deployment time:
+`EXECUTIONS_DATA_PRUNE=true`, `EXECUTIONS_DATA_MAX_AGE=168` (7 days), `EXECUTIONS_DATA_PRUNE_MAX_COUNT=1000`.
+This caps history to the last 7 days or 1000 executions, whichever is hit first.
+**Alternatives considered:** Disable pruning and rely on manual cleanup (rejected — too easy to forget on a constrained disk).
+
+---
+
+## DEC-013 — VPS Disk Constraint Acknowledged; Upgrade Deferred
+
+**Date:** 2026-06-04
+**Context:** After n8n launch, VPS disk is at ~86% used with ~1.4G free.
+This is sufficient for MVP (no high-volume scraping yet), but leaves little headroom.
+**Decision:** Proceed with current VPS for v0.1 MVP. Plan a disk upgrade or VPS tier change
+before running high-volume Apify scrape jobs or accumulating significant execution history.
+Do not run large scrapes without checking free disk first.
+**Trigger for upgrade:** Disk usage exceeds 90%, or before any run expected to produce >500 items.
+**Alternatives considered:** Immediate upgrade (deferred — no pressing need before first workflow test).
+
+---
+
 ## DEC-012 — Real Credentials Stay Outside Git
 
 **Date:** 2026-06-04

@@ -36,13 +36,20 @@ Then open `http://localhost:5678` in a local browser.
 
 Public HTTPS/domain access is deferred until webhooks or OAuth integrations require inbound access.
 
-### Step 3 — Start n8n on VPS
+### Step 3 — Start n8n on VPS ✓
 
 - [x] Docker Engine confirmed: v29.1.3, 3 containers running, 39 images present
 - [x] Docker Compose confirmed: v5.1.2 (manual install at `/usr/local/lib/docker/cli-plugins/docker-compose`)
-- [ ] Upload or create `docker-compose.yml` on VPS in a dedicated directory (e.g. `/opt/n8n/`)
-- [ ] Run: `docker compose up -d` (operator runs this — agent proposes only)
-- [ ] Verify n8n UI accessible via SSH tunnel at `http://localhost:5678`
+- [x] `docker-compose.yml` deployed to `/opt/n8n/` on VPS
+- [x] `docker compose up -d` executed — container `n8n-n8n-1` running
+- [x] n8n UI confirmed accessible via SSH tunnel at `http://localhost:5678`
+- [x] Execution pruning configured in `n8n.env` (PRUNE=true, MAX_AGE=168h, MAX_COUNT=1000)
+
+**Access:** SSH tunnel only — `ssh -L 5678:127.0.0.1:5678 root@SERVER_IP` → `http://localhost:5678`
+**Do not open port 5678 publicly** — n8n is bound to `127.0.0.1` for v0.1. See DEC-010.
+
+> **Disk warning:** VPS at ~86% used, ~1.4G free after n8n launch. Acceptable for MVP.
+> Plan to upgrade VPS disk before running high-volume scrape jobs. See DEC-013.
 
 > **Note:** Docker Compose was installed manually — not via apt. See `docs/DECISIONS.md` DEC-009 and `tools/TOOLS.md` for migration/troubleshooting details. Do not run `docker system prune` without explicit approval.
 
@@ -62,6 +69,12 @@ Public HTTPS/domain access is deferred until webhooks or OAuth integrations requ
 
 ### Step 6 — Build n8n Workflow
 
+**Next immediate action:** Create the first n8n workflow without external APIs.
+- Use a Manual Trigger node → Set node (hardcoded test data) → Code node (normalize) → Telegram or log output
+- No Apify, Firecrawl, Claude API, or Google Sheets required for this first draft
+- Goal: verify workflow mechanics (node wiring, data flow, error handling) before adding credentials
+
+Full workflow steps:
 - [ ] Build workflow per `modules/marketing-scout-v0/WORKFLOW_DESIGN.md` (10 nodes)
 - [ ] For first test: skip Nodes 3a–3c, inject test data via a `Set` node before Split Out
 - [ ] Configure Claude API node with system prompt from `modules/marketing-scout-v0/SYSTEM_PROMPT.md`
@@ -87,4 +100,4 @@ Public HTTPS/domain access is deferred until webhooks or OAuth integrations requ
 
 ## Blocked On
 
-Nothing currently blocked. Next concrete action: prepare `scripts/docker-compose.n8n.example`.
+Nothing currently blocked. Next concrete action: create first n8n workflow without external APIs (see Step 6 above).

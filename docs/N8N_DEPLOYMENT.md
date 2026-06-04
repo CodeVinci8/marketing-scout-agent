@@ -1,5 +1,22 @@
 # N8N_DEPLOYMENT.md — n8n Deployment Guide (v0.1)
 
+## Deployment Status
+
+**n8n is running.** Deployed 2026-06-04.
+
+| Item                  | Value                                      |
+|-----------------------|--------------------------------------------|
+| Container             | `n8n-n8n-1`                               |
+| Port binding          | `127.0.0.1:5678->5678/tcp`                |
+| Access URL            | `http://localhost:5678` (via SSH tunnel)   |
+| Execution pruning     | Enabled — 7 days / 1000 executions max    |
+| Disk (post-launch)    | ~1.4G free, 86% used                      |
+
+**Important:** Port 5678 is bound to `127.0.0.1` only. Do not open it publicly in v0.1.
+See DEC-010 and DEC-011. Upgrade VPS disk before high-volume scraping runs (see DEC-013).
+
+---
+
 ## Access Strategy for v0.1
 
 ### Why SSH tunnel first

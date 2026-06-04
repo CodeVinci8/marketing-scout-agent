@@ -5,6 +5,33 @@ Most recent first.
 
 ---
 
+## 2026-06-04 — n8n Successfully Deployed on VPS
+
+**Agent role:** project-engineer
+**Session goal:** Record confirmed n8n deployment and update all related documentation.
+
+**Deployment confirmed:**
+- Container `n8n-n8n-1` running — port binding `127.0.0.1:5678->5678/tcp`
+- Access verified via SSH tunnel → `http://localhost:5678` in local browser
+- Execution pruning added to `n8n.env`:
+  - `EXECUTIONS_DATA_PRUNE=true`
+  - `EXECUTIONS_DATA_MAX_AGE=168`
+  - `EXECUTIONS_DATA_PRUNE_MAX_COUNT=1000`
+- Disk after launch: ~1.4G free, 86% used — acceptable for MVP, upgrade deferred
+
+**Files updated:**
+- `docs/AGENT_LOG.md` — this entry
+- `docs/NEXT_ACTIONS.md` — Step 3 marked complete; Step 6 updated with first workflow action
+- `docs/DECISIONS.md` — added DEC-013 (disk constraint), DEC-014 (execution pruning)
+- `tools/TOOLS.md` — n8n status updated to Active with deployment details
+- `docs/N8N_DEPLOYMENT.md` — added Deployment Status section and disk warning
+
+**Decisions recorded:** DEC-013, DEC-014
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
 ## 2026-06-04 — n8n Deployment Templates Created
 
 **Agent role:** project-engineer

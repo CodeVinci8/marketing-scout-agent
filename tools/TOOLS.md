@@ -31,9 +31,13 @@ All tools available or planned for the Marketing Scout ecosystem.
 ## Orchestration
 
 ### n8n (self-hosted)
-- **Status:** Available (install pending for v0.1)
+- **Status:** Active — deployed 2026-06-04
 - **Role:** Workflow orchestrator — connects all pipeline steps
-- **Runs on:** VPS via Docker
+- **Runs on:** VPS via Docker — container `n8n-n8n-1`
+- **Port binding:** `127.0.0.1:5678->5678/tcp` (localhost only — not public)
+- **Access:** SSH tunnel → `http://localhost:5678` (see `docs/N8N_DEPLOYMENT.md`)
+- **Do not expose port 5678 publicly** for v0.1 — see DEC-010, DEC-011
+- **Execution pruning:** enabled (7 days / 1000 executions max) — see DEC-014
 - **Key use:** Manual trigger → scrape → analyze → store → notify
 
 ---
