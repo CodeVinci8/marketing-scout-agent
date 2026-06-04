@@ -119,40 +119,65 @@ Workflows are built incrementally — no external APIs until the platform is ver
 **Do not modify this workflow** — it is the Claude API + Google Sheets baseline for the project.
 **Prompt duplication note:** prompt is embedded in Build Claude Request node AND stored in MARKETING_AGENT_PROMPT_V1.md — update both on any change (see DEC-020).
 
-#### Pre-Workflow 03 — Step A: Business Requirements Clarification _(next — zero cost, high value)_
+#### Step A — Ask Uncle: Business Requirements _(zero cost, highest leverage)_
 
-**Goal:** Ask uncle what he actually needs. His answers determine every subsequent workflow, scraping target, and quality threshold.
+**Goal:** Before any paid scraping, confirm what the operator's uncle actually needs.
 
-- [ ] **Ask uncle:** What is the primary use case — competitor monitoring, lead capture, or content strategy?
-- [ ] **Ask uncle:** Which platforms/sources matter most? (Avito, VK, competitor websites, Telegram groups?)
-- [ ] **Ask uncle:** What does a useful result look like? (row in Sheets, daily Telegram summary, leads to call?)
-- [ ] **Ask uncle:** What is the target region? (Moscow only, Moscow Oblast, other cities?)
-- [ ] **Ask uncle:** What loan products does he offer? (PTS only, real estate, both?) This shapes the ICP in Prompt v2.
+- [ ] Ask uncle: primary use case — competitor monitoring, lead capture, or content strategy?
+- [ ] Ask uncle: which platforms/sources matter most? (Avito, VK, competitor websites, Telegram groups?)
+- [ ] Ask uncle: what does a useful result look like? (row in Sheets, daily Telegram summary, leads to call?)
+- [ ] Ask uncle: target region? (Moscow only, Moscow Oblast, other cities?)
+- [ ] Ask uncle: which loan products does he offer? (PTS only, real estate, both?)
 - [ ] Record answers in `docs/DECISIONS.md`
 - [ ] Update ICP section of `MARKETING_AGENT_PROMPT_V2_PLAN.md` with confirmed facts
 
-> See DEC-021. Do not start paid scraping until this conversation happens.
+> See DEC-021. Paid scraping is gated on this conversation.
 
-#### Pre-Workflow 03 — Step B: Marketing Agent Prompt v2 _(after uncle consultation)_
+#### Step B — Fix Documentation Consistency _(zero cost)_ ✓ IN PROGRESS 2026-06-05
 
-**Goal:** Write, test, and approve an upgraded agent prompt before any paid scraping.
-
-- [ ] Write `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` based on `MARKETING_AGENT_PROMPT_V2_PLAN.md`
-- [ ] Build synthetic test set: 5 records (strong competitor, weak competitor, strong lead, weak lead, boilerplate)
-- [ ] Run v2 prompt test calls manually (5 calls) — measure actual cost, compare outputs to v1
-- [ ] Review `reason`, `competitor_threat_summary`, `content_angle` fields for quality
-- [ ] Get operator approval before embedding into workflow JSON
-- [ ] Update `02_claude_api_single_record_analysis.json` Build Claude Request node with v2 prompt text
-
-> See `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md` for full design.
-
-#### Pre-Workflow 03 — Step C: Documentation consistency fixes _(zero cost)_
-
-- [ ] `WORKFLOW_DESIGN.md` — update gateway URL, prompt reference, quality_threshold scale, parse pattern
-- [ ] `TABLE_SCHEMA.md` — update score types to integer 1–100, competitor_strength to integer
+- [x] `WORKFLOW_DESIGN.md` — gateway URL, auth, prompt reference, threshold scale, parse pattern
+- [x] `TABLE_SCHEMA.md` — scoring scale 1–100, entity/status/service_type values, competitor_strength type
+- [x] `docs/PROMPTS.md` — active prompt reference, version history, v2 plan
+- [x] `docs/AGENT_CAPABILITIES.md` — created: v1 can/cannot, v2 plan, scoring, schema, risks, client explanation
 - [ ] `README.md` — update current stage from "in design" to "infrastructure validated"
-- [ ] `tools/TOOLS.md` — fix Google Sheets auth type; update GitHub status
+- [ ] `tools/TOOLS.md` — fix Google Sheets auth note; update GitHub status
 - [ ] `core/warm/decisions.md` — add DEC-018, DEC-019, DEC-020, DEC-021
+
+#### Step C — Write Marketing Agent Prompt v2 _(after Step A — uncle's answers shape the ICP)_
+
+**Goal:** Write a prompt that reasons like a marketing analyst, not a data extractor.
+
+- [ ] Write `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` using `MARKETING_AGENT_PROMPT_V2_PLAN.md`
+- [ ] Fill ICP section with confirmed facts from uncle consultation (Step A)
+- [ ] Include: agent identity, business objective, ICP, competitive threat logic, lead urgency model, content angle framework, evidence rules, structured `reason` field
+
+> Full design in `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md`.
+
+#### Step D — Test Prompt v2 on 5 Synthetic Records _(before any paid scraping)_
+
+**Goal:** Verify v2 produces better, more actionable outputs than v1 before spending money on real data.
+
+- [ ] Create 5 synthetic test records: strong competitor, weak competitor, strong lead, weak lead, boilerplate
+- [ ] Run each through Build Claude Request + Claude API + Parse Claude Response manually (5 API calls)
+- [ ] Measure actual cost per call for v2 (compare to v1 baseline of $0.0115)
+- [ ] Review outputs: are `reason` fields evidence-based? Are scores differentiated? Are new fields useful?
+- [ ] Get operator approval on test results
+- [ ] Only after approval: update Build Claude Request Code node in workflow JSON with v2 prompt
+
+> See `MARKETING_AGENT_PROMPT_V2_PLAN.md` Section 15 for full test strategy.
+
+#### Step E — Workflow 03: Firecrawl Website Analysis _(after Steps A–D complete)_
+
+**Goal:** Take a real competitor URL, extract clean text via Firecrawl, pass to Claude v2, verify full chain.
+
+- [ ] Get Firecrawl API key → create n8n credential: HTTP Header Auth, `Authorization: Bearer <token>`, name `Firecrawl - Marketing Scout`
+- [ ] Check Firecrawl free tier limits → record in `docs/COSTS_AND_LIMITS.md`
+- [ ] Choose one real competitor URL (publicly visible page, secured lending)
+- [ ] Guide: `docs/N8N_WORKFLOW_03_FIRECRAWL_RU.md`
+- [ ] JSON: `n8n/workflows/03_firecrawl_website_analysis.json`
+- [ ] After first run: measure actual cost per Firecrawl + Claude call; update `docs/COSTS_AND_LIMITS.md`
+
+> Do not start this step until v2 prompt is approved (Step D). See DEC-021.
 
 #### Workflow 03 — Firecrawl Website Analysis _(after uncle consultation)_
 
@@ -197,8 +222,11 @@ Workflows are built incrementally — no external APIs until the platform is ver
 
 ## Blocked On
 
-Not technically blocked. Deliberately paused on paid scraping pending:
-1. Uncle's business requirements (Step A above)
-2. Marketing Agent Prompt v2 (Step B above)
+Not technically blocked. Deliberately paused on paid scraping (DEC-021).
 
-See DEC-021. Next zero-cost action: **consult uncle**, then write Prompt v2.
+**Next zero-cost actions (do in order):**
+1. Step A — consult uncle (≤1 conversation)
+2. Finish Step B — `README.md`, `tools/TOOLS.md`, `core/warm/decisions.md` still need minor fixes
+3. Step C — write Prompt v2
+4. Step D — synthetic test (5 API calls, ~$0.10 total)
+5. Step E — Workflow 03 Firecrawl

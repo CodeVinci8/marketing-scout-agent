@@ -5,6 +5,37 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Documentation Consistency Fixes After Milestone Review 02
+
+**Agent role:** project-engineer
+**Session goal:** Fix all documentation drift identified in Milestone Review 02.
+
+**Issues fixed:**
+- `WORKFLOW_DESIGN.md`: gateway URL (anthropic.com → aiprimetech.io), auth format (x-api-key → Authorization Bearer), prompt reference (SYSTEM_PROMPT.md → MARKETING_AGENT_PROMPT_V1.md), parse pattern (content[0].text → find type=text), quality threshold (6 → 60), Google Sheets auth note (OAuth2 → Service Account)
+- `TABLE_SCHEMA.md`: complete rewrite — scoring scale corrected to 1–100, competitor_strength changed from string to integer, entity_type values updated to match v1 prompt enums, status values corrected to analyzed/skipped, service_type values added, freshness_status corrected (stale → old), recommended_action values updated
+- `docs/PROMPTS.md`: active prompt updated to MARKETING_AGENT_PROMPT_V1.md, version history added, v2 plan referenced, SYSTEM_PROMPT.md marked superseded, token and calibration guidance updated
+- `docs/NEXT_ACTIONS.md`: restructured as Step A–E with explicit gates
+
+**Files created:**
+- `docs/AGENT_CAPABILITIES.md` — v1 can/cannot, v2 requirements, model/gateway facts, workflow chain, scoring fields, schema, risks, non-technical client explanation
+
+**Files updated:**
+- `modules/marketing-scout-v0/WORKFLOW_DESIGN.md` — 6 consistency fixes
+- `docs/TABLE_SCHEMA.md` — complete rewrite (12 value/type corrections)
+- `docs/PROMPTS.md` — active prompt, history, v2 plan, guidance updates
+- `docs/NEXT_ACTIONS.md` — Step A/B/C/D/E structure with gates
+- `docs/AGENT_LOG.md` — this entry
+- `core/hot/recent.md` — updated
+
+**Remaining doc fixes (deferred to operator):**
+- `README.md` — update current stage
+- `tools/TOOLS.md` — Google Sheets auth note; GitHub status
+- `core/warm/decisions.md` — add DEC-018 through DEC-021
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
 ## 2026-06-05 — Milestone Review 02; Prompt v2 Plan Created
 
 **Agent role:** project-engineer

@@ -4,6 +4,26 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-05 — Documentation consistency fixes
+
+**What was done:**
+- Fixed 6 issues in `WORKFLOW_DESIGN.md`: gateway URL, auth format, prompt reference, parse pattern, threshold scale, Google Sheets auth
+- Rewrote `TABLE_SCHEMA.md`: 12 type/value corrections — scoring scale 1–100, integer scores, updated entity/status/service enums
+- Updated `PROMPTS.md`: MARKETING_AGENT_PROMPT_V1.md is now the active prompt; SYSTEM_PROMPT.md marked superseded
+- Created `docs/AGENT_CAPABILITIES.md`: v1 capabilities, limitations, v2 requirements, risks, client explanation
+- Restructured `NEXT_ACTIONS.md` into Steps A–E with explicit gates
+
+**Remaining doc fixes (minor):** README.md current stage, tools/TOOLS.md auth note, core/warm/decisions.md DEC-018–021
+
+**What is next (in order):**
+- Step A: consult uncle (zero cost — shapes ICP for Prompt v2)
+- Step B: finish remaining doc fixes (minor)
+- Step C: write MARKETING_AGENT_PROMPT_V2.md
+- Step D: test v2 on 5 synthetic records (~$0.10)
+- Step E: only then Workflow 03 Firecrawl
+
+---
+
 ## Session: 2026-06-05 (latest)
 
 **What was done:**
