@@ -5,6 +5,22 @@ Most recent first.
 
 ---
 
+## DEC-015 — n8n Workflow Delivery via Generated JSON (Confirmed)
+
+**Date:** 2026-06-04
+**Context:** Workflow 00 (Healthcheck Manual Test) was generated as a JSON file by Claude Code,
+committed to the project repo, and imported into n8n by the operator. The workflow executed
+successfully on first import with no manual node editing required.
+**Decision:** All future n8n workflows will be delivered as importable JSON files committed
+to `n8n/workflows/`. The operator imports via **Workflows → ⋮ → Import from File** or clipboard.
+Manual node-by-node construction in the UI is the fallback only if JSON import fails.
+**Confirmed path:** Claude Code → `n8n/workflows/*.json` → GitHub → n8n Import → execution.
+**Workflow 00 baseline:** `n8n/workflows/00_healthcheck_manual_test.json` must not be modified —
+it serves as the healthcheck reference to verify the platform is functioning.
+**Alternatives considered:** Manual UI construction (retained as fallback); n8n API push (deferred — requires additional credentials).
+
+---
+
 ## DEC-014 — Execution Pruning Enabled at Launch
 
 **Date:** 2026-06-04

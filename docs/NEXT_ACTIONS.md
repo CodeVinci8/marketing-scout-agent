@@ -71,30 +71,29 @@ Public HTTPS/domain access is deferred until webhooks or OAuth integrations requ
 
 Workflows are built incrementally — no external APIs until the platform is verified.
 
-#### Workflow 00 — Healthcheck Manual Test
+#### Workflow 00 — Healthcheck Manual Test ✓ COMPLETED 2026-06-04
 
 **Guide:** `docs/N8N_WORKFLOW_00_HEALTHCHECK_RU.md`
-**JSON:** `n8n/workflows/00_healthcheck_manual_test.json` — ready to import
+**JSON:** `n8n/workflows/00_healthcheck_manual_test.json`
 
-- [ ] Import JSON into n8n: **Workflows → ⋮ → Import from File** (or paste from clipboard)
-- [ ] Open imported workflow `00 - Healthcheck Manual Test`
-- [ ] Click **Test workflow** on Manual Start node
-- [ ] Verify Code node output contains `"status": "analyzed"` and `"quality_score": 75`
-- [ ] Confirm no red nodes after run
+- [x] JSON generated and validated (Claude Code → JSON file)
+- [x] Imported into n8n from JSON (via GitHub / file copy)
+- [x] Executed successfully — output: `status=analyzed`, `quality_score=75`, no red nodes
 
-No external APIs. No credentials required.
+**Do not modify this workflow** — it is the healthcheck baseline for the project.
 
-Print JSON for clipboard import:
-```bash
-cat n8n/workflows/00_healthcheck_manual_test.json
-```
+> Confirmed working method: Claude Code generates n8n JSON → committed to repo →
+> operator imports into n8n. This is the standard workflow delivery method going forward.
 
-#### Workflow 01 — Google Sheets Test _(next after Workflow 00)_
+#### Workflow 01 — Google Sheets Append Row Test _(next)_
 
+**Goal:** prove that n8n can write one hardcoded row to Google Sheets — no scraping, no Claude API.
+
+- [ ] Create Google Sheets spreadsheet with columns from `docs/TABLE_SCHEMA.md`
+- [ ] Set up Google Sheets OAuth2 credentials in n8n UI
 - [ ] Guide to be written: `docs/N8N_WORKFLOW_01_SHEETS_TEST_RU.md`
-- [ ] Connect Google Sheets credentials in n8n UI
-- [ ] Write one test row from hardcoded data to a Google Sheet
-- [ ] Verify row appears in the spreadsheet
+- [ ] JSON to be generated: `n8n/workflows/01_sheets_append_row_test.json`
+- [ ] Import and run — verify row appears in the spreadsheet
 
 #### Workflow 10 — Full Pipeline _(after credentials are set up)_
 
@@ -123,4 +122,4 @@ cat n8n/workflows/00_healthcheck_manual_test.json
 
 ## Blocked On
 
-Nothing currently blocked. Next concrete action: **import and run Workflow 00** — `cat n8n/workflows/00_healthcheck_manual_test.json` → paste into n8n → Test workflow → verify `"status": "analyzed"` in output.
+Nothing currently blocked. Next concrete action: **Workflow 01 — Google Sheets Append Row Test** — set up Google Sheets OAuth2 credentials in n8n, then generate and import `01_sheets_append_row_test.json`.

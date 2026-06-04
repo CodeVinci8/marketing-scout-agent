@@ -5,6 +5,29 @@ Most recent first.
 
 ---
 
+## 2026-06-04 — Workflow 00 Executed Successfully; JSON Delivery Method Confirmed
+
+**Agent role:** project-engineer
+**Session goal:** Record successful Workflow 00 execution and lock the JSON delivery method as standard practice.
+
+**Execution confirmed:**
+- Workflow: `00 - Healthcheck Manual Test`
+- Import source: `n8n/workflows/00_healthcheck_manual_test.json` (via GitHub / file copy)
+- Result: succeeded — `status=analyzed`, `quality_score=75`, no red nodes
+- Full path proven: Claude Code → JSON → GitHub → n8n import → execution
+
+**Files updated:**
+- `docs/AGENT_LOG.md` — this entry
+- `docs/NEXT_ACTIONS.md` — Workflow 00 marked complete; Workflow 01 (Google Sheets Append Row Test) added as next action with concrete tasks
+- `docs/N8N_WORKFLOW_00_HEALTHCHECK_RU.md` — status updated to completed; do-not-modify note added
+- `docs/DECISIONS.md` — added DEC-015: JSON workflow delivery confirmed as standard method; Workflow 00 locked as healthcheck baseline
+
+**Decisions recorded:** DEC-015
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
 ## 2026-06-04 — Workflow 00 Healthcheck JSON Generated and Validated
 
 **Agent role:** project-engineer
