@@ -5,6 +5,16 @@ Most recent first.
 
 ---
 
+## DEC-019 — Marketing Scout Agent: Scoring Scale Changed to 1–100
+
+**Date:** 2026-06-05
+**Context:** The original SYSTEM_PROMPT.md used a 0–10 scoring scale for quality_score, lead_signal_score, content_idea_score, and competitor_strength. For Workflow 02, the scoring scale was upgraded to 1–100 to provide finer granularity and enable more precise quality gating. The Quality Gate IF node uses threshold >= 60 (equivalent to ~6/10 in the old scale).
+**Decision:** All scores in MARKETING_AGENT_PROMPT_V1.md and Workflow 02 use integers 1–100. The old SYSTEM_PROMPT.md retains the 0–10 scale as a legacy draft; MARKETING_AGENT_PROMPT_V1.md is the active prompt for all workflows from v02 onward.
+**Quality gate threshold:** quality_score >= 60 passes to Google Sheets; below 60 discarded.
+**Alternatives considered:** Keep 0–10 scale (rejected — too coarse for differentiated filtering at scale).
+
+---
+
 ## DEC-018 — Claude API Gateway: Auth Format, Model ID, and Response Parsing
 
 **Date:** 2026-06-05

@@ -5,6 +5,31 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Workflow 02 Created: Claude API Single Record Analysis
+
+**Agent role:** project-engineer
+**Session goal:** Create Workflow 02 — first real AI-agent workflow using Claude API as Marketing Scout Agent.
+
+**Files created:**
+- `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V1.md` — production system prompt (~8 KB): secured lending domain, 1–100 scoring, skip conditions, entity/service type enums, full output JSON schema
+- `n8n/workflows/02_claude_api_single_record_analysis.json` — importable n8n workflow JSON: 9 nodes, valid, active=false, no real credentials
+- `docs/N8N_WORKFLOW_02_CLAUDE_API_RU.md` — Russian operator guide: setup, run, expected output, 6 error cases, client explanation, pointer to Workflow 03
+
+**Workflow structure:**
+- Manual Start → Set Test Competitor Data → Build Claude Request (Code) → Claude API Request (HTTP) → Parse Claude JSON Response (Code) → Quality Gate (IF, quality_score >= 60) → Append Row to Google Sheets
+- Gateway: `https://aiprimetech.io/v1/messages`, auth: HTTP Header Auth (`Claude API - Marketing Scout`)
+- Model: `claude-sonnet-4-6`
+- Parse node: finds content item by `type === 'text'`; strips markdown fences; safe error fallback
+- Quality Gate: passes if `status === 'analyzed'` AND `quality_score >= 60`
+
+**Validation:** JSON parsed successfully — 9 nodes, all names correct, active=false
+
+**Decisions recorded:** DEC-019
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
 ## 2026-06-05 — Claude-Compatible API Gateway Tested Successfully
 
 **Agent role:** project-engineer
