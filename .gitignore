@@ -1,0 +1,43 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+*_token*
+*_secret*
+*_key*
+
+# n8n runtime / exports
+n8n/.n8n/
+n8n/database.sqlite
+n8n/*.sqlite
+n8n/*.db
+
+# Backups
+backups/*
+!backups/README.md
+
+# Logs
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+
+# Docker
+docker-compose.override.yml

@@ -1,0 +1,42 @@
+#!/bin/bash
+# restore.sh.example — Example n8n restore script
+# Copy this file to restore.sh, fill in your values, and make it executable.
+# DO NOT store real paths or credentials in this example file.
+# WARNING: Restore will overwrite existing n8n data. Stop n8n before restoring.
+
+# Configuration (fill in before use)
+N8N_DATA_DIR="/path/to/your/n8n/data"         # Must match backup.sh path
+BACKUP_FILE="$1"                               # Pass backup file as argument
+
+# Validate argument
+if [ -z "$BACKUP_FILE" ]; then
+    echo "Usage: ./restore.sh /path/to/n8n_backup_TIMESTAMP.tar.gz"
+    exit 1
+fi
+
+if [ ! -f "$BACKUP_FILE" ]; then
+    echo "ERROR: Backup file not found: $BACKUP_FILE"
+    exit 1
+fi
+
+# Safety check: remind operator to stop n8n
+echo "WARNING: This will overwrite n8n data at: $N8N_DATA_DIR"
+echo "Make sure n8n is stopped before proceeding."
+read -p "Continue? (yes/no): " CONFIRM
+
+if [ "$CONFIRM" != "yes" ]; then
+    echo "Restore cancelled."
+    exit 0
+fi
+
+# Restore from backup
+echo "Restoring from: $BACKUP_FILE"
+tar -xzf "$BACKUP_FILE" -C "$(dirname $N8N_DATA_DIR)"
+
+if [ $? -eq 0 ]; then
+    echo "Restore successful."
+    echo "You can now restart n8n."
+else
+    echo "ERROR: Restore failed. Check the archive and paths."
+    exit 1
+fi
