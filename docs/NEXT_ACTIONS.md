@@ -67,16 +67,35 @@ Public HTTPS/domain access is deferred until webhooks or OAuth integrations requ
 - [ ] Share with n8n Google Sheets service account or authenticated OAuth account
 - [ ] Note the Spreadsheet ID and Sheet name for n8n node configuration
 
-### Step 6 — Build n8n Workflow
+### Step 6 — Build n8n Workflows (incremental)
 
-**Next immediate action:** Create the first n8n workflow without external APIs.
-- Use a Manual Trigger node → Set node (hardcoded test data) → Code node (normalize) → Telegram or log output
-- No Apify, Firecrawl, Claude API, or Google Sheets required for this first draft
-- Goal: verify workflow mechanics (node wiring, data flow, error handling) before adding credentials
+Workflows are built incrementally — no external APIs until the platform is verified.
 
-Full workflow steps:
+#### Workflow 00 — Healthcheck Manual Test
+
+**Guide:** `docs/N8N_WORKFLOW_00_HEALTHCHECK_RU.md`
+
+- [ ] Create workflow named `00 - Healthcheck Manual Test` in n8n UI
+- [ ] Add Sticky Note 1 (Russian description — exact text in guide)
+- [ ] Add Manual Trigger
+- [ ] Add Edit Fields / Set with hardcoded test competitor data
+- [ ] Add Code node with mock analysis JavaScript
+- [ ] Add Sticky Note 2 (result explanation — exact text in guide)
+- [ ] Run workflow — verify output JSON contains `"status": "analyzed"`
+
+No external APIs. No credentials required.
+
+#### Workflow 01 — Google Sheets Test _(next after Workflow 00)_
+
+- [ ] Guide to be written: `docs/N8N_WORKFLOW_01_SHEETS_TEST_RU.md`
+- [ ] Connect Google Sheets credentials in n8n UI
+- [ ] Write one test row from hardcoded data to a Google Sheet
+- [ ] Verify row appears in the spreadsheet
+
+#### Workflow 10 — Full Pipeline _(after credentials are set up)_
+
 - [ ] Build workflow per `modules/marketing-scout-v0/WORKFLOW_DESIGN.md` (10 nodes)
-- [ ] For first test: skip Nodes 3a–3c, inject test data via a `Set` node before Split Out
+- [ ] For first test: skip Nodes 3a–3c, inject test data via a Set node before Split Out
 - [ ] Configure Claude API node with system prompt from `modules/marketing-scout-v0/SYSTEM_PROMPT.md`
 - [ ] Set quality threshold to 1 for testing (passes all items through)
 
@@ -100,4 +119,4 @@ Full workflow steps:
 
 ## Blocked On
 
-Nothing currently blocked. Next concrete action: create first n8n workflow without external APIs (see Step 6 above).
+Nothing currently blocked. Next concrete action: build **Workflow 00 — Healthcheck Manual Test** in n8n UI (see Step 6 above and `docs/N8N_WORKFLOW_00_HEALTHCHECK_RU.md`).
