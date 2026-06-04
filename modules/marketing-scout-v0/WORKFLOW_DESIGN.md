@@ -158,7 +158,7 @@ content-type: application/json
 }
 ```
 
-**Output:** Claude response — parse `choices[0].message.content` as JSON to get analysis fields.
+**Output:** Claude response — the analysis JSON is returned as a string inside `content[0].text`. Parse it using the Code node shown below.
 
 > **Note:** The response arrives as a string inside `content[0].text`. Use a subsequent
 > `Code` node or `Set` node with `JSON.parse()` to extract the structured fields.

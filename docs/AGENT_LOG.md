@@ -5,6 +5,19 @@ Most recent first.
 
 ---
 
+## 2026-06-04 — Pre-Commit Fix: Claude API Response Format
+
+**Agent role:** project-engineer
+**Session goal:** Fix broken instruction found during pre-commit review.
+
+**Files edited:**
+- `modules/marketing-scout-v0/WORKFLOW_DESIGN.md` — corrected Node 6 Output description: replaced incorrect OpenAI response format (`choices[0].message.content`) with correct Anthropic Claude API format (`content[0].text`)
+- `docs/AGENT_LOG.md` — this entry
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
 ## 2026-06-04 — Autonomy Rules Update in CLAUDE.md
 
 **Agent role:** project-engineer
