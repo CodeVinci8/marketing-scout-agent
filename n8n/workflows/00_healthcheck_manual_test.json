@@ -1,0 +1,131 @@
+{
+  "name": "00 - Healthcheck Manual Test",
+  "nodes": [
+    {
+      "id": "1a2b3c4d-e5f6-4789-8abc-def012345601",
+      "name": "Описание воркфлоу",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, -280],
+      "parameters": {
+        "content": "Workflow 00 — тестовый запуск n8n. Проверяет, что система принимает тестовые данные, передаёт их между нодами и возвращает структурированный результат. Внешние API, платные сервисы и credentials здесь не используются.",
+        "height": 200,
+        "width": 580,
+        "color": 4
+      }
+    },
+    {
+      "id": "1a2b3c4d-e5f6-4789-8abc-def012345602",
+      "name": "Manual Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [100, 100],
+      "parameters": {}
+    },
+    {
+      "id": "1a2b3c4d-e5f6-4789-8abc-def012345603",
+      "name": "Set Test Competitor Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [380, 100],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1a2b3c4d-e5f6-4789-8abc-def012345611",
+              "name": "platform",
+              "value": "test",
+              "type": "string"
+            },
+            {
+              "id": "1a2b3c4d-e5f6-4789-8abc-def012345612",
+              "name": "source_url",
+              "value": "https://example.com/test",
+              "type": "string"
+            },
+            {
+              "id": "1a2b3c4d-e5f6-4789-8abc-def012345613",
+              "name": "company_name",
+              "value": "Test Competitor",
+              "type": "string"
+            },
+            {
+              "id": "1a2b3c4d-e5f6-4789-8abc-def012345614",
+              "name": "text_context",
+              "value": "Компания предлагает кредит под залог автомобиля. Решение за 1 день. Работаем по Москве и области.",
+              "type": "string"
+            },
+            {
+              "id": "1a2b3c4d-e5f6-4789-8abc-def012345615",
+              "name": "parsed_at",
+              "value": "2026-06-04",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "1a2b3c4d-e5f6-4789-8abc-def012345604",
+      "name": "Mock Marketing Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 100],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first().json;\n\nreturn [\n  {\n    json: {\n      ...item,\n      entity_type: \"competitor\",\n      service_type: \"secured_auto_loan\",\n      quality_score: 75,\n      reason: \"Test record processed successfully\",\n      status: \"analyzed\"\n    }\n  }\n];"
+      }
+    },
+    {
+      "id": "1a2b3c4d-e5f6-4789-8abc-def012345605",
+      "name": "Результат и следующий шаг",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [660, 320],
+      "parameters": {
+        "content": "Успешный результат: Code node возвращает JSON со status='analyzed' и quality_score=75. Это доказывает, что базовая механика n8n работает. Следующий шаг — записать результат в Google Sheets.",
+        "height": 180,
+        "width": 400,
+        "color": 3
+      }
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Set Test Competitor Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Test Competitor Data": {
+      "main": [
+        [
+          {
+            "node": "Mock Marketing Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f47ac10b-58cc-4372-a567-0e02b2c3d480",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": ""
+  },
+  "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "pinData": {},
+  "tags": []
+}

@@ -74,16 +74,20 @@ Workflows are built incrementally — no external APIs until the platform is ver
 #### Workflow 00 — Healthcheck Manual Test
 
 **Guide:** `docs/N8N_WORKFLOW_00_HEALTHCHECK_RU.md`
+**JSON:** `n8n/workflows/00_healthcheck_manual_test.json` — ready to import
 
-- [ ] Create workflow named `00 - Healthcheck Manual Test` in n8n UI
-- [ ] Add Sticky Note 1 (Russian description — exact text in guide)
-- [ ] Add Manual Trigger
-- [ ] Add Edit Fields / Set with hardcoded test competitor data
-- [ ] Add Code node with mock analysis JavaScript
-- [ ] Add Sticky Note 2 (result explanation — exact text in guide)
-- [ ] Run workflow — verify output JSON contains `"status": "analyzed"`
+- [ ] Import JSON into n8n: **Workflows → ⋮ → Import from File** (or paste from clipboard)
+- [ ] Open imported workflow `00 - Healthcheck Manual Test`
+- [ ] Click **Test workflow** on Manual Start node
+- [ ] Verify Code node output contains `"status": "analyzed"` and `"quality_score": 75`
+- [ ] Confirm no red nodes after run
 
 No external APIs. No credentials required.
+
+Print JSON for clipboard import:
+```bash
+cat n8n/workflows/00_healthcheck_manual_test.json
+```
 
 #### Workflow 01 — Google Sheets Test _(next after Workflow 00)_
 
@@ -119,4 +123,4 @@ No external APIs. No credentials required.
 
 ## Blocked On
 
-Nothing currently blocked. Next concrete action: build **Workflow 00 — Healthcheck Manual Test** in n8n UI (see Step 6 above and `docs/N8N_WORKFLOW_00_HEALTHCHECK_RU.md`).
+Nothing currently blocked. Next concrete action: **import and run Workflow 00** — `cat n8n/workflows/00_healthcheck_manual_test.json` → paste into n8n → Test workflow → verify `"status": "analyzed"` in output.
