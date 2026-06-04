@@ -1,10 +1,12 @@
 # MARKETING_AGENT_PROMPT_V1.md
 
 **Version:** v1.0
-**Status:** Active
+**Status:** Active — confirmed working 2026-06-05
 **Module:** marketing-scout-v0
 **Model target:** `claude-sonnet-4-6`
 **Domain:** Secured lending market intelligence — Russia
+
+> **Prompt duplication warning (DEC-020):** This file is the canonical source. The same prompt text is also embedded inside the `Build Claude Request` Code node in `n8n/workflows/02_claude_api_single_record_analysis.json`. If you change the prompt here, you must also update the Code node in the workflow JSON and re-import it into n8n. The Code node text is what runs at runtime.
 
 ---
 

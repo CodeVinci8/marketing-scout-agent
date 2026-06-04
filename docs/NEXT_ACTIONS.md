@@ -101,7 +101,7 @@ Workflows are built incrementally — no external APIs until the platform is ver
 **Do not modify this workflow** — it is the Google Sheets baseline for the project.
 **Do not commit** real Spreadsheet ID or service account email to Git.
 
-#### Workflow 02 — Claude API Single Record Analysis ✓ JSON READY 2026-06-05
+#### Workflow 02 — Claude API Single Record Analysis ✓ COMPLETED 2026-06-05
 
 **Guide:** `docs/N8N_WORKFLOW_02_CLAUDE_API_RU.md`
 **JSON:** `n8n/workflows/02_claude_api_single_record_analysis.json`
@@ -110,16 +110,42 @@ Workflows are built incrementally — no external APIs until the platform is ver
 - [x] MARKETING_AGENT_PROMPT_V1.md created — secured lending domain, 1–100 scoring
 - [x] Workflow JSON generated and validated (9 nodes, active=false)
 - [x] Russian guide created
-- [ ] **OPERATOR ACTION REQUIRED:** Create n8n credential `Claude API - Marketing Scout` (HTTP Header Auth, `Authorization: Bearer <token>`)
-- [ ] Import `n8n/workflows/02_claude_api_single_record_analysis.json` into n8n
-- [ ] In Claude API Request node: select credential `Claude API - Marketing Scout`
-- [ ] In Append Row node: select Google Sheets credential + paste real Spreadsheet ID
-- [ ] Run workflow — verify Claude returns analyzed JSON and row appears in Google Sheets
+- [x] Imported and configured in n8n (credential + Spreadsheet ID)
+- [x] Executed successfully — Claude returned analyzed JSON, row appended to Google Sheets
+- [x] Measured API cost: $0.0115 per short scoring ≈ 0.84 RUB
 
-**Key facts:**
-- Gateway: `https://aiprimetech.io/v1/messages`, model `claude-sonnet-4-6`
-- Quality gate: passes if `status == "analyzed"` AND `quality_score >= 60`
-- Parse node handles thinking blocks and markdown fences automatically
+**Results:** service_type=pts_loan, quality_score=72, lead_signal_score=75, content_idea_score=80, status=analyzed
+
+**Do not modify this workflow** — it is the Claude API + Google Sheets baseline for the project.
+**Prompt duplication note:** prompt is embedded in Build Claude Request node AND stored in MARKETING_AGENT_PROMPT_V1.md — update both on any change (see DEC-020).
+
+#### Pre-Workflow 03 — Business Requirements Clarification _(next — must come before real scraping)_
+
+**Goal:** Before building scraping workflows with real data, clarify with the operator (uncle) what business outputs and columns he actually needs. This prevents building the wrong pipeline.
+
+- [ ] **Ask uncle:** which output columns does he care about most? (lead_signal, competitor monitoring, content ideas, all three?)
+- [ ] **Ask uncle:** which platforms/sources should be prioritized first? (Avito, VK, competitor websites?)
+- [ ] **Ask uncle:** what does "actionable result" look like for him? (a row in Sheets, a Telegram message, a daily summary?)
+- [ ] Record answers in `docs/DECISIONS.md` and update `docs/TABLE_SCHEMA.md` if column priorities change
+- [ ] Only after this conversation: proceed to Workflow 03
+
+> This step costs nothing and prevents wasted scraping budget on wrong data.
+
+#### Workflow 03 — Firecrawl Website Analysis _(after uncle consultation)_
+
+**Goal:** Take a real competitor URL, extract clean text via Firecrawl, pass to Claude for analysis, verify full chain with real scraped data.
+
+**Pre-steps:**
+- [ ] Get Firecrawl API key → create n8n credential: HTTP Header Auth, `Authorization: Bearer <token>`, name `Firecrawl - Marketing Scout`
+- [ ] Check Firecrawl free tier limits and note them in `docs/COSTS_AND_LIMITS.md`
+- [ ] Choose one real competitor URL to test (publicly visible page)
+
+**Workflow tasks:**
+- [ ] Guide: `docs/N8N_WORKFLOW_03_FIRECRAWL_RU.md`
+- [ ] JSON: `n8n/workflows/03_firecrawl_website_analysis.json`
+- [ ] Nodes: Manual Trigger → Set URL → Firecrawl HTTP Request → Extract text → Build Claude Request → Claude API → Parse Response → Quality Gate → Google Sheets
+
+**Cost note:** each Firecrawl + Claude call will cost scraping credit + ~$0.01–0.03 AI scoring depending on page length.
 
 #### Workflow 10 — Full Pipeline _(after credentials are set up)_
 
@@ -148,4 +174,4 @@ Workflows are built incrementally — no external APIs until the platform is ver
 
 ## Blocked On
 
-Nothing currently blocked. Next concrete action: **Workflow 02 — Claude API Single Record Analysis** — create Claude API credential in n8n (HTTP Header Auth), generate and import `02_claude_api_single_record.json`, verify Claude returns structured JSON for one test competitor record.
+Nothing technically blocked. Next concrete action: **Ask uncle about business requirements** — which outputs and platforms matter most before building real scraping workflows. Then proceed to Workflow 03 (Firecrawl). See pre-requisite step above.

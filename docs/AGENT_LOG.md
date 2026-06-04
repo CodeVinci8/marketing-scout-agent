@@ -5,6 +5,58 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Workflow 02 Executed Successfully; Claude API + Google Sheets Confirmed
+
+**Agent role:** project-engineer
+**Session goal:** Record successful Workflow 02 execution and document measured API cost.
+
+**Execution confirmed:**
+- Workflow: `02 - Claude API Single Record Analysis`
+- Credential: `Claude API - Marketing Scout` (HTTP Header Auth)
+- Gateway: `https://aiprimetech.io/v1/messages`, model `claude-sonnet-4-6`
+- Test input: Russian secured lending competitor record (займ под залог авто, Москва)
+- Result: Claude returned valid JSON, Quality Gate passed, row appended to Google Sheets
+
+**Google Sheets row confirmed:**
+- `service_type` = `pts_loan`
+- `quality_score` = 72
+- `lead_signal_score` = 75
+- `content_idea_score` = 80
+- `competitor_strength` = 68
+- `status` = `analyzed`
+- `recommended_action` = `monitor`
+
+**Path proven:** n8n → Claude API gateway → parse JSON → Quality Gate → Google Sheets ✓
+
+**API cost measured:**
+- Before: $0.0007 | After: $0.0122 | Delta: **$0.0115 per short scoring**
+- ≈ 0.84 RUB per scoring at 73.41 RUB/USD
+- 100 scorings ≈ $1.15 / 84 RUB; 1000 scorings ≈ $11.50 / 844 RUB
+- See `docs/COSTS_AND_LIMITS.md` for full cost table
+
+**Prompt duplication note recorded:**
+- Active prompt is embedded in Build Claude Request node AND stored in `MARKETING_AGENT_PROMPT_V1.md`
+- MARKETING_AGENT_PROMPT_V1.md is the canonical source — update both on any prompt change
+- See DEC-020
+
+**Files updated:**
+- `docs/AGENT_LOG.md` — this entry
+- `docs/NEXT_ACTIONS.md` — Workflow 02 marked complete; Workflow 03 / pre-filter added; uncle consultation step added
+- `docs/DECISIONS.md` — added DEC-020: prompt duplication in v0.1
+- `docs/N8N_WORKFLOW_02_CLAUDE_API_RU.md` — status updated to completed; execution result added
+- `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V1.md` — confirmed active; duplication warning added
+- `tools/TOOLS.md` — Claude API and Google Sheets status updated; cost reference added
+- `docs/COSTS_AND_LIMITS.md` — created: cost baseline, estimates, formula, caveats
+
+**Decisions recorded:** DEC-020
+
+**Baselines locked:**
+- Workflow 02 (`02_claude_api_single_record_analysis.json`) — Claude API + Google Sheets baseline
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
 ## 2026-06-05 — Workflow 02 Created: Claude API Single Record Analysis
 
 **Agent role:** project-engineer

@@ -72,19 +72,23 @@ All tools available or planned for the Marketing Scout ecosystem.
 - **Integration:** n8n HTTP Request node with JSON body
 - **Response parsing:** select content item where `type == "text"` — do not use `content[0].text`; thinking blocks may appear before the text block
 - **Prompt requirement:** system prompt must explicitly forbid markdown and code fences; otherwise output may be wrapped in backticks, breaking JSON.parse
-- **System prompt:** `modules/marketing-scout-v0/SYSTEM_PROMPT.md`
-- **See:** DEC-018
+- **Active prompt:** `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V1.md` (canonical source; also embedded in Workflow 02 Code node — see DEC-020)
+- **Measured cost:** $0.0115 per short scoring ≈ 0.84 RUB — see `docs/COSTS_AND_LIMITS.md`
+- **Workflow 02 baseline:** confirmed working 2026-06-05 — n8n → gateway → parse → Quality Gate → Google Sheets ✓
+- **See:** DEC-018, DEC-019, DEC-020
 
 ---
 
 ## Storage
 
 ### Google Sheets
-- **Status:** Planned for v0.1
+- **Status:** Active — confirmed working 2026-06-05 (Workflow 01 + Workflow 02)
 - **Role:** Stores all scored pipeline output rows
-- **Integration:** n8n Google Sheets node
+- **Integration:** n8n Google Sheets node (append row, autoMapInputData)
 - **Schema:** See `docs/TABLE_SCHEMA.md`
-- **Notes:** One sheet per module/stage. Requires OAuth credentials in n8n.
+- **Credential:** `Google Sheets - Marketing Scout Service Account` (Service Account)
+- **Spreadsheet:** `Marketing Scout Results`, sheet `results`
+- **Cost:** free (Google Workspace free tier)
 
 ---
 

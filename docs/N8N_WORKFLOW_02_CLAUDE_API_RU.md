@@ -1,8 +1,30 @@
 # N8N_WORKFLOW_02_CLAUDE_API_RU.md — Workflow 02: Claude API Single Record Analysis
 
-**Статус:** готов к импорту
+**Статус:** ✓ ВЫПОЛНЕН УСПЕШНО 2026-06-05
 **JSON-файл:** `n8n/workflows/02_claude_api_single_record_analysis.json`
 **Дата:** 2026-06-05
+
+---
+
+## Результат выполнения (2026-06-05)
+
+Воркфлоу выполнен успешно. Claude вернул валидный JSON, Quality Gate пропустил запись, строка добавлена в Google Sheets.
+
+| Поле | Значение |
+|------|---------|
+| `service_type` | `pts_loan` |
+| `quality_score` | 72 |
+| `lead_signal_score` | 75 |
+| `content_idea_score` | 80 |
+| `competitor_strength` | 68 |
+| `status` | `analyzed` |
+| `recommended_action` | `monitor` |
+
+**Измеренная стоимость:** $0.0115 за один короткий AI-скоринг ≈ 0.84 RUB. Подробнее: `docs/COSTS_AND_LIMITS.md`.
+
+**Доказанная цепочка:** n8n → Claude API gateway → парсинг JSON → Quality Gate → Google Sheets ✓
+
+**Не изменять этот воркфлоу** — он является базовым Claude API + Google Sheets baseline.
 
 ---
 
