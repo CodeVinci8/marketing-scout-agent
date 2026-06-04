@@ -11,6 +11,21 @@ All tools available or planned for the Marketing Scout ecosystem.
 - **Role:** Hosts all self-hosted services (n8n, Docker containers)
 - **Notes:** Primary compute environment. All services run here.
 
+### Docker Engine
+- **Status:** Active — version 29.1.3
+- **Role:** Container runtime for all self-hosted services
+- **Current state (as of 2026-06-04):** 3 containers running, 39 images present
+- **Storage driver:** overlayfs
+- **Warning:** Do not run `docker system prune` or any destructive Docker cleanup without explicit operator approval — existing containers are in use.
+
+### Docker Compose
+- **Status:** Active — version v5.1.2
+- **Installation method:** Manual binary install (not apt package)
+  - Binary path: `/usr/local/lib/docker/cli-plugins/docker-compose`
+  - `apt install docker-compose-plugin` failed (package not found on this system)
+- **Usage:** `docker compose` (plugin syntax, not `docker-compose` standalone)
+- **Migration note:** On server rebuild or migration, Docker Compose must be reinstalled manually from the official Docker GitHub releases. It will NOT be present after a standard `apt install docker.io` or equivalent.
+
 ---
 
 ## Orchestration

@@ -5,6 +5,57 @@ Most recent first.
 
 ---
 
+## DEC-012 — Real Credentials Stay Outside Git
+
+**Date:** 2026-06-04
+**Context:** n8n requires an encryption key and may later hold API tokens via env file.
+**Decision:** `n8n.env` and any `docker-compose.yml` containing real values are never committed
+to Git. Only `.example` template files are versioned. The encryption key is generated once on
+the VPS and stored only in the live `n8n.env` file outside the project directory.
+**Alternatives considered:** `.env` in repo with `.gitignore` (rejected — risk of accidental commit).
+
+---
+
+## DEC-011 — No Public Domain or HTTPS for v0.1
+
+**Date:** 2026-06-04
+**Context:** v0.1 is a manual, operator-only pipeline. Public access is not required.
+Setting up a reverse proxy and TLS certificate adds setup time before the pipeline is proven.
+**Decision:** n8n has no public domain or HTTPS in v0.1. All access is via SSH tunnel.
+Public HTTPS will be added when a specific technical requirement arises: Apify/Telegram webhooks,
+Google OAuth redirect URI, or remote monitoring.
+**Alternatives considered:** Caddy with auto-TLS from day one (rejected — unnecessary complexity for v0.1).
+
+---
+
+## DEC-010 — n8n Bound to localhost, Accessed via SSH Tunnel
+
+**Date:** 2026-06-04
+**Context:** n8n must not be exposed to the public internet in v0.1. The operator is the only user.
+**Decision:** n8n is bound to `127.0.0.1:5678` in the Docker Compose port mapping.
+Access is via SSH tunnel: `ssh -L 5678:127.0.0.1:5678 root@SERVER_IP`.
+This eliminates the need for firewall rules, TLS, or authentication hardening for v0.1.
+**Alternatives considered:** Bind to `0.0.0.0:5678` with firewall rule (rejected — accidental exposure risk if firewall misconfigured).
+
+---
+
+## DEC-009 — Docker Compose Installed Manually (Not via apt)
+
+**Date:** 2026-06-04
+**Context:** `apt install docker-compose-plugin` failed — package not found on this VPS.
+Docker Engine (v29.1.3) was already present with 3 running containers and 39 images.
+**Decision:** Docker Compose v5.1.2 was installed manually as a CLI plugin:
+`/usr/local/lib/docker/cli-plugins/docker-compose`
+Used as `docker compose` (plugin syntax).
+**Impact:** On any server migration, rebuild, or fresh OS install, Docker Compose must be
+reinstalled manually from the official Docker GitHub releases page. It will not be present
+after a standard apt Docker install.
+**Safety note:** Do not run `docker system prune` or destructive Docker cleanup without
+explicit operator approval — existing containers are actively running.
+**Alternatives considered:** `docker-compose` standalone binary (rejected — plugin syntax preferred; standalone is deprecated).
+
+---
+
 ## DEC-008 — v0.1 Apify Integration: Simple Start + Wait + Fetch
 
 **Date:** 2026-06-04

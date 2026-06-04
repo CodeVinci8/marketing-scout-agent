@@ -45,3 +45,9 @@ docker-compose.override.yml
 # Claude Code local settings
 .claude/settings.local.json
 .claude/*.local.json
+
+# Real deployment files
+n8n.env
+docker-compose.yml
+/opt/n8n/
+*.tar.gz

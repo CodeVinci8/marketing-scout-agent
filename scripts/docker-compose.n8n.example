@@ -1,0 +1,32 @@
+# docker-compose.n8n.example
+# Copy this file to your deployment directory and rename it to docker-compose.yml.
+# Do NOT commit the real docker-compose.yml if it contains real values.
+#
+# Usage:
+#   cp scripts/docker-compose.n8n.example /opt/n8n/docker-compose.yml
+#   cp scripts/n8n.env.example /opt/n8n/n8n.env
+#   # Edit n8n.env — set N8N_ENCRYPTION_KEY and any other real values
+#   cd /opt/n8n && docker compose up -d
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+
+    # Bind to localhost only — not exposed to the public internet.
+    # Access via SSH tunnel: ssh -L 5678:127.0.0.1:5678 root@SERVER_IP
+    ports:
+      - "127.0.0.1:5678:5678"
+
+    # All environment variables are loaded from n8n.env (not committed).
+    env_file:
+      - ./n8n.env
+
+    # Persistent volume — stores workflows, credentials, and execution history.
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+# Named volume managed by Docker.
+# Data persists across container restarts and updates.
+volumes:
+  n8n_data:

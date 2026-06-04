@@ -5,6 +5,48 @@ Most recent first.
 
 ---
 
+## 2026-06-04 — n8n Deployment Templates Created
+
+**Agent role:** project-engineer
+**Session goal:** Prepare n8n deployment templates for v0.1 — localhost-only, SSH tunnel access, no real secrets.
+
+**Files created:**
+- `scripts/docker-compose.n8n.example` — minimal Docker Compose for n8n: localhost port binding, n8n_data volume, env_file reference, commented
+- `scripts/n8n.env.example` — all required env vars with MVP-safe values; placeholder for N8N_ENCRYPTION_KEY with generation instruction
+- `docs/N8N_DEPLOYMENT.md` — full deployment guide: SSH tunnel rationale, copy steps, key generation, start/logs/update commands, what not to commit, future HTTPS path
+
+**Files updated:**
+- `docs/DECISIONS.md` — added DEC-010 (localhost binding + SSH tunnel), DEC-011 (no public domain/HTTPS for v0.1), DEC-012 (real credentials outside Git)
+- `docs/NEXT_ACTIONS.md` — Step 2 marked complete with deploy commands summary
+- `docs/AGENT_LOG.md` — this entry
+
+**Decisions recorded:** DEC-010, DEC-011, DEC-012
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
+## 2026-06-04 — Docker Compose Installation State Documented
+
+**Agent role:** project-engineer
+**Session goal:** Record Docker Engine and Docker Compose installation state discovered on VPS.
+
+**Context recorded:**
+- Docker Engine v29.1.3 — active, 3 containers running, 39 images, overlayfs storage driver
+- Docker Compose v5.1.2 — installed manually at `/usr/local/lib/docker/cli-plugins/docker-compose`
+- `apt install docker-compose-plugin` failed (package not found); manual binary install used instead
+- Existing containers are running — no destructive Docker cleanup without explicit approval
+
+**Files edited:**
+- `tools/TOOLS.md` — added Docker Engine and Docker Compose entries under Infrastructure with version, install method, and migration warning
+- `docs/DECISIONS.md` — added DEC-009 documenting manual install decision and safety note
+- `docs/NEXT_ACTIONS.md` — marked Docker/Compose checks complete; added note referencing DEC-009
+- `docs/AGENT_LOG.md` — this entry
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
 ## 2026-06-04 — Pre-Commit Fix: Claude API Response Format
 
 **Agent role:** project-engineer

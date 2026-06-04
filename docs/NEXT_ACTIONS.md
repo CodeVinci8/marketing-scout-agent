@@ -11,14 +11,19 @@ Updated at the end of each session. This is the first thing to read after `core/
 - [x] Documentation review fixes applied (2026-06-04)
 - [x] Confirm roadmap stages and stack are correct
 
-### Step 2 — Prepare docker-compose.yml for n8n
+### Step 2 — Prepare docker-compose.yml for n8n ✓
 
-Before running Docker, a `docker-compose.yml` file must be prepared for n8n.
+- [x] `scripts/docker-compose.n8n.example` created — localhost-only, n8n_data volume, env_file
+- [x] `scripts/n8n.env.example` created — all required env vars with MVP-safe defaults
+- [x] `docs/N8N_DEPLOYMENT.md` created — full deployment guide including SSH tunnel, HTTPS deferral, what not to commit
 
-- [ ] Request agent to generate `scripts/docker-compose.n8n.example` based on official n8n Docker image
-- [ ] Review the compose file — set data volume path, port, and timezone
-- [ ] Copy to the VPS and rename to `docker-compose.yml` (outside this project dir)
-- [ ] **Do not run Docker commands** until the compose file is reviewed and approved
+**To deploy** (operator runs — see `docs/N8N_DEPLOYMENT.md` for full steps):
+```bash
+mkdir -p /opt/n8n
+cp scripts/docker-compose.n8n.example /opt/n8n/docker-compose.yml
+cp scripts/n8n.env.example /opt/n8n/n8n.env
+# Edit n8n.env: set N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)
+```
 
 **Access method for v0.1:** n8n will be accessed via SSH tunnel only — no public domain,
 no reverse proxy, no HTTPS required for MVP.
@@ -33,10 +38,13 @@ Public HTTPS/domain access is deferred until webhooks or OAuth integrations requ
 
 ### Step 3 — Start n8n on VPS
 
-- [ ] Confirm Docker and Docker Compose are installed on VPS (`docker --version`, `docker compose version`)
+- [x] Docker Engine confirmed: v29.1.3, 3 containers running, 39 images present
+- [x] Docker Compose confirmed: v5.1.2 (manual install at `/usr/local/lib/docker/cli-plugins/docker-compose`)
 - [ ] Upload or create `docker-compose.yml` on VPS in a dedicated directory (e.g. `/opt/n8n/`)
 - [ ] Run: `docker compose up -d` (operator runs this — agent proposes only)
 - [ ] Verify n8n UI accessible via SSH tunnel at `http://localhost:5678`
+
+> **Note:** Docker Compose was installed manually — not via apt. See `docs/DECISIONS.md` DEC-009 and `tools/TOOLS.md` for migration/troubleshooting details. Do not run `docker system prune` without explicit approval.
 
 ### Step 4 — API Credentials Setup in n8n
 
