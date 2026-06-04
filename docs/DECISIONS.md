@@ -5,6 +5,22 @@ Most recent first.
 
 ---
 
+## DEC-017 — Google Sheets Headers: Single Row 1, Horizontal Only
+
+**Date:** 2026-06-04
+**Context:** During Workflow 01 testing, the Google Sheet was initially created with field names
+entered vertically in column A (rows 1–25) instead of horizontally in row 1 (columns A–Y).
+n8n's `autoMapInputData` mode matches fields by column header name in row 1 — it does not read
+vertical headers. The rows 2–25 had to be deleted, leaving only the horizontal header row 1.
+**Decision:** The Google Sheet `results` must have exactly one header row: row 1, columns A–Y,
+with field names matching the output of the Code/Claude node exactly (case-sensitive).
+All data rows start at row 2. No vertical layouts, no merged cells in the header.
+**How to fix if broken:** Delete rows 2–25 in Google Sheets if they contain field names in column A;
+keep only row 1 with horizontal headers.
+**Alternatives considered:** Using `defineBelow` column mapping in n8n (deferred — adds maintenance burden when schema changes).
+
+---
+
 ## DEC-016 — Google Sheets Integration: Service Account, Not OAuth2
 
 **Date:** 2026-06-04

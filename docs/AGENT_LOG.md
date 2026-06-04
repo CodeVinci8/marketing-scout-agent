@@ -5,6 +5,39 @@ Most recent first.
 
 ---
 
+## 2026-06-04 — Workflow 01 Executed Successfully; Google Sheets Integration Confirmed
+
+**Agent role:** project-engineer
+**Session goal:** Record successful Workflow 01 execution and document the header fix discovered during testing.
+
+**Execution confirmed:**
+- Workflow: `01 - Google Sheets Append Row Test`
+- Credential: `Google Sheets - Marketing Scout Service Account` (Service Account)
+- Sheet: `Marketing Scout Results` → tab `results`
+- Result: row appended — `status=analyzed`, `quality_score=75`, `source_type=manual_test`, `platform=test`
+- Path proven: n8n → Google Service Account → Google Sheets Append Row
+
+**Issue discovered and resolved:**
+- Table initially had field names entered vertically in column A (rows 1–25) instead of horizontally in row 1
+- Fix: deleted rows 2–25, kept only row 1 as the single horizontal header row
+- Decision recorded as DEC-017
+
+**Files updated:**
+- `docs/AGENT_LOG.md` — this entry
+- `docs/NEXT_ACTIONS.md` — Workflow 01 marked complete with note on header fix; Workflow 02 (Claude API) added as next action with concrete pre-steps
+- `docs/DECISIONS.md` — added DEC-017: single horizontal header row required in Google Sheets
+- `docs/N8N_WORKFLOW_01_GOOGLE_SHEETS_RU.md` — status updated to completed; do-not-modify note added; section on header layout and Git commit warning added
+
+**Decisions recorded:** DEC-017
+
+**Baselines locked:**
+- Workflow 00 (`00_healthcheck_manual_test.json`) — platform healthcheck
+- Workflow 01 (`01_google_sheets_append_row_test.json`) — Google Sheets baseline
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
 ## 2026-06-04 — Workflow 01 Google Sheets JSON Generated and Validated
 
 **Agent role:** project-engineer

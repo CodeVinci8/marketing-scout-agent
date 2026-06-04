@@ -85,30 +85,32 @@ Workflows are built incrementally — no external APIs until the platform is ver
 > Confirmed working method: Claude Code generates n8n JSON → committed to repo →
 > operator imports into n8n. This is the standard workflow delivery method going forward.
 
-#### Workflow 01 — Google Sheets Append Row Test _(next)_
+#### Workflow 01 — Google Sheets Append Row Test ✓ COMPLETED 2026-06-04
 
 **Guide:** `docs/N8N_WORKFLOW_01_GOOGLE_SHEETS_RU.md`
-**JSON:** `n8n/workflows/01_google_sheets_append_row_test.json` — ready to import
+**JSON:** `n8n/workflows/01_google_sheets_append_row_test.json`
 
-**Pre-import (operator does once):**
-- [ ] Create Google Sheets spreadsheet with headers from `docs/TABLE_SCHEMA.md` in row 1, sheet named `results`
-- [ ] Share the spreadsheet with the service account email (Editor permission)
-- [ ] Create credential in n8n: **Settings → Credentials → Google API (Service Account)**; name it `Google Sheets - Marketing Scout Service Account`
+- [x] Google Sheets spreadsheet "Marketing Scout Results" created; sheet named `results`
+- [x] Service account created in n8n as `Google Sheets - Marketing Scout Service Account`
+- [x] Spreadsheet shared with service account (Editor)
+- [x] Workflow imported and configured (credential + Spreadsheet ID)
+- [x] Executed successfully — test row appended: `status=analyzed`, `quality_score=75`, `source_type=manual_test`
 
-**Import and configure:**
-- [ ] Import JSON: **Workflows → ⋮ → Import from File** → `01_google_sheets_append_row_test.json`
-- [ ] Open node **Append Row to Google Sheets** → select credential `Google Sheets - Marketing Scout Service Account`
-- [ ] Replace `PASTE_SPREADSHEET_ID_HERE` with the real Spreadsheet ID from the sheet URL
-- [ ] Confirm sheet name field shows `results`
+**Note:** table initially had vertical header rows in column A (rows 2–25); fixed by deleting rows 2–25, keeping only row 1 as the single horizontal header row.
 
-**Run:**
-- [ ] Click **Test workflow** — verify new row appears in the Google Sheet
-- [ ] Confirm `status=analyzed`, `quality_score=75` in the appended row
+**Do not modify this workflow** — it is the Google Sheets baseline for the project.
+**Do not commit** real Spreadsheet ID or service account email to Git.
 
-Print JSON for clipboard import:
-```bash
-cat n8n/workflows/01_google_sheets_append_row_test.json
-```
+#### Workflow 02 — Claude API Single Record Analysis _(next)_
+
+**Goal:** replace the hardcoded Code node values with a real Claude API call; verify that n8n can send one competitor record to Claude and receive structured JSON back.
+
+- [ ] Guide to be written: `docs/N8N_WORKFLOW_02_CLAUDE_API_RU.md`
+- [ ] JSON to be generated: `n8n/workflows/02_claude_api_single_record.json`
+- [ ] Create Claude API credential in n8n: HTTP Header Auth, key `x-api-key`
+- [ ] Use system prompt from `modules/marketing-scout-v0/SYSTEM_PROMPT.md`
+- [ ] Parse Claude response: `{{ $json.content[0].text }}` → JSON.parse → downstream fields
+- [ ] No Apify, no Google Sheets in this workflow — Claude API only
 
 #### Workflow 10 — Full Pipeline _(after credentials are set up)_
 
@@ -137,4 +139,4 @@ cat n8n/workflows/01_google_sheets_append_row_test.json
 
 ## Blocked On
 
-Nothing currently blocked. Next concrete action: **Workflow 01 — Google Sheets Append Row Test** — create the spreadsheet, set up service account credential in n8n, import `01_google_sheets_append_row_test.json`, configure credential + Spreadsheet ID in the node, run.
+Nothing currently blocked. Next concrete action: **Workflow 02 — Claude API Single Record Analysis** — create Claude API credential in n8n (HTTP Header Auth), generate and import `02_claude_api_single_record.json`, verify Claude returns structured JSON for one test competitor record.
