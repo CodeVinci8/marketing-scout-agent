@@ -5,6 +5,19 @@ Most recent first.
 
 ---
 
+## DEC-021 — No Paid Scraping Until Prompt v2 Is Ready and Business Requirements Are Clarified
+
+**Date:** 2026-06-05
+**Context:** Milestone Review 02 identified that Marketing Agent Prompt v1 is an extractor/classifier, not a marketing analyst. It also confirmed that the operator's uncle's specific business requirements (which platforms, which outputs, which actions matter) have not been discussed. Starting paid Apify or Firecrawl scraping before these two things are resolved will produce low-value outputs and waste the limited test budget.
+**Decision:** Do not start any paid web scraping (Apify, Firecrawl) until BOTH of the following are done:
+1. Marketing Agent Prompt v2 is written, tested against synthetic records, and approved by the operator
+2. The operator's uncle has confirmed what business outputs and target platforms he actually needs
+**Rationale:** The $5 Claude API test budget and unknown Firecrawl/Apify free tier limits are finite. Burning them on v1 prompt + wrong targets is waste. The infrastructure is now proven. The next investment is in prompt and requirements quality.
+**Trigger to unblock:** Operator confirms uncle's requirements in writing (even a brief bullet list) AND v2 prompt passes the 5-record synthetic test described in `MARKETING_AGENT_PROMPT_V2_PLAN.md`.
+**Alternatives considered:** Proceed with scraping immediately to generate real data for prompt improvement (rejected — real data costs money; synthetic test records are sufficient for prompt iteration).
+
+---
+
 ## DEC-020 — Prompt Duplication in v0.1: Embedded + File Source
 
 **Date:** 2026-06-05

@@ -119,17 +119,40 @@ Workflows are built incrementally — no external APIs until the platform is ver
 **Do not modify this workflow** — it is the Claude API + Google Sheets baseline for the project.
 **Prompt duplication note:** prompt is embedded in Build Claude Request node AND stored in MARKETING_AGENT_PROMPT_V1.md — update both on any change (see DEC-020).
 
-#### Pre-Workflow 03 — Business Requirements Clarification _(next — must come before real scraping)_
+#### Pre-Workflow 03 — Step A: Business Requirements Clarification _(next — zero cost, high value)_
 
-**Goal:** Before building scraping workflows with real data, clarify with the operator (uncle) what business outputs and columns he actually needs. This prevents building the wrong pipeline.
+**Goal:** Ask uncle what he actually needs. His answers determine every subsequent workflow, scraping target, and quality threshold.
 
-- [ ] **Ask uncle:** which output columns does he care about most? (lead_signal, competitor monitoring, content ideas, all three?)
-- [ ] **Ask uncle:** which platforms/sources should be prioritized first? (Avito, VK, competitor websites?)
-- [ ] **Ask uncle:** what does "actionable result" look like for him? (a row in Sheets, a Telegram message, a daily summary?)
-- [ ] Record answers in `docs/DECISIONS.md` and update `docs/TABLE_SCHEMA.md` if column priorities change
-- [ ] Only after this conversation: proceed to Workflow 03
+- [ ] **Ask uncle:** What is the primary use case — competitor monitoring, lead capture, or content strategy?
+- [ ] **Ask uncle:** Which platforms/sources matter most? (Avito, VK, competitor websites, Telegram groups?)
+- [ ] **Ask uncle:** What does a useful result look like? (row in Sheets, daily Telegram summary, leads to call?)
+- [ ] **Ask uncle:** What is the target region? (Moscow only, Moscow Oblast, other cities?)
+- [ ] **Ask uncle:** What loan products does he offer? (PTS only, real estate, both?) This shapes the ICP in Prompt v2.
+- [ ] Record answers in `docs/DECISIONS.md`
+- [ ] Update ICP section of `MARKETING_AGENT_PROMPT_V2_PLAN.md` with confirmed facts
 
-> This step costs nothing and prevents wasted scraping budget on wrong data.
+> See DEC-021. Do not start paid scraping until this conversation happens.
+
+#### Pre-Workflow 03 — Step B: Marketing Agent Prompt v2 _(after uncle consultation)_
+
+**Goal:** Write, test, and approve an upgraded agent prompt before any paid scraping.
+
+- [ ] Write `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` based on `MARKETING_AGENT_PROMPT_V2_PLAN.md`
+- [ ] Build synthetic test set: 5 records (strong competitor, weak competitor, strong lead, weak lead, boilerplate)
+- [ ] Run v2 prompt test calls manually (5 calls) — measure actual cost, compare outputs to v1
+- [ ] Review `reason`, `competitor_threat_summary`, `content_angle` fields for quality
+- [ ] Get operator approval before embedding into workflow JSON
+- [ ] Update `02_claude_api_single_record_analysis.json` Build Claude Request node with v2 prompt text
+
+> See `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md` for full design.
+
+#### Pre-Workflow 03 — Step C: Documentation consistency fixes _(zero cost)_
+
+- [ ] `WORKFLOW_DESIGN.md` — update gateway URL, prompt reference, quality_threshold scale, parse pattern
+- [ ] `TABLE_SCHEMA.md` — update score types to integer 1–100, competitor_strength to integer
+- [ ] `README.md` — update current stage from "in design" to "infrastructure validated"
+- [ ] `tools/TOOLS.md` — fix Google Sheets auth type; update GitHub status
+- [ ] `core/warm/decisions.md` — add DEC-018, DEC-019, DEC-020, DEC-021
 
 #### Workflow 03 — Firecrawl Website Analysis _(after uncle consultation)_
 
@@ -174,4 +197,8 @@ Workflows are built incrementally — no external APIs until the platform is ver
 
 ## Blocked On
 
-Nothing technically blocked. Next concrete action: **Ask uncle about business requirements** — which outputs and platforms matter most before building real scraping workflows. Then proceed to Workflow 03 (Firecrawl). See pre-requisite step above.
+Not technically blocked. Deliberately paused on paid scraping pending:
+1. Uncle's business requirements (Step A above)
+2. Marketing Agent Prompt v2 (Step B above)
+
+See DEC-021. Next zero-cost action: **consult uncle**, then write Prompt v2.

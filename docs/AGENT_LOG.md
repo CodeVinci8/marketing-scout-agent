@@ -5,6 +5,35 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Milestone Review 02; Prompt v2 Plan Created
+
+**Agent role:** project-engineer
+**Session goal:** Full milestone review after Workflow 02; assess prompt quality; plan next steps.
+
+**Review findings (see `docs/MILESTONE_REVIEW_02.md`):**
+- 3 baselines proven: Workflow 00, 01, 02 ✓
+- Core AI loop proven: n8n → Claude → parse → Quality Gate → Google Sheets ✓
+- 7 risks identified before real scraping — prompt quality and unknown business requirements are top risks
+- 12 documentation consistency issues identified
+- Current prompt v1 assessed as extractor/classifier, not a marketing analyst
+- Cost model baseline exists but needs real-page measurement
+
+**Files created:**
+- `docs/MILESTONE_REVIEW_02.md` — full review: proven, unproven, risks, docs issues, prompt assessment, cost assessment, security checklist, 5 recommended actions
+- `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md` — 15-section design plan for stronger agent prompt: ICP, competitive threat logic, lead urgency model, content angle framework, new JSON fields, test strategy
+
+**Files updated:**
+- `docs/AGENT_LOG.md` — this entry
+- `docs/DECISIONS.md` — added DEC-021: no paid scraping until Prompt v2 ready and uncle consulted
+- `docs/NEXT_ACTIONS.md` — restructured: Step A (uncle consult), Step B (Prompt v2), Step C (doc fixes); Blocked On updated
+- `core/hot/recent.md` — updated
+
+**Decisions recorded:** DEC-021
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
 ## 2026-06-05 — Workflow 02 Executed Successfully; Claude API + Google Sheets Confirmed
 
 **Agent role:** project-engineer
