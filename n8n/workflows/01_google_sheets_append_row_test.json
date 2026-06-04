@@ -1,0 +1,193 @@
+{
+  "name": "01 - Google Sheets Append Row Test",
+  "nodes": [
+    {
+      "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e11",
+      "name": "Описание воркфлоу",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, -300],
+      "parameters": {
+        "content": "Workflow 01 — тест записи в Google Sheets. Проверяет, что n8n может взять структурированные тестовые данные и добавить их строкой в таблицу. Claude API, Apify и Firecrawl пока не используются.",
+        "height": 200,
+        "width": 580,
+        "color": 4
+      }
+    },
+    {
+      "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e12",
+      "name": "Manual Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [100, 100],
+      "parameters": {}
+    },
+    {
+      "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e13",
+      "name": "Set Test Competitor Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [380, 100],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e21",
+              "name": "platform",
+              "value": "test",
+              "type": "string"
+            },
+            {
+              "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e22",
+              "name": "source_url",
+              "value": "https://example.com/test-google-sheets",
+              "type": "string"
+            },
+            {
+              "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e23",
+              "name": "company_name",
+              "value": "Test Competitor",
+              "type": "string"
+            },
+            {
+              "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e24",
+              "name": "profile_name",
+              "value": "Test Profile",
+              "type": "string"
+            },
+            {
+              "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e25",
+              "name": "profile_url",
+              "value": "https://example.com/profile",
+              "type": "string"
+            },
+            {
+              "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e26",
+              "name": "region",
+              "value": "Москва",
+              "type": "string"
+            },
+            {
+              "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e27",
+              "name": "text_context",
+              "value": "Компания предлагает кредит под залог автомобиля. Решение за 1 день. Работаем по Москве и области.",
+              "type": "string"
+            },
+            {
+              "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e28",
+              "name": "parsed_at",
+              "value": "2026-06-04",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e14",
+      "name": "Mock Marketing Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 100],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first().json;\nconst now = new Date().toISOString();\n\nreturn [\n  {\n    json: {\n      created_at: now,\n      source_type: \"manual_test\",\n      platform: item.platform,\n      source_url: item.source_url,\n      parsed_at: item.parsed_at,\n      published_at: \"\",\n      freshness_status: \"unknown\",\n      entity_type: \"competitor\",\n      company_name: item.company_name,\n      profile_name: item.profile_name,\n      profile_url: item.profile_url,\n      region: item.region,\n      service_type: \"secured_auto_loan\",\n      offer_text: \"Кредит под залог автомобиля, решение за 1 день\",\n      terms: \"Тестовые условия, не реальные данные\",\n      contact_public: \"\",\n      text_context: item.text_context,\n      detected_need: \"Потребность в быстром займе под залог авто\",\n      competitor_strength: 60,\n      lead_signal_score: 40,\n      content_idea_score: 70,\n      quality_score: 75,\n      reason: \"Test Google Sheets row processed successfully\",\n      recommended_action: \"Use this as a baseline row format before connecting Claude API\",\n      status: \"analyzed\"\n    }\n  }\n];"
+      }
+    },
+    {
+      "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e15",
+      "name": "Append Row to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [940, 100],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "results",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e16",
+      "name": "Настройка перед запуском",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [940, 320],
+      "parameters": {
+        "content": "Перед запуском выбери credential: Google Sheets - Marketing Scout Service Account. Затем укажи Spreadsheet ID своей таблицы Marketing Scout Results и лист results. Успешный результат — новая строка появляется в Google Sheet.",
+        "height": 200,
+        "width": 460,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Set Test Competitor Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Test Competitor Data": {
+      "main": [
+        [
+          {
+            "node": "Mock Marketing Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock Marketing Analysis": {
+      "main": [
+        [
+          {
+            "node": "Append Row to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e01",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": ""
+  },
+  "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e00",
+  "pinData": {},
+  "tags": []
+}

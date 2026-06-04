@@ -87,13 +87,28 @@ Workflows are built incrementally — no external APIs until the platform is ver
 
 #### Workflow 01 — Google Sheets Append Row Test _(next)_
 
-**Goal:** prove that n8n can write one hardcoded row to Google Sheets — no scraping, no Claude API.
+**Guide:** `docs/N8N_WORKFLOW_01_GOOGLE_SHEETS_RU.md`
+**JSON:** `n8n/workflows/01_google_sheets_append_row_test.json` — ready to import
 
-- [ ] Create Google Sheets spreadsheet with columns from `docs/TABLE_SCHEMA.md`
-- [ ] Set up Google Sheets OAuth2 credentials in n8n UI
-- [ ] Guide to be written: `docs/N8N_WORKFLOW_01_SHEETS_TEST_RU.md`
-- [ ] JSON to be generated: `n8n/workflows/01_sheets_append_row_test.json`
-- [ ] Import and run — verify row appears in the spreadsheet
+**Pre-import (operator does once):**
+- [ ] Create Google Sheets spreadsheet with headers from `docs/TABLE_SCHEMA.md` in row 1, sheet named `results`
+- [ ] Share the spreadsheet with the service account email (Editor permission)
+- [ ] Create credential in n8n: **Settings → Credentials → Google API (Service Account)**; name it `Google Sheets - Marketing Scout Service Account`
+
+**Import and configure:**
+- [ ] Import JSON: **Workflows → ⋮ → Import from File** → `01_google_sheets_append_row_test.json`
+- [ ] Open node **Append Row to Google Sheets** → select credential `Google Sheets - Marketing Scout Service Account`
+- [ ] Replace `PASTE_SPREADSHEET_ID_HERE` with the real Spreadsheet ID from the sheet URL
+- [ ] Confirm sheet name field shows `results`
+
+**Run:**
+- [ ] Click **Test workflow** — verify new row appears in the Google Sheet
+- [ ] Confirm `status=analyzed`, `quality_score=75` in the appended row
+
+Print JSON for clipboard import:
+```bash
+cat n8n/workflows/01_google_sheets_append_row_test.json
+```
 
 #### Workflow 10 — Full Pipeline _(after credentials are set up)_
 
@@ -122,4 +137,4 @@ Workflows are built incrementally — no external APIs until the platform is ver
 
 ## Blocked On
 
-Nothing currently blocked. Next concrete action: **Workflow 01 — Google Sheets Append Row Test** — set up Google Sheets OAuth2 credentials in n8n, then generate and import `01_sheets_append_row_test.json`.
+Nothing currently blocked. Next concrete action: **Workflow 01 — Google Sheets Append Row Test** — create the spreadsheet, set up service account credential in n8n, import `01_google_sheets_append_row_test.json`, configure credential + Spreadsheet ID in the node, run.

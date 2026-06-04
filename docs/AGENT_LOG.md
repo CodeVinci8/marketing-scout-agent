@@ -5,6 +5,37 @@ Most recent first.
 
 ---
 
+## 2026-06-04 — Workflow 01 Google Sheets JSON Generated and Validated
+
+**Agent role:** project-engineer
+**Session goal:** Generate importable n8n workflow JSON for Workflow 01 and write the Russian operator guide.
+
+**Files created:**
+- `n8n/workflows/01_google_sheets_append_row_test.json` — importable n8n workflow JSON:
+  6 nodes (2 Sticky Notes, Manual Trigger, Set/Edit Fields, Code, Google Sheets append),
+  no real credentials (placeholder `PASTE_CREDENTIAL_ID_HERE`),
+  no real Spreadsheet ID (placeholder `PASTE_SPREADSHEET_ID_HERE`),
+  `active: false`, explicit positions, connections Manual Start → Set → Code → Google Sheets.
+  Google Sheets node: `n8n-nodes-base.googleSheets v4`, operation `append`,
+  `autoMapInputData` mode, sheet name `results`.
+  Validated: 9/9 checks passed.
+- `docs/N8N_WORKFLOW_01_GOOGLE_SHEETS_RU.md` — Russian guide: purpose, pre-import steps,
+  import instructions, 3 manual config items (credential, Spreadsheet ID, sheet name),
+  expected n8n output, expected Google Sheet row (25 fields), error table (6 errors),
+  non-technical client explanation, pointer to Workflow 02
+
+**Files updated:**
+- `docs/NEXT_ACTIONS.md` — Workflow 01 expanded with pre-import, import, configure, and run steps;
+  JSON filename corrected; "Blocked On" updated
+- `docs/DECISIONS.md` — added DEC-016: Service Account chosen over OAuth2 for Google Sheets
+- `docs/AGENT_LOG.md` — this entry
+
+**Decisions recorded:** DEC-016
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
 ## 2026-06-04 — Workflow 00 Executed Successfully; JSON Delivery Method Confirmed
 
 **Agent role:** project-engineer

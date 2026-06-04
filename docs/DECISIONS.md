@@ -5,6 +5,20 @@ Most recent first.
 
 ---
 
+## DEC-016 — Google Sheets Integration: Service Account, Not OAuth2
+
+**Date:** 2026-06-04
+**Context:** n8n supports two authentication methods for Google Sheets: OAuth2 (browser-based)
+and Service Account (key file). OAuth2 requires a browser redirect during credential setup,
+which is cumbersome via SSH tunnel. Service Account credentials are created once using a JSON key
+file and do not require interactive browser flow.
+**Decision:** Use Google Service Account (`googleApi` credential type in n8n) for Google Sheets
+in all v0.1 workflows. The service account email must be added as Editor to the target spreadsheet.
+**Credential name convention:** `Google Sheets - Marketing Scout Service Account`
+**Alternatives considered:** OAuth2 (deferred — requires browser redirect, adds setup friction in SSH-only environment).
+
+---
+
 ## DEC-015 — n8n Workflow Delivery via Generated JSON (Confirmed)
 
 **Date:** 2026-06-04
