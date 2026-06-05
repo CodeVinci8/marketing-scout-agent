@@ -1,13 +1,22 @@
-# Руководство по тестированию Prompt v2 в n8n
+# Руководство по тестированию Prompt v2.1 в n8n
 
-**Дата:** 2026-06-05
-**Цель:** Протестировать Marketing Agent Prompt v2 на 7 синтетических записях через
+**Дата:** 2026-06-05 (обновлено: v2.1 патч)
+**Цель:** Протестировать Marketing Agent Prompt v2.1 на 7 синтетических записях через
 готовый TEST HARNESS workflow — без ручного редактирования кода.
 **Не изменять:** `n8n/workflows/02_claude_api_single_record_analysis.json` — только после одобрения.
 **TEST HARNESS JSON:** `n8n/workflows/02_claude_api_single_record_v2_test_harness.json`
-**Промпт v2:** `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md`
+**Промпт v2.1:** `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md`
 **Тестовые записи:** `modules/marketing-scout-v0/TEST_RECORDS_V2.md`
 **Ожидаемая стоимость:** ~$0.10–0.20 за 7 вызовов (≈ 7–15 руб.)
+
+> **v2.1 патч (2026-06-05):** Тест 5 (контент-идея) упал с ошибкой JSON.parse в production.
+> Причина: Claude возвращал кавычки или двоеточия внутри строк `offer_text`, что ломало JSON.
+> Исправлено в двух местах:
+> 1. **Промпт v2.1** — добавлен раздел JSON SAFETY RULES; переписаны правила для `offer_text` и `detected_need`.
+> 2. **Parse-нода TEST HARNESS** — добавлена многоступенчатая очистка: brace extraction + нормализация типографских кавычек перед JSON.parse.
+>
+> **Что делать:** Сначала перезапустить только Тест 5. Если JSON parse прошёл — запустить все 7.
+> Если Тест 5 снова упал — сообщить оператору, не запускать остальные тесты.
 
 ---
 
@@ -102,7 +111,7 @@ Spreadsheet ID вставить в параметр **Document ID** ноды `Ap
 | 2 — Слабый лид | `entity_type=lead_signal`, `recommended_action≠contact`, `lead_signal_score≤50`, `region` пустой |
 | 3 — Конкурент авто | `entity_type=competitor`, `recommended_action=monitor`, `competitor_strength≥80`, `terms` содержит ставку |
 | 4 — Конкурент RE | `entity_type=competitor`, `competitor_strength` 60–85 (не 90+), `terms` пустой (ставка не указана) |
-| 5 — Контент-идея | `entity_type=content_idea`, `recommended_action=create_content`, `offer_text` — предложенный заголовок статьи |
+| 5 — Контент-идея | `entity_type=content_idea`, `recommended_action=create_content`, `offer_text` — тема статьи без кавычек и двоеточий, **JSON parse не упал** |
 | 6 — SEO-мусор | `status=skipped`, `quality_score=1`, Quality Gate = false, строка НЕ добавляется в Sheets |
 | 7 — Рефинансирование | `entity_type=lead_signal`, `recommended_action=investigate`, `lead_signal_score` 40–70, `region` — МО/Подмосковье |
 
@@ -147,11 +156,12 @@ Spreadsheet ID вставить в параметр **Document ID** ноды `Ap
 - [ ] Тест 2: `recommended_action ≠ contact`, `lead_signal_score ≤ 50`
 - [ ] Тест 3: `recommended_action = monitor`, `competitor_strength ≥ 80`, `terms` содержит ставку
 - [ ] Тест 4: `competitor_strength` от 60 до 85 (не 90+), `terms` пустой
-- [ ] Тест 5: `recommended_action = create_content`, `offer_text` — заголовок/тема (не описание поста)
+- [ ] Тест 5: `recommended_action = create_content`, `offer_text` — тема статьи без кавычек и двоеточий, **JSON parse не упал** (ключевой критерий v2.1)
 - [ ] Тест 6: `status = skipped`, `quality_score = 1`, все остальные оценки = 1
 - [ ] Тест 7: `recommended_action = investigate`, `lead_signal_score` 40–70, `region` — МО или Подмосковье, не Москва
-- [ ] Все 7 вызовов вернули валидный JSON без ошибок парсинга
+- [ ] **Все 7 вызовов вернули валидный JSON без ошибок парсинга** — обязательное условие (DEC-024)
 - [ ] Ни один ответ не содержит markdown-обрамления (``` )
+- [ ] `offer_text` для теста 5 не начинается с "Статья:", "Пост:" или другого лейбла
 - [ ] Стоимость одного вызова не превышает $0.05
 
 **Если 6 из 7 тестов прошли → допустимо обсудить с оператором. Если все 7 → одобрять.**

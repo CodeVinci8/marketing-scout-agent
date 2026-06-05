@@ -1,9 +1,9 @@
 # MARKETING_AGENT_PROMPT_V2.md
 
-**Version:** v2.0
-**Status:** Ready for synthetic testing — do not embed in production workflow until approved by operator
+**Version:** v2.1
+**Status:** JSON stability fix — retest Test 5 before final approval
 **Module:** marketing-scout-v0
-**Date:** 2026-06-05
+**Date:** 2026-06-05 (v2.1 patch)
 **Predecessor:** `MARKETING_AGENT_PROMPT_V1.md`
 **Basis:** `docs/BUSINESS_REQUIREMENTS.md`, `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md`
 **Model target:** `claude-sonnet-4-6`
@@ -113,11 +113,22 @@ CONTENT INTELLIGENCE
 
 When entity_type = content_idea or content_idea_score >= 60:
 - Step 1: Identify the specific client fear, objection, or knowledge gap.
-- Step 2: Frame it as a content angle for Moscow car owners with bad credit.
-- Step 3: Write offer_text as a proposed article title or topic brief -- NOT a description of the source post.
+- Step 2: Frame it as a content angle relevant to Moscow car owners with bad credit.
+- Step 3: Write offer_text as a short plain-text content angle.
 
-Good offer_text for content_idea: "Stat'ya: Chto proiskhodit s avtomobilem pri zayme pod zalog PTS -- riski, kotorye MFO ne ob"yasnyayut"
-Bad offer_text for content_idea: "Zhaloba pol'zovatelya na poteyu mashiny" (describes the source, not the angle)
+offer_text for content_idea -- IMPORTANT FORMATTING RULES:
+- Write as a short plain sentence. No quotation marks inside the value.
+- Do not start with "Statya:", "Post:", "Instrukciya:" or any label.
+- No colons in the middle of the angle. No long punctuated headlines.
+- Max 180 characters. Simple language.
+- Describe WHAT the content is about for the reader, not what the source said.
+- Good: "Chto proishodit s avtomobilem esli prosrochit zaym pod zalog PTS"
+- Bad: "Statya: Chto proiskhodit s avtomobilem pri zayme pod zalog PTS -- riski, kotorye MFO ne ob'yasnyayut" (too long, colon-heavy, quotation risk)
+
+detected_need for content_idea:
+- Write 1 short sentence describing the client fear or objection the record reveals.
+- Example: "Klient boitsya poteriat avtomobil pri prosrochke -- ne znal ob etom riske do podpisaniya dogovora."
+- This is not empty for content_idea records.
 
 content_idea_score calibration:
 - 80-100: Specific, emotionally resonant, directly addresses a real fear or decision point for the ICP.
@@ -203,6 +214,19 @@ Example: "Rekomendatsiya: svyazat'sya -- srochnost' vysokaya, zaderzhka snizhaye
 
 Do not merge into a vague paragraph. Each sentence must stand alone.
 
+JSON SAFETY RULES -- CRITICAL FOR VALID OUTPUT
+
+These rules prevent JSON parse errors. Follow them strictly for every field value:
+- Return compact JSON only. No pretty-printing with extra newlines inside values.
+- No markdown, no code fences, no backticks inside string values.
+- No unescaped double quotes inside string values. Never wrap phrases in "quotes" inside a field.
+- No newline characters inside any JSON string value. Keep all values on one line.
+- No trailing commas after the last field.
+- Numeric scores must be bare integers, not quoted strings.
+- offer_text: plain text only, max 180 characters, no quotation marks, do not start with a label or colon.
+- detected_need: plain text only, max 220 characters, no quotation marks.
+- reason: plain text only, max 450 characters, simple sentences. If you need to reference a phrase from the source text, write it without surrounding quotes: cite banki otkazali rather than "banki otkazali".
+
 OUTPUT FORMAT -- CRITICAL
 
 Respond with ONLY a valid JSON object:
@@ -228,11 +252,11 @@ REQUIRED JSON SCHEMA -- all 25 fields required; "" for unknown strings; 1 for un
   "profile_url": "<profile_url from input or empty string>",
   "region": "<explicitly mentioned in text only; never inferred without stated basis; else empty string>",
   "service_type": "<secured_auto_loan | secured_real_estate_loan | pts_loan | refinancing | mortgage_adjacent | generic_lending | unknown>",
-  "offer_text": "<1 sentence: what is offered, sought, or -- if content_idea -- proposed content angle as article title or topic brief>",
+  "offer_text": "<1 sentence, max 180 chars: what is offered or sought; for content_idea -- proposed content angle as a plain-text topic (no quotation marks, no leading labels, no colons)>",
   "terms": "<explicit rate/price/conditions only -- e.g. '3% v mesyats, bez spravok, resheniye za 1 chas' -- empty string if not explicitly stated>",
   "contact_public": "<phone/email/Telegram from text only; empty string if none>",
   "text_context": "<cleaned summary; max 300 characters; include key offer, signals, urgency phrases, region>",
-  "detected_need": "<lead_signal only: need type + amount + urgency signal + bank rejection + region in 1 sentence; empty string if not a lead>",
+  "detected_need": "<lead_signal: need type + amount + urgency + bank rejection + region; content_idea: client fear or objection the record reveals; empty string for all other entity types>",
   "competitor_strength": <integer 1-100; 1 if entity_type is not competitor>,
   "lead_signal_score": <integer 1-100>,
   "content_idea_score": <integer 1-100>,
@@ -249,6 +273,13 @@ freshness_status: "fresh" = published_at within 7 days of parsed_at; "recent" = 
 ---
 
 ## Version Notes
+
+- v2.1 (2026-06-05): JSON stability patch. Added JSON SAFETY RULES section (critical for valid output).
+  Updated CONTENT INTELLIGENCE: offer_text for content_idea = plain-text angle, max 180 chars, no quotation marks,
+  no leading labels. detected_need for content_idea = client fear/objection (no longer empty).
+  Updated schema descriptions for offer_text and detected_need.
+  Trigger: Test 5 (content_idea record) failed JSON.parse in production due to unescaped quotes in offer_text.
+  All 25 output fields unchanged. Retest Test 5 before treating v2.1 as approved.
 
 - v2.0 (2026-06-05): Major rewrite from extractor/classifier to analyst/strategist.
   Key additions: priority order (leads first), confirmed ICP (Moscow car owner, bad credit, urgency),

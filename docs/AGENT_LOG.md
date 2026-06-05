@@ -5,6 +5,34 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Prompt v2.1 JSON Stability Patch and TEST HARNESS Parser Upgrade
+
+**Agent role:** project-engineer / prompt-engineer
+**Session goal:** Fix JSON parse failures triggered by Test 5 (content_idea). Upgrade prompt to v2.1 with JSON safety rules. Upgrade Parse node in test harness with multi-step cleanup.
+
+**What was done:**
+- Updated `MARKETING_AGENT_PROMPT_V2.md` header from v2.0 → v2.1 (status: JSON stability fix, retest Test 5 before final approval).
+- Updated CONTENT INTELLIGENCE section: offer_text for content_idea = short plain-text angle, no quotation marks, no labels, no colons at start, max 180 chars. detected_need for content_idea = client fear/objection (no longer empty).
+- Added **JSON SAFETY RULES** section between REASON FIELD and OUTPUT FORMAT: 10 explicit rules covering no unescaped quotes, no markdown, no trailing commas, integer scores, max character limits for offer_text/detected_need/reason, citation-without-quotes rule for reason.
+- Updated schema descriptions for `offer_text` (max 180 chars, no quotation marks for content_idea) and `detected_need` (content_idea → client fear/objection; others → empty string).
+- Added v2.1 version note to Version Notes section.
+- Upgraded Parse Claude JSON Response node in test harness: added Step 2 (brace extraction) and Step 3 (smart quote normalization — curly quotes, guillemets) before JSON.parse.
+- Regenerated test harness JSON using Python json.dump(ensure_ascii=False); validated: python3 -m json.tool exits 0; new size 33,834 bytes.
+- Added DEC-024: zero JSON parse failures required — a parse failure on any expected-analyzed record blocks approval.
+- Updated test plan: v2.1 header, banner explaining the patch, "run Test 5 first" instruction, updated Test 5 pass criteria, added no-parse-failure criterion to approval list, added offer_text format check.
+- Updated NEXT_ACTIONS.md: Step D now says v2.1, run Test 5 first.
+
+**Files updated:**
+- `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` — v2.1 patch (JSON SAFETY RULES, content_idea rules, schema descriptions, version note)
+- `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` — Parse node upgraded (brace extraction + smart quote normalization)
+- `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` — v2.1 note, Test 5 first instruction, updated criteria
+- `docs/DECISIONS.md` — DEC-024 added
+- `docs/NEXT_ACTIONS.md` — Step D updated to v2.1, Test 5 first
+- `docs/AGENT_LOG.md` — this entry
+- `core/hot/recent.md` — updated
+
+---
+
 ## 2026-06-05 — TEST HARNESS Workflow Created for Prompt v2 Testing
 
 **Agent role:** project-engineer

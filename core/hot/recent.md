@@ -4,6 +4,27 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-05 — Prompt v2.1 JSON Stability Patch
+
+**What was done:**
+- Upgraded `MARKETING_AGENT_PROMPT_V2.md` to v2.1: added JSON SAFETY RULES section (10 rules preventing parse failures), tightened `offer_text` for content_idea (plain text, max 180 chars, no quotes, no leading labels), added `detected_need` for content_idea (client fear/objection), updated schema descriptions, added v2.1 version note.
+- Upgraded Parse node in `02_claude_api_single_record_v2_test_harness.json`: added brace extraction (strip text before `{` / after `}`) and smart quote normalization (curly quotes, guillemets) before JSON.parse. JSON re-validated: 33,834 bytes, python3 -m json.tool exits 0.
+- Added DEC-024: zero JSON parse failures = hard blocker for v2 approval.
+- Updated test plan, DECISIONS.md, NEXT_ACTIONS.md, AGENT_LOG.md.
+- Root cause of Test 5 failure: Claude returned article title with internal quotes/colons in `offer_text`, producing invalid JSON.
+
+**Key decisions:**
+- DEC-024: parse failure on any expected-analyzed record blocks approval unconditionally.
+- Parse node now has three defensive layers: fence removal → brace extraction → quote normalization.
+
+**What is next (in order):**
+1. **Step D (immediate):** Import updated TEST HARNESS; run Test 5 first to verify v2.1 fix; if pass, run tests 1–4, 6–7; fill protocol table; measure cost; present to operator.
+2. Get operator approval → update Workflow 02 Build Claude Request with v2.1 prompt.
+3. Step B: minor doc fixes (README.md, tools/TOOLS.md, core/warm/decisions.md DEC-018–024).
+4. Step E: Workflow 03 Firecrawl (competitor website).
+
+---
+
 ## Session: 2026-06-05 — TEST HARNESS Workflow Created
 
 **What was done:**

@@ -5,6 +5,17 @@ Most recent first.
 
 ---
 
+## DEC-024 — Prompt v2 Cannot Be Approved If Any Expected-Analyzed Record Fails JSON Parsing
+
+**Date:** 2026-06-05
+**Context:** Test 5 (content_idea record) failed with a JSON.parse error in the Parse node during the first full test run. Tests 1, 2, 3, 4, 6, 7 passed. The failure was caused by Claude returning unescaped double quotes or colons inside the `offer_text` string value — a well-formed reasoning response but invalid JSON output.
+**Decision:** A JSON parse failure on any record that is expected to return `status=analyzed` is an automatic blocker for Prompt v2 approval. Prompt must be patched and the failing test rerun before the full suite can be approved.
+**Rationale:** A parse failure means the output cannot be written to Google Sheets and cannot be used by any downstream system. A prompt that passes 6/7 tests on reasoning quality but produces unparseable output on the 7th is not production-ready. Parse errors are not acceptable in a data pipeline.
+**Fix applied in v2.1:** JSON SAFETY RULES section added to prompt; offer_text and detected_need field instructions tightened; Parse node upgraded with brace extraction and smart-quote normalization as a defensive backstop.
+**Trigger to unblock:** Rerun Test 5 after v2.1 patch; confirm JSON.parse succeeds and `offer_text` is a plain-text angle (no leading labels, no internal quotation marks, ≤180 chars).
+
+---
+
 ## DEC-023 — Prompt v2 Testing: Use TEST HARNESS Workflow, Not Manual Node Editing
 
 **Date:** 2026-06-05
