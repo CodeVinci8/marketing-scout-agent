@@ -1,47 +1,60 @@
-# Руководство по тестированию Prompt v2.4 в n8n
+# Руководство по тестированию Prompt v2 в n8n
 
-**Дата:** 2026-06-05 (обновлено: v2.4 — compact KEY=VALUE)
-**Цель:** Протестировать Marketing Agent Prompt v2.4 на 7 синтетических записях через
-TEST HARNESS workflow — без ручного редактирования кода.
+**Дата:** 2026-06-05 (обновлено: BASELINE SHORT TEST 5)
 **Не изменять:** `n8n/workflows/02_claude_api_single_record_analysis.json` — только после одобрения.
-**TEST HARNESS JSON:** `n8n/workflows/02_claude_api_single_record_v2_test_harness.json`
-**Промпт v2.4:** `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md`
 **Тестовые записи:** `modules/marketing-scout-v0/TEST_RECORDS_V2.md`
-**Ожидаемая стоимость:** ~$0.04–0.10 за 7 вызовов (max_tokens 700, compact prompt)
 
 ---
 
-## История изменений — почему каждая версия не прошла
+## Текущий статус
 
-| Версия | Проблема | Причина |
-|--------|----------|---------|
-| v2.0 | JSON.parse упал на Тесте 5 | Claude поставил кавычки/двоеточие в `offer_text` |
-| v2.1 | JSON.parse упал на Тесте 1 | Claude нарушил форматирование в `reason`/`detected_need` |
-| v2.2 | 502 Bad Gateway на всех тестах | Шлюз не поддерживает `tools`/`tool_choice`. Также: сломанное соединение (Select Test Record не подключён к Build ноде) |
-| v2.3 | 502 Bad Gateway на Тесте 1 | Промпт слишком большой (9.2 KB) или запрос слишком тяжёлый для шлюза |
+**Базовый харнес (commit d350069) — работает.**
 
-**Подтверждено:** минимальный curl к шлюзу с маленьким промптом работает нормально.
-Значит шлюз живой, ключ верный, модель доступна.
-502 в v2.3 — это проблема размера/тяжести запроса, не сети.
+| Тест | Статус | Результат |
+|------|--------|-----------|
+| Тест 1 — Сильный лид | ✓ Прошёл | entity_type=lead_signal, action=contact, quality=97, lead_signal=98 |
+| Тест 5 — Контент-идея | ✗ Не тестировался с коротким text_context | JSON.parse падал на длинном оригинале |
 
-**v2.4 — compact patch (DEC-027):**
-- Промпт сокращён с 9.2 KB до **5.3 KB** (та же бизнес-логика, компактный формат).
-- `max_tokens`: 1100 → **700**.
-- Лимиты символов ужесточены: offer_text 140, detected_need 160, text_context 220, reason 220.
-- Протокол KEY=VALUE и parse-нода — **без изменений** от v2.3.
-- Все соединения workflow пересобраны с нуля.
+**v2.1–v2.5 эксперименты — отложены.**
 
-**Если 502 повторится с v2.4 compact** — проблема не в размере промпта.
-Нужно проверить: баланс шлюза, лимиты на модель, статус шлюза.
+| Версия | Проблема | Вывод |
+|--------|----------|-------|
+| v2.1 | JSON.parse на Тестах 1 и 5 | JSON-патч недостаточен |
+| v2.2 | 502 на tool_use | Шлюз не поддерживает tool_use |
+| v2.3 | 502 при 9.2 KB | Промпт слишком большой |
+| v2.4 | 502 при 5.3 KB | Промпт всё ещё слишком большой |
+| v2.5 MICRO | 502 при ~2 KB | curl тоже даёт 502 — проблема не в размере промпта |
+
+**Вывод:** Baseline raw JSON работает. v2.1–v2.5 файлы сохранены в репозитории, но не являются активным тестовым путём (DEC-029).
 
 ---
 
-## Что такое TEST HARNESS
+## Текущая задача: BASELINE SHORT TEST 5
 
-- **Промпт v2.4 встроен** — не нужно копировать вручную.
-- **Все 7 записей встроены** — менять только `test_id` (1–7).
-- **Нода `Build Claude Request v2.4`**: нет tools, нет tool_choice; max_tokens=700, temperature=0.1.
-- **Нода `Parse Claude Line Response`**: KEY=VALUE парсер, `parse_method=line_protocol` или `line_failed`.
+**Файл:** `n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json`
+**Изменение:** Test 5 text_context сокращён (252 → 139 chars). Всё остальное — идентично d350069 baseline.
+**Цель:** Проверить, решает ли сокращение Test 5 проблему JSON.parse.
+
+### Порядок тестирования
+
+1. **test_id=5 первым** — это единственный изменённый тест. Проверить, проходит ли JSON.parse.
+2. **Если тест 5 прошёл → test_id=1** — убедиться, что baseline не нарушен.
+3. **Если оба прошли** → обсудить с оператором: одобрить baseline или продолжить эксперименты.
+
+### Что изменилось в Test 5
+
+**Оригинальный text_context (252 chars):**
+```
+Взял займ под залог ПТС год назад. Просрочил три месяца, потому что потерял работу. Машину забрали — пришли и увезли прямо с парковки. Договор подписал не читая. Никто не предупредил о таком развитии. Будьте осторожны с этими МФО, читайте мелкий шрифт.
+```
+
+**Новый text_context (139 chars):**
+```
+Вопрос в VK: боюсь брать займ под ПТС, что будет с машиной при просрочке? Могут ли забрать авто сразу? Хочу понять риски перед оформлением.
+```
+
+**Почему оригинал падал:** Длинный текст с несколькими предложениями, тире, точками — Claude вставлял кавычки или двоеточия в строковые поля (`offer_text`, `reason`), что ломало `JSON.parse`.
+**Почему новый должен работать:** Короткий, сформулирован как вопрос, нет проблемных символов внутри строк, сохраняет суть контент-идеи (страх потери машины).
 
 ---
 
@@ -54,11 +67,11 @@ ssh -L 5678:127.0.0.1:5678 root@ВАШ_IP_СЕРВЕРА
 
 ---
 
-## Шаг 2 — Импортировать TEST HARNESS
+## Шаг 2 — Импортировать BASELINE SHORT TEST 5
 
-1. **Удалить старую версию TEST HARNESS из n8n** (если есть — любая версия v2.x).
-2. В n8n: **+** → **Import from file** → выбрать `n8n/workflows/02_claude_api_single_record_v2_test_harness.json`
-3. Убедиться: нода называется **`Build Claude Request v2.4`** (не v2.3, не v2.2, не v2).
+1. В n8n: **+** → **Import from file** → `n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json`
+2. Убедиться: нода называется **`Build Claude Request v2`** (не v2.5 MICRO, не v2.4).
+3. Убедиться: нода Parse называется **`Parse Claude JSON Response`** (не Line Response).
 4. Workflow должен быть **inactive**.
 
 ---
@@ -70,146 +83,86 @@ ssh -L 5678:127.0.0.1:5678 root@ВАШ_IP_СЕРВЕРА
 | Claude API Request | `Claude API - Marketing Scout` (HTTP Header Auth) |
 | Append Row to Google Sheets | `Google Sheets - Marketing Scout Service Account` |
 
-Вставить реальный Spreadsheet ID в ноду `Append Row to Google Sheets` (заменить `PASTE_SPREADSHEET_ID_HERE`).
+Вставить реальный Spreadsheet ID в ноду `Append Row to Google Sheets`.
 
 ---
 
-## Шаг 4 — Порядок запуска тестов
+## Шаг 4 — Запуск
 
-**Обязательный порядок для v2.4:**
+**Тест 5 (test_id=5) — первым:**
 
-1. **Тест 1 первым** — ранее падал в v2.1 (JSON.parse) и v2.3 (502). Ключевой индикатор: если 502 повторится, проблема не в промпте.
-2. **Тест 5 вторым** — ранее падал в v2.0/v2.1 (content_idea, сложные строки).
-3. **Тест 6 третьим** — SEO-мусор, должен вернуть `status=skipped`, Quality Gate = false.
-4. Если Тесты 1, 5, 6 прошли → запускать Тесты 2, 3, 4, 7.
+В ноде `Set Test Selector` установить `test_id = 5`. Запустить.
 
-**Стоп-условия:**
-- Если Тест 1 вернул 502 — остановиться. Проблема на уровне шлюза. Не запускать остальные.
-- Если `parse_method=line_failed` — смотреть `raw_response_preview`. Claude не вернул KEY=VALUE.
+Проверить в ноде `Parse Claude JSON Response` → Output:
+- `status = analyzed` ✓
+- `entity_type = content_idea` ✓
+- `recommended_action = create_content` ✓
+- `test_pass_basic = true` ✓
+- Нет ошибки `JSON parse failed` ✓
+- `offer_text` — без кавычек, без лейбла ✓
 
-**Как проверить 502:** В n8n Тест 1 покажет красную ноду на `Claude API Request`.
-Открыть ноду → вкладка Output → смотреть `statusCode` и `message`.
+**Если тест 5 прошёл → Тест 1 (test_id=1):**
 
----
+Установить `test_id = 1`. Запустить.
 
-## Шаг 5 — Что проверять
-
-### Нода `Parse Claude Line Response` (вкладка Output):
-- `parse_method=line_protocol` — успех ✓
-- `parse_method=line_failed` — Claude вернул не KEY=VALUE ✗
-- `test_pass_basic=true` — entity_type совпал с ожидаемым
-
-### Quality Gate:
-- Тесты 1, 2, 3, 4, 5, 7 → true-ветка (строка в Google Sheets)
-- Тест 6 → false-ветка (строка НЕ добавляется)
+Проверить:
+- `entity_type = lead_signal` ✓
+- `recommended_action = contact` ✓
+- `lead_signal_score ≥ 82` ✓
+- `quality_score ≥ 80` ✓
 
 ---
 
-## Что проверять для каждого теста
+## Таблица-протокол (BASELINE SHORT TEST 5)
 
-| Тест | parse_method | entity_type | action | Дополнительно |
-|------|-------------|------------|--------|--------------|
-| 1 — Сильный лид | line_protocol | lead_signal | contact | `lead_signal_score≥82`, `contact_public` не пустой |
-| 2 — Слабый лид | line_protocol | lead_signal | ≠contact | `lead_signal_score≤50`, `region` пустой |
-| 3 — Конкурент авто | line_protocol | competitor | monitor | `competitor_strength≥80`, `terms` содержит ставку |
-| 4 — Конкурент RE | line_protocol | competitor | monitor | `competitor_strength` 60–85, `terms` пустой |
-| 5 — Контент-идея | line_protocol | content_idea | create_content | `offer_text` без кавычек и лейбла |
-| 6 — SEO-мусор | line_protocol | irrelevant | ignore | `status=skipped`, `quality_score=1`, Quality Gate = false |
-| 7 — Рефинансирование | line_protocol | lead_signal | investigate | `lead_signal_score` 40–70, `region` — МО |
+| Тест | JSON.parse OK? | entity_type | action | quality | test_pass_basic | Прошёл? |
+|------|---------------|------------|--------|---------|----------------|---------|
+| 5 — Контент-идея (короткий) | | content_idea | create_content | 65-80 | | |
+| 1 — Сильный лид (если 5 прошёл) | | lead_signal | contact | ≥80 | | |
+
+**Стоимость:** ________ до → ________ после 2 тестов → ________ за вызов
 
 ---
 
-## Таблица-протокол
+## Стоп-условия
 
-| Тест | 502? | parse_method | entity_type | action | quality | status | test_pass_basic | Прошёл? |
-|------|------|-------------|------------|--------|---------|--------|----------------|---------|
-| 1 — Сильный лид | | | | | | | | |
-| 5 — Контент-идея | | | | | | | | |
-| 6 — SEO-мусор | | | | | | | | |
-| 2 — Слабый лид | | | | | | | | |
-| 3 — Конкурент авто | | | | | | | | |
-| 4 — Конкурент RE | | | | | | | | |
-| 7 — Рефинансирование | | | | | | | | |
-
-**Стоимость:** ________ до → ________ после 7 тестов → ________ за вызов
+| Ситуация | Действие |
+|----------|----------|
+| Тест 5: `JSON parse failed` | Изучить `raw_response_preview`. Либо укорачивать ещё, либо переключиться на другой формат вывода. |
+| Тест 5: `entity_type ≠ content_idea` | Claude распознал как lead_signal или irrelevant. Пересмотреть text_context. |
+| Тест 1: отличается от предыдущего (97/98) | Вариативность модели — допустима в пределах диапазона. |
 
 ---
 
-## Шаг 6 — Замерить стоимость
-
-1. Записать баланс на aiprimetech.io **до** первого теста.
-2. Запустить все 7 тестов.
-3. Записать баланс после.
-4. Разделить разницу на 7.
-
-Ожидаемый диапазон v2.4: $0.006–0.015 за вызов (compact prompt, max_tokens 700).
-
----
-
-## Критерии одобрения Prompt v2.4
-
-**Блокеры (все обязательны):**
-
-- [ ] Тест 1 прошёл без 502 и с `parse_method=line_protocol`
-- [ ] Тест 5 прошёл с `parse_method=line_protocol`
-- [ ] Тест 6 прошёл с `parse_method=line_protocol` и `status=skipped`
-- [ ] Ноль тестов с `parse_method=line_failed`
-- [ ] Ноль 502 ответов
-
-**Логические критерии (минимум 6 из 7):**
-
-- [ ] Тест 1: `entity_type=lead_signal`, `recommended_action=contact`, `lead_signal_score≥82`
-- [ ] Тест 2: `entity_type=lead_signal`, `recommended_action≠contact`, `lead_signal_score≤50`
-- [ ] Тест 3: `entity_type=competitor`, `recommended_action=monitor`, `competitor_strength≥80`, `terms` содержит ставку
-- [ ] Тест 4: `entity_type=competitor`, `competitor_strength` 60–85, `terms` пустой
-- [ ] Тест 5: `entity_type=content_idea`, `recommended_action=create_content`, `offer_text` без лейбла
-- [ ] Тест 6: `status=skipped`, `quality_score=1`, Quality Gate = false
-- [ ] Тест 7: `entity_type=lead_signal`, `recommended_action=investigate`, `lead_signal_score` 40–70
-- [ ] Стоимость одного вызова ≤ $0.05
-
-**6 из 7 логических + все блокеры → обсудить. 7 из 7 → одобрять.**
-
----
-
-## Диагностика 502
-
-Если 502 повторяется с v2.4 compact prompt:
-
-1. Проверить баланс шлюза (aiprimetech.io) — 402 маскируется как 502.
-2. Сделать минимальный curl вручную прямо с VPS (не через n8n):
-   ```bash
-   curl -s https://aiprimetech.io/v1/messages \
-     -H "Authorization: Bearer ВАШ_ТОКЕН" \
-     -H "anthropic-version: 2023-06-01" \
-     -H "Content-Type: application/json" \
-     -d '{"model":"claude-sonnet-4-6","max_tokens":50,"messages":[{"role":"user","content":"Say OK"}]}'
-   ```
-3. Если curl OK, но n8n даёт 502 — проблема в конфигурации HTTP Request ноды.
-4. Сравнить заголовки n8n запроса с curl запросом (n8n → ноды → Claude API Request → вкладка Input).
-
----
-
-## Что делать после одобрения
+## После успешных тестов 5 и 1
 
 1. Получить явное подтверждение оператора.
-2. Обновить `02_claude_api_single_record_analysis.json`:
-   - Заменить Build ноду на v2.4 структуру (compact prompt, max_tokens=700, KEY=VALUE).
-   - Добавить Parse ноду `Parse Claude Line Response`.
-3. Обновить `docs/PROMPTS.md` — статус v2 → Active.
-4. Оставить TEST HARNESS JSON в репозитории как архив.
+2. Решить: запускать ли остальные 5 тестов (2, 3, 4, 6, 7) на baseline_short_test5.
+3. После одобрения всех тестов → обновить production `02_claude_api_single_record_analysis.json`.
+4. Оставить все TEST HARNESS JSON в репозитории как архив.
+
+---
+
+## Харнесы в репозитории
+
+| Файл | Статус | Описание |
+|------|--------|----------|
+| `02_claude_api_single_record_v2_baseline_short_test5.json` | **АКТИВНЫЙ** | Baseline d350069 + короткий Test 5 |
+| `02_claude_api_single_record_v2_test_harness.json` | Архив (v2.5 MICRO) | Последний эксперимент — 502 |
+| `02_claude_api_single_record_analysis.json` | Production | Не трогать |
 
 ---
 
 ## Валидация JSON
 
 ```bash
-python3 -m json.tool n8n/workflows/02_claude_api_single_record_v2_test_harness.json > /tmp/v2_test_harness_validated.json
+python3 -m json.tool n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json > /tmp/v2_baseline_short_test5_validated.json
 ```
 
 ---
 
 ## Безопасность
 
-- Реальные данные не передаются — только синтетические записи из `TEST_RECORDS_V2.md`.
-- TEST HARNESS должен оставаться **inactive**.
+- Реальные данные не передаются — только синтетические записи.
+- Оба TEST HARNESS должны оставаться **inactive**.
 - Не изменять Workflow 00, 01, 02 во время тестирования.

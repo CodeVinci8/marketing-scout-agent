@@ -4,6 +4,48 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-05 — Baseline Raw JSON SHORT TEST 5
+
+**What was done:**
+- d350069 baseline works (Test 1: quality=97, lead_signal=98, action=contact). v2.1–v2.5 all failed (JSON.parse, 502). DEC-029.
+- Created `02_claude_api_single_record_v2_baseline_short_test5.json`: exact baseline clone, only Test 5 text_context shortened (252→139 chars). New text is short VK question. No other changes.
+- JSON validated: 33,018 bytes. active=false. No real creds. v2.5 harness untouched.
+- Rewrote test plan: status table, Test 5 change rationale, 2-test retest order. Updated NEXT_ACTIONS.md, DECISIONS.md (DEC-029), AGENT_LOG.md.
+
+**Key decisions:**
+- DEC-029: baseline raw JSON is the working fallback. v2.1–v2.5 experiments deferred.
+- Incremental fix: shortest possible change to the baseline (one field, one record).
+
+**What is next (in order):**
+1. **Step D (immediate):** Import `02_claude_api_single_record_v2_baseline_short_test5.json`. Run test_id=5 first. If passes: run test_id=1. If both pass: discuss with operator whether to approve baseline.
+2. Get operator approval → update production Workflow 02.
+3. Step B: doc fixes (README.md, tools/TOOLS.md, core/warm/decisions.md).
+4. Step E: Workflow 03 Firecrawl.
+
+---
+
+## Session: 2026-06-05 — Prompt v2.5 MICRO
+
+**What was done:**
+- v2.4 (5.3 KB compact) returned 502 upstream_error. Minimal curl works. Diagnosis: gateway threshold is well below 5 KB — micro-sized runtime prompt required. DEC-028.
+- v2.5 MICRO: runtime prompt stripped to 1997 chars (~2 KB). Essential rules only; full methodology preserved in the canonical file (Full Methodology Reference section, not sent at runtime).
+- max_tokens 700 → 450. User message: profile_url removed. Field limits tightened: offer_text 80, text_context 100, detected_need 100, reason 120.
+- Build node renamed to `Build Claude Request v2.5 MICRO`. Connections rebuilt from scratch. JSON validated: 24,138 bytes.
+- Test plan rewritten: Step 0 curl-test added (must curl before n8n). Updated cost estimates.
+- Added DEC-028. Updated COSTS_AND_LIMITS.md (v2.5 row, <2.5 KB guidance). Updated NEXT_ACTIONS.md, AGENT_LOG.md.
+
+**Key decisions:**
+- DEC-028: gateway requires micro-sized runtime prompts. Detailed methodology lives in docs only, not in runtime prompt.
+- If 502 persists with v2.5 MICRO (~2 KB): problem is NOT prompt size — check balance, rate limits, routing.
+
+**What is next (in order):**
+1. **Step D (immediate):** curl-test first (Step 0 in test plan). Then delete old harness, import v2.5 harness. Run Test 1 → Test 5 → Test 6. If all pass, run Tests 2/3/4/7. Fill protocol table.
+2. Get operator approval → update production Workflow 02 with v2.5 MICRO structure.
+3. Step B: doc fixes (README.md, tools/TOOLS.md, core/warm/decisions.md DEC-018–028).
+4. Step E: Workflow 03 Firecrawl.
+
+---
+
 ## Session: 2026-06-05 — Prompt v2.4 Compact KEY=VALUE
 
 **What was done:**
@@ -24,6 +66,8 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 4. Step E: Workflow 03 Firecrawl.
 
 ---
+
+<!-- Sessions older than 3 archived below for reference only -->
 
 ## Session: 2026-06-05 — Prompt v2.3 KEY=VALUE Line Protocol
 

@@ -1,0 +1,310 @@
+{
+  "name": "02 - Claude API Single Record Analysis v2 BASELINE SHORT TEST 5",
+  "nodes": [
+    {
+      "id": "th00000000-0000-0000-0000-000000000001",
+      "name": "Описание TEST HARNESS",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        -280
+      ],
+      "parameters": {
+        "content": "Workflow 02 v2 BASELINE SHORT TEST 5 — безопасная копия baseline-харнеса (commit d350069). Изменение: Test 5 text_context сокращён для стабильного JSON-парсинга. Меняй только test_id в ноде Set Test Selector (1–7). Старый Workflow 02 не трогать.",
+        "height": 200,
+        "width": 1000,
+        "color": 5
+      }
+    },
+    {
+      "id": "th00000000-0000-0000-0000-000000000010",
+      "name": "Результат и инструкции",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        220
+      ],
+      "parameters": {
+        "content": "Это не production workflow. Он нужен для проверки качества Prompt v2. Старый Workflow 02 не трогать. Если 6 из 7 тестов проходят, Prompt v2 можно утверждать и потом переносить в production workflow.",
+        "height": 180,
+        "width": 540,
+        "color": 3
+      }
+    },
+    {
+      "id": "th00000000-0000-0000-0000-000000000002",
+      "name": "Manual Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        100,
+        60
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "th00000000-0000-0000-0000-000000000003",
+      "name": "Set Test Selector",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        380,
+        60
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "th00000000-0000-0000-0000-000000000031",
+              "name": "test_id",
+              "value": 1,
+              "type": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "th00000000-0000-0000-0000-000000000004",
+      "name": "Select Test Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        60
+      ],
+      "parameters": {
+        "jsCode": "const testId = parseInt($json.test_id) || 1;\n\nconst records = {\n  1: {\n    test_id: 1,\n    expected_entity_type: \"lead_signal\",\n    expected_recommended_action: \"contact\",\n    expected_quality_range: \"80-92\",\n    source_type: \"classified\",\n    platform: \"avito\",\n    source_url: \"https://www.avito.ru/moskva/test-record-001\",\n    company_name: \"\",\n    profile_name: \"\",\n    profile_url: \"\",\n    region: \"\",\n    published_at: \"2026-06-04\",\n    parsed_at: \"2026-06-05\",\n    text_context: \"Срочно нужен займ под залог ПТС, автомобиль Toyota Camry 2015, в хорошем состоянии. Нужно 180 000 рублей, банки везде отказали из-за просрочек в прошлом. Нужны деньги сегодня, желательно без лишних проверок. Москва, район Митино. Телефон: +7(916)555-12-34.\"\n  },\n  2: {\n    test_id: 2,\n    expected_entity_type: \"lead_signal\",\n    expected_recommended_action: \"monitor_or_investigate\",\n    expected_quality_range: \"25-45\",\n    source_type: \"social\",\n    platform: \"vk\",\n    source_url: \"https://vk.com/wall-test-record-002\",\n    company_name: \"\",\n    profile_name: \"\",\n    profile_url: \"https://vk.com/user_test_002\",\n    region: \"\",\n    published_at: \"2026-06-01\",\n    parsed_at: \"2026-06-05\",\n    text_context: \"Подскажите, где можно взять кредит под залог машины? Интересует в принципе, просто изучаю варианты. Слышал, что это быстрее, чем банк. Есть у кого опыт?\"\n  },\n  3: {\n    test_id: 3,\n    expected_entity_type: \"competitor\",\n    expected_recommended_action: \"monitor\",\n    expected_quality_range: \"78-90\",\n    source_type: \"classified\",\n    platform: \"avito\",\n    source_url: \"https://www.avito.ru/moskva/test-record-003\",\n    company_name: \"\",\n    profile_name: \"\",\n    profile_url: \"\",\n    region: \"\",\n    published_at: \"2026-06-03\",\n    parsed_at: \"2026-06-05\",\n    text_context: \"Частный инвестор. Займы под залог ПТС и автомобиля. Ставка от 2,5% в месяц. Решение за 1 час. Одобряем с любой кредитной историей. Работаем по Москве и МО. Сумма от 50 000 до 800 000 руб. Без скрытых комиссий. Телефон: +7(499)888-44-55. Без выходных.\"\n  },\n  4: {\n    test_id: 4,\n    expected_entity_type: \"competitor\",\n    expected_recommended_action: \"monitor\",\n    expected_quality_range: \"65-80\",\n    source_type: \"scraped_web\",\n    platform: \"website\",\n    source_url: \"https://example-lender.ru/zaloz-kvartiry\",\n    company_name: \"\",\n    profile_name: \"\",\n    profile_url: \"\",\n    region: \"\",\n    published_at: \"2026-05-10\",\n    parsed_at: \"2026-06-05\",\n    text_context: \"Займы под залог квартиры в Москве. Рассматриваем квартиры, дома, коммерческую недвижимость. Без банка, без очереди, решение за день. Работаем с заёмщиками, которым банки отказали. Сумма от 300 000 рублей. Оставьте заявку или позвоните: +7(495)700-00-11. Офис: ул. Тверская, 15, Москва.\"\n  },\n  5: {\n    test_id: 5,\n    expected_entity_type: \"content_idea\",\n    expected_recommended_action: \"create_content\",\n    expected_quality_range: \"65-80\",\n    source_type: \"social\",\n    platform: \"vk\",\n    source_url: \"https://vk.com/wall-test-record-005\",\n    company_name: \"\",\n    profile_name: \"\",\n    profile_url: \"https://vk.com/user_test_005\",\n    region: \"\",\n    published_at: \"2026-05-28\",\n    parsed_at: \"2026-06-05\",\n    text_context: \"Вопрос в VK: боюсь брать займ под ПТС, что будет с машиной при просрочке? Могут ли забрать авто сразу? Хочу понять риски перед оформлением.\"\n  },\n  6: {\n    test_id: 6,\n    expected_entity_type: \"irrelevant\",\n    expected_recommended_action: \"ignore\",\n    expected_quality_range: \"1\",\n    source_type: \"scraped_web\",\n    platform: \"website\",\n    source_url: \"https://example-aggregator.ru/kredity\",\n    company_name: \"\",\n    profile_name: \"\",\n    profile_url: \"\",\n    region: \"\",\n    published_at: \"\",\n    parsed_at: \"2026-06-05\",\n    text_context: \"Кредиты | Займы | Ипотека | Рефинансирование | Автокредит | Залог | Микрозаймы | Все виды кредитов онлайн. Главная О компании Услуги Контакты Войти Зарегистрироваться\"\n  },\n  7: {\n    test_id: 7,\n    expected_entity_type: \"lead_signal\",\n    expected_recommended_action: \"investigate\",\n    expected_quality_range: \"50-68\",\n    source_type: \"classified\",\n    platform: \"avito\",\n    source_url: \"https://www.avito.ru/moskva/test-record-007\",\n    company_name: \"\",\n    profile_name: \"\",\n    profile_url: \"\",\n    region: \"\",\n    published_at: \"2026-06-02\",\n    parsed_at: \"2026-06-05\",\n    text_context: \"Ищу рефинансирование. Есть действующий займ под залог коммерческой недвижимости (помещение в Подмосковье, оценочная стоимость около 4 млн). Текущая ставка 5% в месяц, хочу снизить. Сумма остатка около 900 000 руб. Рассматриваю предложения.\"\n  }\n};\n\nconst selected = records[testId] || records[1];\nreturn [{ json: selected }];\n"
+      }
+    },
+    {
+      "id": "th00000000-0000-0000-0000-000000000005",
+      "name": "Build Claude Request v2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        60
+      ],
+      "parameters": {
+        "jsCode": "const record = $json;\n\nconst systemPrompt = \"You are Marketing Scout Agent v2 -- a market intelligence analyst and performance-minded marketing strategist for a secured lending business in Moscow and Moscow Oblast, Russia.\\n\\nFor every record, ask: \\\"What does this mean for the operator's business, and what should they do about it?\\\" Do not fill in a form -- reason like a business owner reviewing competitive intelligence.\\n\\nANALYSIS PRIORITY ORDER -- always in this sequence:\\n\\n1. LEAD SIGNAL first. Is this a potential client who needs a secured loan? Moscow/MO? Explicit product need (PTS, car collateral, real estate collateral)? Urgency signals? Contactable? If mostly yes -- highest-value record type.\\n2. COMPETITOR second. Active business offering secured lending? Moscow/MO direct threat or national? Growing or stagnating? Targeting same client (bad credit, car owner, urgent need)?\\n3. CONTENT IDEA third. Client fear, objection, or knowledge gap specific to secured lending? Concrete content angle derivable from it?\\n4. IRRELEVANT if none apply.\\n\\nBUSINESS CONTEXT\\n\\nOperator: secured lending business, Moscow and Moscow Oblast.\\n\\nPrimary products (highest lead priority): zaym pod zalog PTS, zaym pod zalog avtomobilya, zaym pod zalog nedvizhimosti.\\nSecondary products (valid, lower priority): refinansirovanie, ipotechnye uslugi, biznes-zaymy pod zalog aktivov.\\n\\nCompetes against: MFO chains (Centrofinans, Dengi pod PTS, AutoMoney), regional private investors, avtolombardi.\\nKey competitive dimensions: rate per month, same-day decision, credit history acceptance, geographic focus.\\n\\nA useful record helps the operator: contact a potential client, monitor a real competitor, extract a content angle, or understand demand in their region. A useless record correctly categorizes something but gives no direction.\\n\\nIDEAL CLIENT PROFILE (ICP)\\n\\nTarget client: owns a car (5-15 years old) with clean PTS title, or owns real estate. Needs cash urgently -- same-day or next-day decision required. Rejected by banks or cannot get conventional credit. Loan amount 50,000-500,000 RUB. Location: Moscow or Moscow Oblast.\\n\\nHigh-fit urgency signals (raise lead_signal_score materially):\\n\\\"srochno\\\", \\\"segodnya\\\", \\\"den'gi v den' obrashcheniya\\\", \\\"banki otkazali\\\", \\\"ne dayut kredit\\\", \\\"isporchena kreditnaya istoriya\\\", a specific loan amount paired with a collateral type.\\nIn Russian text look for: \\u0441\\u0440\\u043e\\u0447\\u043d\\u043e, \\u0441\\u0435\\u0433\\u043e\\u0434\\u043d\\u044f, \\u0434\\u0435\\u043d\\u044c\\u0433\\u0438 \\u0432 \\u0434\\u0435\\u043d\\u044c \\u043e\\u0431\\u0440\\u0430\\u0449\\u0435\\u043d\\u0438\\u044f, \\u0431\\u0430\\u043d\\u043a\\u0438 \\u043e\\u0442\\u043a\\u0430\\u0437\\u0430\\u043b\\u0438, \\u043d\\u0435 \\u0434\\u0430\\u044e\\u0442 \\u043a\\u0440\\u0435\\u0434\\u0438\\u0442, \\u0438\\u0441\\u043f\\u043e\\u0440\\u0447\\u0435\\u043d\\u0430 \\u043a\\u0440\\u0435\\u0434\\u0438\\u0442\\u043d\\u0430\\u044f \\u0438\\u0441\\u0442\\u043e\\u0440\\u0438\\u044f.\\n\\nLead disqualifiers (reduce lead_signal_score significantly):\\n- Unsecured consumer loan only, no collateral mentioned.\\n- Corporate borrower without pledged assets.\\n- No product fit signals or collateral type stated -- too ambiguous.\\n- Record explicitly from a city outside Moscow / Moscow Oblast.\\n\\nREGION SCORING RULES\\n\\nLead signals:\\n- Moscow/MO explicit (\\u041c\\u043e\\u0441\\u043a\\u0432\\u0430, \\u041c\\u041e, or a Moscow district) -> eligible for lead_signal_score 60-100.\\n- Region ambiguous (not stated) -> eligible up to 55; note uncertainty in reason field.\\n- Another city or region stated -> lead_signal_score capped at 40.\\n\\nCompetitors:\\n- Moscow/MO or national (Moscow clearly covered) -> direct threat; score normally.\\n- Only another region -> cap competitor_strength at 50; note limited threat in reason.\\n\\nContent ideas: not region-restricted.\\n\\nCOMPETITOR ASSESSMENT\\n\\nAssess three dimensions before scoring competitor_strength:\\n1. Regional overlap: Do they target Moscow/MO clients directly?\\n2. Tactical differentiation: Real USP (explicit rate, same-day decision, accepts bad credit) or generic claim (\\\"bystro i vygodno\\\")?\\n3. Activity level: Fresh content <=30 days? Active contact info? Multiple platforms?\\n\\nA small active local player with a fresh Avito listing targeting bad-credit Moscow car owners is more dangerous than a large MFO with stale content and no local presence.\\n\\ncompetitor_strength calibration:\\n- 85-100: Fresh (<=30 days), Moscow/MO explicit, stated rate or same-day decision, bad-credit accepted, contactable.\\n- 65-84: Active and professional, Moscow/MO confirmed, but rate absent or one key signal missing.\\n- 45-64: Present but content 1-3 months old or regional coverage uncertain.\\n- 25-44: Weak -- content >90 days old, no clear offer, or different region.\\n- 1: Not a competitor in this market; use 1 if entity_type is not competitor.\\n\\nLEAD SIGNAL ASSESSMENT\\n\\nThree-axis scoring: FIT x URGENCY x READINESS.\\n1. Product fit: Does stated need match operator's products (PTS/auto or real estate collateral)?\\n2. Urgency: Today/this week vs. unspecified general interest?\\n3. Readiness: Amount specified? Rejected by banks? Clear next step named?\\n\\nlead_signal_score calibration:\\n- 85-100: All three (fit + urgency + readiness) AND Moscow/MO confirmed.\\n- 70-84: Strong fit and urgency, region confirmed, readiness weak; OR all three with ambiguous region.\\n- 55-69: Clear product fit, one of urgency/readiness confirmed, region present.\\n- 35-54: Intent to seek secured loan apparent but fit unclear, indirect signals, or region outside MO.\\n- 15-34: Loan mentioned but no collateral match, no urgency, no regional fit.\\n- 1-14: No lead signal; do not assign lead_signal entity_type.\\n\\nRules:\\n- lead_signal_score >= 80: reason field MUST cite a specific phrase from the text that drove the score.\\n- recommended_action = \\\"contact\\\" requires lead_signal_score >= 70.\\n\\ndetected_need format when entity_type = lead_signal -- always cover: need type + amount (if stated) + urgency signal + bank rejection (if present) + region.\\nExample: \\\"Ishchet zaym pod zalog PTS, ~200 000 RUB, banki otkazali, nuzhny den'gi segodnya, Moskva.\\\"\\n\\nCONTENT INTELLIGENCE\\n\\nWhen entity_type = content_idea or content_idea_score >= 60:\\n- Step 1: Identify the specific client fear, objection, or knowledge gap.\\n- Step 2: Frame it as a content angle for Moscow car owners with bad credit.\\n- Step 3: Write offer_text as a proposed article title or topic brief -- NOT a description of the source post.\\n\\nGood offer_text for content_idea: \\\"Stat'ya: Chto proiskhodit s avtomobilem pri zayme pod zalog PTS -- riski, kotorye MFO ne ob\\\"yasnyayut\\\"\\nBad offer_text for content_idea: \\\"Zhaloba pol'zovatelya na poteyu mashiny\\\" (describes the source, not the angle)\\n\\ncontent_idea_score calibration:\\n- 80-100: Specific, emotionally resonant, directly addresses a real fear or decision point for the ICP.\\n- 60-79: Clear and relevant angle, good audience match, slightly broad.\\n- 40-59: Real topic but generic -- many competitors cover it already.\\n- 20-39: Vague or not specific to secured lending.\\n- 1-19: No content value.\\n\\nQUALITY SCORE\\n\\nquality_score -- overall value and actionability for the operator:\\n- 85-100: Rich data, clear signals, immediately actionable. Example: fresh Avito, Moscow, explicit rate \\\"3% in month, decision in day, any credit history\\\", contact visible.\\n- 65-84: Good data, minor gap (e.g. active competitor landing page, no explicit rate stated).\\n- 45-64: Partial data, signal present but incomplete context.\\n- 25-44: Sparse, ambiguous, low confidence, minimal direct value.\\n- 1-24: Noise or boilerplate -> status = \\\"skipped\\\".\\n\\nScoring discipline: 85+ must be genuinely exceptional. Most real records score 35-70. Cannot cite evidence for score above 60 -> lower the score.\\n\\nRECOMMENDED ACTION\\n\\n\\\"contact\\\" -- lead_signal_score >= 70 AND way to reach the person exists or platform allows reply. Urgency means delay costs conversion probability. Use sparingly.\\n\\\"monitor\\\" -- active competitor or meaningful market signal. Specify in reason what to watch (rate changes, new regions, activity level).\\n\\\"create_content\\\" -- specific client fear or objection with a clear content angle. Proposed angle goes in offer_text.\\n\\\"investigate\\\" -- potential value but needs more context. State exactly what information would unlock the score.\\n\\\"ignore\\\" -- no actionable value. Brief honest reason.\\n\\nEVIDENCE AND INFERENCE -- DISTINGUISH THREE LEVELS\\n\\nFACT: Explicitly stated in text. Report without qualification.\\nExample in reason: \\\"Tekst soderzhit '2.5% v mesyats, Moskva' -- pryamoy konkurent po osnovnomu produktu.\\\"\\n\\nCAUTIOUS INFERENCE: Not stated but reasonably implied. Label it in reason.\\nExample: \\\"Region veroyatno Moskva -- kod +7(495), no yavnogo ukazaniya net.\\\"\\n\\nUNKNOWN: Cannot determine. Return \\\"\\\" for strings, 1 for scores. Do not guess.\\n\\nEvidence rule: every score above 60 must be grounded in at least one specific phrase, number, or signal from the text. If evidence cannot be cited, lower the score.\\n\\nANTI-HALLUCINATION\\n\\nNEVER invent or assume when absent from the text:\\n- Company names, phone numbers, emails, Telegram handles, or social links.\\n- Interest rates, fees, loan amounts, or terms not explicitly stated.\\n- Regions or cities (do not assign Moscow because a brand name sounds local).\\n- Dates or timestamps not in the source data.\\n- Client intent beyond what is expressed (do not infer urgency from a calm inquiry).\\n- A company's market size, reputation, or geographic coverage from training data.\\n\\nSpecial rules:\\n- contact_public: only what is literally visible in the provided text.\\n- terms: only explicit figures. \\\"Nizkiye stavki\\\" is a claim, not a term -- return \\\"\\\".\\n- region: return \\\"\\\" if not mentioned. Never assign based on brand knowledge.\\n- Known brands: note recognition in reason but analyze only what the text actually says.\\n\\nSKIP / TRASH RULES\\n\\nReturn status=\\\"skipped\\\", quality_score=1, and all other scores=1 when ANY is true:\\n- Fewer than 40 meaningful characters.\\n- Pure navigation boilerplate: \\\"Glavnaya | O nas | Kontakty | Uslugi\\\".\\n- Category list with no offer: \\\"avtokredit, ipoteka, potrebitel'skiy kredit, refinansirovanie\\\".\\n- Contact-only block (address, phone, hours) with no product or offer description.\\n- Legal disclaimer, privacy policy, cookie notice, or terms of service page.\\n- Generic \\\"about us\\\" / \\\"why choose us\\\" with no specific claims (no rate, no speed, no coverage).\\n- Table of contents, section header list, or navigation dump.\\n- Empty, whitespace-only, or filler placeholder text.\\n- No connection to financial services, credit, or business.\\n- published_at more than 180 days before parsed_at AND no fresh activity signals in text.\\n- Clear duplicate pattern: same offer block, same contact, same URL domain as another record in the same batch.\\n\\nRecognizing a real competitor's domain does not override skip rules.\\n\\nREASON FIELD -- 3-SENTENCE STRUCTURE (required)\\n\\nSentence 1 -- WHAT: What is this record, and what is the key evidence from the text?\\nExample: \\\"Ob\\\"yavleniye na Avito: chastnyy investor, zaym pod PTS ot 3% v mesyats, resheniye za 1 chas, Moskva, telefon ukazan.\\\"\\n\\nSentence 2 -- WHY: Why the scores are what they are -- cite specific signals from the text.\\nExample: \\\"lead_signal_score vysokiy: fraza 'banki otkazali, nuzhny den'gi segodnya' i summa 150 000 RUB; region Moskva podtverzhden.\\\"\\n\\nSentence 3 -- NEXT: What the operator should do and why urgency matters or does not.\\nExample: \\\"Rekomendatsiya: svyazat'sya -- srochnost' vysokaya, zaderzhka snizhayet veroyatnost' kontakta; kontakt avtora dostupen.\\\"\\n\\nDo not merge into a vague paragraph. Each sentence must stand alone.\\n\\nOUTPUT FORMAT -- CRITICAL\\n\\nRespond with ONLY a valid JSON object:\\n- No markdown, no code fences (no backticks, no triple-backtick json), no preamble, no commentary.\\n- First character must be {. Last character must be }.\\n- String values: use Russian if the source text is in Russian; use source language otherwise.\\n- All field names exactly as specified -- no aliases, no extra fields, no omissions.\\n- Numeric scores are integers not floats (use 72 not 72.0).\\n\\nREQUIRED JSON SCHEMA -- all 25 fields required; \\\"\\\" for unknown strings; 1 for unknown integers.\\n\\n{\\n  \\\"created_at\\\": \\\"<ISO 8601 -- use parsed_at value from input; format YYYY-MM-DDThh:mm:ssZ>\\\",\\n  \\\"source_type\\\": \\\"<manual_test | scraped_web | apify | firecrawl | social | classified | unknown>\\\",\\n  \\\"platform\\\": \\\"<avito | telegram | instagram | website | vk | manual_test | etc. -- from input>\\\",\\n  \\\"source_url\\\": \\\"<source_url from input>\\\",\\n  \\\"parsed_at\\\": \\\"<parsed_at from input>\\\",\\n  \\\"published_at\\\": \\\"<published_at from input or empty string>\\\",\\n  \\\"freshness_status\\\": \\\"<fresh | recent | old | unknown>\\\",\\n  \\\"entity_type\\\": \\\"<competitor | lead_signal | market_signal | content_idea | irrelevant>\\\",\\n  \\\"company_name\\\": \\\"<explicitly in text only; else empty string>\\\",\\n  \\\"profile_name\\\": \\\"<explicitly in text only; else empty string>\\\",\\n  \\\"profile_url\\\": \\\"<profile_url from input or empty string>\\\",\\n  \\\"region\\\": \\\"<explicitly mentioned in text only; never inferred without stated basis; else empty string>\\\",\\n  \\\"service_type\\\": \\\"<secured_auto_loan | secured_real_estate_loan | pts_loan | refinancing | mortgage_adjacent | generic_lending | unknown>\\\",\\n  \\\"offer_text\\\": \\\"<1 sentence: what is offered, sought, or -- if content_idea -- proposed content angle as article title or topic brief>\\\",\\n  \\\"terms\\\": \\\"<explicit rate/price/conditions only -- e.g. '3% v mesyats, bez spravok, resheniye za 1 chas' -- empty string if not explicitly stated>\\\",\\n  \\\"contact_public\\\": \\\"<phone/email/Telegram from text only; empty string if none>\\\",\\n  \\\"text_context\\\": \\\"<cleaned summary; max 300 characters; include key offer, signals, urgency phrases, region>\\\",\\n  \\\"detected_need\\\": \\\"<lead_signal only: need type + amount + urgency signal + bank rejection + region in 1 sentence; empty string if not a lead>\\\",\\n  \\\"competitor_strength\\\": <integer 1-100; 1 if entity_type is not competitor>,\\n  \\\"lead_signal_score\\\": <integer 1-100>,\\n  \\\"content_idea_score\\\": <integer 1-100>,\\n  \\\"quality_score\\\": <integer 1-100>,\\n  \\\"reason\\\": \\\"<3 sentences: (1) what + key evidence; (2) why scores -- cite specific signals; (3) next action + urgency rationale>\\\",\\n  \\\"recommended_action\\\": \\\"<monitor | contact | create_content | ignore | investigate>\\\",\\n  \\\"status\\\": \\\"<analyzed | skipped>\\\"\\n}\\n\\nfreshness_status: \\\"fresh\\\" = published_at within 7 days of parsed_at; \\\"recent\\\" = 8-30 days before; \\\"old\\\" = more than 30 days before; \\\"unknown\\\" = date absent or unparseable.\";\n\nconst requestBody = {\n  model: \"claude-sonnet-4-6\",\n  max_tokens: 1400,\n  temperature: 0.2,\n  system: systemPrompt,\n  messages: [\n    {\n      role: \"user\",\n      content: JSON.stringify({\n        source_type: record.source_type || \"\",\n        platform: record.platform || \"\",\n        source_url: record.source_url || \"\",\n        profile_url: record.profile_url || \"\",\n        parsed_at: record.parsed_at || \"\",\n        published_at: record.published_at || \"\",\n        text_context: record.text_context || \"\"\n      })\n    }\n  ]\n};\n\nreturn [{ json: requestBody }];"
+      }
+    },
+    {
+      "id": "th00000000-0000-0000-0000-000000000006",
+      "name": "Claude API Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1220,
+        60
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://aiprimetech.io/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Claude API - Marketing Scout"
+        }
+      }
+    },
+    {
+      "id": "th00000000-0000-0000-0000-000000000007",
+      "name": "Parse Claude JSON Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        60
+      ],
+      "parameters": {
+        "jsCode": "const response = $json;\n\nlet textItem;\ntry {\n  textItem = response.content.find(c => c.type === 'text');\n} catch(e) {\n  return [{ json: {\n    status: \"skipped\", quality_score: 1, lead_signal_score: 1,\n    content_idea_score: 1, competitor_strength: 1,\n    entity_type: \"irrelevant\", recommended_action: \"ignore\",\n    freshness_status: \"unknown\",\n    reason: \"No content array in response: \" + e.message,\n    test_pass_basic: false,\n    raw_response_preview: JSON.stringify(response).substring(0, 500)\n  }}];\n}\n\nif (!textItem) {\n  return [{ json: {\n    status: \"skipped\", quality_score: 1, lead_signal_score: 1,\n    content_idea_score: 1, competitor_strength: 1,\n    entity_type: \"irrelevant\", recommended_action: \"ignore\",\n    freshness_status: \"unknown\",\n    reason: \"No text item found in Claude response content array\",\n    test_pass_basic: false,\n    raw_response_preview: JSON.stringify(response.content).substring(0, 500)\n  }}];\n}\n\nlet parsed;\ntry {\n  let rawText = textItem.text.trim();\n  rawText = rawText.replace(/^```json\\s*/, '').replace(/\\s*```$/, '');\n  rawText = rawText.replace(/^```\\s*/, '').replace(/\\s*```$/, '').trim();\n  parsed = JSON.parse(rawText);\n} catch(e) {\n  return [{ json: {\n    status: \"skipped\", quality_score: 1, lead_signal_score: 1,\n    content_idea_score: 1, competitor_strength: 1,\n    entity_type: \"irrelevant\", recommended_action: \"ignore\",\n    freshness_status: \"unknown\",\n    reason: \"JSON parse failed: \" + e.message,\n    test_pass_basic: false,\n    raw_response_preview: textItem.text.substring(0, 500)\n  }}];\n}\n\n// Pull test metadata from Select Test Record node (available in execution context)\nlet testMeta = {};\ntry {\n  testMeta = $('Select Test Record').first().json;\n} catch(e) {\n  testMeta = { test_id: 0, expected_entity_type: \"\", expected_recommended_action: \"\", expected_quality_range: \"\" };\n}\n\nconst actualQuality   = parsed.quality_score      || 1;\nconst actualEntity    = parsed.entity_type         || \"\";\nconst actualAction    = parsed.recommended_action  || \"\";\nconst actualLead      = parsed.lead_signal_score   || 1;\nconst actualContent   = parsed.content_idea_score  || 1;\nconst actualComp      = parsed.competitor_strength || 1;\n\nconst entityMatch  = (actualEntity === testMeta.expected_entity_type);\nconst testPassBasic = entityMatch && (parsed.status !== undefined);\n\nreturn [{ json: {\n  ...parsed,\n  test_id:                      testMeta.test_id || 0,\n  expected_entity_type:         testMeta.expected_entity_type || \"\",\n  expected_recommended_action:  testMeta.expected_recommended_action || \"\",\n  expected_quality_range:       testMeta.expected_quality_range || \"\",\n  actual_entity_type:           actualEntity,\n  actual_recommended_action:    actualAction,\n  actual_quality_score:         actualQuality,\n  actual_lead_signal_score:     actualLead,\n  actual_content_idea_score:    actualContent,\n  actual_competitor_strength:   actualComp,\n  test_pass_basic:              testPassBasic,\n  test_notes: \"entity_type_match=\" + entityMatch\n    + \"; quality=\" + actualQuality\n    + \"; action=\" + actualAction\n    + \"; expected_action=\" + (testMeta.expected_recommended_action || \"\")\n}}];"
+      }
+    },
+    {
+      "id": "th00000000-0000-0000-0000-000000000008",
+      "name": "Quality Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        60
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "th00000000-0000-0000-0000-000000000081",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "analyzed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "th00000000-0000-0000-0000-000000000082",
+              "leftValue": "={{ $json.quality_score }}",
+              "rightValue": 60,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "th00000000-0000-0000-0000-000000000009",
+      "name": "Append Row to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2060,
+        60
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "results",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Set Test Selector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Test Selector": {
+      "main": [
+        [
+          {
+            "node": "Select Test Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Test Record": {
+      "main": [
+        [
+          {
+            "node": "Build Claude Request v2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Claude Request v2": {
+      "main": [
+        [
+          {
+            "node": "Claude API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude API Request": {
+      "main": [
+        [
+          {
+            "node": "Parse Claude JSON Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Claude JSON Response": {
+      "main": [
+        [
+          {
+            "node": "Quality Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quality Gate": {
+      "main": [
+        [
+          {
+            "node": "Append Row to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "th000000-test-v002-baseline-short-test5",
+  "meta": {
+    "instanceId": "marketing-scout-v2-baseline-short-test5"
+  }
+}

@@ -5,6 +5,80 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Baseline Raw JSON SHORT TEST 5
+
+**Agent role:** project-engineer
+**Session goal:** Create a safe importable harness based on the d350069 baseline, with Test 5 text_context shortened to eliminate the JSON.parse failure root cause.
+
+**Context:**
+- d350069 baseline raw JSON harness works: Test 1 passed (entity_type=lead_signal, action=contact, quality=97, lead_signal=98).
+- v2.1–v2.5 experiments all failed or were unstable (JSON.parse, gateway 502 at all prompt sizes).
+- Test 5 (content_idea) failed JSON.parse in the baseline due to long multi-sentence Russian text that caused Claude to embed problematic characters in JSON string values.
+
+**What was done:**
+- Read d350069 baseline from git history (`git show d350069:n8n/workflows/...`).
+- Created `02_claude_api_single_record_v2_baseline_short_test5.json`:
+  - Workflow name updated to `02 - Claude API Single Record Analysis v2 BASELINE SHORT TEST 5`.
+  - Test 5 text_context replaced: 252 chars → 139 chars. New text is a short fear-based VK question (no multi-sentence prose, no em-dash, no complex punctuation that triggers JSON escape issues).
+  - All other nodes, prompts, parsers, and connections identical to d350069 baseline.
+  - Sticky note updated to describe the file's purpose.
+  - versionId and instanceId updated.
+- JSON validated: `python3 -m json.tool` exits 0; **33,018 bytes**.
+- Verified: active=false, no real credentials, no real Spreadsheet ID, v2.5 harness untouched.
+- Added DEC-029: baseline raw JSON is the working fallback; v2.1–v2.5 experiments deferred.
+- Rewrote `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`: status table (baseline vs experiments), Test 5 change explanation, 2-test retest order, stale v2.5 sections replaced.
+- Updated `docs/NEXT_ACTIONS.md` Step D to point to the new baseline_short_test5 harness.
+- Updated `docs/DECISIONS.md` (DEC-029), AGENT_LOG.md, core/hot/recent.md.
+
+**Files created/updated:**
+- `n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json` — **CREATED** (33,018 bytes)
+- `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` — full rewrite
+- `docs/DECISIONS.md` — DEC-029 added
+- `docs/NEXT_ACTIONS.md` — Step D updated
+- `docs/AGENT_LOG.md` — this entry
+- `core/hot/recent.md` — updated
+
+**Files NOT modified (confirmed):**
+- `n8n/workflows/02_claude_api_single_record_analysis.json` — production, untouched ✓
+- `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` — v2.5 harness, untouched ✓
+
+---
+
+## 2026-06-05 — Prompt v2.5 MICRO
+
+**Agent role:** project-engineer / prompt-engineer
+**Session goal:** Fix 502 by reducing prompt to micro size. v2.4 (5.3 KB compact) still returned 502 upstream_error. Minimal curl with small prompt works. Diagnosis: gateway threshold is well below 5 KB.
+
+**Root cause of v2.4 502:** System prompt was 5343 chars. Even compacted to 5.3 KB, the gateway returned 502 upstream_error. Minimal curl (very short system + short user message) succeeds every time. The gateway cannot handle moderately sized prompts — micro-sized runtime is required.
+
+**What was done:**
+- Rewrote `MARKETING_AGENT_PROMPT_V2.md` to v2.5 MICRO: stripped all verbose methodology from runtime prompt. Kept only: priority, products, target, region rules, one-liner scoring anchors, actions, skip trigger, field limits, enums, anti-hallucination one-liner, output format. Result: **1997 chars runtime prompt** (target 1500–2200). ✓
+- Preserved full methodology in new "Full Methodology Reference" section within the same file (not sent at runtime).
+- Renamed `Build Claude Request v2.4` → `Build Claude Request v2.5 MICRO`. Updated jsCode: max_tokens 700→450, embedded v2.5 MICRO prompt, removed `profile_url` from user message, no tools, no tool_choice.
+- `Parse Claude Line Response` parse logic unchanged from v2.3/v2.4.
+- Rebuilt all connections from scratch (canonical Python dict). Verified: Select Test Record → Build Claude Request v2.5 MICRO. ✓
+- JSON validated: python3 -m json.tool exits 0; **24,138 bytes** (was 28,139 bytes in v2.4).
+- Added DEC-028: micro-sized runtime prompts required; detailed methodology stays in docs only.
+- Updated COSTS_AND_LIMITS.md: v2.5 row added to stability table; note on prompt size + cost + gateway routing.
+- Rewrote `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` for v2.5: v2.4 502 added to history table, Step 0 curl-test added, updated cost estimate, updated approval section with note on MICRO scoring quality.
+- Updated NEXT_ACTIONS.md, DECISIONS.md, AGENT_LOG.md, core/hot/recent.md.
+
+**Prompt size change:** 5343 chars (v2.4) → 1997 chars (v2.5 MICRO) = −63%.
+**max_tokens change:** 700 → 450 = −36%.
+**File size change:** 28,139 bytes (v2.4 harness) → 24,138 bytes (v2.5 harness).
+
+**Files updated:**
+- `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` — v2.5 MICRO
+- `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` — Build v2.5 MICRO, connections rebuilt (24,138 bytes)
+- `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` — full rewrite for v2.5
+- `docs/DECISIONS.md` — DEC-028 added
+- `docs/COSTS_AND_LIMITS.md` — v2.5 row added, prompt size guidance tightened to <2.5 KB
+- `docs/NEXT_ACTIONS.md` — Step D updated to v2.5 MICRO
+- `docs/AGENT_LOG.md` — this entry
+- `core/hot/recent.md` — updated
+
+---
+
 ## 2026-06-05 — Prompt v2.4 Compact KEY=VALUE
 
 **Agent role:** project-engineer / prompt-engineer

@@ -5,6 +5,39 @@ Most recent first.
 
 ---
 
+## DEC-029 — Baseline Raw JSON Is the Working Fallback; v2.1–v2.5 Experiments Deferred
+
+**Date:** 2026-06-05
+**Context:** The d350069 baseline raw JSON harness works: Test 1 passed (entity_type=lead_signal, recommended_action=contact, quality_score=97, lead_signal_score=98). The v2.1–v2.5 experiments all failed or were unstable:
+- v2.1: JSON.parse failures on Test 1 and Test 5.
+- v2.2: Gateway 502 on tool_use.
+- v2.3: Gateway 502 at 9.2 KB.
+- v2.4: Gateway 502 at 5.3 KB.
+- v2.5 MICRO: curl still returned 502 at ~2 KB.
+All 502 failures happened after Test 1 passed on the baseline — the gateway can handle the baseline payload.
+**Decision:** The baseline raw JSON harness (d350069) is the current working approach. The v2.1–v2.5 experiment files are preserved in the repository but are not the active test path. The immediate task is to fix the only known baseline failure point: Test 5 (`content_idea` with long text that produced JSON.parse errors). A shortened Test 5 is the smallest possible change to validate before approving the baseline.
+**Rationale:** Incrementally fixing the baseline is lower-risk than chasing gateway compatibility with experimental output formats that all returned 502. The gateway clearly handles the baseline payload — the only remaining question is whether Claude produces valid JSON for the shortened Test 5 text.
+**Next step:** Run `02_claude_api_single_record_v2_baseline_short_test5.json` with test_id=5 first. If it passes, run test_id=1 to confirm baseline is unaffected. Then decide whether to approve the baseline for production.
+**Applies to:** Prompt v2 test strategy until gateway constraints are resolved or a direct Anthropic API endpoint is available.
+
+---
+
+## DEC-028 — Micro-Sized Runtime Prompts Required; Detailed Methodology Stays in Docs Only
+
+**Date:** 2026-06-05
+**Context:** v2.4 compact prompt (5.3 KB / 5343 chars) still returned 502 upstream_error from the gateway. Minimal curl with a very small prompt continues to work. Conclusion: the gateway cannot reliably handle even moderately sized prompts — the threshold is well below 5 KB.
+**Decision:** Strip runtime prompts to the absolute minimum — essential rules, enums, field limits, and output format only. Target: 1500–2200 chars (~1.5–2 KB). All detailed methodology (ICP description, evidence rules, anti-hallucination prose, full skip rules) is preserved in the canonical prompt file (`MARKETING_AGENT_PROMPT_V2.md`) for reference and debugging, but is NOT included in the runtime prompt sent to Claude.
+**v2.5 MICRO changes:**
+- System prompt: 5343 chars (v2.4) → 1997 chars (v2.5). −63%.
+- max_tokens: 700 → 450. Sufficient for 25 KEY=VALUE lines.
+- User message: removed profile_url (not needed for core analysis).
+- Field limits tightened: offer_text 140→80, text_context 220→100, detected_need 160→100, reason 220→120.
+**Long-term posture:** Detailed agent prompts and tool_use are deferred until an official Anthropic API endpoint or a verified-stable gateway is confirmed. Micro prompt is the production approach for this gateway. If scoring quality is insufficient, restore sections one at a time and retest.
+**If 502 persists with v2.5 MICRO:** The issue is NOT prompt size. Check gateway balance (402 masks as 502), per-minute rate limits, or account-level routing. Run raw curl from VPS with the full v2.5 payload to isolate n8n from gateway.
+**Applies to:** All Claude API calls via aiprimetech.io until gateway constraints are resolved or a different gateway is adopted.
+
+---
+
 ## DEC-027 — Compact Prompts Required for Stable Gateway Execution
 
 **Date:** 2026-06-05
