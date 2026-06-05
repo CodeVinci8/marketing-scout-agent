@@ -3,7 +3,7 @@
 Tracks all Claude API prompt versions used in the pipeline.
 Each version must be tested against synthetic records before embedding into a workflow.
 
-**Last updated:** 2026-06-05
+**Last updated:** 2026-06-05 (v2 written; test records and test plan created)
 
 ---
 
@@ -22,24 +22,29 @@ Each version must be tested against synthetic records before embedding into a wo
 
 ---
 
-## Planned: Prompt v2
+## Prompt v2 — Ready for Testing
 
-**File (when written):** `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md`
+**File:** `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md`
 **Design plan:** `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md`
-**Status:** Design phase — not written yet
-**Blocker:** Uncle's business requirements must be confirmed before finalizing ICP section
+**Status:** Written 2026-06-05 — awaiting synthetic test approval before embedding in workflow
+**Test records:** `modules/marketing-scout-v0/TEST_RECORDS_V2.md` — 7 records
+**Test guide:** `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`
+**Schema changes:** None — same 25 output fields as v1
 
-**Key improvements planned over v1:**
-- Agent identity as marketing analyst, not data extractor
-- ICP definition for the operator's target client
-- Competitive threat assessment (regional overlap, urgency, tactic differentiation)
-- Lead signal urgency model (fit + urgency + readiness three-axis scoring)
-- Content angle proposals (not just tagging a record as content_idea)
-- Structured `reason` field with evidence citation
-- New output fields: `competitor_threat_summary`, `content_angle`, `urgency_indicator`, `icp_fit`
+**Key improvements over v1:**
+- Explicit priority order in reasoning: lead signals first → competitors second → content ideas third
+- Confirmed ICP: Moscow car owner, bad credit, urgent cash need; PTS/auto > real estate > refinancing
+- Region scoring rules: MO leads eligible for 60–100; out-of-region leads capped at 40
+- Competitor threat framework: regional overlap + tactical USP + activity level → competitor_strength
+- Lead urgency model: fit × urgency × readiness three-axis scoring with calibration anchors
+- Content angle framing: `offer_text` for content_idea records = proposed article title, not source description
+- Structured 3-sentence `reason` field: what (evidence) → why (scores) → next (action + urgency)
+- Evidence citation required for any score above 60
+- Anti-hallucination additions: brand knowledge firewall, rate inference prohibition, region inference restriction
+- Expanded skip rules: category lists, contact-only blocks, legal pages, duplicate patterns
 
-**Gate before use:** Prompt v2 must pass a 5-record synthetic test before embedding into any workflow.
-See `docs/MILESTONE_REVIEW_02.md` Section 7 and `MARKETING_AGENT_PROMPT_V2_PLAN.md` Section 15.
+**Gate before use:** Must pass all 7 synthetic test criteria in `N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`.
+Do not embed in any workflow without operator approval after test results are reviewed.
 
 ---
 
@@ -58,7 +63,7 @@ See `docs/MILESTONE_REVIEW_02.md` Section 7 and `MARKETING_AGENT_PROMPT_V2_PLAN.
 |---------|------|------|--------|-------|
 | v0 (draft) | `SYSTEM_PROMPT.md` | 2026-06-04 | Superseded | Initial generic prompt, 0–10 scale, never tested in production |
 | v1.0 | `MARKETING_AGENT_PROMPT_V1.md` | 2026-06-05 | Active | Secured lending domain, 1–100 scale, confirmed working in Workflow 02 |
-| v2.0 | `MARKETING_AGENT_PROMPT_V2.md` | TBD | Planned | Analyst identity, ICP, competitive threat, urgency model |
+| v2.0 | `MARKETING_AGENT_PROMPT_V2.md` | 2026-06-05 | Awaiting test approval | Analyst identity, confirmed ICP, competitive threat, lead urgency model, content angle framing, region rules |
 
 ---
 
@@ -81,7 +86,7 @@ Test against the 5-record synthetic test set described in `MARKETING_AGENT_PROMP
 
 ## Prompt Engineering Notes
 
-- **Token budget:** System prompt should stay under 1 200 tokens for cost efficiency. v1 is approximately 600–700 tokens. v2 is estimated at 900–1 100 tokens.
+- **Token budget:** v1 system prompt is approximately 600–700 tokens. v2 is approximately 1 400–1 800 tokens (longer due to ICP, region rules, frameworks, and evidence requirements). Measure actual cost on first 7 test calls.
 - **Scoring scale:** 1–100 integers. Do not revert to 0–10.
 - **Calibration anchors:** Include at least 2 concrete examples per score dimension (e.g., "a fresh competitor with explicit rate in the same region is quality_score ~75").
 - **JSON output enforcement:** Always specify the complete output schema in the prompt. Claude must see `{` as first character of response.

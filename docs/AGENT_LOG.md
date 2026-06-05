@@ -5,6 +5,38 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Prompt v2 Written; Test Records and Test Plan Created
+
+**Agent role:** project-engineer / prompt-engineer
+**Session goal:** Write Marketing Agent Prompt v2 based on confirmed business requirements; create test infrastructure.
+
+**What was done:**
+- Wrote `MARKETING_AGENT_PROMPT_V2.md` (~12 KB): full analyst-identity prompt with priority order (leads → competitors → content), confirmed ICP, region scoring rules, competitor threat framework, lead urgency model, content angle framing, 3-sentence structured reason field, evidence citation requirement, anti-hallucination additions, expanded skip rules. Schema unchanged (25 fields).
+- Created `TEST_RECORDS_V2.md`: 7 synthetic records covering strong lead, weak lead, active competitor, RE landing page, content idea, SEO boilerplate, and refinancing edge case. Each record includes input JSON, expected entity_type, expected action, expected score ranges, pass criteria, and "why it matters" explanation.
+- Created `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`: full Russian-language test guide — how to duplicate Workflow 02, swap the prompt, run 7 records, fill the protocol table, check costs, and decide whether v2 is approved.
+- Added DEC-022 to `docs/DECISIONS.md`: no new JSON schema fields until v2 is validated in production.
+
+**Files created:**
+- `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md`
+- `modules/marketing-scout-v0/TEST_RECORDS_V2.md`
+- `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`
+
+**Files updated:**
+- `docs/PROMPTS.md` — v2 status updated; version history updated; token budget note updated
+- `docs/AGENT_CAPABILITIES.md` — v2 improvements updated; risks table updated
+- `docs/NEXT_ACTIONS.md` — Step C marked complete; Step D updated with 7-record procedure
+- `docs/DECISIONS.md` — DEC-022 added
+- `docs/AGENT_LOG.md` — this entry
+- `core/hot/recent.md` — updated
+
+**Not changed:**
+- `n8n/workflows/02_claude_api_single_record_analysis.json` — not touched (awaiting test approval)
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+**Next action:** Step D — run 7 synthetic tests in n8n; follow `N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`; cost ~$0.10–0.20
+
+---
+
 ## 2026-06-05 — Business Requirements Recorded After Uncle Consultation
 
 **Agent role:** project-engineer

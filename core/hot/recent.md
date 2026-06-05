@@ -4,6 +4,28 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-05 — Prompt v2 Written
+
+**What was done:**
+- `MARKETING_AGENT_PROMPT_V2.md` written (~12 KB): analyst identity, priority order (leads → competitors → content), confirmed ICP, region scoring (MO leads 60–100; out-of-region cap 40), product hierarchy (PTS/auto first), competitor threat framework, lead urgency model (fit × urgency × readiness), content angle in offer_text, structured 3-sentence reason, evidence citation requirement, expanded skip/anti-hallucination rules
+- `TEST_RECORDS_V2.md` created: 7 synthetic records with input JSON, expected scores, pass criteria
+- `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` created: full Russian test guide for n8n manual testing
+- DEC-022 added: no new JSON schema columns until v2 validated in production (same 25 fields as v1)
+- `docs/PROMPTS.md`, `AGENT_CAPABILITIES.md`, `NEXT_ACTIONS.md`, `DECISIONS.md` updated
+
+**Key decisions:**
+- Schema unchanged: v2 prompt uses same 25 output fields — no new columns until production validation
+- New fields (competitor_threat_summary, content_angle, urgency_indicator, icp_fit) planned for v2.1+
+- Workflow 02 JSON NOT modified yet — only after test approval
+
+**What is next (in order):**
+1. **Step D (immediate):** Run 7 synthetic tests — follow `N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`; cost ~$0.10–0.20
+2. Review test results with operator; get approval to embed v2 in Workflow 02
+3. Step B: remaining minor doc fixes (README.md, tools/TOOLS.md, core/warm/decisions.md)
+4. Step E: Workflow 03 Firecrawl (competitor website)
+
+---
+
 ## Session: 2026-06-05 — Business Requirements (Uncle Consultation)
 
 **What was done:**

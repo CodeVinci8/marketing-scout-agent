@@ -5,6 +5,17 @@ Most recent first.
 
 ---
 
+## DEC-022 — Prompt v2 Schema: No New Columns Until v2 Is Validated in Production
+
+**Date:** 2026-06-05
+**Context:** The Prompt v2 plan (`MARKETING_AGENT_PROMPT_V2_PLAN.md`) defines four new output fields: `competitor_threat_summary`, `content_angle`, `urgency_indicator`, `icp_fit`. These would provide richer intelligence but require Google Sheets schema changes (new columns), updated n8n output mapping, and re-import of the workflow JSON.
+**Decision:** Prompt v2 will use the same 25-field schema as Prompt v1. No new columns are added until v2 passes the 7-record synthetic test, is approved by the operator, runs successfully on real scraped data, and the operator confirms the additional fields are worth the added complexity.
+**The new fields are documented as planned** in `MARKETING_AGENT_PROMPT_V2.md` (Planned Future Fields section) and will be implemented in schema v2.1+ after production validation.
+**Rationale:** Adding columns before the schema is stable is technical debt. The priority is getting v2 reasoning quality validated, not expanding the output surface area.
+**Trigger to add new fields:** v2 is in stable production use (≥ 20 real scraped records analyzed); operator reviews output and confirms new fields are needed.
+
+---
+
 ## DEC-021 — No Paid Scraping Until Prompt v2 Is Ready and Business Requirements Are Clarified
 
 **Date:** 2026-06-05

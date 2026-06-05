@@ -109,7 +109,11 @@ Based on `docs/MILESTONE_REVIEW_02.md` Section 7, `MARKETING_AGENT_PROMPT_V2_PLA
 10. **New fields** — `competitor_threat_summary`, `content_angle`, `urgency_indicator`, `icp_fit`
 11. **Evidence requirement** — every score above 60 must cite a specific phrase from the source text
 
-**Gate:** v2 must not be embedded in any workflow until it passes a 5-record synthetic test and is approved by the operator.
+**Gate:** v2 must not be embedded in any workflow until it passes all 7 synthetic test criteria defined in `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` and is approved by the operator.
+
+**v2 is written.** See `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md`.
+**Test records ready.** See `modules/marketing-scout-v0/TEST_RECORDS_V2.md`.
+**Test guide ready.** See `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`.
 
 ---
 
@@ -152,8 +156,8 @@ Full schema: `docs/TABLE_SCHEMA.md`
 
 | Risk | Severity | Status |
 |------|----------|--------|
-| Prompt v1 is an extractor, not an analyst | High | Mitigation: Prompt v2 in design |
-| No ICP defined — lead quality cannot be truly assessed | High | Mitigation: Uncle consultation required |
+| Prompt v1 is an extractor, not an analyst | High | Mitigation: Prompt v2 written — awaiting test approval |
+| No ICP defined — lead quality cannot be truly assessed | High | Mitigation: ICP confirmed (uncle consultation done); encoded in v2 |
 | No pre-filter node — all records hit Claude API | Medium | Mitigation: Design in progress |
 | Prompt duplication (Code node vs. file) | Medium | Mitigation: DEC-020 procedure documented |
 | Real page cost unknown (only short-record baseline) | Medium | Mitigation: Measure after first Firecrawl test |

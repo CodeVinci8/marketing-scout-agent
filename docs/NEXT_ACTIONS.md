@@ -145,32 +145,44 @@ Workflows are built incrementally — no external APIs until the platform is ver
 - [ ] `tools/TOOLS.md` — fix Google Sheets auth note; update GitHub status
 - [ ] `core/warm/decisions.md` — add DEC-018, DEC-019, DEC-020, DEC-021
 
-#### Step C — Write Marketing Agent Prompt v2 _(Step A complete — ICP and priorities confirmed)_
+#### Step C — Write Marketing Agent Prompt v2 ✓ COMPLETED 2026-06-05
 
 **Goal:** Write a prompt that reasons like a marketing analyst, not a data extractor.
 
-- [ ] Write `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` using `MARKETING_AGENT_PROMPT_V2_PLAN.md`
-- [ ] ICP is now confirmed — use facts from `docs/BUSINESS_REQUIREMENTS.md`
-- [ ] Priority order: **lead signals first → competitors second → content ideas third**
-- [ ] Include: agent identity, business objective, confirmed ICP, competitive threat logic, lead urgency model, content angle framework, evidence rules, structured `reason` field
-- [ ] Add region filter: Moscow / MO required for high `lead_signal_score`; out-of-region records score lower
-- [ ] Add product fit scoring: PTS/auto > real estate > refinancing > other
+- [x] `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` — written (~12 KB)
+- [x] Priority order encoded: lead signals first → competitors second → content ideas third
+- [x] Confirmed ICP from `docs/BUSINESS_REQUIREMENTS.md` — Moscow car owner, bad credit, urgency
+- [x] Region rules: MO leads eligible 60–100; out-of-region capped at 40
+- [x] Product hierarchy: PTS/auto > real estate > refinancing > other
+- [x] Competitor threat framework: regional overlap + USP + activity level
+- [x] Lead urgency model: fit × urgency × readiness with calibration anchors
+- [x] Content intelligence: offer_text for content_idea = proposed article title
+- [x] Structured 3-sentence reason field with evidence citation requirement
+- [x] Anti-hallucination additions, expanded skip rules
+- [x] `modules/marketing-scout-v0/TEST_RECORDS_V2.md` — 7 synthetic test records with expected scores
+- [x] `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` — step-by-step manual test guide (Russian)
 
-> Full design in `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md`.
-> Business requirements in `docs/BUSINESS_REQUIREMENTS.md`.
+> Schema unchanged — same 25 output fields as v1. New fields planned for v2.1+.
 
-#### Step D — Test Prompt v2 on 5 Synthetic Records _(before any paid scraping)_
+#### Step D — Test Prompt v2 on 7 Synthetic Records _(before any paid scraping)_
 
 **Goal:** Verify v2 produces better, more actionable outputs than v1 before spending money on real data.
 
-- [ ] Create 5 synthetic test records: strong competitor, weak competitor, strong lead, weak lead, boilerplate
-- [ ] Run each through Build Claude Request + Claude API + Parse Claude Response manually (5 API calls)
-- [ ] Measure actual cost per call for v2 (compare to v1 baseline of $0.0115)
-- [ ] Review outputs: are `reason` fields evidence-based? Are scores differentiated? Are new fields useful?
-- [ ] Get operator approval on test results
-- [ ] Only after approval: update Build Claude Request Code node in workflow JSON with v2 prompt
+**Cost:** ~$0.10–0.20 for 7 calls (≈ 7–15 RUB). Approved under DEC-021.
 
-> See `MARKETING_AGENT_PROMPT_V2_PLAN.md` Section 15 for full test strategy.
+- [ ] Follow `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` — full procedure in Russian
+- [ ] Duplicate Workflow 02 → create `02b — Prompt v2 Test (temporary)`
+- [ ] Paste v2 prompt into `Build Claude Request` node of the copy
+- [ ] Run all 7 records from `TEST_RECORDS_V2.md` one by one
+- [ ] Fill in the protocol table in the test plan guide
+- [ ] Measure cost: balance before and after → cost per call
+- [ ] Check all 10 pass criteria from the test plan
+- [ ] Present results to operator for approval
+- [ ] Only after approval: update `02_claude_api_single_record_analysis.json` with v2 prompt
+- [ ] Delete temporary workflow `02b` after approval
+
+> Pass criteria: all 7 records meet expected entity_type, action, score ranges, and evidence citation.
+> Full criteria: `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`.
 
 #### Step E — Workflow 03: Firecrawl Website Analysis _(after Steps A–D complete)_
 
@@ -230,9 +242,10 @@ Workflows are built incrementally — no external APIs until the platform is ver
 
 Not technically blocked. Deliberately paused on paid scraping (DEC-021).
 
-**Next zero-cost actions (do in order):**
-1. ~~Step A — consult uncle~~ ✓ Done — see `docs/BUSINESS_REQUIREMENTS.md`
-2. Finish Step B — `README.md`, `tools/TOOLS.md`, `core/warm/decisions.md` still need minor fixes
-3. Step C — write Prompt v2 (ICP and priorities now confirmed from Step A)
-4. Step D — synthetic test (5 API calls, ~$0.10 total)
-5. Step E — Workflow 03 Firecrawl (first test: competitor website)
+**Next actions (in order):**
+1. ~~Step A — consult uncle~~ ✓ Done — `docs/BUSINESS_REQUIREMENTS.md`
+2. ~~Step C — write Prompt v2~~ ✓ Done — `MARKETING_AGENT_PROMPT_V2.md`
+3. **Step D — run 7 synthetic tests** (small cost ~$0.10–0.20, approved under DEC-021) — follow `N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`
+4. Get operator approval on test results → update Workflow 02 with v2 prompt
+5. Step B — remaining minor doc fixes (`README.md`, `tools/TOOLS.md`, `core/warm/decisions.md`)
+6. Step E — Workflow 03 Firecrawl (competitor website)
