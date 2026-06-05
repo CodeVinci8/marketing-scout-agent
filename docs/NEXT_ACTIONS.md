@@ -175,22 +175,34 @@ History: v2.0/v2.1 JSON parse; v2.2 502 tool_use; v2.3 502 at 9.2 KB; v2.4 502 a
 **Node names:** `Build Claude Request v2.5 MICRO` / `Parse Claude Line Response`
 **Connection chain:** Manual Start → Set Test Selector → Select Test Record → Build Claude Request v2.5 MICRO → Claude API Request → Parse Claude Line Response → Quality Gate → Append Row to Google Sheets
 
-**Current approach: Baseline raw JSON + shortened Test 5 (DEC-029). v2.1–v2.5 experiments deferred.**
+**Current approach: Baseline raw JSON (d350069). Extended tests 8–12 ready. DEC-029, DEC-031.**
 
-**TEST HARNESS (active):** `n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json` (33,018 bytes)
-**Connection chain:** Manual Start → Set Test Selector → Select Test Record → Build Claude Request v2 → Claude API Request → Parse Claude JSON Response → Quality Gate → Append Row to Google Sheets
+**Active harnesses:**
+- `02_claude_api_single_record_v2_baseline_short_test5.json` (33,018 bytes) — Test 5 only
+- `02_claude_api_single_record_v2_extended_tests.json` (30,879 bytes) — Tests 8–12
 
-- [ ] Validate JSON: `python3 -m json.tool n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json > /tmp/v2_baseline_short_test5_validated.json`
-- [ ] Import `02_claude_api_single_record_v2_baseline_short_test5.json` into n8n
-- [ ] Bind credentials: `Claude API - Marketing Scout` and `Google Sheets - Marketing Scout Service Account`
-- [ ] Paste real Spreadsheet ID into `Append Row to Google Sheets` node
-- [ ] **Run test_id=5 first** — check JSON.parse succeeds, entity_type=content_idea, action=create_content
-- [ ] **If test 5 passes → run test_id=1** — confirm baseline result matches prior run (quality≥80, action=contact)
-- [ ] If both pass: discuss with operator — approve baseline or run remaining tests (2,3,4,6,7)
-- [ ] Present results to operator for approval
-- [ ] Only after approval: update production `02_claude_api_single_record_analysis.json`
+**Step 1 — Test 5 (short):**
+- [ ] Import `baseline_short_test5.json` → set test_id=5 → run → confirm entity_type=content_idea, no JSON parse error
+- [ ] Record result in `docs/WORKFLOW_02_V2_TEST_RESULTS.md`
 
-> Full procedure: `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`.
+**Step 2 — Extended tests 8–12:**
+- [ ] Record API balance before
+- [ ] Import `extended_tests.json`
+- [ ] Run test_id=8 → 9 → 10 → 11 → 12
+- [ ] Record results in `docs/WORKFLOW_02_V2_TEST_RESULTS.md`
+- [ ] Record API balance after; compute cost per test
+
+**Step 3 — Close Workflow 02 v2 testing stage:**
+- [ ] Minimum 4/5 extended tests pass + Test 1 confirmed + zero JSON parse failures
+- [ ] Present to operator for approval
+- [ ] After approval: update production `02_claude_api_single_record_analysis.json`
+
+**Step 4 — Move to first real source test (Step E):**
+- [ ] Get Firecrawl API key → create n8n credential
+- [ ] Create `n8n/workflows/03_firecrawl_website_analysis.json`
+- [ ] Choose one real competitor URL, run end-to-end
+
+> Full procedure: `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`. Results: `docs/WORKFLOW_02_V2_TEST_RESULTS.md`.
 
 #### Step E — Workflow 03: Firecrawl Website Analysis _(after Steps A–D complete)_
 
@@ -253,9 +265,9 @@ Not technically blocked. Deliberately paused on paid scraping (DEC-021).
 **Next actions (in order):**
 1. ~~Step A — consult uncle~~ ✓ Done — `docs/BUSINESS_REQUIREMENTS.md`
 2. ~~Step C — write Prompt v2~~ ✓ Done — `MARKETING_AGENT_PROMPT_V2.md`
-3. **Step D — import BASELINE SHORT TEST 5 harness and run test_id=5, then test_id=1** (~$0.03, DEC-021, DEC-029)
-   — import `02_claude_api_single_record_v2_baseline_short_test5.json`; **run test_id=5 first**;
-   if passes, run test_id=1; see `N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`
-4. Get operator approval on test results → update production Workflow 02 with approved baseline structure (DEC-029)
+3. **Step D — Run Test 5 (short), then Extended Tests 8–12** (~$0.05–0.10 total, DEC-021, DEC-029, DEC-031)
+   — Test 5 first on `baseline_short_test5.json`; then tests 8–12 on `extended_tests.json`;
+   record all results in `WORKFLOW_02_V2_TEST_RESULTS.md`; get operator approval to close stage
+4. After approval: update production Workflow 02 with v2 baseline structure
 5. Step B — remaining minor doc fixes (`README.md`, `tools/TOOLS.md`, `core/warm/decisions.md`)
-6. Step E — Workflow 03 Firecrawl (competitor website)
+6. **Step E — Workflow 03 Firecrawl** (first real source; competitor website)

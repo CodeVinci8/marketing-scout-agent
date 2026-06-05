@@ -4,6 +4,27 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-05 — Extended Tests 8–12 + Final Test Docs
+
+**What was done:**
+- Created `02_claude_api_single_record_v2_extended_tests.json` (30,879 bytes): d350069 baseline + tests 8–12 (Telegram hot lead, Instagram competitor, Avito refinancing MO, weak website competitor, out-of-region SPb). JSON valid.
+- Created `TEST_RECORDS_V2_EXTENDED.md`: full test specs with input JSON, expected outputs, pass/fail criteria.
+- Created `WORKFLOW_02_V2_TEST_RESULTS.md`: empty protocol table ready for operator to fill.
+- Updated test plan, AGENT_CAPABILITIES.md, ROADMAP.md (added Stage 2.5 Telegram Control Bot), DECISIONS.md (DEC-030 content deferred, DEC-031 no repeat tests, DEC-032 bot future), COSTS_AND_LIMITS.md, NEXT_ACTIONS.md.
+
+**Key decisions:**
+- DEC-030: content_idea deferred to Stage 3 (Content Agent). Not in extended tests.
+- DEC-031: no repeat tests. Extended 8–12 cover uncle's priorities.
+- DEC-032: Telegram Control Bot is future roadmap (Stage 2.5), not current MVP.
+
+**What is next (in order):**
+1. **Step D (immediate):** Run Test 5 (short) on baseline_short_test5 harness. Then run Tests 8–12 on extended_tests harness. Record all results in WORKFLOW_02_V2_TEST_RESULTS.md.
+2. Get operator approval → close Workflow 02 v2 testing stage → update production Workflow 02.
+3. Step B: doc fixes (README.md, tools/TOOLS.md, core/warm/decisions.md, TABLE_SCHEMA.md company_name rule).
+4. Step E: Workflow 03 Firecrawl (first real source).
+
+---
+
 ## Session: 2026-06-05 — Baseline Raw JSON SHORT TEST 5
 
 **What was done:**

@@ -5,6 +5,30 @@ Most recent first.
 
 ---
 
+## DEC-032 — Telegram Control Bot Is Future Roadmap, Not Current MVP
+
+**Date:** 2026-06-05
+**Decision:** An operator Telegram Control Bot (Stage 2.5 in ROADMAP.md) is added to the project plan but is not part of the current MVP scope. It requires: (1) at least one stable real scraping source, (2) Workflow 02 approved for production, (3) Telegram Webhook configured in n8n. Building the bot before the data pipeline is stable would create an interface with nothing to interface. Prioritize real source testing first.
+**Applies to:** All session planning. Do not start bot implementation until Step E (Firecrawl) is complete and approved.
+
+---
+
+## DEC-031 — Do Not Repeat Proven Tests; Extend with Business-Priority Scenarios
+
+**Date:** 2026-06-05
+**Decision:** Tests 1–7 were designed to cover basic classification correctness. Test 1 confirmed the baseline works strongly. Rather than re-running all 7 tests (which would cost ~$0.10 and mostly repeat confirmed behavior), the extended test set (8–12) covers the uncle's actual business priorities: Telegram hot leads, Instagram competitors, Avito refinancing, website weak signal, and out-of-region cap. These scenarios are more representative of real scraping output and cover edge cases not exercised in the original 7-test set.
+**Applies to:** Workflow 02 v2 testing. After extended tests pass, close this testing stage.
+
+---
+
+## DEC-030 — Content Automation Deferred to Stage 3 (Content Agent)
+
+**Date:** 2026-06-05
+**Decision:** `content_idea` records are not production-approved for Workflow 02. The current Quality Gate (status=analyzed AND quality_score≥60) passes content_idea records to Google Sheets, but the schema has no dedicated column or review process for them. They create noise in the leads/competitors table. Content intelligence is deferred to Stage 3 (Content Agent) with a separate Sheets tab, separate Quality Gate, and separate n8n branch. Extended tests 8–12 do not include content_idea scenarios.
+**Applies to:** Workflow 02 configuration and all future Quality Gate decisions until Stage 3 is designed.
+
+---
+
 ## DEC-029 — Baseline Raw JSON Is the Working Fallback; v2.1–v2.5 Experiments Deferred
 
 **Date:** 2026-06-05

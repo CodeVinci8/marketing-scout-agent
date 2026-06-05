@@ -1,8 +1,8 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-05 (updated after uncle consultation)
-**Active agent version:** Marketing Scout Agent v1 (`MARKETING_AGENT_PROMPT_V1.md`)
-**Planned:** Marketing Scout Agent v2 (see `MARKETING_AGENT_PROMPT_V2_PLAN.md`)
+**Last updated:** 2026-06-05 (updated after extended test design)
+**Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
+**Test status:** Baseline Test 1 confirmed. Extended tests 8–12 ready to run.
 **Business requirements:** `docs/BUSINESS_REQUIREMENTS.md`
 
 ---
@@ -76,7 +76,26 @@ The false branch of Quality Gate currently ends silently. No Telegram notificati
 - **Return strict JSON** — the Parse node handles occasional markdown fence wrapping
 - **Feed directly into Google Sheets** via the quality-gated append node
 
-**Proven in Workflow 02:** One real test record was analyzed correctly. Result: `service_type=pts_loan`, `quality_score=72`, `lead_signal_score=75`, `content_idea_score=80`, `status=analyzed`.
+**Proven in Workflow 02 v2 (baseline d350069):**
+- Test 1 (Авито, сильный лид, ПТС, Москва): `entity_type=lead_signal`, `recommended_action=contact`, `quality_score=97`, `lead_signal_score=98`. ✓
+- Hot lead detection: confirmed working for urgent Moscow PTS/car collateral cases.
+- Weak lead filtering, competitor classification, SEO skipping: confirmed in earlier baseline runs.
+- Cautious edge-case handling: refinancing with uncertainty → investigate (not contact).
+- Source/result traceability via `source_url` field.
+
+**Current approved capabilities:**
+1. **Hot lead detection** — identifies urgent, contactable, Moscow/MO PTS/auto leads with high scores.
+2. **Weak lead filtering** — does not promote vague or low-urgency queries as hot leads.
+3. **Competitor monitoring** — classifies active competitors with explicit offers; calibrates strength.
+4. **SEO/navigation junk skipping** — returns `status=skipped`, `quality_score=1` for boilerplate.
+5. **Cautious edge-case handling** — uses `investigate` for ambiguous signals rather than false-positive contact.
+6. **Source/result traceability** — `source_url` written to Sheets for every analyzed record.
+
+**Not production-approved yet:**
+- `content_idea` classification: deferred to Stage 3 (Content Agent). Current Sheets schema has no content review process. See DEC-030.
+- Telegram Control Bot: future roadmap stage. Not in current MVP. See ROADMAP.md.
+- Workflow not connected to real scraping: all tests use synthetic records.
+- Gateway stability: tool_use, KEY=VALUE line protocol, and compact prompts all returned 502 from current gateway. Baseline raw JSON is the only stable format.
 
 ---
 
@@ -156,14 +175,15 @@ Full schema: `docs/TABLE_SCHEMA.md`
 
 | Risk | Severity | Status |
 |------|----------|--------|
-| Prompt v1 is an extractor, not an analyst | High | Mitigation: Prompt v2 written — awaiting test approval |
-| No ICP defined — lead quality cannot be truly assessed | High | Mitigation: ICP confirmed (uncle consultation done); encoded in v2 |
-| No pre-filter node — all records hit Claude API | Medium | Mitigation: Design in progress |
-| Prompt duplication (Code node vs. file) | Medium | Mitigation: DEC-020 procedure documented |
-| Real page cost unknown (only short-record baseline) | Medium | Mitigation: Measure after first Firecrawl test |
-| Gateway dependency on `aiprimetech.io` | Low | Mitigation: Official Anthropic endpoint is fallback |
-| Multi-item pipeline unproven | Medium | Mitigation: Will be tested in Workflow 03+ |
-| .gitignore not audited before GitHub push | Low | Mitigation: Audit required before next push |
+| content_idea not production-approved in Workflow 02 | Medium | Deferred to Stage 3 (Content Agent). DEC-030. |
+| Gateway unstable for tool_use, KEY=VALUE, compact prompts | High | Baseline raw JSON is the only stable format. DEC-026–028. |
+| Workflow not connected to real scraping | High | Extended tests use synthetic records. Real source test is Step E. |
+| Telegram Control Bot not implemented | Low | Future roadmap (Stage 2.5). DEC-032. |
+| No pre-filter node — all records hit Claude API | Medium | Design in progress. |
+| Prompt duplication (Code node vs. file) | Medium | DEC-020 procedure documented. |
+| Real page cost unknown (only short-record baseline) | Medium | Measure after first Firecrawl test. |
+| Multi-item pipeline unproven | Medium | Will be tested in Workflow 03+. |
+| .gitignore not audited before GitHub push | Low | Audit required before next push. |
 
 ---
 

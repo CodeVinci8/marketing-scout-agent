@@ -104,7 +104,7 @@ Update this table after Workflow 03 is run with real URLs.
 
 ---
 
-## Gateway Stability and Prompt Size (2026-06-05)
+## Gateway Stability and Prompt Size (2026-06-05, updated v2.5 MICRO)
 
 **Observed:** Requests with large system prompts (9+ KB) returned 502 Bad Gateway on the current gateway (aiprimetech.io). Minimal curl with short prompt works correctly. This indicates a request-size or processing constraint on the gateway side.
 
@@ -114,19 +114,44 @@ Update this table after Workflow 03 is run with real URLs.
 |---------------|-------------------|------------|--------|
 | v2.0/v2.1 | ~12 KB | 1400 | JSON.parse failures |
 | v2.2 | ~15 KB (tool schema) | 1400 | 502 (tool_use not supported) |
-| v2.3 | ~9.2 KB | 1100 | 502 on Test 1 (likely size) |
-| v2.4 | **5.3 KB** | **700** | Pending test |
+| v2.3 | ~9.2 KB | 1100 | 502 on Test 1 (prompt too large) |
+| v2.4 | ~5.3 KB | 700 | 502 upstream_error (still too large) |
+| v2.5 MICRO | **~2 KB (1997 chars)** | **450** | Pending test |
 
-**Cost impact of compact prompt:**
-- Fewer input tokens → lower cost per call.
-- v2.4 estimated cost: $0.006–0.015 per call (vs. $0.018–0.030 for v2.3).
-- At 1000 scorings: ~$6–15 vs. ~$18–30 (v2.3). Compact prompt preferred for high-volume.
+**Core finding:** Long prompts increase cost AND can break gateway routing.
+The gateway returned 502 at 9.2 KB (v2.3) and again at 5.3 KB (v2.4).
+Micro-sized prompts (~2 KB) are the production direction for this gateway.
 
-**Long prompts waste money in two ways:**
+**Cost impact of micro prompt (v2.5):**
+- Fewer input tokens → lower cost per call than any prior version.
+- v2.5 estimated cost: $0.003–0.008 per call (vs. $0.006–0.015 for v2.4).
+- At 1000 scorings: ~$3–8 vs. ~$6–15 (v2.4). Micro prompt is lowest-cost option.
+
+**Prompts waste money in three ways:**
 1. Higher input token count on every call.
 2. If 502 causes n8n retry, you pay for the failed call too.
+3. Debugging and reimporting the harness takes operator time with no output.
 
-**Recommendation:** Keep system prompts under 6 KB for this gateway. Use field char limits to bound output length (offer_text ≤140, detected_need ≤160, reason ≤220). If a larger prompt is needed, test on official Anthropic API first.
+**Recommendation:** Keep system prompts under 2.5 KB for this gateway. Detailed methodology
+stays in the canonical prompt file for reference only — not in the runtime prompt.
+If a larger prompt is needed, test on official Anthropic API first (api.anthropic.com).
+
+---
+
+## Extended Test Cost Estimate (Tests 8–12)
+
+**Workflow:** `02_claude_api_single_record_v2_extended_tests.json`
+**Baseline:** d350069 raw JSON, max_tokens=1400, temperature=0.2
+
+Each test record uses ~150–200 chars of text_context. Similar to the baseline Test 1 that cost $0.0115.
+
+| Scenario | Estimated cost |
+|----------|---------------|
+| 5 extended tests (8–12) | ~$0.04–0.08 total |
+| Per test | ~$0.008–0.016 |
+| Balance recommended before run | ≥ $0.20 (buffer for retries) |
+
+Record actual cost in `docs/WORKFLOW_02_V2_TEST_RESULTS.md` after the run.
 
 ---
 

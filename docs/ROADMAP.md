@@ -35,6 +35,41 @@
 
 ---
 
+## Stage 2.5 — Operator Telegram Control Bot / Assistant
+
+**Status:** Future roadmap (after stable data collection and first real source tests)
+**Module directory:** `modules/telegram-control-bot-v0/` _(planned)_
+
+**Goal:** Let the operator issue commands via Telegram that trigger and control n8n workflows, without needing to open the n8n UI.
+
+**Example interaction:**
+```
+Operator: "Проанализируй конкурентов из Instagram: @zaym_msk, @pts_fast_moscow"
+Bot: "Запрос принят. Источники: 2. Примерная стоимость: $0.03. Запустить?"
+Operator: "Да"
+Bot: [triggers Workflow 02 for each source]
+Bot: "Готово. Найдено 2 конкурента, 0 лидов. Открыть таблицу: [ссылка]"
+```
+
+**Bot capabilities:**
+1. Parse the operator's Telegram command (source type, URLs or handles)
+2. Propose an execution plan and estimate cost
+3. Ask for confirmation before spending money
+4. Trigger the correct n8n workflow
+5. Update Google Sheets with results
+6. Send a concise summary and table link back to Telegram
+
+**Prerequisites before implementation:**
+- At least one real scraping source (Firecrawl or Apify) tested and stable
+- Workflow 02 approved and connected to real data
+- Telegram Bot token obtained (free, via BotFather)
+- n8n Webhook trigger configured for the bot
+
+**Why this stage matters:**
+The operator does not need the n8n UI for routine analysis. A Telegram interface lowers the activation barrier to zero — they can request analysis from their phone at any time. This is the key UX improvement that makes the system feel like a product, not a prototype.
+
+---
+
 ## Stage 3 — Content Agent
 
 **Status:** Planned

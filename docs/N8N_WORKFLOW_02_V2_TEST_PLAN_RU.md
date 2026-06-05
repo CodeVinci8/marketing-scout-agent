@@ -1,162 +1,133 @@
-# Руководство по тестированию Prompt v2 в n8n
+# Руководство по тестированию Workflow 02 v2
 
-**Дата:** 2026-06-05 (обновлено: BASELINE SHORT TEST 5)
+**Дата:** 2026-06-05 (финальный план: extended tests 8–12)
 **Не изменять:** `n8n/workflows/02_claude_api_single_record_analysis.json` — только после одобрения.
-**Тестовые записи:** `modules/marketing-scout-v0/TEST_RECORDS_V2.md`
 
 ---
 
 ## Текущий статус
 
-**Базовый харнес (commit d350069) — работает.**
+**Baseline raw JSON (d350069) — рабочий.**
 
 | Тест | Статус | Результат |
 |------|--------|-----------|
-| Тест 1 — Сильный лид | ✓ Прошёл | entity_type=lead_signal, action=contact, quality=97, lead_signal=98 |
-| Тест 5 — Контент-идея | ✗ Не тестировался с коротким text_context | JSON.parse падал на длинном оригинале |
+| Тест 1 | ✓ Прошёл | entity_type=lead_signal, action=contact, quality=97, lead_signal=98 |
+| Тест 5b (короткий) | Ожидает | `02_claude_api_single_record_v2_baseline_short_test5.json` готов |
+| Тесты 2–4, 6–7 | Не запускались | Заменены расширенными тестами 8–12 |
 
 **v2.1–v2.5 эксперименты — отложены.**
+Gateway возвращает 502 на любой нестандартный формат (tool_use, KEY=VALUE).
+Baseline сырой JSON остаётся единственным рабочим подходом.
 
-| Версия | Проблема | Вывод |
-|--------|----------|-------|
-| v2.1 | JSON.parse на Тестах 1 и 5 | JSON-патч недостаточен |
-| v2.2 | 502 на tool_use | Шлюз не поддерживает tool_use |
-| v2.3 | 502 при 9.2 KB | Промпт слишком большой |
-| v2.4 | 502 при 5.3 KB | Промпт всё ещё слишком большой |
-| v2.5 MICRO | 502 при ~2 KB | curl тоже даёт 502 — проблема не в размере промпта |
-
-**Вывод:** Baseline raw JSON работает. v2.1–v2.5 файлы сохранены в репозитории, но не являются активным тестовым путём (DEC-029).
+**content_idea — отложено.**
+Не включается в расширенные тесты. Деферировано в Stage 3 (Content Agent). См. DEC-030.
 
 ---
 
-## Текущая задача: BASELINE SHORT TEST 5
+## Три активных харнеса
 
-**Файл:** `n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json`
-**Изменение:** Test 5 text_context сокращён (252 → 139 chars). Всё остальное — идентично d350069 baseline.
-**Цель:** Проверить, решает ли сокращение Test 5 проблему JSON.parse.
-
-### Порядок тестирования
-
-1. **test_id=5 первым** — это единственный изменённый тест. Проверить, проходит ли JSON.parse.
-2. **Если тест 5 прошёл → test_id=1** — убедиться, что baseline не нарушен.
-3. **Если оба прошли** → обсудить с оператором: одобрить baseline или продолжить эксперименты.
-
-### Что изменилось в Test 5
-
-**Оригинальный text_context (252 chars):**
-```
-Взял займ под залог ПТС год назад. Просрочил три месяца, потому что потерял работу. Машину забрали — пришли и увезли прямо с парковки. Договор подписал не читая. Никто не предупредил о таком развитии. Будьте осторожны с этими МФО, читайте мелкий шрифт.
-```
-
-**Новый text_context (139 chars):**
-```
-Вопрос в VK: боюсь брать займ под ПТС, что будет с машиной при просрочке? Могут ли забрать авто сразу? Хочу понять риски перед оформлением.
-```
-
-**Почему оригинал падал:** Длинный текст с несколькими предложениями, тире, точками — Claude вставлял кавычки или двоеточия в строковые поля (`offer_text`, `reason`), что ломало `JSON.parse`.
-**Почему новый должен работать:** Короткий, сформулирован как вопрос, нет проблемных символов внутри строк, сохраняет суть контент-идеи (страх потери машины).
+| Файл | Назначение | Статус |
+|------|-----------|--------|
+| `02_claude_api_single_record_v2_baseline_short_test5.json` | Тест 5 с коротким text_context | Ожидает запуска |
+| `02_claude_api_single_record_v2_extended_tests.json` | Тесты 8–12 по бизнес-приоритетам | Готов к запуску |
+| `02_claude_api_single_record_v2_test_harness.json` | v2.5 MICRO архив (502) | Архив |
 
 ---
 
-## Шаг 1 — SSH-туннель
+## Порядок действий
+
+### Этап A — Test 5 (short)
+
+1. Импортировать `02_claude_api_single_record_v2_baseline_short_test5.json`
+2. Установить `test_id = 5`
+3. Запустить. Проверить: нет `JSON parse failed`, `entity_type=content_idea`, `action=create_content`
+4. Записать результат в `docs/WORKFLOW_02_V2_TEST_RESULTS.md`
+
+### Этап B — Расширенные тесты 8–12
+
+1. Импортировать `02_claude_api_single_record_v2_extended_tests.json`
+2. Записать баланс aiprimetech.io **до** тестов
+3. Запускать по порядку: 8 → 9 → 10 → 11 → 12 (каждый раз менять test_id)
+4. Для каждого теста записывать в `docs/WORKFLOW_02_V2_TEST_RESULTS.md`:
+   - entity_type, action, quality_score, lead_signal_score, competitor_strength, status
+   - Прошёл Quality Gate или нет
+   - Записан ли ряд в Google Sheets
+5. Записать баланс **после** и вычислить стоимость
+
+### Этап C — Закрытие этапа
+
+После 5 тестов:
+- Итог: сколько из 5 прошло (цель: минимум 4 из 5)
+- Обязательные: Тест 8 (hot lead), Тест 12 (region cap)
+- Обсуждение с оператором → одобрение → переход к первому реальному источнику
+
+---
+
+## Шаги для Этапа B
+
+### Шаг 1 — SSH-туннель
 
 ```
 ssh -L 5678:127.0.0.1:5678 root@ВАШ_IP_СЕРВЕРА
 ```
-Открыть: `http://localhost:5678`
 
----
+### Шаг 2 — Импорт
 
-## Шаг 2 — Импортировать BASELINE SHORT TEST 5
+n8n → **+** → **Import from file** → `02_claude_api_single_record_v2_extended_tests.json`
 
-1. В n8n: **+** → **Import from file** → `n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json`
-2. Убедиться: нода называется **`Build Claude Request v2`** (не v2.5 MICRO, не v2.4).
-3. Убедиться: нода Parse называется **`Parse Claude JSON Response`** (не Line Response).
-4. Workflow должен быть **inactive**.
+Убедиться:
+- Нода `Build Claude Request v2` (не v2.5 MICRO)
+- Нода `Parse Claude JSON Response` (не Line Response)
+- Workflow **inactive**
 
----
-
-## Шаг 3 — Credentials и Spreadsheet ID
+### Шаг 3 — Credentials и Spreadsheet ID
 
 | Нода | Credential |
 |------|-----------|
-| Claude API Request | `Claude API - Marketing Scout` (HTTP Header Auth) |
+| Claude API Request | `Claude API - Marketing Scout` |
 | Append Row to Google Sheets | `Google Sheets - Marketing Scout Service Account` |
 
 Вставить реальный Spreadsheet ID в ноду `Append Row to Google Sheets`.
 
----
+### Шаг 4 — Запускать по одному
 
-## Шаг 4 — Запуск
-
-**Тест 5 (test_id=5) — первым:**
-
-В ноде `Set Test Selector` установить `test_id = 5`. Запустить.
-
-Проверить в ноде `Parse Claude JSON Response` → Output:
-- `status = analyzed` ✓
-- `entity_type = content_idea` ✓
-- `recommended_action = create_content` ✓
-- `test_pass_basic = true` ✓
-- Нет ошибки `JSON parse failed` ✓
-- `offer_text` — без кавычек, без лейбла ✓
-
-**Если тест 5 прошёл → Тест 1 (test_id=1):**
-
-Установить `test_id = 1`. Запустить.
-
-Проверить:
-- `entity_type = lead_signal` ✓
-- `recommended_action = contact` ✓
-- `lead_signal_score ≥ 82` ✓
-- `quality_score ≥ 80` ✓
+Для каждого теста: изменить `test_id` в ноде `Set Test Selector` → запустить → записать результат.
 
 ---
 
-## Таблица-протокол (BASELINE SHORT TEST 5)
+## Что проверять для каждого теста
 
-| Тест | JSON.parse OK? | entity_type | action | quality | test_pass_basic | Прошёл? |
-|------|---------------|------------|--------|---------|----------------|---------|
-| 5 — Контент-идея (короткий) | | content_idea | create_content | 65-80 | | |
-| 1 — Сильный лид (если 5 прошёл) | | lead_signal | contact | ≥80 | | |
-
-**Стоимость:** ________ до → ________ после 2 тестов → ________ за вызов
-
----
-
-## Стоп-условия
-
-| Ситуация | Действие |
-|----------|----------|
-| Тест 5: `JSON parse failed` | Изучить `raw_response_preview`. Либо укорачивать ещё, либо переключиться на другой формат вывода. |
-| Тест 5: `entity_type ≠ content_idea` | Claude распознал как lead_signal или irrelevant. Пересмотреть text_context. |
-| Тест 1: отличается от предыдущего (97/98) | Вариативность модели — допустима в пределах диапазона. |
+| test_id | entity_type | action | Ключевые проверки |
+|---------|-------------|--------|------------------|
+| 8 (Telegram) | lead_signal | contact | lead_signal_score≥80, contact_public=@ivan_tg_test, Quality Gate=PASS |
+| 9 (Instagram) | competitor | monitor | competitor_strength≥65, terms содержит "2%", Quality Gate=PASS |
+| 10 (Avito рефинанс.) | lead_signal | investigate | action≠contact, lead_signal 50–70 |
+| 11 (Website слабый) | competitor | monitor | competitor_strength≤65, terms="" |
+| 12 (СПб) | lead_signal/irrelevant | investigate/ignore | lead_signal≤40, Quality Gate=FAIL |
 
 ---
 
-## После успешных тестов 5 и 1
+## Критерии одобрения Workflow 02 v2 (закрытие этапа)
 
-1. Получить явное подтверждение оператора.
-2. Решить: запускать ли остальные 5 тестов (2, 3, 4, 6, 7) на baseline_short_test5.
-3. После одобрения всех тестов → обновить production `02_claude_api_single_record_analysis.json`.
-4. Оставить все TEST HARNESS JSON в репозитории как архив.
+**Обязательные блокеры:**
+- [ ] Ни одного `JSON parse failed`
+- [ ] Тест 8: lead_signal_score ≥ 80, action = contact
+- [ ] Тест 12: lead_signal_score ≤ 40 (регион не Москва — не должен попасть в контакт)
 
----
-
-## Харнесы в репозитории
-
-| Файл | Статус | Описание |
-|------|--------|----------|
-| `02_claude_api_single_record_v2_baseline_short_test5.json` | **АКТИВНЫЙ** | Baseline d350069 + короткий Test 5 |
-| `02_claude_api_single_record_v2_test_harness.json` | Архив (v2.5 MICRO) | Последний эксперимент — 502 |
-| `02_claude_api_single_record_analysis.json` | Production | Не трогать |
+**Логические критерии (минимум 4 из 5):**
+- [ ] Тест 8: entity_type=lead_signal, action=contact ✓
+- [ ] Тест 9: entity_type=competitor, action=monitor ✓
+- [ ] Тест 10: action=investigate (не contact) ✓
+- [ ] Тест 11: competitor_strength≤65 ✓
+- [ ] Тест 12: lead_signal_score≤40 ✓
+- [ ] Стоимость одного вызова ≤ $0.05 ✓
 
 ---
 
 ## Валидация JSON
 
 ```bash
-python3 -m json.tool n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json > /tmp/v2_baseline_short_test5_validated.json
+python3 -m json.tool n8n/workflows/02_claude_api_single_record_v2_extended_tests.json > /tmp/v2_extended_tests_validated.json
 ```
 
 ---
@@ -164,5 +135,5 @@ python3 -m json.tool n8n/workflows/02_claude_api_single_record_v2_baseline_short
 ## Безопасность
 
 - Реальные данные не передаются — только синтетические записи.
-- Оба TEST HARNESS должны оставаться **inactive**.
+- Все TEST HARNESS должны оставаться **inactive**.
 - Не изменять Workflow 00, 01, 02 во время тестирования.

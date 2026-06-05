@@ -5,6 +5,64 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Extended Tests 8–12 + Final Test Documentation
+
+**Agent role:** project-engineer
+**Session goal:** Create 5 new business-priority tests (Telegram, Instagram, Avito, website, out-of-region) and finalize Workflow 02 v2 documentation.
+
+**Context:**
+- Baseline d350069 raw JSON works (Test 1: quality=97, lead_signal=98, action=contact).
+- v2.1–v2.5 experiments all failed (JSON.parse, gateway 502). Deferred.
+- Test 5 (content_idea) deferred to Stage 3 (Content Agent). Not included in extended tests.
+- Extended tests cover uncle's actual business sources: Telegram, Instagram, Avito, website.
+
+**What was done:**
+- Created `02_claude_api_single_record_v2_extended_tests.json` from d350069 baseline:
+  - Workflow name: `02 - Claude API Single Record Analysis v2 EXTENDED TESTS`
+  - Select Test Record: replaced with tests 8–12 only
+  - Set Test Selector: default test_id=8
+  - Build node: identical to baseline (max_tokens=1400, temp=0.2, raw JSON, no tools, no tool_choice)
+  - Parse node: identical to baseline (JSON.parse, markdown fence strip)
+  - Quality Gate, Google Sheets: unchanged
+  - JSON validated: 30,879 bytes, python3 -m json.tool exits 0
+- Created `modules/marketing-scout-v0/TEST_RECORDS_V2_EXTENDED.md`:
+  - 5 tests with full input JSON, expected outputs, pass/fail criteria, rationale
+  - Tests: Telegram hot lead (8), Instagram competitor (9), Avito refinancing MO (10), weak website competitor (11), out-of-region SPb lead (12)
+- Created `docs/WORKFLOW_02_V2_TEST_RESULTS.md`:
+  - Protocol table for tests 8–12 (unfilled, ready for operator)
+  - Confirmed results table (Test 1 done, others pending)
+  - Known limitation section: content_idea deferred to Stage 3
+  - v2.1–v2.5 experiment archive table
+- Rewrote `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`: three-phase plan (Test 5 → 8–12 → close stage)
+- Updated `docs/AGENT_CAPABILITIES.md`: current approved capabilities, not-approved list (content_idea, bot), gateway stability note
+- Updated `docs/ROADMAP.md`: added Stage 2.5 (Telegram Control Bot) with full description
+- Updated `docs/DECISIONS.md`: DEC-030 (content deferred), DEC-031 (no repeat tests), DEC-032 (bot future)
+- Updated `docs/COSTS_AND_LIMITS.md`: extended test cost estimate table
+- Updated `docs/NEXT_ACTIONS.md`: Test 5 + 8–12 sequence, close stage, move to Firecrawl
+
+**Note on TABLE_SCHEMA.md:** The task requested adding a company_name rule but TABLE_SCHEMA.md was not in the authorized edit list. Skipped — should be added in Step B (doc fixes).
+
+**Files created:**
+- `n8n/workflows/02_claude_api_single_record_v2_extended_tests.json` (30,879 bytes)
+- `modules/marketing-scout-v0/TEST_RECORDS_V2_EXTENDED.md`
+- `docs/WORKFLOW_02_V2_TEST_RESULTS.md`
+
+**Files updated:**
+- `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`
+- `docs/AGENT_CAPABILITIES.md`
+- `docs/ROADMAP.md`
+- `docs/DECISIONS.md` (DEC-030, DEC-031, DEC-032)
+- `docs/COSTS_AND_LIMITS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/AGENT_LOG.md` — this entry
+- `core/hot/recent.md`
+
+**Files NOT modified (confirmed):**
+- `n8n/workflows/02_claude_api_single_record_analysis.json` — production, untouched ✓
+- `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` — v2.5 harness, untouched ✓
+
+---
+
 ## 2026-06-05 — Baseline Raw JSON SHORT TEST 5
 
 **Agent role:** project-engineer
