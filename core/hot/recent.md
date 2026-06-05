@@ -4,6 +4,27 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-05 — Prompt v2.3 KEY=VALUE Line Protocol
+
+**What was done:**
+- v2.2 failed: gateway returned 502 Bad Gateway for tool_use. Also: broken connection bug — Select Test Record was pointing to non-existent node name, entire chain was disconnected.
+- v2.3 fix: Claude returns 25 KEY=VALUE lines. No JSON. No tool_use. Parse node splits on `=`, no JSON.parse on Claude output. `parse_method=line_protocol` on success, `line_failed` on error.
+- All workflow connections rebuilt from scratch in Python. Chain verified: Manual Start → Set Test Selector → Select Test Record → Build Claude Request v2.3 → Claude API Request → Parse Claude Line Response → Quality Gate → Google Sheets.
+- Added DEC-026. Updated NEXT_ACTIONS.md, test plan (full rewrite), AGENT_LOG.md.
+- JSON validated: 32,077 bytes, python3 -m json.tool exits 0.
+
+**Key decisions:**
+- DEC-026: KEY=VALUE line protocol chosen — gateway blocks tool_use, raw JSON is unstable for Russian text fields.
+- Connection rebuilding done at Python script level (not by editing JSON by hand) to prevent stale-key bugs.
+
+**What is next (in order):**
+1. **Step D (immediate):** Delete old v2.2 harness in n8n; import updated harness; run Test 1 → Test 5 → Test 6 in that order; check `parse_method=line_protocol`; fill protocol table; measure cost.
+2. Get operator approval → update Workflow 02 with v2.3 Build + Parse structure.
+3. Step B: minor doc fixes (README.md, tools/TOOLS.md, core/warm/decisions.md DEC-018–026).
+4. Step E: Workflow 03 Firecrawl (competitor website).
+
+---
+
 ## Session: 2026-06-05 — Prompt v2.2 tool_use Architecture
 
 **What was done:**

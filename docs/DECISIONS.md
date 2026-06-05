@@ -5,6 +5,21 @@ Most recent first.
 
 ---
 
+## DEC-026 — KEY=VALUE Line Protocol for Claude Output (Gateway Does Not Support tool_use)
+
+**Date:** 2026-06-05
+**Context:** Three output strategies failed or were unavailable:
+1. v2.0/v2.1: Raw JSON text. Claude put unescaped quotes or colons inside field values (`offer_text`, `reason`, `detected_need`), breaking `JSON.parse`. Prompt-level rules and Parse-node cleanup reduced but did not eliminate failures.
+2. v2.2: Anthropic tool_use structured output. The gateway (aiprimetech.io) returned 502 Bad Gateway for all requests containing `tools` and `tool_choice` parameters. tool_use is not supported by this gateway.
+   Also discovered: Select Test Record node was not connected to Build Claude Request v2.2 in the generated workflow JSON (stale connection key from node rename). Entire test chain was broken.
+**Decision:** Use plain text KEY=VALUE line protocol. Claude returns exactly 25 lines in order: `field_name=value`. The n8n Parse node (`Parse Claude Line Response`) splits each line on the first `=` character and assembles a JS object. No `JSON.parse` is called on Claude's output. Integer fields are parsed with `parseInt` and clamped to 1–100. Enum fields are validated; invalid values fall back to safe defaults. Parse failures are caught deterministically: if fewer than 5 fields are found, `parse_method=line_failed` is returned.
+**Workflow fix:** All connections rebuilt from scratch in the Python generation script. The broken connection bug is resolved. The connection chain is now explicit and verified at build time.
+**Build parameters changed:** `max_tokens` 1400 → 1100; `temperature` 0.2 → 0.1; no `tools`; no `tool_choice`. User message appended with `\n\nReturn KEY=VALUE lines only.` for reinforcement.
+**Known edge case:** If Claude returns a value containing `=` (e.g. in `terms` field), the parser takes everything before the first `=` as the key and everything after as the value. The prompt instructs Claude to avoid `=` inside values. This is acceptable for MVP.
+**Applies to:** TEST HARNESS v2.3. If a gateway supporting tool_use becomes available, DEC-025 strategy is preferred and should be re-evaluated at that point.
+
+---
+
 ## DEC-025 — tool_use Structured Output Is the Preferred Architecture for Claude API Integration
 
 **Date:** 2026-06-05

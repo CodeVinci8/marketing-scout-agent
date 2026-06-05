@@ -164,29 +164,30 @@ Workflows are built incrementally — no external APIs until the platform is ver
 
 > Schema unchanged — same 25 output fields as v1. New fields planned for v2.1+.
 
-#### Step D — Test Prompt v2.2 via TEST HARNESS _(before any paid scraping)_
+#### Step D — Test Prompt v2.3 via TEST HARNESS _(before any paid scraping)_
 
-**Goal:** Verify v2.2 tool_use structured output resolves the JSON.parse failures from v2.0 and v2.1.
-**v2.2 status:** Architecture change — Claude no longer writes JSON text; uses tool_use structured output.
-Root cause: raw text JSON failed on Test 1 (v2.1) and Test 5 (v2.0 and v2.1). See DEC-025.
+**Goal:** Verify v2.3 KEY=VALUE line protocol resolves all previous parse failures.
+**v2.3 status:** KEY=VALUE output. No JSON. No tool_use. Connections rebuilt and verified. See DEC-026.
+History: v2.0/v2.1 failed JSON.parse; v2.2 gateway returned 502 + broken node connection.
 
-**Cost:** ~$0.10–0.20 for 7 calls (≈ 7–15 RUB). Approved under DEC-021.
-**TEST HARNESS JSON:** `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` (v2.2, 33,540 bytes)
-**Node name:** `Build Claude Request v2.2` (contains tools definition + tool_choice)
+**Cost:** ~$0.08–0.15 for 7 calls (≈ 6–11 RUB). Approved under DEC-021.
+**TEST HARNESS JSON:** `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` (v2.3, 32,077 bytes)
+**Node names:** `Build Claude Request v2.3` / `Parse Claude Line Response`
+**Connection chain:** Manual Start → Set Test Selector → Select Test Record → Build Claude Request v2.3 → Claude API Request → Parse Claude Line Response → Quality Gate → Append Row to Google Sheets
 
 - [ ] Validate JSON: `python3 -m json.tool n8n/workflows/02_claude_api_single_record_v2_test_harness.json > /tmp/v2_test_harness_validated.json`
-- [ ] Import `02_claude_api_single_record_v2_test_harness.json` into n8n (Import from file — delete old version first)
+- [ ] Delete old TEST HARNESS in n8n (if present), then import new version
 - [ ] Bind credentials: `Claude API - Marketing Scout` and `Google Sheets - Marketing Scout Service Account`
 - [ ] Paste real Spreadsheet ID into `Append Row to Google Sheets` node
-- [ ] **Run Test 1 first** — check `parse_method=tool_use` in Parse node output; if `text_fallback`, gateway may not support tool_use
-- [ ] **Run Test 5 second** — check `parse_method=tool_use`, no parse failures
-- [ ] **Run Test 6 third** — check `parse_method=tool_use`, `status=skipped`, Quality Gate = false
+- [ ] **Run Test 1 first** — check `parse_method=line_protocol`; if `line_failed`, stop and report
+- [ ] **Run Test 5 second** — check `parse_method=line_protocol`
+- [ ] **Run Test 6 third** — check `parse_method=line_protocol`, `status=skipped`, Quality Gate = false
 - [ ] If Tests 1, 5, 6 pass: run Tests 2, 3, 4, 7
-- [ ] Fill in the protocol table in `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` (new column: `parse_method`)
+- [ ] Fill in the protocol table in `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`
 - [ ] Measure cost: balance before and after all 7 tests → cost per call
-- [ ] Check all pass criteria — zero `text_failed`/`none` results, min 6/7 logical tests (DEC-024, DEC-025)
+- [ ] Check all pass criteria — zero `line_failed`, min 6/7 logical tests (DEC-024, DEC-026)
 - [ ] Present results to operator for approval
-- [ ] Only after approval: update `02_claude_api_single_record_analysis.json` with v2.2 tool_use request structure
+- [ ] Only after approval: update `02_claude_api_single_record_analysis.json` Build Claude Request + Parse nodes with v2.3 structure
 
 > Full procedure: `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`.
 
@@ -251,7 +252,7 @@ Not technically blocked. Deliberately paused on paid scraping (DEC-021).
 **Next actions (in order):**
 1. ~~Step A — consult uncle~~ ✓ Done — `docs/BUSINESS_REQUIREMENTS.md`
 2. ~~Step C — write Prompt v2~~ ✓ Done — `MARKETING_AGENT_PROMPT_V2.md`
-3. **Step D — import TEST HARNESS and run 7 tests** (~$0.10–0.20, DEC-021) — follow `N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`; **run Test 1 first, then Test 5, then Test 6** to verify v2.2 tool_use; check `parse_method=tool_use` in output
-4. Get operator approval on test results → update Workflow 02 Build Claude Request node with v2.2 tool_use structure (DEC-025)
+3. **Step D — import TEST HARNESS and run 7 tests** (~$0.08–0.15, DEC-021) — follow `N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`; delete old v2.2 harness in n8n; **run Test 1 first, Test 5 second, Test 6 third** to verify v2.3 KEY=VALUE protocol; check `parse_method=line_protocol`
+4. Get operator approval on test results → update Workflow 02 with v2.3 Build + Parse nodes (DEC-026)
 5. Step B — remaining minor doc fixes (`README.md`, `tools/TOOLS.md`, `core/warm/decisions.md`)
 6. Step E — Workflow 03 Firecrawl (competitor website)

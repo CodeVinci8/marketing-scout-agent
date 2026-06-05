@@ -5,6 +5,36 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Prompt v2.3 KEY=VALUE Line Protocol
+
+**Agent role:** project-engineer / prompt-engineer
+**Session goal:** Fix test harness after v2.2 502 Bad Gateway failure and broken node connection. Replace tool_use with KEY=VALUE line protocol.
+
+**Root cause of v2.2 failures:**
+1. Gateway (aiprimetech.io) returned 502 Bad Gateway for requests containing `tools`/`tool_choice`. Gateway does not support Anthropic tool_use.
+2. Broken connection bug: `Select Test Record` was still pointing to `Build Claude Request v2` (stale key from previous node rename). The chain was broken — test record never reached Claude.
+
+**What was done:**
+- Upgraded `MARKETING_AGENT_PROMPT_V2.md` to v2.3: replaced OUTPUT INSTRUCTION (tool call) with KEY=VALUE OUTPUT FORMAT section listing all 25 fields in order. Prompt instructs Claude to return exactly 25 `field_name=value` lines with no JSON, no Markdown, no blank lines. max_tokens 1100, temperature 0.1. Business logic unchanged.
+- Renamed `Build Claude Request v2.2` → `Build Claude Request v2.3` in test harness; removed `tools` and `tool_choice`; updated system prompt; user message appended with `"\n\nReturn KEY=VALUE lines only."`.
+- Renamed `Parse Claude JSON Response` → `Parse Claude Line Response`; rewrote parsing: find text block, strip fences, split on newlines, extract key/value by first `=`, build JS object, clampInt for scores, pickEnum for categorical fields. Output includes `parse_method=line_protocol` or `line_failed`. All test comparison fields preserved.
+- **Rebuilt all connections from scratch** in Python to eliminate the stale-key bug: explicit canonical dict covers all 7 links; verified by connection dump.
+- Added DEC-026: KEY=VALUE line protocol chosen because gateway blocks tool_use and raw JSON is unstable.
+- JSON validated: `python3 -m json.tool` exits 0; 32,077 bytes.
+- Rewrote `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` for v2.3: failure history, new test order, parse_method column, updated criteria.
+- Updated DECISIONS.md (DEC-026), NEXT_ACTIONS.md (Step D v2.3), AGENT_LOG.md, core/hot/recent.md.
+
+**Files updated:**
+- `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` — v2.3 (KEY=VALUE output, all connections rebuilt)
+- `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` — Build v2.3, Parse Line Response, connections fixed (32,077 bytes, valid)
+- `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` — full rewrite for v2.3
+- `docs/DECISIONS.md` — DEC-026 added
+- `docs/NEXT_ACTIONS.md` — Step D updated to v2.3
+- `docs/AGENT_LOG.md` — this entry
+- `core/hot/recent.md` — updated
+
+---
+
 ## 2026-06-05 — Prompt v2.2 tool_use Structured Output Architecture
 
 **Agent role:** project-engineer / prompt-engineer
