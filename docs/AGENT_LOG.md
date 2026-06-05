@@ -5,6 +5,43 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Prompt v2.2 tool_use Structured Output Architecture
+
+**Agent role:** project-engineer / prompt-engineer
+**Session goal:** Eliminate JSON parse failures permanently by switching from raw text JSON output to Anthropic tool_use structured output.
+
+**Root cause confirmed:** Raw JSON text from Claude failed in two versions:
+- v2.0: Test 5 (content_idea) — unescaped quotes/colons in `offer_text` broke JSON.parse.
+- v2.1: Test 1 (strong lead) — similar failure in `reason` or `detected_need`.
+Text-based JSON output is inherently brittle for Russian-language fields. Prompt instructions are insufficient.
+
+**What was done:**
+- Upgraded `MARKETING_AGENT_PROMPT_V2.md` to v2.2: removed JSON SAFETY RULES, OUTPUT FORMAT, REQUIRED JSON SCHEMA sections. Added FIELD CONSTRAINTS and OUTPUT INSTRUCTION ("call return_marketing_analysis tool exactly once"). Added Tool Definition table. Added v2.2 version note explaining architecture change. Business logic unchanged.
+- Upgraded `Build Claude Request v2` → `Build Claude Request v2.2` Code node in test harness:
+  - Added `toolDefinition` object with full JSON Schema (25 fields, `type: "object"`, `additionalProperties: false`, integer constraints for scores, enums for categorical fields, `required` array).
+  - Added `tools: [toolDefinition]` and `tool_choice: { type: "tool", name: "return_marketing_analysis" }` to API request body.
+  - Updated connection keys accordingly.
+- Upgraded `Parse Claude JSON Response` Code node:
+  - Primary path: find `{ type: "tool_use", name: "return_marketing_analysis" }` block; use `block.input` directly.
+  - Fallback: existing text parser with brace extraction and smart-quote normalization.
+  - New output field: `parse_method` = "tool_use" | "text_fallback" | "text_failed" | "none".
+  - All test comparison fields preserved.
+- Added DEC-025: tool_use is the preferred architecture; text fallback retained for gateway compatibility.
+- Updated test plan: explains v2.0/v2.1 failure history; test order = Test 1, Test 5, Test 6, then 2/3/4/7; `parse_method` column added to protocol table; approval criteria split into blockers and logical tests.
+- JSON validated: `python3 -m json.tool` exits 0; 33,540 bytes.
+- Updated NEXT_ACTIONS.md — Step D reflects v2.2 and test order.
+
+**Files updated:**
+- `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` — v2.2 (tool_use architecture, clean prompt)
+- `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` — Build node renamed v2.2, tool_use added, Parse node upgraded
+- `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` — v2.2 header, failure history, test order, parse_method column, updated criteria
+- `docs/DECISIONS.md` — DEC-025 added
+- `docs/NEXT_ACTIONS.md` — Step D updated to v2.2
+- `docs/AGENT_LOG.md` — this entry
+- `core/hot/recent.md` — updated
+
+---
+
 ## 2026-06-05 — Prompt v2.1 JSON Stability Patch and TEST HARNESS Parser Upgrade
 
 **Agent role:** project-engineer / prompt-engineer

@@ -4,6 +4,28 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-05 — Prompt v2.2 tool_use Architecture
+
+**What was done:**
+- Upgraded prompt to v2.2: removed all JSON-text output instructions, added tool_use output instruction. Business logic unchanged.
+- Upgraded test harness: `Build Claude Request v2.2` now sends `tools` array with full JSON Schema for `return_marketing_analysis` + `tool_choice: {type:"tool", name:"return_marketing_analysis"}`. Claude fills schema fields directly; no text serialization.
+- Parse node primary path: `content.find(type=tool_use && name=return_marketing_analysis).input`. Text parser retained as fallback. New `parse_method` output field shows which path ran.
+- Added DEC-025: tool_use is preferred architecture for Claude API structured output.
+- JSON revalidated: 33,540 bytes, python3 -m json.tool exits 0.
+- Updated test plan, DECISIONS.md, NEXT_ACTIONS.md, AGENT_LOG.md.
+
+**Key decisions:**
+- DEC-025: raw JSON text from Claude is not production-safe for Russian-language fields; tool_use structured output eliminates the failure mode at the API level.
+- Text fallback retained: if the gateway (aiprimetech.io) strips `tools`/`tool_choice`, `parse_method=text_fallback` will appear — escalate separately if that happens.
+
+**What is next (in order):**
+1. **Step D (immediate):** Import updated TEST HARNESS (delete old v2.1 version first); run Test 1 first → check `parse_method=tool_use`; then Test 5, Test 6; if all 3 pass, run Tests 2/3/4/7; fill protocol table; measure cost.
+2. Get operator approval → update Workflow 02 Build Claude Request with v2.2 tool_use structure.
+3. Step B: minor doc fixes (README.md, tools/TOOLS.md, core/warm/decisions.md DEC-018–025).
+4. Step E: Workflow 03 Firecrawl (competitor website).
+
+---
+
 ## Session: 2026-06-05 — Prompt v2.1 JSON Stability Patch
 
 **What was done:**

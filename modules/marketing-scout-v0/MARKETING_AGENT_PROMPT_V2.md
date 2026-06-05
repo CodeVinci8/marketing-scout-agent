@@ -1,23 +1,28 @@
 # MARKETING_AGENT_PROMPT_V2.md
 
-**Version:** v2.1
-**Status:** JSON stability fix — retest Test 5 before final approval
+**Version:** v2.2
+**Status:** tool_use structured output — retest all 7 records (start with Test 1, Test 5, Test 6)
 **Module:** marketing-scout-v0
-**Date:** 2026-06-05 (v2.1 patch)
+**Date:** 2026-06-05 (v2.2 patch)
 **Predecessor:** `MARKETING_AGENT_PROMPT_V1.md`
 **Basis:** `docs/BUSINESS_REQUIREMENTS.md`, `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md`
 **Model target:** `claude-sonnet-4-6`
 
-> **Prompt duplication warning (DEC-020):** This file is the canonical source. When embedding in the
-> `Build Claude Request` Code node, copy only the text between ---PROMPT START--- and ---PROMPT END---.
-> Do not include the markers. Update both this file and the Code node in the same session.
+> **Architecture change (v2.2):** This prompt no longer instructs Claude to write JSON text.
+> Instead, the API request includes a `tools` definition and `tool_choice` forcing a call to
+> `return_marketing_analysis`. Claude fills the tool input schema — the API handles serialization.
+> Raw JSON text output is no longer parsed. See DEC-025.
+
+> **Prompt duplication warning (DEC-020):** This file is the canonical source. The prompt between
+> ---PROMPT START--- and ---PROMPT END--- is embedded in the `Build Claude Request v2.2` Code node.
+> Update both this file and the Code node in the same session.
 
 ---
 
 ## Prompt Text
 
-Copy everything between the START and END markers into the `system` field of the Claude API request body.
-Do not include the markers. Do not wrap in code fences.
+This is the `system` prompt. The tool definition lives in the `Build Claude Request v2.2` Code node
+as `toolDefinition` — it is not part of this file. Do not add the JSON schema here.
 
 ---PROMPT START---
 
@@ -106,29 +111,20 @@ Rules:
 - lead_signal_score >= 80: reason field MUST cite a specific phrase from the text that drove the score.
 - recommended_action = "contact" requires lead_signal_score >= 70.
 
-detected_need format when entity_type = lead_signal -- always cover: need type + amount (if stated) + urgency signal + bank rejection (if present) + region.
+detected_need when entity_type = lead_signal: need type + amount (if stated) + urgency signal + bank rejection (if present) + region. Max 220 characters.
 Example: "Ishchet zaym pod zalog PTS, ~200 000 RUB, banki otkazali, nuzhny den'gi segodnya, Moskva."
+
+detected_need when entity_type = content_idea: the specific client fear or objection the record reveals. Max 220 characters.
+Example: "Klient boitsya poteriat avtomobil pri prosrochke -- ne znal ob etom riske do podpisaniya dogovora."
+
+detected_need for all other entity types: empty string.
 
 CONTENT INTELLIGENCE
 
 When entity_type = content_idea or content_idea_score >= 60:
 - Step 1: Identify the specific client fear, objection, or knowledge gap.
-- Step 2: Frame it as a content angle relevant to Moscow car owners with bad credit.
-- Step 3: Write offer_text as a short plain-text content angle.
-
-offer_text for content_idea -- IMPORTANT FORMATTING RULES:
-- Write as a short plain sentence. No quotation marks inside the value.
-- Do not start with "Statya:", "Post:", "Instrukciya:" or any label.
-- No colons in the middle of the angle. No long punctuated headlines.
-- Max 180 characters. Simple language.
-- Describe WHAT the content is about for the reader, not what the source said.
-- Good: "Chto proishodit s avtomobilem esli prosrochit zaym pod zalog PTS"
-- Bad: "Statya: Chto proiskhodit s avtomobilem pri zayme pod zalog PTS -- riski, kotorye MFO ne ob'yasnyayut" (too long, colon-heavy, quotation risk)
-
-detected_need for content_idea:
-- Write 1 short sentence describing the client fear or objection the record reveals.
-- Example: "Klient boitsya poteriat avtomobil pri prosrochke -- ne znal ob etom riske do podpisaniya dogovora."
-- This is not empty for content_idea records.
+- Step 2: Frame it as a content angle for Moscow car owners with bad credit.
+- Step 3: Write offer_text as a short plain-text topic. Max 180 characters. No quotation marks. No leading labels. No colons.
 
 content_idea_score calibration:
 - 80-100: Specific, emotionally resonant, directly addresses a real fear or decision point for the ICP.
@@ -140,8 +136,8 @@ content_idea_score calibration:
 QUALITY SCORE
 
 quality_score -- overall value and actionability for the operator:
-- 85-100: Rich data, clear signals, immediately actionable. Example: fresh Avito, Moscow, explicit rate "3% in month, decision in day, any credit history", contact visible.
-- 65-84: Good data, minor gap (e.g. active competitor landing page, no explicit rate stated).
+- 85-100: Rich data, clear signals, immediately actionable.
+- 65-84: Good data, minor gap.
 - 45-64: Partial data, signal present but incomplete context.
 - 25-44: Sparse, ambiguous, low confidence, minimal direct value.
 - 1-24: Noise or boilerplate -> status = "skipped".
@@ -159,11 +155,7 @@ RECOMMENDED ACTION
 EVIDENCE AND INFERENCE -- DISTINGUISH THREE LEVELS
 
 FACT: Explicitly stated in text. Report without qualification.
-Example in reason: "Tekst soderzhit '2.5% v mesyats, Moskva' -- pryamoy konkurent po osnovnomu produktu."
-
 CAUTIOUS INFERENCE: Not stated but reasonably implied. Label it in reason.
-Example: "Region veroyatno Moskva -- kod +7(495), no yavnogo ukazaniya net."
-
 UNKNOWN: Cannot determine. Return "" for strings, 1 for scores. Do not guess.
 
 Evidence rule: every score above 60 must be grounded in at least one specific phrase, number, or signal from the text. If evidence cannot be cited, lower the score.
@@ -186,7 +178,7 @@ Special rules:
 
 SKIP / TRASH RULES
 
-Return status="skipped", quality_score=1, and all other scores=1 when ANY is true:
+Call return_marketing_analysis with status="skipped", quality_score=1, and all other scores=1 when ANY is true:
 - Fewer than 40 meaningful characters.
 - Pure navigation boilerplate: "Glavnaya | O nas | Kontakty | Uslugi".
 - Category list with no offer: "avtokredit, ipoteka, potrebitel'skiy kredit, refinansirovanie".
@@ -204,104 +196,110 @@ Recognizing a real competitor's domain does not override skip rules.
 REASON FIELD -- 3-SENTENCE STRUCTURE (required)
 
 Sentence 1 -- WHAT: What is this record, and what is the key evidence from the text?
-Example: "Ob"yavleniye na Avito: chastnyy investor, zaym pod PTS ot 3% v mesyats, resheniye za 1 chas, Moskva, telefon ukazan."
-
 Sentence 2 -- WHY: Why the scores are what they are -- cite specific signals from the text.
-Example: "lead_signal_score vysokiy: fraza 'banki otkazali, nuzhny den'gi segodnya' i summa 150 000 RUB; region Moskva podtverzhden."
-
 Sentence 3 -- NEXT: What the operator should do and why urgency matters or does not.
-Example: "Rekomendatsiya: svyazat'sya -- srochnost' vysokaya, zaderzhka snizhayet veroyatnost' kontakta; kontakt avtora dostupen."
 
-Do not merge into a vague paragraph. Each sentence must stand alone.
+Max 450 characters total. Do not merge into a vague paragraph. Each sentence must stand alone.
 
-JSON SAFETY RULES -- CRITICAL FOR VALID OUTPUT
+FIELD CONSTRAINTS
 
-These rules prevent JSON parse errors. Follow them strictly for every field value:
-- Return compact JSON only. No pretty-printing with extra newlines inside values.
-- No markdown, no code fences, no backticks inside string values.
-- No unescaped double quotes inside string values. Never wrap phrases in "quotes" inside a field.
-- No newline characters inside any JSON string value. Keep all values on one line.
-- No trailing commas after the last field.
-- Numeric scores must be bare integers, not quoted strings.
-- offer_text: plain text only, max 180 characters, no quotation marks, do not start with a label or colon.
-- detected_need: plain text only, max 220 characters, no quotation marks.
-- reason: plain text only, max 450 characters, simple sentences. If you need to reference a phrase from the source text, write it without surrounding quotes: cite banki otkazali rather than "banki otkazali".
+- offer_text: max 180 characters. Plain text only, no quotation marks.
+- detected_need: max 220 characters. Plain text only, no quotation marks.
+- reason: max 450 characters. Plain text only. Cite phrases from source text without surrounding quote marks.
+- text_context: max 300 characters. Include key offer, signals, urgency phrases, region.
+- freshness_status: "fresh" = published_at within 7 days of parsed_at; "recent" = 8-30 days; "old" = more than 30 days; "unknown" = date absent or unparseable.
 
-OUTPUT FORMAT -- CRITICAL
+OUTPUT INSTRUCTION
 
-Respond with ONLY a valid JSON object:
-- No markdown, no code fences (no backticks, no triple-backtick json), no preamble, no commentary.
-- First character must be {. Last character must be }.
-- String values: use Russian if the source text is in Russian; use source language otherwise.
-- All field names exactly as specified -- no aliases, no extra fields, no omissions.
-- Numeric scores are integers not floats (use 72 not 72.0).
-
-REQUIRED JSON SCHEMA -- all 25 fields required; "" for unknown strings; 1 for unknown integers.
-
-{
-  "created_at": "<ISO 8601 -- use parsed_at value from input; format YYYY-MM-DDThh:mm:ssZ>",
-  "source_type": "<manual_test | scraped_web | apify | firecrawl | social | classified | unknown>",
-  "platform": "<avito | telegram | instagram | website | vk | manual_test | etc. -- from input>",
-  "source_url": "<source_url from input>",
-  "parsed_at": "<parsed_at from input>",
-  "published_at": "<published_at from input or empty string>",
-  "freshness_status": "<fresh | recent | old | unknown>",
-  "entity_type": "<competitor | lead_signal | market_signal | content_idea | irrelevant>",
-  "company_name": "<explicitly in text only; else empty string>",
-  "profile_name": "<explicitly in text only; else empty string>",
-  "profile_url": "<profile_url from input or empty string>",
-  "region": "<explicitly mentioned in text only; never inferred without stated basis; else empty string>",
-  "service_type": "<secured_auto_loan | secured_real_estate_loan | pts_loan | refinancing | mortgage_adjacent | generic_lending | unknown>",
-  "offer_text": "<1 sentence, max 180 chars: what is offered or sought; for content_idea -- proposed content angle as a plain-text topic (no quotation marks, no leading labels, no colons)>",
-  "terms": "<explicit rate/price/conditions only -- e.g. '3% v mesyats, bez spravok, resheniye za 1 chas' -- empty string if not explicitly stated>",
-  "contact_public": "<phone/email/Telegram from text only; empty string if none>",
-  "text_context": "<cleaned summary; max 300 characters; include key offer, signals, urgency phrases, region>",
-  "detected_need": "<lead_signal: need type + amount + urgency + bank rejection + region; content_idea: client fear or objection the record reveals; empty string for all other entity types>",
-  "competitor_strength": <integer 1-100; 1 if entity_type is not competitor>,
-  "lead_signal_score": <integer 1-100>,
-  "content_idea_score": <integer 1-100>,
-  "quality_score": <integer 1-100>,
-  "reason": "<3 sentences: (1) what + key evidence; (2) why scores -- cite specific signals; (3) next action + urgency rationale>",
-  "recommended_action": "<monitor | contact | create_content | ignore | investigate>",
-  "status": "<analyzed | skipped>"
-}
-
-freshness_status: "fresh" = published_at within 7 days of parsed_at; "recent" = 8-30 days before; "old" = more than 30 days before; "unknown" = date absent or unparseable.
+You must call the return_marketing_analysis tool exactly once. Do not answer in text. Do not add any text before or after the tool call.
 
 ---PROMPT END---
 
 ---
 
+## Tool Definition (v2.2)
+
+The tool lives in the `Build Claude Request v2.2` Code node as `toolDefinition`. Canonical reference:
+
+```
+name: return_marketing_analysis
+description: Return structured Marketing Scout analysis for one market record.
+tool_choice: { type: "tool", name: "return_marketing_analysis" }
+```
+
+**Properties and types:**
+
+| Field | Type | Constraints |
+|-------|------|-------------|
+| created_at | string | ISO 8601, use parsed_at from input |
+| source_type | enum | manual_test, manual_test_v2, scraped_web, apify, firecrawl, social, classified, unknown |
+| platform | string | from input |
+| source_url | string | from input |
+| parsed_at | string | from input |
+| published_at | string | from input or "" |
+| freshness_status | enum | fresh, recent, old, unknown |
+| entity_type | enum | competitor, lead_signal, market_signal, content_idea, irrelevant |
+| company_name | string | explicit in text only |
+| profile_name | string | explicit in text only |
+| profile_url | string | from input or "" |
+| region | string | explicit in text only |
+| service_type | enum | secured_auto_loan, secured_real_estate_loan, pts_loan, refinancing, mortgage_adjacent, business_loan, generic_lending, unknown |
+| offer_text | string | max 180 chars |
+| terms | string | explicit figures only |
+| contact_public | string | from text only |
+| text_context | string | max 300 chars |
+| detected_need | string | max 220 chars |
+| competitor_strength | integer | 1–100 |
+| lead_signal_score | integer | 1–100 |
+| content_idea_score | integer | 1–100 |
+| quality_score | integer | 1–100 |
+| reason | string | max 450 chars, 3 sentences |
+| recommended_action | enum | monitor, contact, create_content, ignore, investigate |
+| status | enum | analyzed, skipped |
+
+All 25 fields required. `additionalProperties: false`.
+
+---
+
 ## Version Notes
 
-- v2.1 (2026-06-05): JSON stability patch. Added JSON SAFETY RULES section (critical for valid output).
-  Updated CONTENT INTELLIGENCE: offer_text for content_idea = plain-text angle, max 180 chars, no quotation marks,
-  no leading labels. detected_need for content_idea = client fear/objection (no longer empty).
-  Updated schema descriptions for offer_text and detected_need.
-  Trigger: Test 5 (content_idea record) failed JSON.parse in production due to unescaped quotes in offer_text.
-  All 25 output fields unchanged. Retest Test 5 before treating v2.1 as approved.
+- v2.2 (2026-06-05): Architecture change to tool_use structured output.
+  Root cause: raw text JSON failed JSON.parse on Test 1 (v2.1) and Test 5 (v2.0 and v2.1).
+  Text-based output is inherently brittle when field values contain quotes, colons, or Cyrillic.
+  Fix: API request includes `tools` array with full JSON Schema for `return_marketing_analysis`
+  and `tool_choice: {type:"tool", name:"return_marketing_analysis"}` to force the call.
+  Claude fills the schema fields directly -- no serialization or escaping required on Claude's side.
+  Parse node primary path: `content.find(c => c.type === "tool_use" && c.name === "return_marketing_analysis")`.
+  Text fallback retained for compatibility.
+  Prompt changes: removed JSON SAFETY RULES, OUTPUT FORMAT, and REQUIRED JSON SCHEMA sections.
+  Added FIELD CONSTRAINTS and OUTPUT INSTRUCTION sections. Business logic unchanged.
+  service_type enum: added "business_loan". source_type enum: added "manual_test_v2".
+  Parse node: added `parse_method` field to output ("tool_use", "text_fallback", "text_failed", "none").
+
+- v2.1 (2026-06-05): JSON stability patch (superseded by v2.2).
+  Added JSON SAFETY RULES; tightened offer_text and detected_need instructions.
+  Trigger: Test 5 failed JSON.parse. Still failed on Test 1 in production.
 
 - v2.0 (2026-06-05): Major rewrite from extractor/classifier to analyst/strategist.
-  Key additions: priority order (leads first), confirmed ICP (Moscow car owner, bad credit, urgency),
-  region scoring rules (MO cap for leads, competitor threat model), product hierarchy,
-  three-axis lead urgency model (fit x urgency x readiness), competitor threat assessment,
-  structured 3-sentence reason field with evidence citation requirement,
-  content angle framing in offer_text for content_idea records,
-  expanded skip rules, anti-hallucination additions (brand knowledge firewall).
+  Key additions: priority order (leads first), confirmed ICP, region scoring rules, product hierarchy,
+  three-axis lead urgency model, competitor threat assessment, 3-sentence reason field,
+  evidence citation requirement, content angle in offer_text, expanded skip rules.
   Schema unchanged from v1 -- same 25 fields.
 
-## Known Limitations (v2)
+## Known Limitations (v2.2)
 
-- Claude may still occasionally return markdown fences despite the instruction. The Parse node strips them.
-- `created_at` is set by Claude from input context -- n8n should override it with `new Date().toISOString()` for accuracy.
+- Gateway compatibility: `tool_use` requires the gateway (aiprimetech.io) to pass the `tools` and
+  `tool_choice` parameters through to the Claude API unchanged. If the gateway strips or ignores
+  these fields, Claude will respond with text and the fallback parser activates.
+  If the fallback activates for all 7 tests, the gateway does not support tool_use -- escalate.
+- `created_at` is set by Claude from input context -- n8n should override with `new Date().toISOString()`.
 - `source_type` and `platform` are passed from the Set node -- Claude does not infer them.
-- Region inference is deliberately conservative -- Claude returns "" rather than guess. Prefer precision over recall at this stage.
-- Token cost per call will be higher than v1 (longer system prompt). Measure on first 7 test calls before projecting at scale.
+- Region inference is deliberately conservative -- "" rather than guess.
+- Token cost per call may be slightly higher (tool schema adds tokens to input). Measure on first 7 calls.
 
 ## Planned Future Fields (schema v2.1+, not in current output)
 
-These fields are designed in `MARKETING_AGENT_PROMPT_V2_PLAN.md` but are not in the current JSON schema.
-Add only after v2 passes production validation and Google Sheets table is updated:
+Add only after v2.2 passes production validation and Google Sheets table is updated:
 
 | Field | Purpose |
 |-------|---------|

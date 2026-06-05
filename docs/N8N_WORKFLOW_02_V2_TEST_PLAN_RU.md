@@ -1,22 +1,41 @@
-# Руководство по тестированию Prompt v2.1 в n8n
+# Руководство по тестированию Prompt v2.2 в n8n
 
-**Дата:** 2026-06-05 (обновлено: v2.1 патч)
-**Цель:** Протестировать Marketing Agent Prompt v2.1 на 7 синтетических записях через
+**Дата:** 2026-06-05 (обновлено: v2.2 — переход на tool_use)
+**Цель:** Протестировать Marketing Agent Prompt v2.2 на 7 синтетических записях через
 готовый TEST HARNESS workflow — без ручного редактирования кода.
 **Не изменять:** `n8n/workflows/02_claude_api_single_record_analysis.json` — только после одобрения.
 **TEST HARNESS JSON:** `n8n/workflows/02_claude_api_single_record_v2_test_harness.json`
-**Промпт v2.1:** `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md`
+**Промпт v2.2:** `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md`
 **Тестовые записи:** `modules/marketing-scout-v0/TEST_RECORDS_V2.md`
 **Ожидаемая стоимость:** ~$0.10–0.20 за 7 вызовов (≈ 7–15 руб.)
 
-> **v2.1 патч (2026-06-05):** Тест 5 (контент-идея) упал с ошибкой JSON.parse в production.
-> Причина: Claude возвращал кавычки или двоеточия внутри строк `offer_text`, что ломало JSON.
-> Исправлено в двух местах:
-> 1. **Промпт v2.1** — добавлен раздел JSON SAFETY RULES; переписаны правила для `offer_text` и `detected_need`.
-> 2. **Parse-нода TEST HARNESS** — добавлена многоступенчатая очистка: brace extraction + нормализация типографских кавычек перед JSON.parse.
->
-> **Что делать:** Сначала перезапустить только Тест 5. Если JSON parse прошёл — запустить все 7.
-> Если Тест 5 снова упал — сообщить оператору, не запускать остальные тесты.
+---
+
+## Почему перешли на tool_use (история изменений)
+
+**v2.0:** Claude возвращал сырой JSON-текст. Тест 5 (content_idea) упал с ошибкой JSON.parse —
+Claude поставил кавычки и двоеточие внутри строки `offer_text`, что сломало JSON.
+
+**v2.1:** Добавлены JSON SAFETY RULES в промпт и многоступенчатая очистка в Parse-ноде.
+Тест 5 прошёл, но Тест 1 упал с JSON.parse в production — Claude снова нарушил форматирование.
+
+**Вывод:** Сырой JSON-текст из LLM нестабилен. Даже строгие инструкции не дают 100% гарантии.
+Любой символ кавычки или переноса строки внутри поля `reason`, `offer_text` или `detected_need`
+(которые содержат русский текст) может сломать JSON.parse.
+
+**v2.2 — архитектурное решение (DEC-025):** Вместо "Claude пишет JSON-текст" используется
+**Anthropic tool_use structured output**. API-запрос включает:
+- `tools`: определение инструмента `return_marketing_analysis` с полным JSON Schema (25 полей).
+- `tool_choice: { type: "tool", name: "return_marketing_analysis" }` — Claude обязан вызвать этот инструмент.
+
+Claude заполняет поля схемы напрямую. API сам сериализует результат — Claude не пишет JSON-текст.
+Parse-нода ищет блок `{ type: "tool_use", name: "return_marketing_analysis" }` и берёт `block.input`.
+Текстовый парсер оставлен как запасной путь (если шлюз не поддерживает tool_use).
+
+**Важно:** Поле `parse_method` в выводе Parse-ноды показывает, какой путь сработал:
+- `tool_use` — штатный режим v2.2 (идеально)
+- `text_fallback` — шлюз не поддерживает tool_use; работает, но нестабильно
+- `text_failed` или `none` — критическая ошибка, требует разбора
 
 ---
 
@@ -80,8 +99,14 @@ Spreadsheet ID вставить в параметр **Document ID** ноды `Ap
 4. Нажать **Test workflow** (кнопка вверху)
 5. Дождаться выполнения — 2–5 секунд
 
-**Тест 6 (SEO boilerplate)** — Quality Gate закроет эту запись (false-ветка). Это правильное поведение.
-Все остальные тесты должны проходить Quality Gate (true-ветка) и добавлять строку в Google Sheets.
+**Порядок запуска тестов (v2.2):**
+1. **Тест 1 первым** — сильный лид, Москва, ранее упал в v2.1. Должен вернуть `parse_method=tool_use`.
+2. **Тест 5 вторым** — content_idea, ранее упал в v2.0. Должен вернуть `parse_method=tool_use`.
+3. **Тест 6 третьим** — SEO-мусор, должен вернуть `status=skipped`. Quality Gate закроет запись (false-ветка).
+4. Если Тесты 1, 5, 6 прошли — запускать Тесты 2, 3, 4, 7 в любом порядке.
+5. Если хотя бы один из Тестов 1, 5, 6 вернул `parse_method=text_failed` или `none` — остановиться и сообщить оператору.
+
+**Внимание:** Если все 7 тестов показывают `parse_method=text_fallback` — шлюз (aiprimetech.io) не передаёт параметр `tools` в Claude. Это требует отдельного решения (DEC-025).
 
 ---
 
@@ -89,6 +114,10 @@ Spreadsheet ID вставить в параметр **Document ID** ноды `Ap
 
 ### В ноде `Parse Claude JSON Response`:
 - Открыть ноду → вкладка **Output**
+- **Первым делом проверить поле `parse_method`:**
+  - `tool_use` — v2.2 работает штатно ✓
+  - `text_fallback` — шлюз не передал tool_use; данные есть, но нестабильно ⚠
+  - `text_failed` или `none` — критическая ошибка ✗
 - Проверить наличие полей: `actual_entity_type`, `actual_recommended_action`, `test_pass_basic`, `test_notes`
 - `test_pass_basic = true` означает, что `entity_type` совпал с ожидаемым
 
@@ -107,13 +136,13 @@ Spreadsheet ID вставить в параметр **Document ID** ноды `Ap
 
 | Тест | Что проверить |
 |------|--------------|
-| 1 — Сильный лид | `entity_type=lead_signal`, `recommended_action=contact`, `lead_signal_score≥82`, `contact_public` не пустой, `reason` цитирует "банки отказали" или "сегодня" |
-| 2 — Слабый лид | `entity_type=lead_signal`, `recommended_action≠contact`, `lead_signal_score≤50`, `region` пустой |
-| 3 — Конкурент авто | `entity_type=competitor`, `recommended_action=monitor`, `competitor_strength≥80`, `terms` содержит ставку |
-| 4 — Конкурент RE | `entity_type=competitor`, `competitor_strength` 60–85 (не 90+), `terms` пустой (ставка не указана) |
-| 5 — Контент-идея | `entity_type=content_idea`, `recommended_action=create_content`, `offer_text` — тема статьи без кавычек и двоеточий, **JSON parse не упал** |
-| 6 — SEO-мусор | `status=skipped`, `quality_score=1`, Quality Gate = false, строка НЕ добавляется в Sheets |
-| 7 — Рефинансирование | `entity_type=lead_signal`, `recommended_action=investigate`, `lead_signal_score` 40–70, `region` — МО/Подмосковье |
+| 1 — Сильный лид | `parse_method=tool_use`, `entity_type=lead_signal`, `recommended_action=contact`, `lead_signal_score≥82`, `contact_public` не пустой, `reason` цитирует "банки отказали" или "сегодня" |
+| 2 — Слабый лид | `parse_method=tool_use`, `entity_type=lead_signal`, `recommended_action≠contact`, `lead_signal_score≤50`, `region` пустой |
+| 3 — Конкурент авто | `parse_method=tool_use`, `entity_type=competitor`, `recommended_action=monitor`, `competitor_strength≥80`, `terms` содержит ставку |
+| 4 — Конкурент RE | `parse_method=tool_use`, `entity_type=competitor`, `competitor_strength` 60–85 (не 90+), `terms` пустой |
+| 5 — Контент-идея | `parse_method=tool_use`, `entity_type=content_idea`, `recommended_action=create_content`, `offer_text` — тема статьи (без кавычек, без лейбла) |
+| 6 — SEO-мусор | `parse_method=tool_use`, `status=skipped`, `quality_score=1`, Quality Gate = false, строка НЕ добавляется в Sheets |
+| 7 — Рефинансирование | `parse_method=tool_use`, `entity_type=lead_signal`, `recommended_action=investigate`, `lead_signal_score` 40–70, `region` — МО/Подмосковье |
 
 ---
 
@@ -121,14 +150,14 @@ Spreadsheet ID вставить в параметр **Document ID** ноды `Ap
 
 Заполнить после каждого запуска:
 
-| Тест | entity_type | action | quality | lead | comp | content | status | test_pass_basic | reason цитирует? | Прошёл? |
-|------|------------|--------|---------|------|------|---------|--------|----------------|-----------------|---------|
+| Тест | parse_method | entity_type | action | quality | lead | comp | content | status | test_pass_basic | Прошёл? |
+|------|-------------|------------|--------|---------|------|------|---------|--------|----------------|---------|
 | 1 — Сильный лид | | | | | | | | | | |
+| 5 — Контент-идея | | | | | | | | | | |
+| 6 — SEO-мусор | | | | | | | | | | |
 | 2 — Слабый лид | | | | | | | | | | |
 | 3 — Конкурент авто | | | | | | | | | | |
 | 4 — Конкурент RE | | | | | | | | | | |
-| 5 — Контент-идея | | | | | | | | | | |
-| 6 — SEO-мусор | | | | | | | | | | |
 | 7 — Рефинансирование | | | | | | | | | | |
 
 **Стоимость:** ________ до тестов → ________ после 7 тестов → ________ за вызов
@@ -148,24 +177,28 @@ Spreadsheet ID вставить в параметр **Document ID** ноды `Ap
 
 ---
 
-## Критерии одобрения Prompt v2
+## Критерии одобрения Prompt v2.2
 
-Все критерии должны быть выполнены:
+**Обязательные условия (блокеры):**
 
-- [ ] Тест 1: `recommended_action = contact`, `lead_signal_score ≥ 82`, `reason` цитирует конкретную фразу
-- [ ] Тест 2: `recommended_action ≠ contact`, `lead_signal_score ≤ 50`
-- [ ] Тест 3: `recommended_action = monitor`, `competitor_strength ≥ 80`, `terms` содержит ставку
-- [ ] Тест 4: `competitor_strength` от 60 до 85 (не 90+), `terms` пустой
-- [ ] Тест 5: `recommended_action = create_content`, `offer_text` — тема статьи без кавычек и двоеточий, **JSON parse не упал** (ключевой критерий v2.1)
-- [ ] Тест 6: `status = skipped`, `quality_score = 1`, все остальные оценки = 1
-- [ ] Тест 7: `recommended_action = investigate`, `lead_signal_score` 40–70, `region` — МО или Подмосковье, не Москва
-- [ ] **Все 7 вызовов вернули валидный JSON без ошибок парсинга** — обязательное условие (DEC-024)
-- [ ] Ни один ответ не содержит markdown-обрамления (``` )
-- [ ] `offer_text` для теста 5 не начинается с "Статья:", "Пост:" или другого лейбла
+- [ ] **Тест 1** прошёл с `parse_method=tool_use` — обязателен (ранее падал)
+- [ ] **Тест 5** прошёл с `parse_method=tool_use` — обязателен (ранее падал)
+- [ ] **Тест 6** прошёл с `parse_method=tool_use` и `status=skipped` — обязателен
+- [ ] **Ноль** тестов с `parse_method=text_failed` или `parse_method=none` — DEC-024
+- [ ] Если все тесты показывают `parse_method=text_fallback` — шлюз не поддерживает tool_use; одобрение невозможно без решения о шлюзе
+
+**Логические критерии (минимум 6 из 7):**
+
+- [ ] Тест 1: `entity_type=lead_signal`, `recommended_action=contact`, `lead_signal_score≥82`, `reason` цитирует фразу
+- [ ] Тест 2: `entity_type=lead_signal`, `recommended_action≠contact`, `lead_signal_score≤50`
+- [ ] Тест 3: `entity_type=competitor`, `recommended_action=monitor`, `competitor_strength≥80`, `terms` содержит ставку
+- [ ] Тест 4: `entity_type=competitor`, `competitor_strength` от 60 до 85 (не 90+), `terms` пустой
+- [ ] Тест 5: `entity_type=content_idea`, `recommended_action=create_content`, `offer_text` — тема статьи без лейбла
+- [ ] Тест 6: `status=skipped`, `quality_score=1`, Quality Gate = false
+- [ ] Тест 7: `entity_type=lead_signal`, `recommended_action=investigate`, `lead_signal_score` 40–70, `region` — МО
 - [ ] Стоимость одного вызова не превышает $0.05
 
-**Если 6 из 7 тестов прошли → допустимо обсудить с оператором. Если все 7 → одобрять.**
-
+**Если 6 из 7 логических + все обязательные → обсудить с оператором. Если 7 из 7 → одобрять.**
 ---
 
 ## Что делать после тестирования

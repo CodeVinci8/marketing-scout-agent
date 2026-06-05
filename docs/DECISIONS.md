@@ -5,6 +5,24 @@ Most recent first.
 
 ---
 
+## DEC-025 — tool_use Structured Output Is the Preferred Architecture for Claude API Integration
+
+**Date:** 2026-06-05
+**Context:** Raw JSON text output from Claude failed JSON.parse in production twice across two prompt versions:
+- v2.0: Test 5 (content_idea) — Claude put colons and quotes inside `offer_text` string value.
+- v2.1: Test 1 (strong lead) — Claude put unescaped content inside `reason` or `detected_need` string value.
+Prompt-level instructions (JSON SAFETY RULES) and Parse-node-level cleanup (brace extraction, smart-quote normalization) reduced but did not eliminate the failure mode. The root cause is that any Russian text field containing a period, quote, or colon adjacent to other JSON syntax will break `JSON.parse` if Claude serializes incorrectly.
+**Decision:** Use Anthropic Messages API `tool_use` structured output instead of asking Claude to write JSON text. The API request includes:
+1. `tools`: array with one tool definition `return_marketing_analysis` containing a full JSON Schema (25 fields, `additionalProperties: false`).
+2. `tool_choice: { type: "tool", name: "return_marketing_analysis" }` to force the call.
+Claude fills schema fields directly. The API serializes the result — Claude never writes raw JSON string values containing quotes or escape sequences. The Parse node reads `content.find(c => c.type === "tool_use" && c.name === "return_marketing_analysis").input` directly as a plain JS object.
+**Text fallback retained:** The old text parser remains as a fallback path (`parse_method=text_fallback`) in case the gateway (aiprimetech.io) strips `tools`/`tool_choice` parameters before passing to Claude. If all 7 tests return `text_fallback`, the gateway does not support tool_use and a different solution is needed.
+**Parse method field:** The Parse node now outputs `parse_method` = "tool_use" | "text_fallback" | "text_failed" | "none" for observability.
+**Prompt changes:** Removed JSON SAFETY RULES, OUTPUT FORMAT, and REQUIRED JSON SCHEMA sections. Added FIELD CONSTRAINTS and OUTPUT INSTRUCTION sections. Business logic unchanged.
+**Applies to:** All Claude API integrations in this project from v2.2 onward. If the gateway supports tool_use, prefer it over raw text output for all structured data extraction.
+
+---
+
 ## DEC-024 — Prompt v2 Cannot Be Approved If Any Expected-Analyzed Record Fails JSON Parsing
 
 **Date:** 2026-06-05
