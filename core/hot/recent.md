@@ -4,23 +4,28 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
-## Session: 2026-06-05 — Documentation consistency fixes
+## Session: 2026-06-05 — Business Requirements (Uncle Consultation)
 
 **What was done:**
-- Fixed 6 issues in `WORKFLOW_DESIGN.md`: gateway URL, auth format, prompt reference, parse pattern, threshold scale, Google Sheets auth
-- Rewrote `TABLE_SCHEMA.md`: 12 type/value corrections — scoring scale 1–100, integer scores, updated entity/status/service enums
-- Updated `PROMPTS.md`: MARKETING_AGENT_PROMPT_V1.md is now the active prompt; SYSTEM_PROMPT.md marked superseded
-- Created `docs/AGENT_CAPABILITIES.md`: v1 capabilities, limitations, v2 requirements, risks, client explanation
-- Restructured `NEXT_ACTIONS.md` into Steps A–E with explicit gates
+- Step A complete: uncle's business priorities confirmed and documented
+- Created `docs/BUSINESS_REQUIREMENTS.md` — full BRD with goal, priorities, source order, ICP, product scope, useful row definition, field mapping, open questions, implications for Prompt v2 and scraping
+- Updated `NEXT_ACTIONS.md` — Step A marked done; Step C updated with confirmed facts
+- Updated `AGENT_CAPABILITIES.md` — confirmed business requirements section added; v2 improvement list updated
+- Updated `MARKETING_AGENT_PROMPT_V2_PLAN.md` — priority order section added; ICP rewritten with confirmed uncle facts; region scoring rule and product priority added
+- Updated `TABLE_SCHEMA.md` — uncle field mapping table added (no schema changes)
 
-**Remaining doc fixes (minor):** README.md current stage, tools/TOOLS.md auth note, core/warm/decisions.md DEC-018–021
+**Key facts confirmed:**
+- Priority: lead signals → competitors → content ideas
+- Region: Moscow + Moscow Oblast (mandatory for high lead_signal_score)
+- Products: PTS/auto first, real estate, refinancing, mortgage, business loans
+- Business sources: Telegram, Instagram, Avito, competitor websites
+- Technical start: competitor websites first (lower risk), then Avito, then Telegram, then Instagram
 
 **What is next (in order):**
-- Step A: consult uncle (zero cost — shapes ICP for Prompt v2)
-- Step B: finish remaining doc fixes (minor)
-- Step C: write MARKETING_AGENT_PROMPT_V2.md
-- Step D: test v2 on 5 synthetic records (~$0.10)
-- Step E: only then Workflow 03 Firecrawl
+1. Step B: finish remaining doc fixes — README.md, tools/TOOLS.md, core/warm/decisions.md (DEC-018–021 + DEC-022)
+2. Step C: write MARKETING_AGENT_PROMPT_V2.md (ICP now confirmed — ready)
+3. Step D: test v2 on 5 synthetic records (~$0.10)
+4. Step E: Workflow 03 Firecrawl (competitor website first)
 
 ---
 

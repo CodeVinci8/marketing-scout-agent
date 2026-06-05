@@ -1,11 +1,24 @@
 # MARKETING_AGENT_PROMPT_V2_PLAN.md
 
 **Version:** plan (not a final prompt)
-**Status:** Design phase — do not embed into workflows until reviewed and tested
+**Status:** Design phase — ICP confirmed 2026-06-05; ready for prompt writing
 **Module:** marketing-scout-v0
 **Date:** 2026-06-05
 **Predecessor:** `MARKETING_AGENT_PROMPT_V1.md`
 **Context:** See critical assessment in `docs/MILESTONE_REVIEW_02.md`, Section 7.
+**Business requirements:** `docs/BUSINESS_REQUIREMENTS.md` — confirmed by uncle 2026-06-05
+
+---
+
+## Priority Order for v2 (Confirmed)
+
+The agent must reason in this priority order:
+
+1. **Lead signals** — Is this person a potential client? Can the operator contact them?
+2. **Competitors** — Is this a competing business? Should the operator monitor them?
+3. **Content ideas** — Does this reveal a client pain point worth writing about?
+
+This priority order must be reflected in the agent identity, business objective framing, scoring calibration, and `recommended_action` logic. Not just a bullet list — it must shape how Claude structures its analysis for every record.
 
 ---
 
@@ -71,25 +84,35 @@ The difference in output:
 
 ---
 
-## Section 4 — Target Audience / ICP Assumptions
+## Section 4 — Target Audience / ICP (Confirmed 2026-06-05)
 
 **Design intent:** Define who the operator's ideal client is so Claude can score lead signals relative to fit, not just presence.
 
-**ICP draft (to be confirmed with uncle):**
-- Person who owns a vehicle (usually 5–15 years old) and needs cash urgently
+**ICP — confirmed by uncle:**
+- Person who owns a vehicle (PTS / car collateral) and needs cash urgently
 - Often has a damaged credit history — rejected by banks
 - Needs speed: same-day or next-day decision is the primary need
 - Loan amount typically 50 000–500 000 RUB
-- Region: Moscow and Moscow Oblast primarily (adjust based on uncle's geography)
-- Urgency signals: "сегодня", "срочно", "быстро", specific amount mentioned, "не дают в банке"
-- Disqualifiers: person is asking about mortgage (different product), person is a business seeking corporate financing
+- **Region: Moscow and Moscow Oblast — mandatory for high lead_signal_score**
+- Urgency signals: "сегодня", "срочно", "быстро", specific amount mentioned, "не дают в банке", "отказали"
+- Disqualifiers: person is asking about unsecured consumer loans; person is a business seeking corporate financing; region is outside Moscow / MO
+
+**Product priority for lead scoring:**
+1. PTS / car collateral — highest fit
+2. Real estate collateral — high fit
+3. Refinancing — medium fit (existing loan client)
+4. Mortgage / business loans — lower priority
+
+**Region scoring rule:**
+- Moscow / MO + product fit → eligible for `lead_signal_score` 60–100
+- Outside Moscow / MO → `lead_signal_score` capped at 40, unless nationally relevant competitor
 
 **Instructions for Claude:**
-- A lead_signal score of 80+ requires: explicit need + urgency indicator + product fit (car/PTS/real estate)
-- A lead_signal score of 60–79: clear need but no urgency or fit is inferred, not stated
-- A lead_signal score below 40: lead is present but fit is unclear or content is old
+- A lead_signal score of 80+ requires: explicit need + urgency indicator + product fit (car/PTS/real estate) + region match (Moscow / MO)
+- A lead_signal score of 60–79: clear need but no urgency, or fit is inferred not stated, or region uncertain
+- A lead_signal score below 40: lead is present but fit is unclear, content is old, or region is outside Moscow / MO
 
-**What changes from v1:** v1 gives no ICP at all. Claude has no basis for evaluating whether a lead is actually valuable. v2 provides a concrete profile so the score reflects real business value.
+**What changes from v1:** v1 gives no ICP at all. Claude has no basis for evaluating whether a lead is actually valuable. v2 provides a concrete profile — confirmed with the operator — so the score reflects real business value.
 
 ---
 

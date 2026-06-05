@@ -3,44 +3,105 @@
 One row per analyzed item. All columns populated by the pipeline.
 Claude API fills the analysis columns; n8n fills the metadata columns.
 
+**Last updated:** 2026-06-05 — scoring scale corrected to 1–100; entity/status values updated to match active prompt v1; uncle field mapping added.
+
 ---
 
 ## Column Reference
 
-| # | Column Name          | Type     | Source       | Description                                                    |
-|---|----------------------|----------|--------------|----------------------------------------------------------------|
-| 1 | `created_at`         | datetime | n8n          | Timestamp when the row was created (pipeline run time)         |
-| 2 | `source_type`        | string   | n8n config   | Category of source: `competitor_site`, `avito`, `social`       |
-| 3 | `platform`           | string   | n8n config   | Platform name: `avito`, `vk`, `instagram`, `website`, etc.     |
-| 4 | `source_url`         | string   | scraper      | URL of the scraped page or listing                             |
-| 5 | `parsed_at`          | datetime | n8n          | Timestamp when the item was scraped                            |
-| 6 | `published_at`       | datetime | scraper      | Original publish date of the content (if available)            |
-| 7 | `freshness_status`   | string   | Claude/n8n   | `fresh` (< 7 days) / `recent` (7–30 days) / `stale` (> 30d)  |
-| 8 | `entity_type`        | string   | Claude       | `competitor` / `lead` / `content_source` / `unknown`           |
-| 9 | `company_name`       | string   | Claude       | Name of company or business if detected                        |
-|10 | `profile_name`       | string   | Claude       | Name of individual or profile if detected                      |
-|11 | `profile_url`        | string   | scraper      | Direct link to profile or author page                          |
-|12 | `region`             | string   | Claude       | Geographic region or city mentioned                            |
-|13 | `service_type`       | string   | Claude       | Type of service or product offered/needed                      |
-|14 | `offer_text`         | string   | Claude       | Short extracted description of the offer or listing            |
-|15 | `terms`              | string   | Claude       | Price, conditions, delivery terms if mentioned                 |
-|16 | `contact_public`     | string   | Claude       | Public contact info: phone, email, Telegram handle (if visible)|
-|17 | `text_context`       | string   | n8n          | First 500 characters of raw source text (for reference)        |
-|18 | `detected_need`      | string   | Claude       | Inferred need or intent of the author                          |
-|19 | `competitor_strength`| string   | Claude       | `strong` / `moderate` / `weak` / `not_applicable`             |
-|20 | `lead_signal_score`  | integer  | Claude       | 0–10: likelihood this item represents an inbound lead          |
-|21 | `content_idea_score` | integer  | Claude       | 0–10: potential value as a content idea inspiration            |
-|22 | `quality_score`      | integer  | Claude       | 0–10: overall quality and actionability of this item           |
-|23 | `reason`             | string   | Claude       | 1–2 sentence explanation of the scores                         |
-|24 | `recommended_action` | string   | Claude       | Suggested next step: `contact`, `monitor`, `create_content`, `ignore` |
-|25 | `status`             | string   | operator     | Manual status update: `new` / `in_progress` / `done` / `skip` |
+| # | Column Name           | Type    | Source     | Description |
+|---|-----------------------|---------|------------|-------------|
+| 1 | `created_at`          | string  | n8n (Code) | ISO 8601 timestamp when the row was created (pipeline run time) |
+| 2 | `source_type`         | string  | n8n Set    | Source category: `manual_test` / `scraped_web` / `apify` / `firecrawl` / `social` / `classified` / `unknown` |
+| 3 | `platform`            | string  | n8n Set    | Platform name: `avito`, `vk`, `instagram`, `website`, `manual_test`, etc. |
+| 4 | `source_url`          | string  | scraper    | URL of the scraped page or listing |
+| 5 | `parsed_at`           | string  | n8n Set    | Date when the item was scraped (YYYY-MM-DD) |
+| 6 | `published_at`        | string  | scraper    | Original publish date of the content (if available, else empty) |
+| 7 | `freshness_status`    | string  | Claude     | `fresh` (≤7 days) / `recent` (8–30 days) / `old` (>30 days) / `unknown` |
+| 8 | `entity_type`         | string  | Claude     | `competitor` / `lead_signal` / `market_signal` / `content_idea` / `irrelevant` |
+| 9 | `company_name`        | string  | Claude     | Company or brand name if detected, else empty |
+|10 | `profile_name`        | string  | Claude     | Individual or author name if detected, else empty |
+|11 | `profile_url`         | string  | scraper    | Direct link to profile or author page |
+|12 | `region`              | string  | Claude     | City or region explicitly mentioned in source text, else empty |
+|13 | `service_type`        | string  | Claude     | `secured_auto_loan` / `secured_real_estate_loan` / `pts_loan` / `refinancing` / `mortgage_adjacent` / `generic_lending` / `unknown` |
+|14 | `offer_text`          | string  | Claude     | 1-sentence description of what is offered or advertised |
+|15 | `terms`               | string  | Claude     | Explicitly stated price, rate, or conditions; empty if none |
+|16 | `contact_public`      | string  | Claude     | Publicly visible contact info from source text only (phone, email, Telegram); empty if none |
+|17 | `text_context`        | string  | n8n        | Cleaned summary of raw source text, max 300 characters |
+|18 | `detected_need`       | string  | Claude     | 1-sentence inferred need or intent of the author; empty if not a lead |
+|19 | `competitor_strength` | integer | Claude     | 1–100: assessed strength of this competitor (1 if entity is not a competitor) |
+|20 | `lead_signal_score`   | integer | Claude     | 1–100: likelihood this record represents a potential inbound client |
+|21 | `content_idea_score`  | integer | Claude     | 1–100: value as inspiration for content marketing |
+|22 | `quality_score`       | integer | Claude     | 1–100: overall quality and actionability of this record |
+|23 | `reason`              | string  | Claude     | 2–3 sentences explaining the scores and recommended action |
+|24 | `recommended_action`  | string  | Claude     | `monitor` / `contact` / `create_content` / `ignore` / `investigate` |
+|25 | `status`              | string  | Claude     | `analyzed` (record processed normally) / `skipped` (boilerplate or low quality) |
+
+---
+
+## Scoring Scale
+
+All numeric scores use the **1–100 integer scale** (not 0–10).
+
+| Score range | Interpretation |
+|-------------|----------------|
+| 80–100 | High value — rich data, clear signals, directly actionable |
+| 60–79 | Useful — good data with minor gaps |
+| 40–59 | Weak — partial data, incomplete context |
+| 20–39 | Low — sparse or ambiguous, minimal value |
+| 1–19 | Skip — noise, boilerplate, or irrelevant (status = skipped) |
+
+**Quality gate:** Only rows with `status = analyzed` AND `quality_score >= 60` are written to the sheet.
+
+---
+
+## Entity Type Values
+
+| Value | Meaning |
+|-------|---------|
+| `competitor` | Business or individual actively offering secured lending products |
+| `lead_signal` | Person or business actively seeking a secured loan |
+| `market_signal` | News item, regulation, or industry trend providing strategic context |
+| `content_idea` | Discussion, question, or topic revealing client pain points |
+| `irrelevant` | No connection to secured lending or financial services |
+
+---
+
+## Status Values
+
+| Value | Set by | Meaning |
+|-------|--------|---------|
+| `analyzed` | Claude | Record was analyzed normally; scores are meaningful |
+| `skipped` | Claude | Record was too short, boilerplate, or irrelevant; quality_score = 1 |
 
 ---
 
 ## Notes
 
-- Rows with `quality_score < 6` are filtered out by the IF node and not written to the sheet.
-- `text_context` is truncated to 500 chars to keep the sheet readable.
-- `contact_public` stores only publicly visible contact info — no scraping of private data.
-- `status` column is filled manually by the operator after reviewing results.
+- `text_context` is truncated to 300 characters before sending to Claude to control token cost.
+- `contact_public` stores only contact information that is explicitly visible in the source text — no inference.
 - `published_at` may be empty if the scraper cannot determine the publish date.
+- `competitor_strength` is 1 (minimum) when `entity_type` is not `competitor`.
+- Scores are assigned by Claude; they reflect the model's assessment based on the prompt calibration in `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V1.md`.
+- The `results` sheet must have a single horizontal header row (row 1). See DEC-017.
+
+---
+
+## Mapping: Uncle's Requested Fields → Current Columns
+
+These fields were requested by the operator (confirmed 2026-06-05). Full mapping in `docs/BUSINESS_REQUIREMENTS.md` Section 9.
+
+| Requested | Current column | Gap |
+|-----------|---------------|-----|
+| Name / title | `company_name` + `profile_name` | None |
+| Source link | `source_url` | None |
+| Offer | `offer_text` | None |
+| Terms | `terms` | None |
+| Public contacts | `contact_public` | None |
+| Region | `region` | None |
+| Competitor strength | `competitor_strength` | None |
+| Client pain | `detected_need` | Partial — v2 will expand to capture pain dimension explicitly |
+| Recommendation | `recommended_action` | None |
+| Comment / source link | `profile_url` | Partial — Telegram/Instagram comment links may need dedicated field |
+| Scores | `quality_score`, `lead_signal_score`, `content_idea_score`, `competitor_strength` | None |
+| Verification fields | Not in schema | Planned post-v0.1 |

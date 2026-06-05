@@ -5,6 +5,35 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Business Requirements Recorded After Uncle Consultation
+
+**Agent role:** project-engineer
+**Session goal:** Document uncle's business priorities and update all dependent files.
+
+**Business requirements confirmed:**
+- Priority order: lead signals → competitors → content ideas
+- Region: Moscow + Moscow Oblast
+- Products: PTS, auto collateral, real estate, refinancing, mortgage, business loans
+- Source priority (business): Telegram, Instagram, Avito, Yandex / competitor websites
+- Technical start sequence: competitor websites → Avito → Telegram → Instagram
+- Useful row: helps identify/contact a lead, monitor a competitor, or extract a content insight
+
+**Files created:**
+- `docs/BUSINESS_REQUIREMENTS.md` — full BRD: business goal, priorities, source order, region, product scope, useful row definition, recommended actions, field mapping, open questions, Prompt v2 implications, Firecrawl/Apify implications, what not to build yet
+
+**Files updated:**
+- `docs/NEXT_ACTIONS.md` — Step A marked complete; Step C updated with confirmed ICP and priority order
+- `docs/AGENT_CAPABILITIES.md` — confirmed business requirements section added; v2 improvements list updated with priority order and region filter
+- `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md` — priority order section added at top; ICP section rewritten with confirmed facts; region scoring rule added; product priority list added
+- `docs/TABLE_SCHEMA.md` — uncle field mapping table added (no schema changes)
+- `docs/AGENT_LOG.md` — this entry
+- `core/hot/recent.md` — updated
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+**Next action:** Step B remaining fixes (README.md, tools/TOOLS.md, core/warm/decisions.md), then Step C — write Prompt v2
+
+---
+
 ## 2026-06-05 — Documentation Consistency Fixes After Milestone Review 02
 
 **Agent role:** project-engineer

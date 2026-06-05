@@ -119,19 +119,21 @@ Workflows are built incrementally — no external APIs until the platform is ver
 **Do not modify this workflow** — it is the Claude API + Google Sheets baseline for the project.
 **Prompt duplication note:** prompt is embedded in Build Claude Request node AND stored in MARKETING_AGENT_PROMPT_V1.md — update both on any change (see DEC-020).
 
-#### Step A — Ask Uncle: Business Requirements _(zero cost, highest leverage)_
+#### Step A — Ask Uncle: Business Requirements ✓ COMPLETED 2026-06-05
 
 **Goal:** Before any paid scraping, confirm what the operator's uncle actually needs.
 
-- [ ] Ask uncle: primary use case — competitor monitoring, lead capture, or content strategy?
-- [ ] Ask uncle: which platforms/sources matter most? (Avito, VK, competitor websites, Telegram groups?)
-- [ ] Ask uncle: what does a useful result look like? (row in Sheets, daily Telegram summary, leads to call?)
-- [ ] Ask uncle: target region? (Moscow only, Moscow Oblast, other cities?)
-- [ ] Ask uncle: which loan products does he offer? (PTS only, real estate, both?)
-- [ ] Record answers in `docs/DECISIONS.md`
-- [ ] Update ICP section of `MARKETING_AGENT_PROMPT_V2_PLAN.md` with confirmed facts
+- [x] Ask uncle: primary use case — **lead signals first, competitors second, content third**
+- [x] Ask uncle: which platforms/sources matter most? — **Telegram, Instagram, Avito, Yandex / competitor websites**
+- [x] Ask uncle: target region? — **Moscow + Moscow Oblast**
+- [x] Ask uncle: which loan products? — **PTS, auto collateral, real estate, refinancing, mortgage, business loans**
+- [x] Ask uncle: what does a useful result look like? — row in Sheets; contact strong leads, monitor competitors
+- [x] Recorded in `docs/BUSINESS_REQUIREMENTS.md` — full BRD with product scope, ICP, source priorities, table fields, open questions
+- [x] Updated `MARKETING_AGENT_PROMPT_V2_PLAN.md` — ICP confirmed; priority order locked
 
-> See DEC-021. Paid scraping is gated on this conversation.
+**Output:** `docs/BUSINESS_REQUIREMENTS.md` created. See also implications sections for Prompt v2 and scraping config.
+
+> See DEC-021. Paid scraping is still gated on Prompt v2 approval (Step C/D).
 
 #### Step B — Fix Documentation Consistency _(zero cost)_ ✓ IN PROGRESS 2026-06-05
 
@@ -143,15 +145,19 @@ Workflows are built incrementally — no external APIs until the platform is ver
 - [ ] `tools/TOOLS.md` — fix Google Sheets auth note; update GitHub status
 - [ ] `core/warm/decisions.md` — add DEC-018, DEC-019, DEC-020, DEC-021
 
-#### Step C — Write Marketing Agent Prompt v2 _(after Step A — uncle's answers shape the ICP)_
+#### Step C — Write Marketing Agent Prompt v2 _(Step A complete — ICP and priorities confirmed)_
 
 **Goal:** Write a prompt that reasons like a marketing analyst, not a data extractor.
 
 - [ ] Write `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` using `MARKETING_AGENT_PROMPT_V2_PLAN.md`
-- [ ] Fill ICP section with confirmed facts from uncle consultation (Step A)
-- [ ] Include: agent identity, business objective, ICP, competitive threat logic, lead urgency model, content angle framework, evidence rules, structured `reason` field
+- [ ] ICP is now confirmed — use facts from `docs/BUSINESS_REQUIREMENTS.md`
+- [ ] Priority order: **lead signals first → competitors second → content ideas third**
+- [ ] Include: agent identity, business objective, confirmed ICP, competitive threat logic, lead urgency model, content angle framework, evidence rules, structured `reason` field
+- [ ] Add region filter: Moscow / MO required for high `lead_signal_score`; out-of-region records score lower
+- [ ] Add product fit scoring: PTS/auto > real estate > refinancing > other
 
 > Full design in `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md`.
+> Business requirements in `docs/BUSINESS_REQUIREMENTS.md`.
 
 #### Step D — Test Prompt v2 on 5 Synthetic Records _(before any paid scraping)_
 
@@ -225,8 +231,8 @@ Workflows are built incrementally — no external APIs until the platform is ver
 Not technically blocked. Deliberately paused on paid scraping (DEC-021).
 
 **Next zero-cost actions (do in order):**
-1. Step A — consult uncle (≤1 conversation)
+1. ~~Step A — consult uncle~~ ✓ Done — see `docs/BUSINESS_REQUIREMENTS.md`
 2. Finish Step B — `README.md`, `tools/TOOLS.md`, `core/warm/decisions.md` still need minor fixes
-3. Step C — write Prompt v2
+3. Step C — write Prompt v2 (ICP and priorities now confirmed from Step A)
 4. Step D — synthetic test (5 API calls, ~$0.10 total)
-5. Step E — Workflow 03 Firecrawl
+5. Step E — Workflow 03 Firecrawl (first test: competitor website)
