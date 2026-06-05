@@ -4,6 +4,27 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-05 — Prompt v2.4 Compact KEY=VALUE
+
+**What was done:**
+- v2.3 (9.2 KB prompt) returned 502 on Test 1. Minimal curl to gateway works → gateway alive, key valid. Diagnosis: request too large for gateway. DEC-027.
+- v2.4 compact: prompt rewritten to 5.3 KB (same business logic, compressed). max_tokens 1100→700. Estimated 42% smaller request.
+- `Build Claude Request v2.4` updated. `Parse Claude Line Response` logic unchanged. Connections rebuilt from scratch. JSON validated: 28,139 bytes.
+- COSTS_AND_LIMITS.md: added gateway stability / prompt size guidance table.
+- Added DEC-027. Updated test plan, NEXT_ACTIONS.md, AGENT_LOG.md.
+
+**Key decisions:**
+- DEC-027: compact prompts ≤6 KB required for this gateway. Verified: small curl works; 9 KB prompt causes 502.
+- If 502 persists with v2.4 compact → problem is NOT prompt size. Check balance, rate limits, gateway routing.
+
+**What is next (in order):**
+1. **Step D (immediate):** Delete old harness from n8n. Import v2.4 harness. Run Test 1 first — watch for 502. If 502: diagnose gateway (check balance, raw curl from VPS). If OK: run Test 5, Test 6, then 2/3/4/7.
+2. Get operator approval → update production Workflow 02 with v2.4 Build + Parse nodes.
+3. Step B: doc fixes (README.md, tools/TOOLS.md, core/warm/decisions.md DEC-018–027).
+4. Step E: Workflow 03 Firecrawl.
+
+---
+
 ## Session: 2026-06-05 — Prompt v2.3 KEY=VALUE Line Protocol
 
 **What was done:**

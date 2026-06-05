@@ -5,6 +5,21 @@ Most recent first.
 
 ---
 
+## DEC-027 — Compact Prompts Required for Stable Gateway Execution
+
+**Date:** 2026-06-05
+**Context:** v2.3 used the correct KEY=VALUE line protocol (resolves JSON parsing failures) but still returned 502 Bad Gateway on Test 1. The prompt was 9.2 KB. A minimal curl with a short prompt to the same gateway and same model works correctly. Conclusion: the gateway has request-size or processing-time constraints that cause 502 for large payloads. The failure is not network-level or credential-level.
+**Decision:** Use compact prompts for all Claude API calls via this gateway. Target: ≤6 KB system prompt. Specific reductions in v2.4:
+- System prompt: 9.2 KB → 5.3 KB (same business logic, rewrote all sections for brevity).
+- max_tokens: 1100 → 700 (line protocol responses are short; 700 is sufficient for 25 KEY=VALUE lines plus field content).
+- temperature: kept at 0.1.
+- Field char limits tightened: offer_text 180→140, detected_need 220→160, text_context 300→220, reason 350→220.
+**If 502 persists with v2.4 compact prompt:** the issue is not prompt size. Check gateway balance (402 can be masked as 502), model routing, or per-minute rate limits. Do a raw curl from the VPS to isolate n8n vs. gateway.
+**Long-term:** If an official Anthropic API endpoint or a verified-compatible gateway becomes available, restore full prompt length and re-evaluate tool_use (DEC-025). Compact prompt is a workaround for the current gateway constraint.
+**Applies to:** All Claude API calls via aiprimetech.io until gateway constraints are clarified.
+
+---
+
 ## DEC-026 — KEY=VALUE Line Protocol for Claude Output (Gateway Does Not Support tool_use)
 
 **Date:** 2026-06-05

@@ -104,6 +104,32 @@ Update this table after Workflow 03 is run with real URLs.
 
 ---
 
+## Gateway Stability and Prompt Size (2026-06-05)
+
+**Observed:** Requests with large system prompts (9+ KB) returned 502 Bad Gateway on the current gateway (aiprimetech.io). Minimal curl with short prompt works correctly. This indicates a request-size or processing constraint on the gateway side.
+
+**Rule: keep system prompts compact for this gateway.**
+
+| Prompt version | System prompt size | max_tokens | Result |
+|---------------|-------------------|------------|--------|
+| v2.0/v2.1 | ~12 KB | 1400 | JSON.parse failures |
+| v2.2 | ~15 KB (tool schema) | 1400 | 502 (tool_use not supported) |
+| v2.3 | ~9.2 KB | 1100 | 502 on Test 1 (likely size) |
+| v2.4 | **5.3 KB** | **700** | Pending test |
+
+**Cost impact of compact prompt:**
+- Fewer input tokens → lower cost per call.
+- v2.4 estimated cost: $0.006–0.015 per call (vs. $0.018–0.030 for v2.3).
+- At 1000 scorings: ~$6–15 vs. ~$18–30 (v2.3). Compact prompt preferred for high-volume.
+
+**Long prompts waste money in two ways:**
+1. Higher input token count on every call.
+2. If 502 causes n8n retry, you pay for the failed call too.
+
+**Recommendation:** Keep system prompts under 6 KB for this gateway. Use field char limits to bound output length (offer_text ≤140, detected_need ≤160, reason ≤220). If a larger prompt is needed, test on official Anthropic API first.
+
+---
+
 ## Budget Alerts
 
 | Threshold | Action |

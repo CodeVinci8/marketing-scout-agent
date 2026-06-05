@@ -1,122 +1,107 @@
-# Руководство по тестированию Prompt v2.3 в n8n
+# Руководство по тестированию Prompt v2.4 в n8n
 
-**Дата:** 2026-06-05 (обновлено: v2.3 — KEY=VALUE line protocol)
-**Цель:** Протестировать Marketing Agent Prompt v2.3 на 7 синтетических записях через
+**Дата:** 2026-06-05 (обновлено: v2.4 — compact KEY=VALUE)
+**Цель:** Протестировать Marketing Agent Prompt v2.4 на 7 синтетических записях через
 TEST HARNESS workflow — без ручного редактирования кода.
 **Не изменять:** `n8n/workflows/02_claude_api_single_record_analysis.json` — только после одобрения.
 **TEST HARNESS JSON:** `n8n/workflows/02_claude_api_single_record_v2_test_harness.json`
-**Промпт v2.3:** `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md`
+**Промпт v2.4:** `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md`
 **Тестовые записи:** `modules/marketing-scout-v0/TEST_RECORDS_V2.md`
-**Ожидаемая стоимость:** ~$0.08–0.15 за 7 вызовов (max_tokens 1100, temperature 0.1)
+**Ожидаемая стоимость:** ~$0.04–0.10 за 7 вызовов (max_tokens 700, compact prompt)
 
 ---
 
-## История изменений и причина перехода на KEY=VALUE
+## История изменений — почему каждая версия не прошла
 
-**v2.0:** Claude возвращал сырой JSON-текст. Тест 5 (content_idea) упал с ошибкой JSON.parse —
-Claude поставил кавычки и двоеточие внутри строки `offer_text`.
+| Версия | Проблема | Причина |
+|--------|----------|---------|
+| v2.0 | JSON.parse упал на Тесте 5 | Claude поставил кавычки/двоеточие в `offer_text` |
+| v2.1 | JSON.parse упал на Тесте 1 | Claude нарушил форматирование в `reason`/`detected_need` |
+| v2.2 | 502 Bad Gateway на всех тестах | Шлюз не поддерживает `tools`/`tool_choice`. Также: сломанное соединение (Select Test Record не подключён к Build ноде) |
+| v2.3 | 502 Bad Gateway на Тесте 1 | Промпт слишком большой (9.2 KB) или запрос слишком тяжёлый для шлюза |
 
-**v2.1:** Добавлены JSON SAFETY RULES в промпт + многоступенчатая очистка в Parse-ноде.
-Тест 5 прошёл, но Тест 1 упал с JSON.parse. Сырой JSON ненадёжен.
+**Подтверждено:** минимальный curl к шлюзу с маленьким промптом работает нормально.
+Значит шлюз живой, ключ верный, модель доступна.
+502 в v2.3 — это проблема размера/тяжести запроса, не сети.
 
-**v2.2:** Переход на Anthropic tool_use structured output.
-Шлюз (aiprimetech.io) вернул **502 Bad Gateway** — tool_use не поддерживается или нестабилен.
-Также обнаружена ошибка соединений: нода `Select Test Record` не была подключена к `Build Claude Request v2.2`
-(сломанное соединение — запись никогда не доходила до Claude).
+**v2.4 — compact patch (DEC-027):**
+- Промпт сокращён с 9.2 KB до **5.3 KB** (та же бизнес-логика, компактный формат).
+- `max_tokens`: 1100 → **700**.
+- Лимиты символов ужесточены: offer_text 140, detected_need 160, text_context 220, reason 220.
+- Протокол KEY=VALUE и parse-нода — **без изменений** от v2.3.
+- Все соединения workflow пересобраны с нуля.
 
-**v2.3 — архитектурное решение (DEC-026):**
-Вместо JSON или tool_use используется **KEY=VALUE line protocol**:
-- Claude возвращает ровно 25 строк: `field_name=value`
-- Без JSON, без Markdown, без кода, без фигурных скобок.
-- Parse-нода (`Parse Claude Line Response`) делит строки по `=` и собирает объект.
-- Никакого `JSON.parse` на выводе Claude. Нет риска сломать парсер.
-- Все соединения workflow пересобраны с нуля — цепочка исправлена.
+**Если 502 повторится с v2.4 compact** — проблема не в размере промпта.
+Нужно проверить: баланс шлюза, лимиты на модель, статус шлюза.
 
 ---
 
 ## Что такое TEST HARNESS
 
-TEST HARNESS — отдельный workflow для тестирования Prompt v2.3:
-- **Промпт v2.3 уже встроен** — не нужно ничего копировать вручную.
-- **Все 7 тестовых записей уже встроены** — менять только `test_id` (1–7).
-- **Нода `Build Claude Request v2.3`**: нет tools, нет tool_choice; max_tokens=1100, temperature=0.1.
-- **Нода `Parse Claude Line Response`**: парсит KEY=VALUE строки, добавляет `parse_method`.
-- Поле `parse_method`: `line_protocol` = успех, `line_failed` = ошибка парсинга.
+- **Промпт v2.4 встроен** — не нужно копировать вручную.
+- **Все 7 записей встроены** — менять только `test_id` (1–7).
+- **Нода `Build Claude Request v2.4`**: нет tools, нет tool_choice; max_tokens=700, temperature=0.1.
+- **Нода `Parse Claude Line Response`**: KEY=VALUE парсер, `parse_method=line_protocol` или `line_failed`.
 
 ---
 
-## Шаг 1 — Открыть SSH-туннель и зайти в n8n
+## Шаг 1 — SSH-туннель
 
-На локальной машине:
 ```
 ssh -L 5678:127.0.0.1:5678 root@ВАШ_IP_СЕРВЕРА
 ```
-Открыть в браузере: `http://localhost:5678`
+Открыть: `http://localhost:5678`
 
 ---
 
 ## Шаг 2 — Импортировать TEST HARNESS
 
-1. **Если старая версия TEST HARNESS уже импортирована в n8n — удалить её.**
-2. В n8n нажать **+** (New workflow) → **Import from file**.
-3. Выбрать файл: `n8n/workflows/02_claude_api_single_record_v2_test_harness.json`
-4. Workflow появится с именем: **"02 - Claude API Single Record Analysis v2 TEST HARNESS"**
-5. Убедиться, что workflow **inactive** (переключатель выключен).
-6. Убедиться в наличии ноды **`Build Claude Request v2.3`** — не v2.2 и не v2.
-
-> Если файл не виден в файловой системе — скопировать JSON из репозитория
-> и использовать **Import from clipboard**.
+1. **Удалить старую версию TEST HARNESS из n8n** (если есть — любая версия v2.x).
+2. В n8n: **+** → **Import from file** → выбрать `n8n/workflows/02_claude_api_single_record_v2_test_harness.json`
+3. Убедиться: нода называется **`Build Claude Request v2.4`** (не v2.3, не v2.2, не v2).
+4. Workflow должен быть **inactive**.
 
 ---
 
-## Шаг 3 — Настроить credentials
+## Шаг 3 — Credentials и Spreadsheet ID
 
-| Нода | Credential | Тип |
-|------|-----------|-----|
-| Claude API Request | `Claude API - Marketing Scout` | HTTP Header Auth |
-| Append Row to Google Sheets | `Google Sheets - Marketing Scout Service Account` | Google API |
+| Нода | Credential |
+|------|-----------|
+| Claude API Request | `Claude API - Marketing Scout` (HTTP Header Auth) |
+| Append Row to Google Sheets | `Google Sheets - Marketing Scout Service Account` |
 
-Spreadsheet ID вставить в параметр **Document ID** ноды `Append Row to Google Sheets`
-(заменить `PASTE_SPREADSHEET_ID_HERE` на реальный ID таблицы).
+Вставить реальный Spreadsheet ID в ноду `Append Row to Google Sheets` (заменить `PASTE_SPREADSHEET_ID_HERE`).
 
 ---
 
-## Шаг 4 — Выбрать тест и запустить
+## Шаг 4 — Порядок запуска тестов
 
-1. Открыть ноду **`Set Test Selector`**
-2. Изменить поле **`test_id`** (число от 1 до 7)
-3. Сохранить ноду
-4. Нажать **Test workflow**
-5. Дождаться выполнения — 2–5 секунд
+**Обязательный порядок для v2.4:**
 
-**Порядок запуска тестов v2.3:**
-
-1. **Тест 1 первым** — сильный лид ПТС, Москва, ранее падал в v2.1.
-2. **Тест 5 вторым** — content_idea (VK-пост, страх потери авто), ранее падал в v2.0.
-3. **Тест 6 третьим** — SEO-мусор. Должен вернуть `status=skipped`, Quality Gate = false.
+1. **Тест 1 первым** — ранее падал в v2.1 (JSON.parse) и v2.3 (502). Ключевой индикатор: если 502 повторится, проблема не в промпте.
+2. **Тест 5 вторым** — ранее падал в v2.0/v2.1 (content_idea, сложные строки).
+3. **Тест 6 третьим** — SEO-мусор, должен вернуть `status=skipped`, Quality Gate = false.
 4. Если Тесты 1, 5, 6 прошли → запускать Тесты 2, 3, 4, 7.
 
-**Стоп-условие:** Если хотя бы один тест вернул `parse_method=line_failed` — остановиться и сообщить оператору.
+**Стоп-условия:**
+- Если Тест 1 вернул 502 — остановиться. Проблема на уровне шлюза. Не запускать остальные.
+- Если `parse_method=line_failed` — смотреть `raw_response_preview`. Claude не вернул KEY=VALUE.
+
+**Как проверить 502:** В n8n Тест 1 покажет красную ноду на `Claude API Request`.
+Открыть ноду → вкладка Output → смотреть `statusCode` и `message`.
 
 ---
 
-## Шаг 5 — Проверить результат
+## Шаг 5 — Что проверять
 
-### В ноде `Parse Claude Line Response`:
-- Открыть ноду → вкладка **Output**
-- **Первым делом проверить `parse_method`:**
-  - `line_protocol` — парсинг успешен ✓
-  - `line_failed` — Claude вернул не KEY=VALUE; смотреть `raw_response_preview` ✗
-- Проверить: `actual_entity_type`, `actual_recommended_action`, `test_pass_basic`, `test_notes`
-- `test_pass_basic = true` — `entity_type` совпал с ожидаемым
+### Нода `Parse Claude Line Response` (вкладка Output):
+- `parse_method=line_protocol` — успех ✓
+- `parse_method=line_failed` — Claude вернул не KEY=VALUE ✗
+- `test_pass_basic=true` — entity_type совпал с ожидаемым
 
-### В ноде `Quality Gate`:
-- Тесты 1, 2, 3, 4, 5, 7 — true-ветка (строка в Google Sheets)
-- Тест 6 — false-ветка (строка НЕ добавляется)
-
-### В Google Sheets:
-- Открыть таблицу → лист `results`
-- Проверить: `entity_type`, `recommended_action`, `quality_score`, `reason`
+### Quality Gate:
+- Тесты 1, 2, 3, 4, 5, 7 → true-ветка (строка в Google Sheets)
+- Тест 6 → false-ветка (строка НЕ добавляется)
 
 ---
 
@@ -124,22 +109,20 @@ Spreadsheet ID вставить в параметр **Document ID** ноды `Ap
 
 | Тест | parse_method | entity_type | action | Дополнительно |
 |------|-------------|------------|--------|--------------|
-| 1 — Сильный лид | line_protocol | lead_signal | contact | `lead_signal_score≥82`, `contact_public` не пустой, `reason` цитирует "банки отказали" или "сегодня" |
+| 1 — Сильный лид | line_protocol | lead_signal | contact | `lead_signal_score≥82`, `contact_public` не пустой |
 | 2 — Слабый лид | line_protocol | lead_signal | ≠contact | `lead_signal_score≤50`, `region` пустой |
 | 3 — Конкурент авто | line_protocol | competitor | monitor | `competitor_strength≥80`, `terms` содержит ставку |
-| 4 — Конкурент RE | line_protocol | competitor | monitor | `competitor_strength` 60–85 (не 90+), `terms` пустой |
-| 5 — Контент-идея | line_protocol | content_idea | create_content | `offer_text` — тема без кавычек и лейбла |
+| 4 — Конкурент RE | line_protocol | competitor | monitor | `competitor_strength` 60–85, `terms` пустой |
+| 5 — Контент-идея | line_protocol | content_idea | create_content | `offer_text` без кавычек и лейбла |
 | 6 — SEO-мусор | line_protocol | irrelevant | ignore | `status=skipped`, `quality_score=1`, Quality Gate = false |
-| 7 — Рефинансирование | line_protocol | lead_signal | investigate | `lead_signal_score` 40–70, `region` — МО/Подмосковье |
+| 7 — Рефинансирование | line_protocol | lead_signal | investigate | `lead_signal_score` 40–70, `region` — МО |
 
 ---
 
-## Таблица-протокол тестирования
+## Таблица-протокол
 
-Заполнить после каждого запуска:
-
-| Тест | parse_method | entity_type | action | quality | lead | status | test_pass_basic | Прошёл? |
-|------|-------------|------------|--------|---------|------|--------|----------------|---------|
+| Тест | 502? | parse_method | entity_type | action | quality | status | test_pass_basic | Прошёл? |
+|------|------|-------------|------------|--------|---------|--------|----------------|---------|
 | 1 — Сильный лид | | | | | | | | |
 | 5 — Контент-идея | | | | | | | | |
 | 6 — SEO-мусор | | | | | | | | |
@@ -148,87 +131,85 @@ Spreadsheet ID вставить в параметр **Document ID** ноды `Ap
 | 4 — Конкурент RE | | | | | | | | |
 | 7 — Рефинансирование | | | | | | | | |
 
-**Стоимость:** ________ до тестов → ________ после 7 тестов → ________ за вызов
+**Стоимость:** ________ до → ________ после 7 тестов → ________ за вызов
 
 ---
 
-## Шаг 6 — Замерить стоимость API
+## Шаг 6 — Замерить стоимость
 
-1. Зайти в личный кабинет шлюза (aiprimetech.io) **до** первого теста — записать баланс.
+1. Записать баланс на aiprimetech.io **до** первого теста.
 2. Запустить все 7 тестов.
-3. Снова проверить баланс.
-4. Разделить разницу на 7 → стоимость одного вызова v2.3.
-5. Сравнить с базовым v1: $0.0115 за вызов.
+3. Записать баланс после.
+4. Разделить разницу на 7.
 
-Ожидаемый диапазон v2.3: $0.012–0.025 за вызов (max_tokens 1100, промпт короче).
+Ожидаемый диапазон v2.4: $0.006–0.015 за вызов (compact prompt, max_tokens 700).
 
 ---
 
-## Критерии одобрения Prompt v2.3
+## Критерии одобрения Prompt v2.4
 
-**Обязательные условия (блокеры):**
+**Блокеры (все обязательны):**
 
-- [ ] **Тест 1** прошёл с `parse_method=line_protocol` — обязателен (ранее падал)
-- [ ] **Тест 5** прошёл с `parse_method=line_protocol` — обязателен (ранее падал)
-- [ ] **Тест 6** прошёл с `parse_method=line_protocol` и `status=skipped` — обязателен
-- [ ] **Ноль** тестов с `parse_method=line_failed`
+- [ ] Тест 1 прошёл без 502 и с `parse_method=line_protocol`
+- [ ] Тест 5 прошёл с `parse_method=line_protocol`
+- [ ] Тест 6 прошёл с `parse_method=line_protocol` и `status=skipped`
+- [ ] Ноль тестов с `parse_method=line_failed`
+- [ ] Ноль 502 ответов
 
 **Логические критерии (минимум 6 из 7):**
 
-- [ ] Тест 1: `entity_type=lead_signal`, `recommended_action=contact`, `lead_signal_score≥82`, `reason` цитирует фразу
+- [ ] Тест 1: `entity_type=lead_signal`, `recommended_action=contact`, `lead_signal_score≥82`
 - [ ] Тест 2: `entity_type=lead_signal`, `recommended_action≠contact`, `lead_signal_score≤50`
 - [ ] Тест 3: `entity_type=competitor`, `recommended_action=monitor`, `competitor_strength≥80`, `terms` содержит ставку
-- [ ] Тест 4: `entity_type=competitor`, `competitor_strength` от 60 до 85 (не 90+), `terms` пустой
-- [ ] Тест 5: `entity_type=content_idea`, `recommended_action=create_content`, `offer_text` без кавычек и лейбла
+- [ ] Тест 4: `entity_type=competitor`, `competitor_strength` 60–85, `terms` пустой
+- [ ] Тест 5: `entity_type=content_idea`, `recommended_action=create_content`, `offer_text` без лейбла
 - [ ] Тест 6: `status=skipped`, `quality_score=1`, Quality Gate = false
-- [ ] Тест 7: `entity_type=lead_signal`, `recommended_action=investigate`, `lead_signal_score` 40–70, `region` — МО
+- [ ] Тест 7: `entity_type=lead_signal`, `recommended_action=investigate`, `lead_signal_score` 40–70
 - [ ] Стоимость одного вызова ≤ $0.05
 
-**Если 6 из 7 логических + все блокеры → обсудить с оператором. Если 7 из 7 → одобрять.**
+**6 из 7 логических + все блокеры → обсудить. 7 из 7 → одобрять.**
 
 ---
 
-## Что делать после тестирования
+## Диагностика 502
 
-### Если промпт одобрен:
+Если 502 повторяется с v2.4 compact prompt:
 
-1. Сообщить оператору результаты и стоимость. Получить явное подтверждение.
-2. После подтверждения:
-   - Обновить `02_claude_api_single_record_analysis.json` — заменить ноду `Build Claude Request` на v2.3 структуру (KEY=VALUE, без tool_use). Также заменить Parse-ноду.
-   - Обновить `docs/PROMPTS.md` — статус v2 → Active
-   - Обновить `docs/AGENT_CAPABILITIES.md`
-   - Добавить запись в `docs/AGENT_LOG.md`
-3. Оставить TEST HARNESS JSON в репозитории как архив
-
-### Если промпт не прошёл:
-
-1. Записать: тест, поле, что получили, что ожидали, `parse_method`.
-2. Если `line_failed`: посмотреть `raw_response_preview` — Claude вернул не KEY=VALUE.
-3. Если логика плохая (entity_type, score, reason): скорректировать соответствующий раздел промпта.
-4. Обновить prompt в тестовом харнессе через Python-скрипт (не редактировать JSON вручную).
-
-### Восстановление сломанного workflow:
-
-1. Удалить испорченную версию из n8n.
-2. Повторно импортировать из Git: `n8n/workflows/02_claude_api_single_record_v2_test_harness.json`
-3. Заново привязать credentials и Spreadsheet ID.
+1. Проверить баланс шлюза (aiprimetech.io) — 402 маскируется как 502.
+2. Сделать минимальный curl вручную прямо с VPS (не через n8n):
+   ```bash
+   curl -s https://aiprimetech.io/v1/messages \
+     -H "Authorization: Bearer ВАШ_ТОКЕН" \
+     -H "anthropic-version: 2023-06-01" \
+     -H "Content-Type: application/json" \
+     -d '{"model":"claude-sonnet-4-6","max_tokens":50,"messages":[{"role":"user","content":"Say OK"}]}'
+   ```
+3. Если curl OK, но n8n даёт 502 — проблема в конфигурации HTTP Request ноды.
+4. Сравнить заголовки n8n запроса с curl запросом (n8n → ноды → Claude API Request → вкладка Input).
 
 ---
 
-## Валидация JSON перед импортом
+## Что делать после одобрения
+
+1. Получить явное подтверждение оператора.
+2. Обновить `02_claude_api_single_record_analysis.json`:
+   - Заменить Build ноду на v2.4 структуру (compact prompt, max_tokens=700, KEY=VALUE).
+   - Добавить Parse ноду `Parse Claude Line Response`.
+3. Обновить `docs/PROMPTS.md` — статус v2 → Active.
+4. Оставить TEST HARNESS JSON в репозитории как архив.
+
+---
+
+## Валидация JSON
 
 ```bash
 python3 -m json.tool n8n/workflows/02_claude_api_single_record_v2_test_harness.json > /tmp/v2_test_harness_validated.json
 ```
 
-Если команда выполнилась без ошибок — JSON валиден и готов к импорту.
-
 ---
 
-## Разрешения и безопасность
+## Безопасность
 
-- Этот тест вызывает реальный Claude API → стоимость ~$0.08–0.15 (~6–11 руб.)
-- Синтетический тест одобрён (DEC-021): тестовые вызовы входят в бюджет
-- Реальные данные не передаются — только синтетические записи из `TEST_RECORDS_V2.md`
-- Не вносить изменения в Workflow 00, 01, 02 во время тестирования
-- TEST HARNESS workflow должен оставаться **inactive** — не активировать
+- Реальные данные не передаются — только синтетические записи из `TEST_RECORDS_V2.md`.
+- TEST HARNESS должен оставаться **inactive**.
+- Не изменять Workflow 00, 01, 02 во время тестирования.

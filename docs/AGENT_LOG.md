@@ -5,6 +5,40 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — Prompt v2.4 Compact KEY=VALUE
+
+**Agent role:** project-engineer / prompt-engineer
+**Session goal:** Fix 502 Bad Gateway by reducing prompt size. v2.3 (9.2 KB) returned 502 on Test 1. Minimal curl to gateway with small prompt works. Conclusion: gateway has request-size or processing constraint.
+
+**Root cause of v2.3 502:** System prompt was 9.2 KB. With max_tokens=1100 and the record JSON, total request payload was large enough to exceed gateway processing capacity. A small curl works fine — gateway is alive and key is valid.
+
+**What was done:**
+- Rewrote `MARKETING_AGENT_PROMPT_V2.md` to v2.4: same business logic (priority order, ICP, region rules, scoring calibration, anti-hallucination, skip rules), all sections rewritten compactly. Result: 5.3 KB / 5431 bytes (target 4–6 KB). ✓
+- Renamed `Build Claude Request v2.3` → `Build Claude Request v2.4`; updated jsCode: max_tokens 1100→700, user message reminder "Return exactly 25 KEY=VALUE lines. No extra text.", same KEY=VALUE protocol, no tools, no tool_choice.
+- `Parse Claude Line Response` parse logic unchanged from v2.3.
+- Rebuilt all connections from scratch (canonical Python dict); verified Select Test Record → Build Claude Request v2.4. ✓
+- JSON validated: python3 -m json.tool exits 0; 28,139 bytes.
+- Added DEC-027: compact prompts required for this gateway (≤6 KB system prompt, max_tokens ≤700).
+- Updated COSTS_AND_LIMITS.md: prompt size vs. cost/stability table added.
+- Updated test plan (full rewrite for v2.4): history table, 502 diagnostic section, "502 column" in protocol table.
+- Updated NEXT_ACTIONS.md, AGENT_LOG.md, core/hot/recent.md.
+
+**Prompt size change:** 9241 chars (v2.3) → 5343 chars (v2.4) = −42%.
+**max_tokens change:** 1100 → 700 = −36%.
+**File size change:** 32,077 bytes (v2.3) → 28,139 bytes (v2.4).
+
+**Files updated:**
+- `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` — v2.4
+- `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` — Build v2.4, connections rebuilt (28,139 bytes)
+- `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` — full rewrite for v2.4
+- `docs/DECISIONS.md` — DEC-027 added
+- `docs/COSTS_AND_LIMITS.md` — gateway stability / prompt size section added
+- `docs/NEXT_ACTIONS.md` — Step D updated to v2.4
+- `docs/AGENT_LOG.md` — this entry
+- `core/hot/recent.md` — updated
+
+---
+
 ## 2026-06-05 — Prompt v2.3 KEY=VALUE Line Protocol
 
 **Agent role:** project-engineer / prompt-engineer
