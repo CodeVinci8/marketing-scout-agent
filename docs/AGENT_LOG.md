@@ -5,6 +5,39 @@ Most recent first.
 
 ---
 
+## 2026-06-05 — TEST HARNESS Workflow Created for Prompt v2 Testing
+
+**Agent role:** project-engineer
+**Session goal:** Create an importable n8n workflow that allows testing Prompt v2 without manual code editing.
+
+**What was done:**
+- Generated `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` using Python/json.dumps for correct escaping.
+  Workflow contains: 2 Sticky Notes (RU), Manual Start, Set Test Selector (single `test_id` field 1–7), Select Test Record (Code node — all 7 test records embedded), Build Claude Request v2 (Code node — Prompt v2 embedded, model claude-sonnet-4-6, max_tokens 1400, temperature 0.2), Claude API Request (HTTP Request, POST aiprimetech.io/v1/messages, Header Auth), Parse Claude JSON Response (Code node — strips fences, adds test_pass_basic/test_notes comparison fields), Quality Gate (IF — status=analyzed AND quality_score≥60), Append Row to Google Sheets.
+- Workflow: active=false, no real secrets, Spreadsheet ID = PASTE_SPREADSHEET_ID_HERE, credentials by name only.
+- JSON validated: `python3 -m json.tool` returns exit 0; all 7 test records confirmed present; Cyrillic correct; prompt embedding confirmed; old Workflow 02 unchanged.
+- Added DEC-023: use TEST HARNESS, not manual node editing.
+- Rewrote `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` — now explains import procedure, credential binding, test_id cycling, protocol table, cost measurement, restoration from Git if workflow breaks in UI.
+
+**Files created:**
+- `n8n/workflows/02_claude_api_single_record_v2_test_harness.json`
+
+**Files updated:**
+- `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` — full rewrite for TEST HARNESS procedure
+- `docs/NEXT_ACTIONS.md` — Step D updated with TEST HARNESS import steps
+- `docs/DECISIONS.md` — DEC-023 added
+- `docs/AGENT_LOG.md` — this entry
+- `core/hot/recent.md` — updated
+
+**Not changed:**
+- `n8n/workflows/02_claude_api_single_record_analysis.json` — untouched (production baseline)
+- `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` — untouched
+- `modules/marketing-scout-v0/TEST_RECORDS_V2.md` — untouched
+
+**Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+**Next action:** Step D — import TEST HARNESS into n8n, bind credentials, add Spreadsheet ID, run tests 1–7, record results
+
+---
+
 ## 2026-06-05 — Prompt v2 Written; Test Records and Test Plan Created
 
 **Agent role:** project-engineer / prompt-engineer

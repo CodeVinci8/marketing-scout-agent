@@ -164,25 +164,26 @@ Workflows are built incrementally — no external APIs until the platform is ver
 
 > Schema unchanged — same 25 output fields as v1. New fields planned for v2.1+.
 
-#### Step D — Test Prompt v2 on 7 Synthetic Records _(before any paid scraping)_
+#### Step D — Test Prompt v2 via TEST HARNESS _(before any paid scraping)_
 
 **Goal:** Verify v2 produces better, more actionable outputs than v1 before spending money on real data.
 
 **Cost:** ~$0.10–0.20 for 7 calls (≈ 7–15 RUB). Approved under DEC-021.
+**TEST HARNESS JSON:** `n8n/workflows/02_claude_api_single_record_v2_test_harness.json`
 
-- [ ] Follow `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` — full procedure in Russian
-- [ ] Duplicate Workflow 02 → create `02b — Prompt v2 Test (temporary)`
-- [ ] Paste v2 prompt into `Build Claude Request` node of the copy
-- [ ] Run all 7 records from `TEST_RECORDS_V2.md` one by one
-- [ ] Fill in the protocol table in the test plan guide
-- [ ] Measure cost: balance before and after → cost per call
-- [ ] Check all 10 pass criteria from the test plan
+- [ ] Validate JSON: `python3 -m json.tool n8n/workflows/02_claude_api_single_record_v2_test_harness.json > /tmp/v2_test_harness_validated.json`
+- [ ] Import `02_claude_api_single_record_v2_test_harness.json` into n8n (Import from file)
+- [ ] Bind credentials: `Claude API - Marketing Scout` and `Google Sheets - Marketing Scout Service Account`
+- [ ] Paste real Spreadsheet ID into `Append Row to Google Sheets` node
+- [ ] For each test (1–7): change `test_id` in `Set Test Selector` node → run → record results
+- [ ] Fill in the protocol table in `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`
+- [ ] Measure cost: balance before and after all 7 tests → cost per call
+- [ ] Check all pass criteria from the test plan
 - [ ] Present results to operator for approval
-- [ ] Only after approval: update `02_claude_api_single_record_analysis.json` with v2 prompt
-- [ ] Delete temporary workflow `02b` after approval
+- [ ] Only after approval: update `02_claude_api_single_record_analysis.json` Build Claude Request node with v2 prompt
 
-> Pass criteria: all 7 records meet expected entity_type, action, score ranges, and evidence citation.
-> Full criteria: `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`.
+> No manual prompt pasting or code editing required — TEST HARNESS has everything embedded.
+> Full procedure: `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`.
 
 #### Step E — Workflow 03: Firecrawl Website Analysis _(after Steps A–D complete)_
 
@@ -245,7 +246,7 @@ Not technically blocked. Deliberately paused on paid scraping (DEC-021).
 **Next actions (in order):**
 1. ~~Step A — consult uncle~~ ✓ Done — `docs/BUSINESS_REQUIREMENTS.md`
 2. ~~Step C — write Prompt v2~~ ✓ Done — `MARKETING_AGENT_PROMPT_V2.md`
-3. **Step D — run 7 synthetic tests** (small cost ~$0.10–0.20, approved under DEC-021) — follow `N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`
-4. Get operator approval on test results → update Workflow 02 with v2 prompt
+3. **Step D — import TEST HARNESS and run 7 tests** (~$0.10–0.20, DEC-021) — follow `N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`; import `02_claude_api_single_record_v2_test_harness.json`, change test_id 1–7
+4. Get operator approval on test results → update Workflow 02 Build Claude Request node with v2 prompt
 5. Step B — remaining minor doc fixes (`README.md`, `tools/TOOLS.md`, `core/warm/decisions.md`)
 6. Step E — Workflow 03 Firecrawl (competitor website)

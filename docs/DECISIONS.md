@@ -5,6 +5,16 @@ Most recent first.
 
 ---
 
+## DEC-023 — Prompt v2 Testing: Use TEST HARNESS Workflow, Not Manual Node Editing
+
+**Date:** 2026-06-05
+**Context:** The original plan for testing Prompt v2 was to duplicate Workflow 02, manually paste the new prompt into the Build Claude Request Code node, and manually change the Set node fields for each of the 7 test records. This requires 7 manual Set-node edits per run and risks introduction of copy-paste errors.
+**Decision:** Use a dedicated importable test harness workflow (`02_claude_api_single_record_v2_test_harness.json`) that has Prompt v2 and all 7 test records pre-embedded. The operator changes only a single `test_id` integer (1–7) to select each record. No manual prompt pasting or code editing required.
+**Benefits:** Reproducible, error-resistant, keeps the production Workflow 02 untouched, the harness can be re-imported from Git if accidentally broken in n8n UI.
+**Gate unchanged:** The production Workflow 02 is still updated only after all test criteria pass and the operator gives explicit approval.
+
+---
+
 ## DEC-022 — Prompt v2 Schema: No New Columns Until v2 Is Validated in Production
 
 **Date:** 2026-06-05

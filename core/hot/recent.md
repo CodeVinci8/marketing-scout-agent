@@ -4,6 +4,27 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-05 — TEST HARNESS Workflow Created
+
+**What was done:**
+- Created `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` — importable n8n workflow with Prompt v2 and all 7 test records pre-embedded. Operator changes only `test_id` (1–7) in Set Test Selector node.
+- Workflow: Manual Start → Set Test Selector → Select Test Record (7 records in code) → Build Claude Request v2 (prompt embedded, claude-sonnet-4-6, 1400 tokens, temp 0.2) → Claude API Request → Parse Claude JSON Response (adds test comparison fields) → Quality Gate → Append Row to Google Sheets
+- JSON validated with python3 -m json.tool; active=false; no secrets; old Workflow 02 untouched
+- DEC-023 added: TEST HARNESS approach preferred over manual node editing
+- `N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md` rewritten — import procedure, credential binding, test_id cycling, protocol table, cost measurement, Git restoration
+
+**Key decisions:**
+- TEST HARNESS is the testing method — not manual copy-paste
+- Production Workflow 02 JSON unchanged until after test approval
+
+**What is next (in order):**
+1. **Step D (immediate):** Import TEST HARNESS into n8n; bind credentials; add Spreadsheet ID; run tests 1–7; fill protocol table; measure cost; present results to operator
+2. Get operator approval → update Workflow 02 Build Claude Request with v2 prompt
+3. Step B: minor doc fixes (README.md, tools/TOOLS.md, core/warm/decisions.md DEC-018–023)
+4. Step E: Workflow 03 Firecrawl (competitor website)
+
+---
+
 ## Session: 2026-06-05 — Prompt v2 Written
 
 **What was done:**
