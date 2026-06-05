@@ -30,7 +30,7 @@
 | `keywords`          | `["веб-разработка", "сайт"]`     | Search keywords (array)              |
 | `platforms`         | `["avito", "competitor_site"]`   | Target platforms for this run        |
 | `target_urls`       | `["https://competitor.ru"]`      | Competitor URLs to scrape            |
-| `quality_threshold` | `6`                              | Minimum quality_score to pass filter |
+| `quality_threshold` | `60`                             | Minimum quality_score to pass filter (1–100 scale) |
 | `max_items`         | `20`                             | Max items to process per run         |
 | `run_id`            | `={{$now.toISO()}}`              | Unique run identifier                |
 
@@ -130,38 +130,55 @@ processes only the first item or fails.
 **Type:** `HTTP Request` node
 **Purpose:** Send normalized item to Claude API for structured analysis.
 **Method:** POST
-**URL:** `https://api.anthropic.com/v1/messages`
+**URL:** `https://aiprimetech.io/v1/messages`
 
-**Headers:**
+> **Gateway note:** The project uses a Claude-compatible API gateway, not the official Anthropic endpoint.
+> See DEC-018 and `tools/TOOLS.md` for confirmed gateway details.
+
+**Headers required (add manually in HTTP Request node):**
 ```
 anthropic-version: 2023-06-01
-content-type: application/json
 ```
+`content-type: application/json` is set automatically by n8n when body type is JSON or raw.
 
-> **Credentials:** The `x-api-key` header must be set using an n8n **Header Auth** credential
-> configured in the n8n Credentials UI with your Claude API key.
-> Do NOT write the key as a literal value or as a `{{ $credentials.x.y }}` expression —
-> that syntax is not valid in n8n. Use the credential picker on the HTTP Request node.
+> **Credentials:** Use n8n **HTTP Header Auth** credential named `Claude API - Marketing Scout`.
+> Header Name: `Authorization`, Header Value: `Bearer <token>`.
+> Select this credential in the HTTP Request node's credential picker.
+> Do NOT hardcode the token in the node body or URL.
+> Do NOT use `{{ $credentials.x.y }}` expressions — that syntax is not valid in n8n.
 
 **Body:**
 ```json
 {
   "model": "claude-sonnet-4-6",
-  "max_tokens": 1024,
-  "system": "<paste system prompt text from SYSTEM_PROMPT.md here>",
+  "max_tokens": 1200,
+  "temperature": 0.2,
+  "system": "<paste system prompt text from MARKETING_AGENT_PROMPT_V1.md here>",
   "messages": [
     {
       "role": "user",
-      "content": "Analyze this item:\n\nURL: {{ $json.source_url }}\nPlatform: {{ $json.platform }}\nText: {{ $json.text_context }}"
+      "content": "Analyze this market record. Return JSON only.\n\n{{ JSON.stringify($json) }}"
     }
   ]
 }
 ```
 
-**Output:** Claude response — the analysis JSON is returned as a string inside `content[0].text`. Parse it using the Code node shown below.
+> **Active prompt:** Use the text from `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V1.md`
+> (between the START/END markers). Do not use the old `SYSTEM_PROMPT.md` — that file is superseded.
+> Prompt v2 is planned; see `MARKETING_AGENT_PROMPT_V2_PLAN.md`.
 
-> **Note:** The response arrives as a string inside `content[0].text`. Use a subsequent
-> `Code` node or `Set` node with `JSON.parse()` to extract the structured fields.
+**Output:** Claude response — the analysis JSON is inside the `content` array.
+
+> **IMPORTANT — response parsing:** Do NOT use `content[0].text`. The response may include a
+> `thinking` content block before the text block. Always find the text item by type:
+> ```javascript
+> const textItem = $json.content.find(c => c.type === 'text');
+> let raw = textItem.text.trim();
+> // Strip markdown fences if present
+> raw = raw.replace(/^```json\s*/i, '').replace(/\s*```\s*$/, '').trim();
+> const parsed = JSON.parse(raw);
+> ```
+> See the `Parse Claude JSON Response` Code node in Workflow 02 for the full safe implementation.
 
 ---
 
@@ -169,9 +186,14 @@ content-type: application/json
 
 **Type:** `IF` node
 **Purpose:** Filter out low-quality items.
-**Condition:** `{{ $json.quality_score }} >= {{ $json.quality_threshold }}`
+**Conditions (AND):**
+- `{{ $json.status }}` equals `analyzed`
+- `{{ $json.quality_score }}` >= `{{ $json.quality_threshold }}` (default: `60` on the 1–100 scale)
+
 **True branch:** → Node 8 (Google Sheets)
 **False branch:** → counted as discarded (feed into aggregation at Node 9)
+
+> **Scale note:** `quality_threshold` is `60` by default (1–100 scale). The old default of `6` (0–10 scale) is obsolete.
 
 ---
 
@@ -181,11 +203,15 @@ content-type: application/json
 **Purpose:** Write the qualified scored record to the output sheet.
 **Operation:** Append row
 **Spreadsheet:** Configured via n8n Google Sheets credential + Sheet ID
-**Columns:** All 25 columns from `docs/TABLE_SCHEMA.md`
-**Mapping:** Each schema column mapped to the corresponding `$json` field.
+**Sheet name:** `results`
+**Mapping:** `autoMapInputData` — n8n matches JSON field names to column headers automatically.
 
-> **Credentials:** Set up Google Sheets OAuth2 in the n8n Credentials UI.
-> The spreadsheet must be shared with the authenticated account.
+> **Credentials:** Use Service Account credential named `Google Sheets - Marketing Scout Service Account`.
+> The spreadsheet must be shared with the service account email as Editor.
+> Do NOT use OAuth2 — see DEC-016.
+
+> **Column header requirement:** Row 1 of sheet `results` must be a single horizontal header row
+> with field names exactly matching the JSON output (case-sensitive). See DEC-017.
 
 ---
 
