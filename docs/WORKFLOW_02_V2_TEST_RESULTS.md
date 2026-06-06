@@ -76,12 +76,12 @@ See: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md` — DEC-033.
 | test_id | Scenario | route | processing_status | parse_method | repair | result | notes |
 |---------|----------|-------|-------------------|--------------|--------|--------|-------|
 | A | Telegram hot PTS lead | `results` | parsed_success | primary_json | false | **PASS** | entity=lead_signal, lead=97, quality=98, action=contact |
-| B | Weak/review lead | `content_queue` → **`review_queue`** (after patch) | parsed_success | repaired_json | true (success) | **PASS after patch** | Exposed routing-priority bug — see below |
+| B | Weak/review lead | **`review_queue`** | parsed_success | primary_json | false | **PASS (live, after DEC-036 patch)** | Live re-run confirms fix: lead_signal_score≈38, no longer goes to content_queue. Originally exposed the routing-priority bug |
 | C | Competitor MFO | `monitor_queue` | parsed_success | primary_json | false | **PASS** | comp_strength=88, quality=88, action=monitor. `company_name` was empty → fixed with fallback |
 | D | Forced Markdown → repair | `results` | parsed_success | mock_markdown_repair | true (success) | **PASS** | lead=88, quality=82, action=contact. Validates Repair Formatter. `service_type="займ под залог ПТС"` → normalized to `pts_loan` |
 | E | Unrepairable response | `technical_errors` | technical_error | — | failed | **PASS** | needs_manual_review=true. Validates technical_errors path |
 
-**Outcome:** A, C, D, E passed as-is. **B exposed a routing-priority bug** — a weak/potential lead with product fit was classified by Claude (via repair) as `content_idea` and routed to `content_queue` instead of `review_queue`. Business intent: weak/potential leads with product fit must go to `review_queue`, not be siloed as content.
+**Outcome:** All five tests A–E now pass live. **B originally exposed a routing-priority bug** — a weak/potential lead with product fit was siloed into `content_queue` instead of `review_queue`. After the DEC-036 patch, the live B re-run routes correctly to `review_queue` (`parse_method=primary_json`, `lead_signal_score≈38`, `repair_used=false`). Business intent satisfied: weak/potential leads with product fit go to `review_queue`. Full project gate review: `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md`.
 
 ### Patch applied (DEC-036)
 
@@ -94,7 +94,7 @@ See: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md` — DEC-033.
 
 **Validation (logic simulation, 2026-06-06):** A→results, B→review_queue, C→monitor_queue (company_name=`МФО / частный кредитор`), D→results (service_type=`pts_loan`), all `test_pass_basic=true`. Repair Formatter validated by D; technical_errors path validated by E.
 
-**Retest required:** Test B (the fix), then optional A/D quick smoke. No re-run of C/E needed (logic for those paths unchanged).
+**Retest status:** ✅ Test B re-run live — passes (`route=review_queue`). A/C/D/E confirmed. All A–E green. Next gate is productionization, not more A–E runs — see `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md`.
 
 ### API cost — Tests A–E run
 
@@ -116,7 +116,7 @@ The original approval gate (4 of 5 extended tests pass) cannot be met with the c
 
 - [x] Resilient Output Layer implemented in TEST HARNESS (dynamic-sheet, per `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`)
 - [x] Test A passes: hot lead → `results` tab, `parse_method=primary_json`
-- [x] Test B passes: weak lead → `review_queue` tab (after DEC-036 patch — **retest required to confirm live**)
+- [x] Test B passes: weak lead → `review_queue` tab (DEC-036 patch confirmed live — `primary_json`, lead≈38)
 - [x] Test C passes: competitor → `monitor_queue` tab (company_name fallback added)
 - [x] Test D passes: forced Markdown input → Repair Formatter → repaired JSON routed correctly (service_type normalized)
 - [x] Test E passes: malformed input → `technical_errors` tab

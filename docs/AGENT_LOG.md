@@ -5,6 +5,32 @@ Most recent first.
 
 ---
 
+## 2026-06-06 — Full Project Review After Resilient Router A–E (Review 03)
+
+**Agent role:** project-engineer
+**Session goal:** Full project review after Tests A–E passed on the dynamic-sheet resilient router. Review only — no workflow/code/file deletions.
+
+**What was done (inspection):**
+- Verified active workflow `02_..._resilient_router_test_dynamic_sheet.json`: active=false; no real secrets (1× PASTE_SPREADSHEET_ID_HERE, 3× PASTE_CREDENTIAL_ID_HERE; credential names only); no tool_use/tool_choice/tools; no KEY=VALUE; dynamic Sheet Name `={{ $json.route }}`; route validation present; all 47 emitted fields match the RU guide header exactly; all required schema fields present; explicit readable connections (15 nodes, two-pass + single dynamic sheet).
+- Prompt review: primary 3922 chars (sonnet-4-6, max_tokens 1400, temp 0.2, JSON-only constraints, no stale experiment formats); repair 1187 chars (max_tokens 900, temp 0.0, "Do not add new facts/invent", "Extract only", "Return JSON only"). No conflicting instructions.
+- Schema/security review: secrets scan clean; deployment + disk constraints documented.
+- Found drift: `TABLE_SCHEMA.md` documents only 25 core columns (no 6 technical columns / 6 tabs); test harness writes 16 test-only columns into tabs (must be stripped for production); `raw_response_preview` truncates at 1200 in code vs 300 in design doc.
+
+**Output created:** `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md` — executive summary; approved / not-approved; blockers; important & nice-to-have fixes; cleanup candidates; security/ops; first-scraper readiness; exact next implementation prompt + smoke tests; final GO (conditional on hardening).
+
+**Verdict:** Architecture GO. First scraper conditional-GO after productionization. Recommended first source: Firecrawl single competitor website.
+
+**Files updated:**
+- `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md` (created)
+- `docs/WORKFLOW_02_V2_TEST_RESULTS.md` (B live pass, A–E all green)
+- `docs/AGENT_CAPABILITIES.md` (approved-capabilities section)
+- `docs/NEXT_ACTIONS.md` (Step D5 review-first gate + blockers)
+- `docs/AGENT_LOG.md`, `core/hot/recent.md`
+
+**No workflow JSON modified, no files deleted, no git rm, no external calls.**
+
+---
+
 ## 2026-06-06 — Resilient Router Patch After Tests A–E (DEC-036)
 
 **Agent role:** project-engineer

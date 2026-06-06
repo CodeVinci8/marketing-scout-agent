@@ -4,6 +4,31 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-06 — Full Project Review After A–E (Review 03)
+
+**What was done:**
+- Full review-only pass before the first scraper. Created `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md`.
+- Verified active workflow `..._dynamic_sheet.json`: active=false, no secrets, no tool_use, no KEY=VALUE, dynamic Sheet Name `={{ $json.route }}`, route validation present, 47 emitted fields == RU guide header, two-pass + single dynamic sheet, connections explicit.
+- Prompts OK: primary 3922 chars (sonnet-4-6, 1400/0.2, JSON-only); repair 1187 chars (900/0.0, no invent / extract only / JSON only).
+- A–E all pass live (B confirmed: review_queue, primary_json, lead≈38). Cost A–E ≈ $0.075.
+
+**Top findings:**
+1. Workflow still a **test harness** — writes 16 test-only columns into tabs; must be stripped for production.
+2. `TABLE_SCHEMA.md` drift — only 25 core columns documented; missing 6 technical columns + 6 tab names (blocker for operator tab setup).
+3. `raw_response_preview` truncation mismatch (code 1200 vs design doc 300).
+4. No dedup key — real scrapes will create duplicate rows.
+5. Dynamic node won't create missing tabs — all 6 must pre-exist or run errors.
+
+**Verdict:** Architecture GO. First scraper conditional-GO after hardening. Recommended first source: **Firecrawl single competitor website** (monitor_queue path proven by Test C).
+
+**What is next (in order):**
+1. **Operator: commit** review docs.
+2. Implement production resilient Workflow 02/03 (no test fields) + Firecrawl single-URL scraper — see review §10.
+3. Reconcile TABLE_SCHEMA (31-col production header + 6 tabs); add dedup key; reconcile raw_response_preview length.
+4. Run smoke tests (review §11). Then Cleanup Phase 2 (git rm the 2 Switch-based workflows).
+
+---
+
 ## Session: 2026-06-06 — Resilient Router Patch After Tests A–E (DEC-036)
 
 **What was done:**

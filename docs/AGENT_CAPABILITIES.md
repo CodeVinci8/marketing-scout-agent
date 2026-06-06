@@ -1,8 +1,17 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-06 (updated after Resilient Router Tests A–E and DEC-036 routing patch)
+**Last updated:** 2026-06-06 (updated after full project review — `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md`)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
-**Test status:** Resilient Router (dynamic-sheet) Tests A–E run. A, C, D, E passed. B exposed a routing-priority bug (weak lead → content_queue), fixed in `Normalize + Route` (DEC-036); B retest pending. Repair Formatter validated by Test D; technical_errors path validated by Test E.
+**Test status:** Resilient Router (dynamic-sheet) Tests A–E **all pass live**. B retest confirmed (`review_queue`, `primary_json`, lead≈38) after DEC-036 routing patch. Repair Formatter validated by Test D; technical_errors path validated by Test E.
+
+## Currently Approved Capabilities (Post Tests A–E, 2026-06-06)
+
+- **Two-pass resilient analysis** of a single Russian secured-lending record: Primary Claude → parse → conditional JSON repair → parse → normalize → route.
+- **Six-way routing** via one dynamic Google Sheets node: `results`, `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`, `technical_errors`.
+- **Field hardening:** route validation (invalid → technical_errors), `service_type` enum normalization, `recommended_action` enum guard, competitor `company_name` descriptive fallback (DEC-036).
+- **Failure isolation:** technical errors separated from business skips; `needs_manual_review` flag set.
+
+**Not yet approved:** production resilient Workflow 02 (still a test harness with test-only columns), any real-source ingestion, multi-item/batch, `content_idea` production handling. See `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md` §3–4.
 **Business requirements:** `docs/BUSINESS_REQUIREMENTS.md`
 
 ---

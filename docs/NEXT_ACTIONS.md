@@ -232,10 +232,28 @@ Workflows are built incrementally — no external APIs until the platform is ver
 - [x] Run Test C (test_id=C): competitor → `monitor_queue`. PASS. `company_name` was empty → descriptive fallback added (DEC-036).
 - [x] Run Test D (test_id=D): mock_markdown → repair → `results`. PASS. Validates Repair Formatter. `service_type` free text → normalized to `pts_loan` (DEC-036).
 - [x] Run Test E (test_id=E): mock_unrepairable → `technical_errors`. PASS. Validates technical_errors path.
-- [ ] **Retest Test B** (live) after DEC-036 patch → confirm `route=review_queue`, `needs_manual_review=TRUE`. Then optional A/D smoke.
-- [ ] All pass → approve for Phase 4 + Cleanup Phase 2
+- [x] **Retest Test B** (live) after DEC-036 patch → confirmed `route=review_queue` (`primary_json`, lead≈38).
+- [x] All A–E pass live → full project review done.
 
 > Patch applied 2026-06-06 (DEC-036): routing priority fixed (weak lead before content_queue), service_type enum normalization, company_name competitor fallback. JSON re-validated VALID. API cost for A–E run: $0.0750 (see `docs/COSTS_AND_LIMITS.md`).
+
+#### Step D5 — Full Project Review (review-first gate) ✓ DONE 2026-06-06
+
+**Read this before any implementation:** `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md`
+
+Review verdict: **GO for first scraper, conditional on hardening.** Architecture approved; productionization required first.
+
+**Blockers before first scraper (from the review):**
+- [ ] Build a **production** resilient Workflow 02 (or new Workflow 03) whose `Normalize + Route` emits only 25 business + 6 technical fields — **no test-harness columns** (`test_id/expected_*/actual_*/test_pass_basic/test_notes`).
+- [ ] Reconcile `TABLE_SCHEMA.md` — document the production 31-column header + all six tab names (operator-facing source of truth).
+- [ ] Operator pre-creates all six tabs (dynamic node does not create missing tabs).
+- [ ] Record Firecrawl credential + free-tier limits in `COSTS_AND_LIMITS.md`.
+
+**Important fixes before first scraper:** reconcile `raw_response_preview` length (code 1200 vs doc 300 → pick 500); add dedup key (`source_url + parsed_at`); add append-node error handling; confirm B live retest logged (done).
+
+**First scraper recommendation:** Firecrawl on one public competitor website (lowest risk; `monitor_queue` path already validated by Test C). Then Avito/Apify → Telegram → Instagram later.
+
+**Next implementation prompt + smoke tests:** see `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md` §10–11.
 
 **Phase 4 — Migrate to production Workflow 02:**
 - [ ] After operator approval: apply Resilient Output Layer to `02_claude_api_single_record_analysis.json`
