@@ -257,15 +257,19 @@ Review verdict: **GO for first scraper, conditional on hardening.** Architecture
 - [x] Obsolete Switch-based workflows removed via `git rm` (`..._test.json`, `..._test_fixed.json`).
 - [x] Docs updated: TABLE_SCHEMA, RESILIENT_OUTPUT_LAYER, TEST_RESULTS, CLEANUP_AUDIT, CAPABILITIES, COSTS, ROADMAP, DECISIONS (DEC-037).
 
-#### Step D7 — Production smoke test, then Firecrawl ← NEXT
+#### Step D7 — Production smoke test ⚠️ FIRST ATTEMPT FAILED (2026-06-06)
 
-1. [ ] Import `02_claude_api_single_record_v2_resilient_router_production.json` into n8n (active stays false).
-2. [ ] Set the Google Sheets credential (`Google Sheets - Marketing Scout Service Account`) and the real **Spreadsheet ID** on `Append to Dynamic Route Sheet`; set the Claude credential (`Claude API - Marketing Scout`) on both HTTP nodes.
-3. [ ] Create the 6 tabs (`results, review_queue, monitor_queue, content_queue, skipped_log, technical_errors`) with the 33-column header row from `docs/TABLE_SCHEMA.md`.
-4. [ ] In `Set Source Record`, replace `PLACEHOLDER_TEXT_REPLACE_BEFORE_RUN` with one real competitor record; set `source_url`.
-5. [ ] Record Claude balance, run once manually, record balance after.
-6. [ ] Verify: a single row appears in the correct tab, **no test columns present**, `route`/`processing_status`/`parse_method` correct.
-7. [ ] If smoke passes → proceed to **Firecrawl single-URL scraper** (Stage 2 / review §10): build `03_firecrawl_single_url_resilient.json` fronting the production resilient layer; check `source_url` before append.
+First manual smoke test failed: primary parse failed → **Repair API 502 Bad Gateway** → row went to `technical_errors` with primary diagnostics lost. Workflow patched (DEC-038): primary raw preserved, compact repair payload (max_tokens 700, smaller schema), dual Primary+Repair error diagnostics, primary prompt reminder, smoke `text_context` preset to the competitor example. **Retest required.**
+
+#### Step D8 — Clean Sheets headers, re-import patched workflow, rerun smoke ← NEXT
+
+1. [ ] **Clean the 6 Sheets tabs to exactly the 33-column header** (`docs/TABLE_SCHEMA.md`) — no test columns, internal English names only. Tabs: `results, review_queue, monitor_queue, content_queue, skipped_log, technical_errors`.
+2. [ ] Re-import the **patched** `02_claude_api_single_record_v2_resilient_router_production.json` (active stays false).
+3. [ ] Set Google Sheets credential + real **Spreadsheet ID** on `Append to Dynamic Route Sheet`; set Claude credential on both HTTP nodes.
+4. [ ] `Set Source Record` already carries the competitor smoke record (`text_context` preset). Adjust only if needed.
+5. [ ] Record Claude balance before, run once manually, record balance after (`docs/COSTS_AND_LIMITS.md`).
+6. [ ] Verify expected: `route=monitor_queue`, `entity_type=competitor`, `recommended_action=monitor`, `processing_status=parsed_success`, `parse_method=primary_json` (or `repaired_json`). If it still lands in `technical_errors`, confirm `parse_error` now shows **both** `Primary:` and `Repair:` and `raw_response_preview` shows the primary raw response — then diagnose the 502 (gateway retry/backoff).
+7. [ ] **Firecrawl remains BLOCKED until this smoke test passes** (DEC-038). Only then build `03_firecrawl_single_url_resilient.json`.
 
 **First scraper recommendation:** Firecrawl on one public competitor website (lowest risk; `monitor_queue` path validated by Test C). Then Avito/Apify → Telegram → Instagram later.
 

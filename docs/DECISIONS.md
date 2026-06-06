@@ -5,6 +5,25 @@ Most recent first.
 
 ---
 
+## DEC-038 — Production Smoke-Test Patch: Diagnostics Preservation, Compact Repair, 33 English Columns
+
+**Date:** 2026-06-06
+**Context:** First manual production smoke test (competitor website record) failed: primary parse failed, the Repair API returned **502 Bad Gateway / upstream_error**, the row went to `technical_errors`, and `raw_response_preview` showed only the repair error — the primary raw response was lost, making diagnosis impossible.
+
+**Decisions:**
+1. **`technical_errors` rows must preserve both failure stages.** `parse_error` = `Primary: <primary error> | Repair: <repair error>` (≤800). `raw_response_preview` keeps the **primary** raw response first (≤500), appending the repair error only if space remains. The primary raw response is never overwritten by the repair error alone. `Parse Primary JSON` now always emits `primary_parse_error`, `primary_raw_response_preview`, `content_summary`, `original_record`; `Parse Repaired JSON` reads them back via `$('Parse Primary JSON')`.
+2. **Compact repair payload to reduce gateway 502 risk.** Repair request: trimmed `original_record` (essential fields, `text_context`≤500), `primary_raw_response_preview`≤500, `primary_parse_error`≤300, compact schema + enum summary, `max_tokens=700`, `temperature=0`. System prompt opens "You are a JSON repair formatter, not a market analyst…". No tool_use, no KEY=VALUE.
+3. **Production schema is 33 English machine columns** (25 core + 8 technical). Every Sheets tab uses exactly this header. **Russian/human display names are deferred to the Telegram/reporting layer** — they are not part of the internal schema, and the Sheets headers must stay English.
+4. **`parse_method=technical_error`** is used when repair fails (distinct from `primary_json` / `repaired_json` success values).
+5. **Primary prompt reminder** added (short): JSON-only output, and classify competitor-website records as `competitor` when they offer secured lending services/rates/speed/contact/Moscow-MO coverage. No methodology bloat, no format experiment.
+6. **No new workflow copy** — patched in place (validation passed). Firecrawl stays blocked until the patched production smoke test passes.
+
+**Verification:** `python3 -m json.tool` VALID; output schema still exactly 33 fields; leakage scan shows no test/mock/tool_use/KEY=VALUE; logic simulation of primary-fail + repair-502 chain produces a `technical_errors` row carrying both errors and the primary raw preview (33 fields).
+
+**File:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json` (patched).
+
+---
+
 ## DEC-037 — Production Resilient Workflow Strips Test Fields; Test Harness Retained as Evidence
 
 **Date:** 2026-06-06

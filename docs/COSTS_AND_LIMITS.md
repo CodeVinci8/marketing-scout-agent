@@ -174,6 +174,17 @@ Covers ~5 primary Claude calls plus repair calls triggered by Test D (mock_markd
 - **Estimate:** `cost ≈ N × baseline × (1 + failure_rate)`. At a 20–30% failure rate, ~1.2–1.3× baseline overall.
 - **Before any scraper run, the operator must record the Claude balance before and after** the run and log the delta here. Real scraped pages are longer than test records, so per-record cost will be higher than the $0.0115 short-record baseline — measure on the first Firecrawl run.
 
+### Production smoke test #1 — FAILED (2026-06-06, DEC-038)
+
+The first manual production smoke test consumed a **primary call + a repair attempt**. The repair returned **502 Bad Gateway**, so it produced no usable output but **may still have cost or counted against the gateway depending on its billing behavior** — a 502 can occur before or after token processing. The compact-repair patch (max_tokens 700, smaller payload) lowers both the 502 risk and the worst-case repair cost.
+
+**Retest cost discipline:** record the Claude balance **before and after** the patched smoke run, and log the delta here. If the row still hits `technical_errors`, the `parse_error` now shows whether the cost was a primary failure, a repair 502, or both.
+
+| Run | Balance before | Balance after | Delta | Outcome |
+|-----|----------------|---------------|-------|---------|
+| Smoke #1 (pre-patch) | _record_ | _record_ | _record_ | FAILED — repair 502 |
+| Smoke #2 (post-patch) | _record_ | _record_ | _record_ | _pending_ |
+
 ---
 
 ## Budget Alerts

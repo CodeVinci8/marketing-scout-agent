@@ -5,6 +5,13 @@
 **Status:** ✅ Implemented & tested (A–E pass). Production workflow built with test fields stripped.
 **Related decisions:** DEC-033 (design), DEC-035 (dynamic-sheet routing), DEC-036 (routing priority + normalization), DEC-037 (production strip + cleanup)
 
+> **Smoke-test failure + patch (2026-06-06, DEC-038):** The first manual production smoke test (a competitor website record) failed: primary parse failed, the **Repair API returned 502 Bad Gateway / upstream_error**, and the row went to `technical_errors` with `raw_response_preview` showing only the repair error — the primary raw response was lost. Patch applied (no new workflow copy):
+> 1. **Preserve primary diagnostics** — `Parse Primary JSON` now emits `primary_parse_error`, `primary_raw_response_preview` (≤500), `content_summary`, and `original_record` on every failure branch (no-text-item, invalid-JSON, HTTP error each have distinct messages).
+> 2. **Compact repair payload** — `Build Repair Request` now sends a trimmed `original_record` (essential fields only, `text_context`≤500), `primary_raw_response_preview`≤500, `primary_parse_error`≤300, a compact schema/enum summary, `max_tokens=700`, `temperature=0`, and a system prompt that opens "You are a JSON repair formatter, not a market analyst…". Smaller payload reduces gateway 502 risk.
+> 3. **Dual-error diagnostics** — `Parse Repaired JSON` reads back from `Parse Primary JSON` and, on any repair failure, emits `parse_method=technical_error`, `parse_error="Primary: … | Repair: …"`, and a `raw_response_preview` that keeps the primary raw response first. `Normalize + Route` caps `parse_error` to ~800 and `raw_response_preview` to 500.
+> 4. **Primary prompt reminder** — short closing line reinforcing JSON-only output and competitor classification for website records (no methodology bloat).
+> Output stays at the 33 production columns. No test fields reintroduced.
+
 > **Implementation note (2026-06-06):** The final implementation uses **dynamic-sheet routing** (one Google Sheets node, `Sheet Name = {{ $json.route }}`) instead of the Switch-by-Route node described in older sections, and the **Repair Formatter uses `claude-sonnet-4-6`** (same gateway), not Haiku — gateway model availability drove this. The **production** workflow is `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json` (no test/mock fields; 33 output columns; `raw_response_preview` capped at 500). The dynamic-sheet **test harness** (`..._test_dynamic_sheet.json`) is retained as A–E evidence. Sections below are the original design; where they differ, DEC-035/036/037 and this note govern.
 
 ---

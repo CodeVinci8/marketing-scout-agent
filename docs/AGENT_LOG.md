@@ -5,6 +5,32 @@ Most recent first.
 
 ---
 
+## 2026-06-06 — Production Smoke-Test Patch (DEC-038)
+
+**Agent role:** project-engineer
+**Session goal:** Patch the production resilient workflow after the first manual smoke test failed (competitor record → primary parse failed → Repair API 502 Bad Gateway → technical_errors with lost primary diagnostics).
+
+**Root cause:** (1) `Parse Repaired JSON` overwrote `raw_response_preview` with only the repair error, discarding the primary raw response; (2) the repair payload was large (full schema, max_tokens 900), raising 502 risk.
+
+**What was done (patched in place — no new copy):**
+- `Parse Primary JSON`: every failure branch now emits `primary_parse_error`, `primary_raw_response_preview` (≤500), `content_summary`, `original_record`; distinct messages for no-content-array, "no text item", and "Primary JSON parse failed:".
+- `Build Repair Request`: compact payload — trimmed `original_record` (essential fields, `text_context`≤500), `primary_raw_response_preview`≤500, `primary_parse_error`≤300, compact schema+enum summary, `max_tokens=700`, `temperature=0`; system prompt opens "You are a JSON repair formatter, not a market analyst… If raw response is unusable, return an object that can be routed to technical_errors."
+- `Parse Repaired JSON`: reads back `$('Parse Primary JSON')`; on any repair failure emits `parse_method=technical_error`, `parse_error="Primary: … | Repair: …"`, and a `raw_response_preview` that keeps the primary raw response first; route=technical_errors, needs_manual_review=true, repair_used=true, repair_status=failed.
+- `Normalize + Route`: `parse_error` capped to 800, `raw_response_preview` to 500; technical_error pass-through preserves diagnostics; service_type + company_name normalization unchanged.
+- `Build Primary Claude Request`: appended a short reminder (JSON-only; classify competitor-website records as competitor when offering secured lending/rates/speed/contact/Moscow-MO). Prompt ~4.1 KB, no methodology bloat.
+- `Set Source Record`: preset `text_context` to the competitor smoke example so the retest is ready-to-run.
+- Output stays at the **33 production columns**; no test-only fields; no tool_use; no KEY=VALUE.
+
+**Verification:** `python3 -m json.tool` VALID; schema = exactly 33 fields; leakage scan clean; logic simulation of primary-fail + repair-502 chain → `technical_errors` row carrying both Primary+Repair errors and the primary raw preview, 33 fields.
+
+**Files updated:**
+- `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json` (patched)
+- `docs/TABLE_SCHEMA.md`, `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`, `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md`, `docs/NEXT_ACTIONS.md`, `docs/DECISIONS.md` (DEC-038), `docs/COSTS_AND_LIMITS.md`, `docs/AGENT_CAPABILITIES.md`, `docs/AGENT_LOG.md`, `core/hot/recent.md`
+
+**Next:** operator cleans Sheets headers to 33 columns, re-imports patched workflow, reruns the manual smoke test. Firecrawl stays blocked until it passes.
+
+---
+
 ## 2026-06-06 — Production Hardening + Cleanup (DEC-037)
 
 **Agent role:** project-engineer

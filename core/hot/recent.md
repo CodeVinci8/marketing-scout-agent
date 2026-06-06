@@ -4,6 +4,30 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-06 — Production Smoke-Test Patch (DEC-038)
+
+**What was done:**
+- First manual production smoke test FAILED: competitor record → primary parse failed → **Repair API 502 Bad Gateway** → technical_errors, and `raw_response_preview` showed only the repair error (primary raw lost).
+- Patched production workflow in place (no new copy):
+  - `Parse Primary JSON`: preserves `primary_parse_error` + `primary_raw_response_preview` (≤500) + `content_summary` + `original_record` on all failure branches.
+  - `Build Repair Request`: compact payload (trimmed original_record, previews capped, compact schema/enums, max_tokens 700, temp 0); prompt "JSON repair formatter, not a market analyst".
+  - `Parse Repaired JSON`: reads back Parse Primary; on failure emits `parse_method=technical_error` + `parse_error="Primary: … | Repair: …"` + raw preview that keeps primary first.
+  - `Normalize + Route`: parse_error≤800, raw_response_preview≤500.
+  - Primary prompt: short JSON-only + competitor-classification reminder.
+  - `Set Source Record`: competitor smoke text preset for ready retest.
+- Output stays 33 columns; no test fields; no tool_use/KEY=VALUE. JSON VALID; failure-chain simulation preserves both errors + primary preview (33 fields).
+- Docs updated: TABLE_SCHEMA (33-col header rule, Russian names deferred, diagnostics), RESILIENT_OUTPUT_LAYER, PROJECT_REVIEW_03 (GO → conditional/NO-GO until smoke passes), NEXT_ACTIONS (Step D8), DECISIONS (DEC-038), COSTS, CAPABILITIES.
+
+**Active workflow candidate:** `02_claude_api_single_record_v2_resilient_router_production.json` (patched).
+
+**What is next (in order):**
+1. **Operator: commit** patch + doc updates.
+2. **Operator (NEXT_ACTIONS Step D8):** clean 6 Sheets tabs to exactly the 33-column English header; re-import patched workflow; set Claude + Sheets creds + real Spreadsheet ID; record balance; run smoke once.
+3. Verify `route=monitor_queue`, `entity_type=competitor`, `processing_status=parsed_success`. If still technical_errors, `parse_error` now shows Primary+Repair → diagnose the 502.
+4. **Firecrawl blocked until smoke passes** (DEC-038). Then build `03_firecrawl_single_url_resilient.json`.
+
+---
+
 ## Session: 2026-06-06 — Production Hardening + Cleanup (DEC-037)
 
 **What was done:**

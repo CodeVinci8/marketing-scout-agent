@@ -41,6 +41,19 @@ Every tab uses the same header row. The **25 core columns** are the Column Refer
 
 These exist only in the **test harness** (`..._resilient_router_test_dynamic_sheet.json`) and must NOT appear in production tabs: `test_id`, `expected_route`, `expected_entity_type`, `expected_recommended_action`, `expected_quality_range`, `actual_entity_type`, `actual_recommended_action`, `actual_quality_score`, `actual_lead_signal_score`, `actual_content_idea_score`, `actual_competitor_strength`, `test_pass_basic`, `test_notes`, and `source_record_type`. The production workflow does not emit them.
 
+### Header rule (DEC-038)
+
+Each of the six Google Sheets tabs must use **exactly the same 33-column header row** — the 25 core columns (Column Reference below) followed by the 8 technical columns above, in that order. No extra columns. The dynamic append node auto-maps by header name, so a missing or renamed header silently drops that field.
+
+**Columns are internal English machine names.** Russian/human-friendly display names are a **future reporting/Telegram layer concern**, not part of the internal schema — do not rename the Sheets headers to Russian (DEC-038).
+
+### Diagnostics on failure (DEC-038)
+
+When a row lands in `technical_errors`, it preserves both failure stages so the operator can debug:
+- `parse_error` = `Primary: <primary parse error> | Repair: <repair error>` (capped ~800 chars).
+- `raw_response_preview` = the **primary** raw model response first (capped 500), with the repair error appended only if space remains. The primary raw response is never overwritten by the repair error alone.
+- `parse_method` = `technical_error` on a failed repair; `primary_json` / `repaired_json` on success.
+
 ### Dedup (v0.1)
 
 No dedup column is emitted yet. For v0.1, **`source_url` is the first dedup key**: a future scraper workflow should check whether `source_url` already exists in the target tab before appending. A dedicated `dedup_key` column will only be added later, with a documented justification and a matching header change (DEC-037).

@@ -6,6 +6,8 @@
 **Trigger:** Resilient Router (dynamic-sheet) Tests A–E passed. Gate review before the first scraper.
 **Active workflow under review:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json`
 
+> **UPDATE 2026-06-06 (DEC-038) — GO is now CONDITIONAL.** The first manual production smoke test FAILED: primary parse failed and the Repair API returned a **502 Bad Gateway**, sending the row to `technical_errors` with lost primary diagnostics. The production workflow was patched (preserve primary raw response, compact repair payload, dual Primary+Repair error diagnostics, primary prompt reminder). **New hard blocker: the production manual smoke test must PASS after this patch before Firecrawl.** The earlier "GO conditional on hardening" (§12) is downgraded to "NO-GO until the patched smoke test passes."
+
 ---
 
 ## 1. Executive Summary

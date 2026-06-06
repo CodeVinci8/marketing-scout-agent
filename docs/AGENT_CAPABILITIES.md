@@ -3,7 +3,7 @@
 **Last updated:** 2026-06-06 (production hardening + cleanup — DEC-037)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
 **Active workflow candidate:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json`
-**Test status:** Resilient Router Tests A–E **all pass**. Production workflow built (test/mock fields stripped, 33 columns). Obsolete Switch-based workflows removed. Remaining gate: one manual smoke test of the production workflow before connecting Firecrawl.
+**Test status:** Resilient Router Tests A–E **all pass**. Production workflow built (33 columns). **First manual production smoke test FAILED** (repair API 502 → technical_errors with lost diagnostics); workflow **patched** (DEC-038): primary raw preserved, compact repair payload, dual Primary+Repair diagnostics, primary prompt reminder. **Production workflow is NOT approved for Firecrawl until the patched manual smoke test passes.**
 
 ## Currently Approved Capabilities (Production-hardened, 2026-06-06, DEC-037)
 
@@ -16,7 +16,7 @@
 - **Production workflow** `02_claude_api_single_record_v2_resilient_router_production.json` — no test/mock fields, 33 output columns, `raw_response_preview` capped at 500, `recommended_action` normalized to route.
 
 **Still NOT approved:**
-- Real scraper ingestion (Firecrawl/Apify/Telegram/Instagram) — next step is a Firecrawl single-URL test.
+- Real scraper ingestion (Firecrawl/Apify/Telegram/Instagram) — **blocked until the patched production manual smoke test passes** (DEC-038), then a Firecrawl single-URL test.
 - Deduplication at scale (v0.1 uses `source_url` as the first manual dedup key only).
 - Telegram Control Bot.
 - Fully autonomous multi-source agent.
