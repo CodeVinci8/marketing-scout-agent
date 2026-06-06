@@ -5,6 +5,41 @@ Most recent first.
 
 ---
 
+## 2026-06-06 — Resilient Router TEST HARNESS FIXED Copy Created
+
+**Agent role:** project-engineer
+**Session goal:** Create a fixed copy of the Resilient Router TEST HARNESS with Switch by Route rebuilt using typeVersion 1 (simple string-match) to eliminate the visual missing-lines issue on n8n import.
+
+**Context:** After import of the original `_test.json`, n8n UI showed no visible connection lines from Switch by Route to the six Append nodes. Previous audit confirmed the JSON connections were structurally present but the typeVersion 3 rules-mode Switch node may not render reliably in all n8n builds. Fix: rebuild Switch with typeVersion 1 (simpler, battle-tested string-match format).
+
+**What was done:**
+- Created `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_fixed.json` by patching the source with Python json module:
+  - Workflow name changed to `...RESILIENT ROUTER TEST FIXED`
+  - versionId: `rr000000-resilient-router-v002-fixed-20260606`
+  - Switch by Route node rebuilt: typeVersion 1, dataType=string, value1=`$json.route`, 6 explicit value2/output rules (results=0, review_queue=1, monitor_queue=2, content_queue=3, skipped_log=4, technical_errors=5), fallbackOutput=5
+  - Switch by Route position: [1700, 300]
+  - 6 Append node positions moved to x=2000: results y=-100, review_queue y=100, monitor_queue y=300, content_queue y=500, skipped_log y=700, technical_errors y=900
+  - Connections entry for Switch by Route hard-deleted and rebuilt: outputs 0–5 → respective Append nodes
+  - active=false preserved; all credentials remain placeholder references; Spreadsheet ID = PASTE_SPREADSHEET_ID_HERE
+- Validated JSON: `python3 -m json.tool` → VALID. Output written to `/tmp/v2_resilient_router_fixed_validated.json`.
+- Updated `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md` — Step 1 now instructs operator to use the FIXED file, delete old workflow before import.
+- Updated `docs/AGENT_LOG.md`, `docs/NEXT_ACTIONS.md`, `core/hot/recent.md`.
+
+**Source workflow not modified:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test.json` — untouched.
+
+**Files created:**
+- `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_fixed.json`
+
+**Files updated:**
+- `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`
+- `docs/AGENT_LOG.md`
+- `docs/NEXT_ACTIONS.md`
+- `core/hot/recent.md`
+
+**Next:** Operator deletes old import in n8n, imports the FIXED file, sets credentials + Spreadsheet ID, runs Tests A–E.
+
+---
+
 ## 2026-06-06 — Resilient Router Switch Connections Audit and JSON Validation
 
 **Agent role:** project-engineer

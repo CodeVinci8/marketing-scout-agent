@@ -4,6 +4,26 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-06 — Resilient Router TEST HARNESS FIXED Copy
+
+**What was done:**
+- Created `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_fixed.json`.
+- Switch by Route rebuilt as typeVersion 1 (simple string-match: dataType=string, value1=`$json.route`, 6 value2/output rules). Previous typeVersion 3 rules-mode caused visual rendering failure in n8n UI after import.
+- Switch position: [1700, 300]. Append nodes: x=2000, y=-100 to y=900.
+- Connections for Switch by Route hard-deleted and rebuilt: outputs 0–5 → results/review_queue/monitor_queue/content_queue/skipped_log/technical_errors.
+- JSON validated VALID. Source `_test.json` unchanged.
+- Updated `N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md` Step 1: delete old workflow, import FIXED file.
+- Updated NEXT_ACTIONS.md: Phase 2 complete with FIXED file note; Phase 3 import step updated.
+
+**What is next (in order):**
+1. **Operator: commit** (new fixed workflow JSON + doc updates).
+2. **Operator**: Delete old `RESILIENT ROUTER TEST` import in n8n (if present).
+3. **Operator Phase 1**: Create 6 Sheets tabs with 47-column headers (see guide Step 4).
+4. **Operator Phase 3**: Import `_fixed.json`, set credentials + Spreadsheet ID, run Tests A–E.
+5. If all 5 pass: Phase 4 — production migration.
+
+---
+
 ## Session: 2026-06-06 — Resilient Router Switch Connections Audit
 
 **What was done:**

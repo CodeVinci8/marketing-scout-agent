@@ -22,14 +22,17 @@
 
 ## Шаг 1 — Импорт workflow в n8n
 
-1. Открой n8n в браузере (через SSH-туннель или прямой доступ).
-2. Слева: **Workflows → Import from file**.
-3. Выбери файл:
+> **Используй FIXED-версию файла.** Файл `_fixed.json` содержит Switch by Route, пересобранный с typeVersion 1 (простой строковый матч). Предыдущий файл `_test.json` имел визуальную проблему — линии от Switch к Append-нодам не отображались после импорта. FIXED-версия это исправляет.
+
+1. Если в n8n уже импортирован старый workflow с именем **"02 - Claude API Single Record Analysis v2 RESILIENT ROUTER TEST"** — **удали его** перед импортом (открой workflow → три точки → Delete).
+2. Открой n8n в браузере (через SSH-туннель или прямой доступ).
+3. Слева: **Workflows → Import from file**.
+4. Выбери файл:
    ```
-   n8n/workflows/02_claude_api_single_record_v2_resilient_router_test.json
+   n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_fixed.json
    ```
-4. Workflow откроется с именем **"02 - Claude API Single Record Analysis v2 RESILIENT ROUTER TEST"**.
-5. Убедись, что `active = false` (переключатель вверху выключен). **Не активируй workflow.**
+5. Workflow откроется с именем **"02 - Claude API Single Record Analysis v2 RESILIENT ROUTER TEST FIXED"**.
+6. Убедись, что `active = false` (переключатель вверху выключен). **Не активируй workflow.**
 
 ---
 

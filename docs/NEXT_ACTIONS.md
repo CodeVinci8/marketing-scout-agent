@@ -216,9 +216,13 @@ Workflows are built incrementally — no external APIs until the platform is ver
 - [x] Russian test guide created: `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`
 - [x] Validated with `python3 -m json.tool` — VALID
 - [x] DEC-034 added to `docs/DECISIONS.md`
+- [x] **FIXED copy created:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_fixed.json`
+  — Switch by Route rebuilt as typeVersion 1 (simple string-match, not rules-mode); positions adjusted; validated VALID
+  — **Use this file for import, not the original `_test.json`**
 
 **Phase 3 — Run Tests A–E (operator, next action):**
-- [ ] Import `02_claude_api_single_record_v2_resilient_router_test.json` into n8n _(if Switch by Route lines are not visible after import, delete workflow and re-import — this is an n8n rendering artifact; connections are correct in the JSON)_
+- [ ] **Delete** old `RESILIENT ROUTER TEST` workflow from n8n if already imported
+- [ ] Import `02_claude_api_single_record_v2_resilient_router_test_fixed.json` into n8n
 - [ ] Set credentials + Spreadsheet ID (see `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`)
 - [ ] Create 6 Sheets tabs with header rows (see guide, Step 4)
 - [ ] Run Test A (test_id=A): hot lead → `results`. Verify `test_pass_basic=TRUE`, `parse_method=primary_json`
