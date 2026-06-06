@@ -5,6 +5,28 @@ Most recent first.
 
 ---
 
+## DEC-034 — Resilient Router TEST HARNESS: 21-Node Workflow with Mock Modes
+
+**Date:** 2026-06-06
+**Context:** Building a testable harness for the Resilient Output Layer (DEC-033) without requiring real scraped data or live API calls for negative tests.
+**Decision:** The TEST HARNESS uses three mock modes in Select Test Record:
+- `none` — real Primary Claude API call (Tests A, B, C)
+- `mock_markdown` — bypasses primary API; feeds a simulated Markdown response to Repair Formatter (Test D)
+- `mock_unrepairable` — bypasses primary API; feeds an unreadable response; Parse Repaired JSON checks `mock_mode` and forces `processing_status=technical_error`, `route=technical_errors` regardless of repair output (Test E)
+
+Repair API is still called for Test E (unavoidable — the mock bypass is in Parse Repaired JSON, not before the HTTP node). One extra API call for Test E is acceptable — costs ~$0.001.
+
+IF Skip Primary API? checks `skip_primary_api === true` and routes True → Build Repair Request, False → Claude Primary API Request. The HTTP body strips `skip_primary_api` via explicit field selection in body expression so Anthropic API does not receive unknown parameters.
+
+Normalize + Route passes through confirmed `technical_error` records without re-routing. For all others it validates entity_type and recommended_action against allowed enum sets, clamps scores 1–100, and applies routing thresholds. Test assertion fields (`test_pass_basic`, `test_notes`, `expected_route`) are output alongside business fields for easy review in Sheets.
+
+**Credential pattern:** `PASTE_CREDENTIAL_ID_HERE` for both httpHeaderAuth and googleApi in all relevant nodes. `PASTE_SPREADSHEET_ID_HERE` for all 6 Append nodes. No real secrets in file.
+
+**File:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test.json`
+**Guide:** `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`
+
+---
+
 ## DEC-033 — Resilient Output Layer: Two-Pass Parse + Repair + Multi-Tab Router
 
 **Date:** 2026-06-06

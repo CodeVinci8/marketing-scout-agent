@@ -5,6 +5,42 @@ Most recent first.
 
 ---
 
+## 2026-06-06 — Resilient Router TEST HARNESS Build
+
+**Agent role:** project-engineer
+**Session goal:** Build the Resilient Output Layer TEST HARNESS — 21-node n8n workflow JSON + Russian test guide + doc updates.
+
+**Context:** Context recovery session after two consecutive output-token-limit failures in the same conversation. All file writes done via Write tool (not printed to chat) to stay within limits. Baseline for node types confirmed from `02_claude_api_single_record_v2_baseline_raw_json.json`.
+
+**What was done:**
+- Created `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test.json` — 21-node workflow, active=false, no real credentials.
+- Validated JSON with `python3 -m json.tool` — VALID.
+- Created `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md` — Russian import and test guide covering 5 tests A–E, credential setup, Sheets tab creation, column headers, cost tracking, troubleshooting.
+- Updated `docs/NEXT_ACTIONS.md` — Step D Phase 2 marked complete; Phase 3 (operator runs Tests A–E) listed as next action.
+- Added DEC-034 to `docs/DECISIONS.md` — mock mode architecture, IF skip logic, credential pattern.
+- Updated `docs/AGENT_LOG.md` and `core/hot/recent.md`.
+
+**Files created:**
+- `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test.json`
+- `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`
+
+**Files updated:**
+- `docs/NEXT_ACTIONS.md`
+- `docs/DECISIONS.md` (DEC-034 added)
+- `docs/AGENT_LOG.md`
+- `core/hot/recent.md`
+
+**Workflow structure (21 nodes):**
+- Описание Resilient Router (stickyNote) + Инструкции по тестированию (stickyNote)
+- Manual Start → Set Test Selector → Select Test Record → Build Primary Claude Request
+- IF Skip Primary API? → [True: Build Repair Request] [False: Claude Primary API Request → Parse Primary JSON → IF Primary Parse OK? → [True: Normalize + Route] [False: Build Repair Request]]
+- Build Repair Request → Claude Repair API Request → Parse Repaired JSON → Normalize + Route
+- Switch by Route (6 outputs) → 6 Append to [results / review_queue / monitor_queue / content_queue / skipped_log / technical_errors]
+
+**Next:** Operator imports workflow, sets credentials + Spreadsheet ID, creates 6 Sheets tabs, runs Tests A–E.
+
+---
+
 ## 2026-06-06 — Cleanup Phase 1 Execution
 
 **Agent role:** project-engineer

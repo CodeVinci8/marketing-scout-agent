@@ -205,21 +205,28 @@ Workflows are built incrementally — no external APIs until the platform is ver
 - [ ] Add header row to each tab — 25 existing columns + 6 new technical columns: `processing_status`, `parse_method`, `parse_error`, `raw_response_preview`, `route`, `needs_manual_review`
 - [ ] Update existing `results` tab header row to include the same 6 new columns
 
-**Phase 2 — Build Resilient Output Layer in TEST HARNESS (Claude Code generates JSON):**
-- [ ] Add `Claude JSON Repair Formatter` node (HTTP Request → same gateway, Haiku model, ~400-char prompt, max_tokens=600, temp=0.0)
-- [ ] Add `Parse Repaired JSON` Code node (same parse logic as primary)
-- [ ] Replace `Quality Gate` IF node with `Router` Switch node (6 branches per routing table in design spec)
-- [ ] Add 5 new `Append Row` Google Sheets nodes (one per new tab)
-- [ ] Update `Parse Claude JSON Response` Code node: add `processing_status`, `parse_method`, `parse_error`, `raw_response_preview` fields to output
-- [ ] Validate full JSON with `python3 -m json.tool`
+**Phase 2 — Build Resilient Output Layer in TEST HARNESS (Claude Code generates JSON) ✓ COMPLETE 2026-06-06:**
+- [x] 21-node workflow JSON created: `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test.json`
+- [x] JSON Repair Formatter node added (Claude Repair API Request, same gateway, max_tokens=900, temp=0.0)
+- [x] Parse Repaired JSON Code node added (forces technical_error for mock_unrepairable)
+- [x] Switch by Route node (6 branches: results/review_queue/monitor_queue/content_queue/skipped_log/technical_errors)
+- [x] 6 Append nodes (one per tab), credential placeholders only
+- [x] Normalize + Route Code node: full routing logic with clamp, entity validation, test assertion fields
+- [x] Mock modes: mock_markdown (Test D) and mock_unrepairable (Test E) — no real API for mocks
+- [x] Russian test guide created: `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`
+- [x] Validated with `python3 -m json.tool` — VALID
+- [x] DEC-034 added to `docs/DECISIONS.md`
 
-**Phase 3 — Run Tests A–E (per design spec Section 8):**
-- [ ] Test A: hot lead → primary parse → `results` tab. Verify `parse_method=json_primary`, `needs_manual_review=false`
-- [ ] Test B: weak lead → `review_queue`. Verify routing threshold correct
-- [ ] Test C: competitor → `monitor_queue`. Verify `competitor_strength >= 45` condition
-- [ ] Test D: inject forced Markdown input → Repair Formatter → repaired JSON → correct tab. Verify `parse_method=json_repaired`, `needs_manual_review=true`
-- [ ] Test E: inject malformed/empty input → `technical_errors` tab. Verify `parse_method=failed`, `processing_status=technical_error`
-- [ ] All 5 pass → present to operator for approval
+**Phase 3 — Run Tests A–E (operator, next action):**
+- [ ] Import `02_claude_api_single_record_v2_resilient_router_test.json` into n8n
+- [ ] Set credentials + Spreadsheet ID (see `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`)
+- [ ] Create 6 Sheets tabs with header rows (see guide, Step 4)
+- [ ] Run Test A (test_id=A): hot lead → `results`. Verify `test_pass_basic=TRUE`, `parse_method=primary_json`
+- [ ] Run Test B (test_id=B): weak lead → `review_queue`. Verify `test_pass_basic=TRUE`
+- [ ] Run Test C (test_id=C): competitor → `monitor_queue`. Verify `test_pass_basic=TRUE`
+- [ ] Run Test D (test_id=D): mock_markdown → repair → `results`. Verify `repair_used=TRUE`, `test_pass_basic=TRUE`
+- [ ] Run Test E (test_id=E): mock_unrepairable → `technical_errors`. Verify `repair_status=failed`, `test_pass_basic=TRUE`
+- [ ] All 5 pass → approve for Phase 4
 
 **Phase 4 — Migrate to production Workflow 02:**
 - [ ] After operator approval: apply Resilient Output Layer to `02_claude_api_single_record_analysis.json`
@@ -291,6 +298,6 @@ Not technically blocked. Deliberately paused on paid scraping (DEC-021).
 3. ~~Extended tests 8–12 run~~ ✓ Done — Tests 1 and 8 passed; Tests 9–12 failed with output-contract errors
 4. ~~Step D0 — Project cleanup phase 1~~ ✓ Done — 2 experiment workflow JSONs deleted; ghost files absent
 5. **Step D — Implement Resilient Output Layer** ← CURRENT (design spec: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`, DEC-033)
-   — Phase 1: operator creates 6 Sheets tabs + 6 technical columns; Phase 2: Claude Code builds TEST HARNESS JSON; Phase 3: Tests A–E; Phase 4: production migration
+   — Phase 1: operator creates 6 Sheets tabs; Phase 2: TEST HARNESS JSON built ✓; Phase 3: operator runs Tests A–E (NEXT); Phase 4: production migration
 6. Step B — remaining minor doc fixes (`README.md`, `tools/TOOLS.md`, `core/warm/decisions.md`)
 7. **Step E — Workflow 03 Firecrawl** (first real source; competitor website) — after Step D approved

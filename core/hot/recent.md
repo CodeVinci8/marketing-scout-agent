@@ -4,6 +4,24 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-06 — Resilient Router TEST HARNESS Build
+
+**What was done:**
+- Built `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test.json` — 21-node workflow, active=false, no real credentials, validated VALID with python3.
+- Architecture: Build Primary Claude Request → IF Skip Primary API? → (mock path: Build Repair Request) / (real path: Claude Primary API Request → Parse Primary JSON → IF Primary Parse OK? → [ok: Normalize+Route] [fail: Build Repair Request]) → Claude Repair API Request → Parse Repaired JSON → Normalize + Route → Switch by Route → 6 Append nodes.
+- Mock modes: `none` (Tests A/B/C — real primary API), `mock_markdown` (Test D — bypass primary, repair runs), `mock_unrepairable` (Test E — repair forced to technical_error in Parse Repaired JSON code).
+- Built `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md` — Russian test guide.
+- Added DEC-034 to DECISIONS.md. Updated NEXT_ACTIONS.md (Phase 2 complete, Phase 3 next), AGENT_LOG.md.
+
+**What is next (in order):**
+1. **Operator: commit** staged changes (2 deletions from cleanup + new harness files + doc updates).
+2. **Operator Phase 1**: Create 6 Sheets tabs with 47-column header rows (see guide Step 4).
+3. **Operator Phase 3**: Import workflow, set credentials + Spreadsheet ID, run Tests A–E.
+4. If all 5 pass: approve for Phase 4 — production migration.
+5. Deferred: TABLE_SCHEMA.md 6-tab update, COSTS_AND_LIMITS.md repair cost note, AGENT_CAPABILITIES.md repair formatter entry, cleanup phase 2.
+
+---
+
 ## Session: 2026-06-06 — Cleanup Phase 1 Execution
 
 **What was done:**
