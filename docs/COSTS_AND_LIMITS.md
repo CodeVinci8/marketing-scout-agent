@@ -104,6 +104,27 @@ Update this table after Workflow 03 is run with real URLs.
 
 ---
 
+## Firecrawl Single-URL First Test (Workflow 03, 2026-06-07, DEC-039–042)
+
+**Workflow:** `n8n/workflows/03_firecrawl_single_url_resilient.json`
+
+Cost-control rules baked into the first Firecrawl test:
+
+- **One URL only.** No crawl, no batch, no schedule (DEC-039). One Firecrawl scrape + at most two Claude calls (primary, plus repair only on parse failure) per run.
+- **`text_context` capped at 6000 chars** before Claude (DEC-042) — bounds token cost on long real pages.
+- **Firecrawl failure → `technical_errors` without a Claude call** (DEC-041) — a failed/empty scrape costs no AI spend.
+- **Repair call fires only on a primary parse failure** — clean records cost ~1× baseline.
+- **Record balance before/after.** Log Firecrawl credits (if visible) and the Claude balance delta below.
+- **No scheduled scraping** until the per-URL cost profile is known.
+
+| Run | Firecrawl credits before/after | Claude before | Claude after | Claude delta | Outcome |
+|-----|-------------------------------|---------------|--------------|--------------|---------|
+| Firecrawl single-URL #1 | _record_ | _record_ | _record_ | _record_ | _pending_ |
+
+> Real competitor pages are longer than the ~200-char test record, so the per-record Claude cost will be **higher** than the $0.0115 short-record baseline (even with the 6000-char cap). Measure on this first run and update the estimate table.
+
+---
+
 ## Gateway Stability and Prompt Size (2026-06-05, updated v2.5 MICRO)
 
 **Observed:** Requests with large system prompts (9+ KB) returned 502 Bad Gateway on the current gateway (aiprimetech.io). Minimal curl with short prompt works correctly. This indicates a request-size or processing constraint on the gateway side.

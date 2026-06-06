@@ -5,6 +5,60 @@ Most recent first.
 
 ---
 
+## DEC-039 — First Scraper Source Is Firecrawl Single URL (Not Crawl / Batch / Search)
+
+**Date:** 2026-06-07
+**Context:** Workflow 02 production resilient analyzer smoke test passed (competitor record → `monitor_queue`, `processing_status=parsed_success`, `parse_method=primary_json`, dynamic Sheets routing confirmed). The first real source can now be connected.
+
+**Decision:** The first scraper is **Firecrawl `POST /v2/scrape` on one URL at a time** — not crawl, not batch, not search, no `actions`, no browser steps. Workflow 03 (`03_firecrawl_single_url_resilient.json`) scrapes one public competitor page, normalizes the markdown into a source record, and feeds it to the same resilient analyzer.
+
+**Rationale:** Lowest risk and lowest cost. One URL keeps anti-bot exposure, credit burn, and failure surface minimal while the per-URL cost profile is still unknown. The competitor → `monitor_queue` path is already validated (Test C + production smoke). Crawl/batch/search multiply cost and failure modes before we have a cost baseline.
+
+**Trigger to expand:** Only after a passing single-URL test with a recorded cost delta may multi-URL be considered (then Avito/Apify → Telegram → Instagram).
+
+**File:** `n8n/workflows/03_firecrawl_single_url_resilient.json`. active=false, placeholders only.
+
+---
+
+## DEC-040 — Firecrawl MCP/CLI Integration Deferred
+
+**Date:** 2026-06-07
+**Context:** Firecrawl offers an HTTP API, an MCP server, and a CLI.
+
+**Decision:** Use the **n8n HTTP Request node** against `https://api.firecrawl.dev/v2/scrape` with Header Auth. The **MCP server and CLI are deferred** to a later phase for local agent / browser automation, where an interactive agent drives scraping itself.
+
+**Rationale:** The HTTP node is transparent (visible in the execution log), reuses the existing Claude HTTP pattern and the credential-by-name model, and needs no extra daemon/runtime on the constrained VPS. MCP/CLI add a local process and a different auth/runtime surface with no benefit for a single n8n-orchestrated scrape.
+
+**Doc:** `docs/FIRECRAWL_SETUP.md`.
+
+---
+
+## DEC-041 — Firecrawl Failures Route to technical_errors Without a Claude Call
+
+**Date:** 2026-06-07
+**Context:** If Firecrawl returns an HTTP/API error or an empty/unusable page, sending it to Claude would waste AI spend and produce a meaningless analysis.
+
+**Decision:** The `Normalize Firecrawl Output` Code node emits a complete **33-field `technical_errors` row** directly when (a) the Firecrawl call errored, or (b) the scrape succeeded but the cleaned markdown has **fewer than 80 meaningful characters**. The `IF Firecrawl Normalized OK?` node then sends that row straight to `Append to Dynamic Route Sheet`, **bypassing Claude**. Error rows carry `parse_method=firecrawl_error`, `processing_status=technical_error`, `needs_manual_review=true`, `route=technical_errors`, and a `raw_response_preview` (≤500) of the error/markdown.
+
+**Note on empty content:** an empty-but-successful scrape is treated as `technical_errors` (scrape succeeded, content unusable) rather than `skipped_log`, so the operator sees a pipeline issue, not a business skip (DEC-038 distinction preserved).
+
+**File:** `n8n/workflows/03_firecrawl_single_url_resilient.json` (`Normalize Firecrawl Output`, `IF Firecrawl Normalized OK?`).
+
+---
+
+## DEC-042 — text_context Capped at 6000 Chars Before Claude (Firecrawl Cost Control)
+
+**Date:** 2026-06-07
+**Context:** Real scraped pages are far longer than the ~200-char test records. Unbounded markdown would inflate Claude token cost per record and risk gateway limits.
+
+**Decision:** `Normalize Firecrawl Output` cleans the markdown (strip `\r`, collapse 3+ blank lines, trim) and caps `text_context` at **6000 characters** before it reaches `Build Primary Claude Request`. The first test uses **one URL only**; per-record cost is measured on that run and logged in `docs/COSTS_AND_LIMITS.md`.
+
+**Rationale:** 6000 chars preserves enough of a competitor landing page to classify it (offer, rates, region, contact) while bounding token cost. Tighter caps can be applied later once the cost/quality tradeoff is measured on real pages.
+
+**File:** `n8n/workflows/03_firecrawl_single_url_resilient.json` (`Normalize Firecrawl Output`).
+
+---
+
 ## DEC-038 — Production Smoke-Test Patch: Diagnostics Preservation, Compact Repair, 33 English Columns
 
 **Date:** 2026-06-06

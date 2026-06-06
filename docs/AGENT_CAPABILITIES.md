@@ -1,6 +1,6 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-06 (production hardening + cleanup — DEC-037)
+**Last updated:** 2026-06-07 (Workflow 03 Firecrawl single-URL built — DEC-039–042; production smoke test passed)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
 **Active workflow candidate:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json`
 **Test status:** Resilient Router Tests A–E **all pass**. Production workflow built (33 columns). **First manual production smoke test FAILED** (repair API 502 → technical_errors with lost diagnostics); workflow **patched** (DEC-038): primary raw preserved, compact repair payload, dual Primary+Repair diagnostics, primary prompt reminder. **Production workflow is NOT approved for Firecrawl until the patched manual smoke test passes.**
@@ -15,8 +15,16 @@
 - **Dynamic-sheet routing** — one Google Sheets node, `Sheet Name = {{ $json.route }}`, route validation enforces a valid tab.
 - **Production workflow** `02_claude_api_single_record_v2_resilient_router_production.json` — no test/mock fields, 33 output columns, `raw_response_preview` capped at 500, `recommended_action` normalized to route.
 
+**Under test (built, not yet run on a real URL):**
+- **Firecrawl single-URL ingestion** — `03_firecrawl_single_url_resilient.json` (DEC-039–042). Scrapes one public URL via `POST /v2/scrape` (markdown only), normalizes to a source record (`text_context`≤6000), feeds the copied resilient analyzer; Firecrawl failures route to `technical_errors` without a Claude call. Awaiting one manual operator run + cost delta.
+
 **Still NOT approved:**
-- Real scraper ingestion (Firecrawl/Apify/Telegram/Instagram) — **blocked until the patched production manual smoke test passes** (DEC-038), then a Firecrawl single-URL test.
+- Multi-URL crawl (`/v2/crawl`).
+- Batch scrape (`/v2/batch/scrape`).
+- Scheduled scraping (cron trigger).
+- Automated lead outreach.
+- Firecrawl MCP/CLI (deferred — DEC-040).
+- Other scraper sources (Apify/Telegram/Instagram) — after the Firecrawl single-URL test passes.
 - Deduplication at scale (v0.1 uses `source_url` as the first manual dedup key only).
 - Telegram Control Bot.
 - Fully autonomous multi-source agent.

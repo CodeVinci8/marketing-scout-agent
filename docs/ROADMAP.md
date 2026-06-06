@@ -47,17 +47,19 @@
 
 ---
 
-## Stage 2 — First Real Source Test: Firecrawl Single Competitor URL (Next)
+## Stage 2 — First Real Source Test: Firecrawl Single Competitor URL (Current)
 
-**Status:** Next immediate step (after production smoke test).
+**Status:** Workflow built (2026-06-07, DEC-039–042). Production smoke test passed. Awaiting operator manual Firecrawl test.
 **Goal:** Prove the full chain on one real source: Firecrawl scrape of one public competitor secured-lending page → resilient router → `monitor_queue`.
 
-**Why Firecrawl single URL first:** lowest risk, one URL at a time, clean text output, deterministic, low anti-bot exposure; the competitor → `monitor_queue` path is already validated by Test C.
+**Why Firecrawl single URL first:** lowest risk, one URL at a time, clean text output, deterministic, low anti-bot exposure; the competitor → `monitor_queue` path is already validated by Test C and the production smoke test (DEC-039).
 
 **Deliverables:**
-- Firecrawl credential + free-tier limits recorded in `COSTS_AND_LIMITS.md`
-- `03_firecrawl_single_url_resilient.json` fronting the production resilient layer
-- `source_url` dedup check before append (v0.1 dedup key)
+- [x] `03_firecrawl_single_url_resilient.json` — Firecrawl single-URL scrape fronting the (copied) production resilient analyzer; 17 nodes; Firecrawl failures route to `technical_errors` without Claude (DEC-041); `text_context` capped at 6000 chars (DEC-042). JSON valid; active=false.
+- [x] `docs/N8N_WORKFLOW_03_FIRECRAWL_SINGLE_URL_RU.md` + `docs/FIRECRAWL_SETUP.md` written.
+- [ ] Firecrawl credential created in n8n + free-tier limits recorded in `COSTS_AND_LIMITS.md`.
+- [ ] One manual run with a real competitor URL; cost delta recorded.
+- [ ] `source_url` dedup check before append (deferred to next iteration; v0.1 dedup key documented).
 
 **Later sources (in order):** Avito/Apify → Telegram → Instagram.
 

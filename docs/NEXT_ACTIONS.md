@@ -290,18 +290,29 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 
 > Design spec: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`. Results: `docs/WORKFLOW_02_V2_TEST_RESULTS.md`. Cleanup plan: `docs/PROJECT_CLEANUP_AUDIT.md`.
 
-#### Step E — Workflow 03: Firecrawl Website Analysis _(after Steps A–D complete)_
+#### Step E — Firecrawl Single URL Test ← ACTIVE STAGE (2026-06-07)
+
+**Context:** Production smoke test passed (competitor → `monitor_queue`, `parsed_success`, `primary_json`, dynamic routing confirmed). Workflow 03 built (DEC-039–042): `n8n/workflows/03_firecrawl_single_url_resilient.json` (17 nodes; Firecrawl single-URL scrape → copied resilient analyzer; Firecrawl failures → `technical_errors` without Claude; `text_context`≤6000; active=false; JSON valid).
+
+**Guide:** `docs/N8N_WORKFLOW_03_FIRECRAWL_SINGLE_URL_RU.md` · **Setup/safety:** `docs/FIRECRAWL_SETUP.md`
+
+**Operator tasks (in order):**
+1. [ ] Create Firecrawl credential in n8n — Header Auth, name `Firecrawl API - Marketing Scout`, Header Name `Authorization`, Header Value `Bearer <FIRECRAWL_API_KEY>`, allowed domain `api.firecrawl.dev`.
+2. [ ] Import Workflow 03; set Firecrawl + Claude + Google Sheets credentials + real Spreadsheet ID (keep Sheet Name expression `={{ $json.route }}`). Confirm the 6 tabs exist with the 33-column header.
+3. [ ] Set one public competitor URL in `Set Firecrawl URL → target_url`.
+4. [ ] Record Firecrawl + Claude balance, run once manually.
+5. [ ] Verify a row in `monitor_queue` (competitor) — or `technical_errors` if Firecrawl/Claude failed.
+6. [ ] Record cost delta in `docs/COSTS_AND_LIMITS.md`.
+7. [ ] Only after this passes, consider a real competitor URL **list** (then Avito/Apify → Telegram → Instagram).
+
+> Not approved this phase (DEC-039/040): multi-URL crawl, batch scrape, search, scheduled scraping, Firecrawl MCP/CLI, automated outreach.
+
+#### Step E (legacy plan) — Workflow 03: Firecrawl Website Analysis _(superseded by the active Step E above)_
 
 **Goal:** Take a real competitor URL, extract clean text via Firecrawl, pass to Claude v2, verify full chain.
 
-- [ ] Get Firecrawl API key → create n8n credential: HTTP Header Auth, `Authorization: Bearer <token>`, name `Firecrawl - Marketing Scout`
-- [ ] Check Firecrawl free tier limits → record in `docs/COSTS_AND_LIMITS.md`
-- [ ] Choose one real competitor URL (publicly visible page, secured lending)
-- [ ] Guide: `docs/N8N_WORKFLOW_03_FIRECRAWL_RU.md`
-- [ ] JSON: `n8n/workflows/03_firecrawl_website_analysis.json`
+- [x] Superseded by `03_firecrawl_single_url_resilient.json` (single-URL resilient build, DEC-039).
 - [ ] After first run: measure actual cost per Firecrawl + Claude call; update `docs/COSTS_AND_LIMITS.md`
-
-> Do not start this step until v2 prompt is approved (Step D). See DEC-021.
 
 #### Workflow 03 — Firecrawl Website Analysis _(after uncle consultation)_
 
@@ -356,4 +367,4 @@ Not technically blocked. Deliberately paused on paid scraping (DEC-021).
 5. **Step D — Implement Resilient Output Layer** ← CURRENT (design spec: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`, DEC-033)
    — Phase 1: operator creates 6 Sheets tabs; Phase 2: TEST HARNESS JSON built ✓; Phase 3: operator runs Tests A–E (NEXT); Phase 4: production migration
 6. Step B — remaining minor doc fixes (`README.md`, `tools/TOOLS.md`, `core/warm/decisions.md`)
-7. **Step E — Workflow 03 Firecrawl** (first real source; competitor website) — after Step D approved
+7. **Step E — Firecrawl Single URL Test** ← ACTIVE. Workflow 03 built (DEC-039–042); operator creates Firecrawl credential, sets one URL, runs once, verifies `monitor_queue`/`technical_errors`, records cost.

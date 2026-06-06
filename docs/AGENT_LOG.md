@@ -5,6 +5,31 @@ Most recent first.
 
 ---
 
+## 2026-06-07 — Workflow 03: Firecrawl Single URL → Resilient Analyzer (DEC-039–042)
+
+**Agent role:** project-engineer
+**Session goal:** Build the first real-source workflow — Firecrawl single-URL scrape fronting the production resilient analyzer — now that the Workflow 02 production smoke test passed.
+
+**What was done:**
+- Created `n8n/workflows/03_firecrawl_single_url_resilient.json` (name `03 - Firecrawl Single URL to Resilient Analyzer`, **17 nodes**, active=false) by copying the production resilient analyzer and prepending a Firecrawl front-end:
+  - `Set Firecrawl URL` (target_url=`https://example.com`, source_type=scraped_web, platform=website, parsed_at=`{{ $now.toISO() }}`, source_note=single_url_firecrawl_test) — the only place the operator changes the URL.
+  - `Build Firecrawl Request` (Code) → body `{url, formats:["markdown"], onlyMainContent:true, onlyCleanContent:false, removeBase64Images:true, blockAds:true, timeout:60000, storeInCache:true}`.
+  - `Firecrawl Scrape API` (HTTP, POST `https://api.firecrawl.dev/v2/scrape`, Header Auth cred `Firecrawl API - Marketing Scout`, `onError=continueRegularOutput`, body `={{ JSON.stringify($json) }}`).
+  - `Normalize Firecrawl Output` (Code) — on Firecrawl error OR empty/<80-meaningful-char markdown → 33-field `technical_errors` row (`parse_method=firecrawl_error`); on success → source record (markdown cleaned, `text_context`≤6000, resolved source_url/title/description), `route=''`.
+  - `IF Firecrawl Normalized OK?` — route empty → Build Primary Claude Request; route set → Append (bypass Claude).
+  - Copied analyzer nodes unchanged except the three `$('Set Source Record')` lookups → `$('Normalize Firecrawl Output')`. Dynamic Google Sheets append (`Sheet Name = {{ $json.route }}`) reused.
+- No sub-workflow call yet — analyzer nodes copied in so the file is standalone/importable (DEC-039).
+- Firecrawl failure → `technical_errors` without a Claude call (DEC-041); `text_context` capped 6000 (DEC-042); MCP/CLI deferred (DEC-040).
+
+**Verification:** `python3 -m json.tool` → VALID (also written to `/tmp/03_firecrawl_single_url_resilient_validated.json`); node count 17; active=false; placeholders only (`PASTE_SPREADSHEET_ID_HERE`, `PASTE_CREDENTIAL_ID_HERE`); no API keys; no test-only fields; no tool_use; no KEY=VALUE; dynamic sheet node present; **all three 33-field output paths (Firecrawl error row + both Normalize+Route returns) emit exactly 33 fields**; 0 stale `Set Source Record` refs; 3 `Normalize Firecrawl Output` lookups.
+
+**Files created:** `n8n/workflows/03_firecrawl_single_url_resilient.json`, `docs/N8N_WORKFLOW_03_FIRECRAWL_SINGLE_URL_RU.md`, `docs/FIRECRAWL_SETUP.md`
+**Files updated:** `docs/DECISIONS.md` (DEC-039–042), `docs/ROADMAP.md`, `docs/COSTS_AND_LIMITS.md`, `docs/AGENT_CAPABILITIES.md`, `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`, `docs/TABLE_SCHEMA.md`, `docs/NEXT_ACTIONS.md`, `docs/AGENT_LOG.md`, `core/hot/recent.md`
+
+**Next:** operator creates the Firecrawl credential, sets one competitor URL, runs once, verifies `monitor_queue` (or `technical_errors`), records cost delta. Multi-URL/crawl/batch/schedule stay deferred until this passes.
+
+---
+
 ## 2026-06-06 — Production Smoke-Test Patch (DEC-038)
 
 **Agent role:** project-engineer

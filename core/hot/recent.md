@@ -4,6 +4,26 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-07 — Workflow 03: Firecrawl Single URL → Resilient Analyzer (DEC-039–042)
+
+**What was done:**
+- Built the first real-source workflow `n8n/workflows/03_firecrawl_single_url_resilient.json` (**17 nodes**, active=false) — Firecrawl single-URL scrape fronting a **copy** of the production resilient analyzer (no sub-workflow call yet; standalone/importable).
+- Front-end nodes: `Set Firecrawl URL` (only place to change target_url) → `Build Firecrawl Request` → `Firecrawl Scrape API` (POST `api.firecrawl.dev/v2/scrape`, Header Auth, onError=continue) → `Normalize Firecrawl Output` → `IF Firecrawl Normalized OK?`.
+- `Normalize Firecrawl Output`: Firecrawl error OR empty/<80-char markdown → 33-field `technical_errors` row (`firecrawl_error`), **bypasses Claude** (DEC-041); success → source record, `text_context`≤6000 (DEC-042). Analyzer's three `$('Set Source Record')` lookups → `$('Normalize Firecrawl Output')`.
+- Decisions: DEC-039 (Firecrawl single URL first, not crawl/batch/search), DEC-040 (MCP/CLI deferred), DEC-041 (Firecrawl fail → technical_errors w/o Claude), DEC-042 (text_context≤6000).
+- Verified: JSON VALID; 17 nodes; active=false; placeholders only; no keys/test fields/tool_use/KEY=VALUE; dynamic sheet node present; all 3 output paths emit exactly 33 fields.
+- Docs: created N8N_WORKFLOW_03_FIRECRAWL_SINGLE_URL_RU.md + FIRECRAWL_SETUP.md; updated DECISIONS, ROADMAP, COSTS, CAPABILITIES, RESILIENT_OUTPUT_LAYER, TABLE_SCHEMA, NEXT_ACTIONS, AGENT_LOG.
+
+**Active workflow candidate:** `03_firecrawl_single_url_resilient.json` (Firecrawl front-end + reused resilient layer).
+
+**What is next (in order):**
+1. **Operator: commit** Workflow 03 + new/updated docs.
+2. **Operator (NEXT_ACTIONS Step E):** create Firecrawl credential (`Firecrawl API - Marketing Scout`, Header Auth, `Authorization: Bearer <key>`, domain api.firecrawl.dev); import WF03; set creds + real Spreadsheet ID; confirm 6 tabs / 33-col header.
+3. Set ONE public competitor URL → run once → verify `monitor_queue` (or `technical_errors`) → record Firecrawl + Claude cost delta in COSTS.
+4. Multi-URL/crawl/batch/schedule stay deferred until this single-URL test passes (DEC-039).
+
+---
+
 ## Session: 2026-06-06 — Production Smoke-Test Patch (DEC-038)
 
 **What was done:**
