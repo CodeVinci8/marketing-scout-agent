@@ -133,6 +133,22 @@ Cost-control rules baked into the first Firecrawl test:
 
 ---
 
+## Firecrawl URL List Mini-Batch (Workflow 04, DEC-048/049)
+
+**Workflow:** `n8n/workflows/04_firecrawl_url_list_resilient.json` — 3–5 URLs/run, manual, dedup before spend.
+
+**Cost model:** `run_cost ≈ (non_duplicate_URLs) × per_URL_cost`, where `per_URL_cost ≈ 1 Firecrawl credit + ~$0.01–0.023 Claude` (repair adds a second Claude call only on parse failure). **Duplicates cost 0** Firecrawl/Claude (skipped before spend). Pre-run Claude balance buffer ≥ $0.20 for a 5-URL run.
+
+**Per-run log template (fill one row per run, keyed by `run_id`):**
+
+| run_id | URL count | duplicates | Firecrawl credits before | Firecrawl credits after | Claude before | Claude after | technical_errors | repair_used count | cost per successful row |
+|--------|-----------|------------|--------------------------|-------------------------|---------------|--------------|------------------|-------------------|-------------------------|
+| _record_ | _3_ | _record_ | _record_ | _record_ | _record_ | _record_ | _record_ | _record_ | _record_ |
+
+> Verify dedup: a **re-run of the same list** should show `duplicates = URL count`, `Firecrawl credits delta = 0`, `Claude delta = 0`, and all rows in `skipped_log` with `parse_method=dedup_source_url`.
+
+---
+
 ## Gateway Stability and Prompt Size (2026-06-05, updated v2.5 MICRO)
 
 **Observed:** Requests with large system prompts (9+ KB) returned 502 Bad Gateway on the current gateway (aiprimetech.io). Minimal curl with short prompt works correctly. This indicates a request-size or processing constraint on the gateway side.

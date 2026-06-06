@@ -5,6 +5,39 @@ Most recent first.
 
 ---
 
+## DEC-048 — Batch Schema = 35 Columns (run_id + batch_index)
+
+**Date:** 2026-06-08
+**Context:** Workflow 04 processes several URLs per run; rows need to be grouped by run and ordered by URL position for traceability and cost attribution. The operator extended all six Google Sheets tabs from 33 to 35 columns by adding `run_id` and `batch_index`.
+
+**Decision:** The production/batch schema is now **35 columns** = 25 core + 8 technical + `run_id` + `batch_index`. `run_id` is one id per execution (`firecrawl_YYYYMMDD_HHmmss`); `batch_index` is the 1-based URL position within the run (0 if N/A). **Workflow 04 fills both on every output path** (dedup-skip, firecrawl-error, analyzer, repaired-technical-error). **Workflows 02 and 03 may leave them empty** — the dynamic append auto-maps by header, so absent fields are written blank. All six tabs must carry the same 35-column header.
+
+**Verification:** node simulation confirms all WF04 output paths emit exactly 35 keys including `run_id`/`batch_index`.
+
+---
+
+## DEC-049 — Workflow 04 Deduplicates by source_url Before Firecrawl/Claude Spend
+
+**Date:** 2026-06-08
+**Context:** Re-running an overlapping URL list would create duplicate rows and waste Firecrawl credits + Claude tokens. The plan made dedup a first-class requirement.
+
+**Decision:** Workflow 04 normalizes each URL (lowercase scheme/host, strip `#fragment`, drop tracking params `utm_*`/`gclid`/`yclid`/`fbclid`, remove trailing slash except root) into `normalized_source_url`, then looks it up in the four **business** tabs (`results`, `review_queue`, `monitor_queue`, `content_queue`) **before** calling Firecrawl/Claude. A match → `skipped_log` row with `parse_method=dedup_source_url`, `processing_status=business_skip`, **zero Firecrawl/Claude cost**. `technical_errors` and `skipped_log` are intentionally **not** hard-duplicate blockers, so previously failed/skipped URLs can be retried.
+
+**Implementation status: IMPLEMENTED (best-effort).** Four Google Sheets `read` nodes filter `source_url` (`filtersUI` lookup) with `alwaysOutputData=true` + `onError=continueRegularOutput`; `Evaluate Dedup` aggregates via `$('node').all()` and matches the exact normalized key. If a given n8n build rejects the lookup config on import, the RU guide documents a fallback (whole-tab read + compare, or temporary dedup bypass). Dedup is never silently omitted.
+
+**File:** `n8n/workflows/04_firecrawl_url_list_resilient.json`.
+
+---
+
+## DEC-050 — Future Telegram Bot May Feed URL Lists to Workflow 04; URL Discovery Deferred
+
+**Date:** 2026-06-08
+**Context:** A natural next-product step is letting the operator request analysis in plain language (e.g. «найди конкурентов по кредитам под залог авто в Москве») instead of pasting URLs.
+
+**Decision:** A future Telegram Control Bot / URL Discovery agent may collect or generate candidate URLs, estimate cost, ask for confirmation, then pass the list into Workflow 04 (whose dedup prevents repeated processing). **This is deferred** — URL discovery and NL requests are a separate future layer. **Workflow 04 accepts only manually provided URLs** (max 5). Not built now.
+
+---
+
 ## DEC-045 — Firecrawl Single-URL Competitor Websites Approved (After Two Successful Tests)
 
 **Date:** 2026-06-08

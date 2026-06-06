@@ -5,6 +5,32 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Workflow 04 Built: Firecrawl URL List Mini-Batch with source_url Dedup (DEC-048/049/050)
+
+**Agent role:** project-engineer
+**Session goal:** Build the mini-batch workflow (3–5 URLs, manual) with `source_url` dedup before spend, reusing the hardened Workflow 03 analyzer; 35-column schema (`run_id`, `batch_index`).
+
+**What was done:**
+- Created `n8n/workflows/04_firecrawl_url_list_resilient.json` (**25 nodes**, active=false) by copying Workflow 03 and adding a dedup front-end + per-URL loop:
+  - `Set URL List` (Code, run-once) — emits one item per URL, 3 `example.com` placeholders, **hard cap 5**, generates `run_id` (`firecrawl_YYYYMMDD_HHmmss`) + 1-based `batch_index`.
+  - `Loop Over Items` (Split In Batches v3, batchSize default) — processes one URL per iteration; `Append` loops back.
+  - `Normalize URL for Dedup` — lowercases scheme/host, strips `#fragment` + `utm_*`/`gclid`/`yclid`/`fbclid`, removes trailing slash (except root) → `normalized_source_url`.
+  - 4× `Dedup Lookup — results/review_queue/monitor_queue/content_queue` (Google Sheets read, filter `source_url`, `alwaysOutputData`, `onError=continue`).
+  - `Evaluate Dedup` — aggregates `$('node').all()`; duplicate → 35-field `skipped_log` row (`parse_method=dedup_source_url`, no Firecrawl/Claude); else → source record for Firecrawl.
+  - `IF Duplicate?` (parse_method == dedup_source_url) → Append / Build Firecrawl Request.
+  - Reused analyzer (Build Firecrawl Request, Firecrawl Scrape API, Normalize Firecrawl Output, Build Primary, Claude Primary, Parse Primary, IF Primary Parse OK?, Build Repair, Claude Repair, Parse Repaired, Normalize + Route, Append) — kept `.first()`/run-once semantics (valid inside the batchSize-1 loop). Adapted: Build FC Request drops the `Set Firecrawl URL` ref; Normalize FC Output takes context from `Evaluate Dedup` and adds `run_id`/`batch_index`; Normalize + Route adds `run_id`/`batch_index` to both 35-field returns.
+- **Dedup: IMPLEMENTED (best-effort)** with documented fallback in the RU guide. Duplicate URLs cost 0 Firecrawl/Claude.
+- Firecrawl-error path, dedup path, and analyzer paths all emit **exactly 35 fields** with `run_id`/`batch_index` (verified by Node simulation). `text_context`≤6000. Competitor hardening + language guard preserved.
+
+**Verification:** `python3 -m json.tool` VALID (→ `/tmp/04_firecrawl_url_list_resilient_validated.json`); 25 nodes; connection integrity OK; all 8 credential refs correct by name (placeholder IDs); active=false; only `example.com`/gateway/Firecrawl endpoints (no real URLs/secrets/Spreadsheet ID); no test fields / tool_use / KEY=VALUE; dynamic sheet node present; `Set URL List` caps at 5; dedup runs before Firecrawl. Simulation: 3 URLs → batch_index 1,2,3 + shared run_id; dup → skipped_log/dedup_source_url (35); firecrawl error → technical_errors (35); competitor → monitor_queue/generic_lending/strength 75 (35); tech-error passthrough (35).
+
+**Files created:** `n8n/workflows/04_firecrawl_url_list_resilient.json`, `docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md`
+**Files updated:** `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` (built), `docs/TABLE_SCHEMA.md` (35 cols), `docs/NEXT_ACTIONS.md`, `docs/DECISIONS.md` (DEC-048/049/050), `docs/COSTS_AND_LIMITS.md`, `docs/AGENT_CAPABILITIES.md`, `docs/ROADMAP.md`, `docs/AGENT_LOG.md`, `core/hot/recent.md`
+
+**Next:** operator imports WF04, rebinds credentials + Spreadsheet ID on all 5 Sheets nodes, runs 3 URLs, verifies routes + dedup-on-rerun (0 cost) + `run_id`/`batch_index`, records cost; then max 5. Crawl/batch/schedule/URL-discovery remain blocked.
+
+---
+
 ## 2026-06-08 — Workflow 03 Firecrawl Single URL PASSED; Workflow 04 Mini-Batch Planned (DEC-045/046/047)
 
 **Agent role:** project-engineer

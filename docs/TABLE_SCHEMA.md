@@ -11,6 +11,10 @@ Claude API fills the analysis columns; n8n fills the metadata columns.
 
 The production workflow `02_claude_api_single_record_v2_resilient_router_production.json` writes one row to **one of six tabs**, chosen dynamically by the `route` field (Sheet Name = `={{ $json.route }}`).
 
+> **Workflow 03 (Firecrawl single URL, DEC-039–042)** writes to the **same six tabs**. It sets `source_type=scraped_web`, `platform=website`; a Firecrawl failure or empty/unusable page produces a `technical_errors` row (`parse_method=firecrawl_error`) without calling Claude.
+
+> **Schema is now 35 columns (DEC-048).** All six tabs were extended with **`run_id`** and **`batch_index`** for batch traceability. **Workflow 04 (Firecrawl URL list mini-batch)** fills them (`run_id` per execution, `batch_index` = 1-based URL position); **Workflows 02 and 03 may leave them empty** (they auto-map and simply omit the two fields, which the append node writes as blank). A duplicate `source_url` detected by Workflow 04 produces a 35-field `skipped_log` row with `parse_method=dedup_source_url`, **no Firecrawl/Claude cost**.
+
 ### Six tabs (names must match `route` exactly)
 
 | Tab | Receives |
@@ -22,14 +26,14 @@ The production workflow `02_claude_api_single_record_v2_resilient_router_product
 | `skipped_log` | Business skips — `status=skipped` or `entity_type=irrelevant` |
 | `technical_errors` | Parse failures after repair, or invalid route — `needs_manual_review=true` |
 
-### Production columns = 25 core + 8 technical = **33 columns**
+### Production columns = 25 core + 8 technical + 2 batch = **35 columns**
 
 Every tab uses the same header row. The **25 core columns** are the Column Reference table below. The **8 technical columns** are:
 
 | Column | Type | Values |
 |--------|------|--------|
 | `processing_status` | string | `parsed_success` / `business_skip` / `technical_error` |
-| `parse_method` | string | `primary_json` / `repaired_json` |
+| `parse_method` | string | `primary_json` / `repaired_json` / `firecrawl_error` / `dedup_source_url` / `technical_error` |
 | `parse_error` | string | error text or empty (may include `invalid_route`) |
 | `raw_response_preview` | string | first **500** chars of the raw model response (debugging) |
 | `route` | string | one of the six tab names |
@@ -37,13 +41,20 @@ Every tab uses the same header row. The **25 core columns** are the Column Refer
 | `repair_used` | boolean | `true` if the JSON Repair Formatter ran |
 | `repair_status` | string | `success` / `failed` / empty |
 
+The **2 batch columns** (DEC-048), filled by Workflow 04, optional/empty for Workflows 02–03:
+
+| Column | Type | Values |
+|--------|------|--------|
+| `run_id` | string | one id per execution, e.g. `firecrawl_YYYYMMDD_HHmmss` |
+| `batch_index` | integer | 1-based position of the URL within the run (0 if N/A) |
+
 ### Test-only columns — NOT production
 
 These exist only in the **test harness** (`..._resilient_router_test_dynamic_sheet.json`) and must NOT appear in production tabs: `test_id`, `expected_route`, `expected_entity_type`, `expected_recommended_action`, `expected_quality_range`, `actual_entity_type`, `actual_recommended_action`, `actual_quality_score`, `actual_lead_signal_score`, `actual_content_idea_score`, `actual_competitor_strength`, `test_pass_basic`, `test_notes`, and `source_record_type`. The production workflow does not emit them.
 
 ### Header rule (DEC-038)
 
-Each of the six Google Sheets tabs must use **exactly the same 33-column header row** — the 25 core columns (Column Reference below) followed by the 8 technical columns above, in that order. No extra columns. The dynamic append node auto-maps by header name, so a missing or renamed header silently drops that field.
+Each of the six Google Sheets tabs must use **exactly the same 35-column header row** — the 25 core columns (Column Reference below), then the 8 technical columns, then `run_id`, `batch_index`, in that order. No extra columns. The dynamic append node auto-maps by header name, so a missing or renamed header silently drops that field.
 
 **Columns are internal English machine names.** Russian/human-friendly display names are a **future reporting/Telegram layer concern**, not part of the internal schema — do not rename the Sheets headers to Russian (DEC-038).
 
@@ -56,7 +67,7 @@ When a row lands in `technical_errors`, it preserves both failure stages so the 
 
 ### Dedup (v0.1)
 
-No dedup column is emitted yet. For v0.1, **`source_url` is the first dedup key**: a future scraper workflow should check whether `source_url` already exists in the target tab before appending. A dedicated `dedup_key` column will only be added later, with a documented justification and a matching header change (DEC-037).
+**`source_url` is the dedup key.** **Workflow 04 implements this (DEC-049):** before any Firecrawl/Claude spend it looks up the normalized `source_url` in `results`, `review_queue`, `monitor_queue`, `content_queue`; a match → `skipped_log` with `parse_method=dedup_source_url`. `technical_errors`/`skipped_log` are **not** treated as hard duplicates (so failed/skipped URLs can be retried). Workflows 02–03 do not dedup. A dedicated `dedup_key` column is still not used; if added later it needs a documented justification and a matching header change (DEC-037).
 
 ---
 

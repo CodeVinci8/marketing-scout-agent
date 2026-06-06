@@ -1,8 +1,20 @@
-# WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md — Firecrawl URL List Mini-Batch (Plan Only)
+# WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md — Firecrawl URL List Mini-Batch
 
-**Status:** PLAN ONLY — no JSON, do not build until the operator approves this plan.
+**Status:** ✅ BUILT (2026-06-08) — `n8n/workflows/04_firecrawl_url_list_resilient.json`. active=false; awaiting operator manual test (3 URLs).
+**Guide:** `docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md`
 **Date:** 2026-06-08
-**Related:** Workflow 03 (`03_firecrawl_single_url_resilient.json`), DEC-039–047, `docs/FIRECRAWL_SETUP.md`, `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`
+**Related:** Workflow 03 (`03_firecrawl_single_url_resilient.json`), DEC-039–050, `docs/FIRECRAWL_SETUP.md`, `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`
+
+---
+
+## BUILD SUMMARY (2026-06-08)
+
+- **25 nodes.** Manual Start → Set URL List → Loop Over Items (Split In Batches) → Normalize URL for Dedup → 4× Dedup Lookup (results/review_queue/monitor_queue/content_queue) → Evaluate Dedup → IF Duplicate? → [dup → Append] / [new → Build Firecrawl Request → Firecrawl Scrape API → Normalize Firecrawl Output → IF Firecrawl Normalized OK? → resilient analyzer → Normalize + Route] → Append → back to Loop.
+- **Schema = 35 fields** (33 + `run_id` + `batch_index`) on every output path (verified by simulation).
+- **Hard cap 5 URLs** in `Set URL List`; placeholders only (`example.com`).
+- **Dedup status: IMPLEMENTED (best-effort).** Google Sheets `read` lookups filter `source_url` (`filtersUI`) against `results/review_queue/monitor_queue/content_queue`; `Evaluate Dedup` aggregates via `$('node').all()`. `alwaysOutputData=true` + `onError=continueRegularOutput` on each lookup. If a given n8n build rejects the lookup config on import, the guide documents a fallback (whole-tab read + compare, or temporary dedup bypass). Duplicate → `skipped_log`, `parse_method=dedup_source_url`, **no Firecrawl/Claude cost**.
+- **Credentials by name** only (placeholder IDs); operator must rebind after import (DEC-046).
+- `active=false`. No schedule, no crawl/batch/search, no MCP/CLI. JSON validated.
 
 ---
 
@@ -120,8 +132,8 @@ needed repair.
 
 ---
 
-## 9. Build gate
+## 9. Build gate — ✅ CLEARED & BUILT (2026-06-08)
 
-**Do not build Workflow 04 until the operator approves this plan.** When approved, the build session will
-create `n8n/workflows/04_firecrawl_url_list_resilient.json` plus a Russian guide, reusing Workflow 03's
-analyzer nodes verbatim and adding only the list input, loop, and dedup guard.
+Built `n8n/workflows/04_firecrawl_url_list_resilient.json` + guide `docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md`,
+reusing Workflow 03's analyzer nodes verbatim and adding the list input, Split-In-Batches loop, dedup guard,
+and `run_id`/`batch_index`. **Next gate:** operator runs the 3-URL manual test before any 5-URL run.

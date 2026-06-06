@@ -300,15 +300,24 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 
 > Still blocked (DEC-039/040): multi-page crawl, batch scrape, search, scheduled scraping, Firecrawl MCP/CLI, automated outreach.
 
-#### Step F — Workflow 04: Firecrawl URL List Mini-Batch ← ACTIVE STAGE (plan only, 2026-06-08)
+#### Step F — Workflow 04: Firecrawl URL List Mini-Batch ✅ BUILT ← ACTIVE (manual test next, 2026-06-08)
 
-**Plan:** `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` (DEC-047). **Documentation only — do not build until the operator approves the plan.**
+**Workflow:** `n8n/workflows/04_firecrawl_url_list_resilient.json` (25 nodes; JSON valid; active=false; 35-field schema; dedup implemented). **Plan/guide:** `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`, `docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md`.
 
-**Scope:** one manual run over a **manually provided list of 3–5 competitor URLs**, reusing the Workflow 03 chain (scrape → normalize → resilient analyzer → dynamic Sheets) with a per-URL loop.
+**Hard limits:** max 5 URLs · manual only · no crawl/batch/search/schedule · `text_context`≤6000 · continue-on-failure per URL. **Dedup by `source_url` runs before Firecrawl/Claude** (DEC-049): duplicate → `skipped_log`/`dedup_source_url`, zero cost.
 
-**Hard limits:** max 5 URLs · manual trigger only · no crawl · no schedule · `text_context`≤6000 · continue-on-failure per URL (failed URL → `technical_errors`). **Dedup by `source_url` is a first-class requirement** (in-run de-dup always; cross-run Sheets lookup recommended).
+**Operator tasks (in order):**
+1. [ ] Import Workflow 04 (active stays false).
+2. [ ] **Rebind credentials** (DEC-046): `Firecrawl Scrape API`→Firecrawl; both Claude nodes→Claude; 4× `Dedup Lookup — *` + `Append to Dynamic Route Sheet`→Google Sheets; paste real Spreadsheet ID on all **5** Sheets nodes. Confirm 6 tabs have the **35-column** header.
+3. [ ] In `Set URL List`, paste **3** real competitor URLs (first run = 3).
+4. [ ] Record Firecrawl credits + Claude balance, run once manually.
+5. [ ] Verify: competitors → `monitor_queue`; broken/empty → `technical_errors`; each row has `run_id` + `batch_index`.
+6. [ ] **Re-run the same 3 URLs** → verify they now go to `skipped_log` with `parse_method=dedup_source_url` and **0** Firecrawl/Claude cost.
+7. [ ] Record results + cost in `docs/COSTS_AND_LIMITS.md`.
+8. [ ] If the first run is clean, run **max 5** URLs. Then review before any larger source.
 
-**Operator next action:** review `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` and approve/adjust. On approval, the build session creates `04_firecrawl_url_list_resilient.json` + RU guide (3 URLs first, then 5).
+> If dedup lookup nodes fail on import, see the RU guide Troubleshooting → "dedup lookup failed" (fallback). Dedup is implemented best-effort (DEC-049).
+> Still blocked: >5 URLs, scheduled runs, crawler, URL-discovery agent, Telegram bot, Avito/Telegram/Instagram (DEC-050).
 
 #### Step E (legacy plan) — Workflow 03: Firecrawl Website Analysis _(superseded by the active Step E above)_
 
@@ -371,4 +380,4 @@ Not technically blocked. Deliberately paused on paid scraping (DEC-021).
    — Phase 1: operator creates 6 Sheets tabs; Phase 2: TEST HARNESS JSON built ✓; Phase 3: operator runs Tests A–E (NEXT); Phase 4: production migration
 6. Step B — remaining minor doc fixes (`README.md`, `tools/TOOLS.md`, `core/warm/decisions.md`)
 7. ~~Step E — Firecrawl Single URL Test~~ ✅ PASSED (2026-06-08; DEC-045) — two competitor URLs → `monitor_queue`. Firecrawl single-URL ingestion approved (manual).
-8. **Step F — Workflow 04: Firecrawl URL List mini-batch** ← ACTIVE (plan only). Operator reviews/approves `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` (3–5 URLs, manual, no schedule, dedup by `source_url`). Build only after approval.
+8. **Step F — Workflow 04: Firecrawl URL List mini-batch** ✅ BUILT ← ACTIVE. Operator imports `04_firecrawl_url_list_resilient.json`, rebinds creds, runs **3 URLs**, verifies routes + dedup-on-rerun, records cost; then max 5. Dedup by `source_url` implemented (DEC-049); 35-col schema (DEC-048).

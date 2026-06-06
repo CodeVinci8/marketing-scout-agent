@@ -1,6 +1,6 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-08 (Workflow 03 passed two real single-URL tests; Firecrawl single-URL competitor ingestion APPROVED — DEC-045; Workflow 04 mini-batch planned — DEC-047)
+**Last updated:** 2026-06-08 (Workflow 04 Firecrawl URL list mini-batch BUILT with source_url dedup, 35-col schema — DEC-048/049/050; awaiting operator 3-URL test)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
 **Active workflow candidate:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json`
 **Test status:** Resilient Router Tests A–E **all pass**. Production workflow built (33 columns). **First manual production smoke test FAILED** (repair API 502 → technical_errors with lost diagnostics); workflow **patched** (DEC-038): primary raw preserved, compact repair payload, dual Primary+Repair diagnostics, primary prompt reminder. **Production workflow is NOT approved for Firecrawl until the patched manual smoke test passes.**
@@ -17,15 +17,19 @@
 - **Firecrawl single-URL competitor website ingestion** ✅ APPROVED (manual, controlled — DEC-045). `03_firecrawl_single_url_resilient.json` scrapes one public URL via `POST /v2/scrape` (markdown only), normalizes (`text_context`≤6000), feeds the copied resilient analyzer with post-repair consistency hardening (DEC-043/044); Firecrawl failures → `technical_errors` without a Claude call. Two passing real tests (2026-06-08): `mosinvestfinans.ru/` and `lioncredit.ru/…/kredit-pod-zalog-nedvizhimosti`.
 - **Competitor website → `monitor_queue` routing** ✅ APPROVED — competitor pages with offer/rates/region/contact route to `monitor_queue` with `recommended_action=monitor`.
 
+**Under-tested (built, awaiting operator manual test):**
+- **Firecrawl URL list mini-batch with `source_url` dedup** — `04_firecrawl_url_list_resilient.json` (DEC-048/049). 3–5 URLs/run, manual, per-URL loop, dedup before Firecrawl/Claude spend (duplicate → `skipped_log`/`dedup_source_url`, zero cost), 35-field schema (`run_id`+`batch_index`). 25 nodes; JSON valid; active=false. Dedup implemented best-effort (Google Sheets lookups). **Pending: operator 3-URL run + dedup-on-rerun verification.**
+
 **Still NOT approved:**
+- More than 5 URLs per run.
 - Multi-page crawl (`/v2/crawl`).
-- Batch scraping over large URL lists (`/v2/batch/scrape`). _(A small manual 3–5 URL mini-batch is planned — Workflow 04, DEC-047 — but not yet built or approved for use.)_
+- Batch scraping over large URL lists (`/v2/batch/scrape`).
 - Scheduled scraping (cron trigger).
+- URL-discovery agent / Telegram Control Bot (DEC-050).
 - Avito / Telegram / Instagram real ingestion.
 - Automated lead outreach.
 - Firecrawl MCP/CLI (deferred — DEC-040).
-- Deduplication at scale (v0.1 uses `source_url` as the first manual dedup key only).
-- Telegram Control Bot.
+- Deduplication at scale (Workflow 04 dedups a small manual list by `source_url`; large-scale dedup is not approved).
 - Fully autonomous multi-source agent.
 - `content_idea` production handling (content_queue exists; review process deferred to Stage 4).
 

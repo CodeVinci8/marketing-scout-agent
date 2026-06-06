@@ -4,6 +4,28 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Workflow 04 BUILT: Firecrawl URL List Mini-Batch + source_url Dedup (DEC-048/049/050)
+
+**What was done:**
+- Built `n8n/workflows/04_firecrawl_url_list_resilient.json` (**25 nodes**, active=false). Mini-batch of 3–5 competitor URLs, manual, per-URL loop (Split In Batches), `source_url` dedup BEFORE Firecrawl/Claude spend, reusing hardened Workflow 03 analyzer.
+- Front-end: Set URL List (cap 5, run_id+batch_index) → Loop Over Items → Normalize URL for Dedup (lowercase host, strip #frag + utm, trailing slash) → 4× Dedup Lookup (results/review/monitor/content, Sheets read by source_url) → Evaluate Dedup → IF Duplicate? → dup→skipped_log(`dedup_source_url`, 0 cost) / new→Firecrawl→analyzer→Normalize+Route → Append → loop.
+- **Schema now 35 cols** (DEC-048): +`run_id` +`batch_index` on every output path. Operator already extended all 6 tabs to 35.
+- **Dedup implemented best-effort** (DEC-049): Google Sheets read+filter, `.all()` aggregation, fallback documented in RU guide. Duplicate URLs cost 0.
+- DEC-050: future Telegram/URL-discovery may feed URL lists into WF04; deferred.
+- Verified: JSON VALID; 25 nodes; connection integrity OK; 8 creds correct by name (placeholders); only example.com/gateway URLs; no secrets/test fields/tool_use/KEY=VALUE; dynamic sheet node; cap 5; dedup before Firecrawl. Simulation: all output paths = exactly 35 fields with run_id/batch_index; competitor→monitor_queue/generic_lending/75; dup→skipped_log; firecrawl error→technical_errors.
+- Docs: created RU guide; updated PLAN (built), TABLE_SCHEMA (35), NEXT_ACTIONS, DECISIONS, COSTS, CAPABILITIES, ROADMAP (Stage 2.1 built + Stage 2.5 future), AGENT_LOG.
+
+**Active candidate:** `04_firecrawl_url_list_resilient.json` (built, active=false). WF03 remains approved single-URL.
+
+**What is next (in order):**
+1. **Operator: commit** WF04 + new/updated docs.
+2. **Operator (NEXT_ACTIONS Step F):** import WF04; rebind 8 credential nodes + real Spreadsheet ID on all 5 Sheets nodes; confirm 6 tabs have 35-col header.
+3. Run **3 URLs** → verify competitors→monitor_queue, broken→technical_errors, run_id/batch_index present.
+4. **Re-run same 3 URLs** → verify dedup → skipped_log/`dedup_source_url`, 0 Firecrawl/Claude cost. Record cost.
+5. If clean → max 5 URLs. Crawl/batch/schedule/URL-discovery stay blocked.
+
+---
+
 ## Session: 2026-06-08 — Firecrawl Single URL PASSED; Workflow 04 Mini-Batch Planned (DEC-045/046/047)
 
 **What was done (docs/planning only — no workflow JSON edited):**

@@ -1,7 +1,7 @@
 # ROADMAP.md — Marketing Scout Stages
 
-**Near-term sequence (updated 2026-06-08, DEC-045/047):**
-1.5 Resilient Output Layer ✅ done → 2 First Real Source Test (Firecrawl single competitor URL) ✅ **done** → **2.1 Firecrawl URL List mini-batch (3–5 URLs, manual) — next** → 3 Competitor Monitor Agent → 4 Content Agent → 5 Telegram Control Bot. Stages 6–8 (Inbound Lead Bot, CRM, Analytics) follow. Stage numbers are canonical labels; the Telegram bot (Stage 5) block appears before the Content Agent block in this file for historical reasons.
+**Near-term sequence (updated 2026-06-08, DEC-048/049/050):**
+1.5 Resilient Output Layer ✅ done → 2 First Real Source Test (Firecrawl single competitor URL) ✅ done → **2.1 Firecrawl URL List mini-batch (3–5 URLs, manual) ✅ built — operator test next** → 2.5 Telegram Control Bot / URL Discovery (future) → 3 Competitor Monitor Agent → 4 Content Agent → 5 Telegram Control Bot. Stages 6–8 (Inbound Lead Bot, CRM, Analytics) follow. Stage numbers are canonical labels; the Telegram bot (Stage 5) block appears before the Content Agent block in this file for historical reasons.
 
 ---
 
@@ -66,16 +66,29 @@
 
 ---
 
-## Stage 2.1 — Firecrawl URL List Mini-Batch (Next)
+## Stage 2.1 — Firecrawl URL List Mini-Batch (Under Test)
 
-**Status:** Plan only — `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` (DEC-047). Not built; awaiting operator approval of the plan.
-**Goal:** Process a manually provided list of **3–5 competitor URLs in one manual run**, reusing the Workflow 03 chain with a per-URL loop.
+**Status:** ✅ BUILT (2026-06-08) — `n8n/workflows/04_firecrawl_url_list_resilient.json` (DEC-048/049). Awaiting operator manual 3-URL test.
+**Goal:** Process a manually provided list of **3–5 competitor URLs in one manual run**, reusing the Workflow 03 chain with a per-URL loop and `source_url` dedup.
 
-**Hard limits:** max 5 URLs, manual trigger only, no crawl, no schedule, `text_context`≤6000, continue-on-failure per URL (failed URL → `technical_errors`). **Dedup by `source_url` is a first-class requirement.**
+**Built:** 25 nodes — Set URL List → Loop Over Items → Normalize URL for Dedup → 4× dedup lookup → Evaluate Dedup → IF Duplicate? → (dup → skipped_log / new → Firecrawl → resilient analyzer) → dynamic Sheets → loop. 35-field schema (`run_id`, `batch_index`). Dedup before Firecrawl/Claude spend (implemented best-effort).
 
-**Why a mini-batch (not crawl/batch):** smallest safe step up from single-URL — tests iteration, per-URL failure isolation, and cost-per-URL before any real batch/crawl/schedule.
+**Hard limits:** max 5 URLs, manual trigger only, no crawl, no schedule, `text_context`≤6000, continue-on-failure per URL (failed URL → `technical_errors`).
+
+**Remaining:** operator imports, rebinds credentials, runs 3 URLs, verifies routes + dedup-on-rerun + cost; then max 5.
 
 **Later sources (in order):** Avito/Apify → Telegram → Instagram.
+
+---
+
+## Stage 2.5 — Telegram Control Bot / URL Discovery Agent (Future)
+
+**Status:** Future (DEC-050). Not built; depends on a stable mini-batch.
+**Goal:** Let the operator request analysis in natural language instead of pasting URLs.
+
+**Flow:** operator request (e.g. «найди конкурентов по кредитам под залог авто в Москве») → bot collects/generates candidate URLs → proposes URLs + estimated cost → asks approval → calls the URL-list workflow (Workflow 04) → sends a summary. Workflow 04's `source_url` dedup prevents repeated processing.
+
+**Prerequisites:** Workflow 04 stable on manual lists; Telegram bot token + n8n webhook; a vetted URL-discovery/source method. URL discovery and NL parsing are a separate layer, deferred.
 
 ---
 
