@@ -5,6 +5,48 @@ Most recent first.
 
 ---
 
+## 2026-06-06 — Resilient Router Patch After Tests A–E (DEC-036)
+
+**Agent role:** project-engineer
+**Session goal:** Patch the dynamic-sheet resilient router after Tests A–E. A, C, D, E passed; B exposed a routing-priority bug. Fix `Normalize + Route` only — no prompt, model, architecture, or new-copy changes.
+
+**Test results (operator run):**
+- A hot Telegram PTS lead → results, parsed_success, primary_json, lead=97, quality=98, contact — PASS
+- B weak/review lead → **content_queue** (entity=content_idea via repair), repaired_json, lead=35, content=55 — technically passed but business routing WRONG (should be review_queue)
+- C competitor → monitor_queue, comp=88, monitor — PASS, but `company_name` empty for an MFO/private lender
+- D forced Markdown → repair → results, mock_markdown_repair, lead=88, contact — PASS; repair returned `service_type="займ под залог ПТС"` (free text, not enum)
+- E unrepairable → technical_errors, repair_status=failed, needs_manual_review=true — PASS
+- API cost: $0.1145 → $0.1895, delta **$0.0750**
+
+**What was done (patch — `Normalize + Route` node only):**
+- Rewrote routing priority: technical_errors → business-skip/irrelevant → hot lead (results) → **weak/potential lead (review_queue)** → competitor (monitor_queue) → pure content idea (content_queue) → fallback review_queue. Weak-lead rule now runs before content_queue (fixes B).
+- Added weak/potential-lead rule (entity=lead_signal score 30–69; OR action=investigate; OR score≥30 + social/classified + product-term mention; OR content_idea + score≥30 + social/classified + service_type≠unknown).
+- content_queue only when weak-lead rule did not match.
+- Added `normalizeServiceType()` — maps free text (птс/авто+залог/недвиж/рефинанс/ипотек/бизнес) to the 7-value enum; valid enums pass through. Fixes D's `pts_loan`.
+- Added `companyNameFallback()` — descriptive label for empty competitor names (`МФО / частный кредитор`, `Частный инвестор`, `Автоломбард`, `Брокер`, `Конкурент без бренда`); never invents a brand. Fixes C.
+- Updated test-pass logic: for expected_route=review_queue, pass = route=review_queue AND needs_manual_review=true AND lead_signal_score≥30 (route-focused; entity may differ after repair).
+- Kept dynamic-sheet routing, repair architecture, prompts, model, credentials, placeholders, active=false.
+- Verified via Node logic simulation: A→results, B→review_queue, C→monitor_queue (company=`МФО / частный кредитор`), D→results (service=`pts_loan`); all test_pass_basic=true.
+- Re-validated JSON: `python3 -m json.tool` → VALID (`/tmp/v2_resilient_router_dynamic_validated.json`). versionId bumped to `...dynamic-patched-20260606`.
+- Added DEC-036. Updated TEST_RESULTS, AGENT_CAPABILITIES, TABLE_SCHEMA, COSTS_AND_LIMITS, RESILIENT_OUTPUT_LAYER, RU guide, NEXT_ACTIONS.
+
+**Files updated:**
+- `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json` (Normalize + Route node)
+- `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`
+- `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`
+- `docs/WORKFLOW_02_V2_TEST_RESULTS.md`
+- `docs/AGENT_CAPABILITIES.md`
+- `docs/TABLE_SCHEMA.md`
+- `docs/COSTS_AND_LIMITS.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/DECISIONS.md` (DEC-036)
+- `docs/AGENT_LOG.md`
+- `core/hot/recent.md`
+
+**Retest required:** Test B (live), then optional A/D smoke. C/E unchanged. No production workflow touched.
+
+---
+
 ## 2026-06-06 — Cleanup Phase 2 Plan Prepared (Blocked on Tests A–E)
 
 **Agent role:** project-engineer

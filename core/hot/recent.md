@@ -4,6 +4,27 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-06 — Resilient Router Patch After Tests A–E (DEC-036)
+
+**What was done:**
+- Tests A–E run on dynamic-sheet workflow. A, C, D, E passed. **B exposed routing-priority bug**: weak/potential lead (classified content_idea via repair) went to `content_queue` instead of `review_queue`.
+- Patched `Normalize + Route` only (no prompt/model/architecture/new-copy change):
+  1. Routing priority: technical_errors → skip/irrelevant → hot lead (results) → **weak lead (review_queue)** → competitor (monitor_queue) → content idea (content_queue) → fallback review_queue.
+  2. Weak/potential-lead rule runs before content_queue.
+  3. `service_type` free-text → enum normalization (e.g. "займ под залог ПТС" → `pts_loan`, fixes D).
+  4. `company_name` descriptive fallback for empty competitors (e.g. `МФО / частный кредитор`, fixes C). Never invents a brand.
+  5. Test-pass for review_queue is route-focused (route + needs_manual_review + lead≥30).
+- Verified by Node simulation: A→results, B→review_queue, C→monitor_queue (company=МФО / частный кредитор), D→results (service=pts_loan), all pass. JSON re-validated VALID.
+- API cost A–E: $0.1145 → $0.1895, delta **$0.0750**. Repair validated by D, technical_errors by E.
+- Added DEC-036. Updated TEST_RESULTS, CAPABILITIES, TABLE_SCHEMA, COSTS, RESILIENT_OUTPUT_LAYER, RU guide, NEXT_ACTIONS.
+
+**What is next (in order):**
+1. **Operator: commit** patch + doc updates.
+2. **Operator: retest Test B** (live) → confirm route=review_queue, needs_manual_review=true. Optional A/D smoke.
+3. If B passes: approve → Cleanup Phase 2 (git rm the 2 Switch-based workflows) + Phase 4 production migration.
+
+---
+
 ## Session: 2026-06-06 — Cleanup Phase 2 Plan Prepared (Blocked on Tests A–E)
 
 **What was done:**

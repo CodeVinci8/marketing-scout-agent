@@ -173,6 +173,15 @@ The routing logic below is computed in the `Normalize + Route` Code node. The re
 `route` value drives a single dynamic Google Sheets append (DEC-035) — it no longer feeds
 a Switch by Route node.
 
+> **Post-test refinement (2026-06-06, DEC-036):** Tests A–E revealed that a weak/potential lead
+> classified as `content_idea` after repair was siloed into `content_queue` instead of `review_queue`
+> (Test B). The routing priority in `Normalize + Route` was tightened so the **weak/potential lead
+> rule runs before content_queue**: technical_errors → business-skip/irrelevant → hot lead (`results`)
+> → weak/potential lead (`review_queue`) → competitor (`monitor_queue`) → pure content idea
+> (`content_queue`) → fallback `review_queue`. The same node now also normalizes `service_type` to the
+> enum and adds a descriptive `company_name` fallback for competitors (DEC-036). The table below
+> remains the conceptual reference; the implemented priority is the DEC-036 order.
+
 ### 5.1 Routing Rules (evaluated in priority order)
 
 | Priority | Route | Condition | Sheets Tab |

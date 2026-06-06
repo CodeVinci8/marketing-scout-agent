@@ -5,6 +5,33 @@ Most recent first.
 
 ---
 
+## DEC-036 — Routing Priority Fix + service_type/company_name Normalization (Post Tests A–E)
+
+**Date:** 2026-06-06
+**Context:** Dynamic-sheet resilient router Tests A–E were run. A, C, D, E passed. **Test B failed business intent:** a weak/potential lead with clear product fit was classified (via repair) as `content_idea` and routed to `content_queue`. Two secondary gaps surfaced: Test C had empty `company_name` for a competitor MFO, and Test D's repaired `service_type` came back as free text (`"займ под залог ПТС"`) instead of an enum.
+
+**Decision:** Patch `Normalize + Route` only (no prompt change, no architecture change, no new workflow copy):
+
+1. **Routing priority** (strict order): technical_errors → business-skip/irrelevant → hot lead (`results`) → **weak/potential lead (`review_queue`)** → competitor (`monitor_queue`) → pure content idea (`content_queue`) → fallback `review_queue`. The weak-lead rule runs **before** content_queue.
+
+2. **Weak/potential lead rule** → `review_queue` if ANY: entity=lead_signal with lead_signal_score 30–69; OR recommended_action=investigate; OR (lead_signal_score≥30 AND source_type in [social, classified] AND text mentions loan/collateral/PTS/auto/real-estate/refinancing); OR (entity=content_idea AND lead_signal_score≥30 AND source_type in [social, classified] AND service_type≠unknown).
+
+3. **content_queue** only if entity=content_idea AND content_idea_score≥50 AND the weak-lead rule did not match.
+
+4. **service_type normalization** to enum: птс/pts→`pts_loan`; авто/машин + collateral→`secured_auto_loan`; недвиж/квартир/дом/земл→`secured_real_estate_loan`; рефинанс→`refinancing`; ипотек→`mortgage_adjacent`; бизнес→`generic_lending` (or `secured_real_estate_loan` only if real-estate collateral explicit); else `unknown`. Already-valid enums pass through unchanged.
+
+5. **company_name descriptive fallback** (competitor, when empty): МФО/микрофинанс/mfo→`МФО / частный кредитор`; частный инвестор→`Частный инвестор`; автоломбард→`Автоломбард`; брокер→`Брокер`; otherwise `Конкурент без бренда`. Never invents a brand.
+
+6. **Test-pass logic:** for `expected_route=review_queue`, pass = (route=review_queue AND needs_manual_review=true AND lead_signal_score≥30) — route-focused, since entity may legitimately differ after repair. Other routes keep strict entity match.
+
+**Verification:** logic simulation confirmed A→results, B→review_queue, C→monitor_queue (company_name=`МФО / частный кредитор`), D→results (service_type=`pts_loan`); all `test_pass_basic=true`.
+
+**Retest required:** Test B (live), then optional A/D smoke. C/E paths unchanged.
+
+**File:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json` (Normalize + Route node only). active=false, no real secrets.
+
+---
+
 ## DEC-035 — Dynamic Google Sheets Routing Replaces Switch by Route
 
 **Date:** 2026-06-06

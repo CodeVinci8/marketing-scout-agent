@@ -155,6 +155,20 @@ Record actual cost in `docs/WORKFLOW_02_V2_TEST_RESULTS.md` after the run.
 
 ---
 
+## Measured Cost — Resilient Router Tests A–E (2026-06-06)
+
+**Workflow:** `02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json`
+
+| | Balance |
+|---|---|
+| Before today | $0.1145 |
+| After today | $0.1895 |
+| **Delta (5 tests A–E)** | **$0.0750** |
+
+Covers ~5 primary Claude calls plus repair calls triggered by Test D (mock_markdown) and Test E (mock_unrepairable). ≈ $0.015/test including repair overhead — consistent with the ~$0.0115 baseline plus the second (repair) call on D and E. Repair pass roughly doubles per-record cost when triggered; it only fires on parse failure, so steady-state cost stays near baseline for clean records.
+
+---
+
 ## Budget Alerts
 
 | Threshold | Action |

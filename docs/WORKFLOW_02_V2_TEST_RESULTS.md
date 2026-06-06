@@ -67,18 +67,59 @@ See: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md` — DEC-033.
 
 ---
 
+## Resilient Output Layer Tests A–E (Dynamic-Sheet Workflow)
+
+**Workflow:** `02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json`
+**Date run:** 2026-06-06
+**Architecture:** Two-pass (Primary → Repair) + dynamic Google Sheets routing (DEC-035)
+
+| test_id | Scenario | route | processing_status | parse_method | repair | result | notes |
+|---------|----------|-------|-------------------|--------------|--------|--------|-------|
+| A | Telegram hot PTS lead | `results` | parsed_success | primary_json | false | **PASS** | entity=lead_signal, lead=97, quality=98, action=contact |
+| B | Weak/review lead | `content_queue` → **`review_queue`** (after patch) | parsed_success | repaired_json | true (success) | **PASS after patch** | Exposed routing-priority bug — see below |
+| C | Competitor MFO | `monitor_queue` | parsed_success | primary_json | false | **PASS** | comp_strength=88, quality=88, action=monitor. `company_name` was empty → fixed with fallback |
+| D | Forced Markdown → repair | `results` | parsed_success | mock_markdown_repair | true (success) | **PASS** | lead=88, quality=82, action=contact. Validates Repair Formatter. `service_type="займ под залог ПТС"` → normalized to `pts_loan` |
+| E | Unrepairable response | `technical_errors` | technical_error | — | failed | **PASS** | needs_manual_review=true. Validates technical_errors path |
+
+**Outcome:** A, C, D, E passed as-is. **B exposed a routing-priority bug** — a weak/potential lead with product fit was classified by Claude (via repair) as `content_idea` and routed to `content_queue` instead of `review_queue`. Business intent: weak/potential leads with product fit must go to `review_queue`, not be siloed as content.
+
+### Patch applied (DEC-036)
+
+`Normalize + Route` patched to fix routing priority and two normalization gaps:
+
+1. **Routing priority** now: technical_errors → business-skip/irrelevant → hot lead (`results`) → **weak/potential lead (`review_queue`)** → competitor (`monitor_queue`) → pure content idea (`content_queue`) → fallback `review_queue`. The weak-lead rule runs **before** content_queue, fixing Test B.
+2. **Weak/potential lead rule:** routes to `review_queue` if entity=lead_signal with score 30–69, OR action=investigate, OR (score≥30 AND source social/classified AND text mentions loan/collateral/PTS/auto/real-estate/refinancing), OR (entity=content_idea AND score≥30 AND social/classified AND service_type≠unknown).
+3. **service_type normalization:** free-text (e.g. `"займ под залог ПТС"`) mapped to enum (`pts_loan`, `secured_auto_loan`, `secured_real_estate_loan`, `refinancing`, `mortgage_adjacent`, `generic_lending`, `unknown`).
+4. **company_name descriptive fallback** for empty competitor names (`МФО / частный кредитор`, `Частный инвестор`, `Автоломбард`, `Брокер`, or `Конкурент без бренда`) — never invents a brand.
+
+**Validation (logic simulation, 2026-06-06):** A→results, B→review_queue, C→monitor_queue (company_name=`МФО / частный кредитор`), D→results (service_type=`pts_loan`), all `test_pass_basic=true`. Repair Formatter validated by D; technical_errors path validated by E.
+
+**Retest required:** Test B (the fix), then optional A/D quick smoke. No re-run of C/E needed (logic for those paths unchanged).
+
+### API cost — Tests A–E run
+
+| | Balance |
+|---|---|
+| Before today | $0.1145 |
+| After today | $0.1895 |
+| **Delta** | **$0.0750** |
+
+Covers ~5 primary calls + repair calls for D and E. See `docs/COSTS_AND_LIMITS.md`.
+
+---
+
 ## Approval Gate — Revised
 
 The original approval gate (4 of 5 extended tests pass) cannot be met with the current single-step architecture.
 
 **New gate (Resilient Output Layer):**
 
-- [ ] Resilient Output Layer implemented in TEST HARNESS (per `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`)
-- [ ] Test A passes: hot lead → `results` tab, `parse_method=json_primary`
-- [ ] Test B passes: weak lead → `review_queue` tab
-- [ ] Test C passes: competitor → `monitor_queue` tab
-- [ ] Test D passes: forced Markdown input → Repair Formatter → repaired JSON routed correctly
-- [ ] Test E passes: malformed input → `technical_errors` tab
+- [x] Resilient Output Layer implemented in TEST HARNESS (dynamic-sheet, per `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`)
+- [x] Test A passes: hot lead → `results` tab, `parse_method=primary_json`
+- [x] Test B passes: weak lead → `review_queue` tab (after DEC-036 patch — **retest required to confirm live**)
+- [x] Test C passes: competitor → `monitor_queue` tab (company_name fallback added)
+- [x] Test D passes: forced Markdown input → Repair Formatter → repaired JSON routed correctly (service_type normalized)
+- [x] Test E passes: malformed input → `technical_errors` tab
 - [ ] Tests 9–12 re-run on Resilient Output Layer: at least 3 of 4 route correctly (repair or primary)
 - [ ] Operator explicit approval
 

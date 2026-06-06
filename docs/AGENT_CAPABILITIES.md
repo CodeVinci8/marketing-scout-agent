@@ -1,8 +1,8 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-06 (updated after extended test results and Resilient Output Layer design)
+**Last updated:** 2026-06-06 (updated after Resilient Router Tests A–E and DEC-036 routing patch)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
-**Test status:** Tests 1 and 8 passed strongly. Tests 9–12 and 5 failed with output-contract errors. Resilient Output Layer designed (DEC-033).
+**Test status:** Resilient Router (dynamic-sheet) Tests A–E run. A, C, D, E passed. B exposed a routing-priority bug (weak lead → content_queue), fixed in `Normalize + Route` (DEC-036); B retest pending. Repair Formatter validated by Test D; technical_errors path validated by Test E.
 **Business requirements:** `docs/BUSINESS_REQUIREMENTS.md`
 
 ---
@@ -178,7 +178,8 @@ Full schema: `docs/TABLE_SCHEMA.md`
 |------|----------|--------|
 | content_idea not production-approved in Workflow 02 | Medium | Deferred to Stage 3 (Content Agent). DEC-030. |
 | Gateway unstable for tool_use, KEY=VALUE, compact prompts | High | Baseline raw JSON is the only stable format. DEC-026–028. |
-| Output contract unstable for non-obvious records | High | Tests 9–12 failed with Markdown output or no-text response. Resilient Output Layer design ready (DEC-033). Not yet implemented. |
+| Output contract unstable for non-obvious records | Medium | Resilient Output Layer (two-pass repair + dynamic-sheet routing) implemented and tested A–E. Repair validated by Test D, technical_errors by Test E. DEC-033/035/036. Production migration pending. |
+| Business routing drift (weak lead misclassified as content) | Medium | Found in Test B; fixed in `Normalize + Route` with strict routing priority (DEC-036). Weak/potential leads now route to review_queue before content_queue. B retest pending. |
 | Workflow not connected to real scraping | High | Extended tests use synthetic records. Real source test is Step E. |
 | Telegram Control Bot not implemented | Low | Future roadmap (Stage 2.5). DEC-032. |
 | No pre-filter node — all records hit Claude API | Medium | Design in progress. |

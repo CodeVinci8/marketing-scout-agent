@@ -227,12 +227,15 @@ Workflows are built incrementally — no external APIs until the platform is ver
 - [ ] Import `02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json` into n8n
 - [ ] Set credentials + Spreadsheet ID (see `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`)
 - [ ] Create 6 Sheets tabs with header rows (see guide, Step 4)
-- [ ] Run Test A (test_id=A): hot lead → `results`. Verify `test_pass_basic=TRUE`, `parse_method=primary_json`
-- [ ] Run Test B (test_id=B): weak lead → `review_queue`. Verify `test_pass_basic=TRUE`
-- [ ] Run Test C (test_id=C): competitor → `monitor_queue`. Verify `test_pass_basic=TRUE`
-- [ ] Run Test D (test_id=D): mock_markdown → repair → `results`. Verify `repair_used=TRUE`, `test_pass_basic=TRUE`
-- [ ] Run Test E (test_id=E): mock_unrepairable → `technical_errors`. Verify `repair_status=failed`, `test_pass_basic=TRUE`
-- [ ] All 5 pass → approve for Phase 4
+- [x] Run Test A (test_id=A): hot lead → `results`. PASS (`parse_method=primary_json`, lead=97, quality=98)
+- [x] Run Test B (test_id=B): weak lead → `review_queue`. **Exposed routing-priority bug** — went to `content_queue`. Fixed in `Normalize + Route` (DEC-036). **Retest required to confirm live.**
+- [x] Run Test C (test_id=C): competitor → `monitor_queue`. PASS. `company_name` was empty → descriptive fallback added (DEC-036).
+- [x] Run Test D (test_id=D): mock_markdown → repair → `results`. PASS. Validates Repair Formatter. `service_type` free text → normalized to `pts_loan` (DEC-036).
+- [x] Run Test E (test_id=E): mock_unrepairable → `technical_errors`. PASS. Validates technical_errors path.
+- [ ] **Retest Test B** (live) after DEC-036 patch → confirm `route=review_queue`, `needs_manual_review=TRUE`. Then optional A/D smoke.
+- [ ] All pass → approve for Phase 4 + Cleanup Phase 2
+
+> Patch applied 2026-06-06 (DEC-036): routing priority fixed (weak lead before content_queue), service_type enum normalization, company_name competitor fallback. JSON re-validated VALID. API cost for A–E run: $0.0750 (see `docs/COSTS_AND_LIMITS.md`).
 
 **Phase 4 — Migrate to production Workflow 02:**
 - [ ] After operator approval: apply Resilient Output Layer to `02_claude_api_single_record_analysis.json`

@@ -84,6 +84,8 @@ All numeric scores use the **1–100 integer scale** (not 0–10).
 - `competitor_strength` is 1 (minimum) when `entity_type` is not `competitor`.
 - Scores are assigned by Claude; they reflect the model's assessment based on the prompt calibration in `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V1.md`.
 - The `results` sheet must have a single horizontal header row (row 1). See DEC-017.
+- **`service_type` normalization (DEC-036):** the resilient router's `Normalize + Route` node maps free-text `service_type` returned by Claude/repair into the enum above (e.g. `"займ под залог ПТС"` → `pts_loan`). Always one of the seven enum values reaches Sheets; raw free text is never written.
+- **`company_name` fallback (DEC-036):** when Claude returns an empty `company_name` for a `competitor`, the resilient router writes a descriptive label (`МФО / частный кредитор`, `Частный инвестор`, `Автоломбард`, `Брокер`, or `Конкурент без бренда`) instead of leaving it blank. It never invents a real brand name.
 
 ---
 
