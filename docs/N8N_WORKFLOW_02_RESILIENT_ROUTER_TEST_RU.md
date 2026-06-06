@@ -22,17 +22,30 @@
 
 ## Шаг 1 — Импорт workflow в n8n
 
-> **Используй FIXED-версию файла.** Файл `_fixed.json` содержит Switch by Route, пересобранный с typeVersion 1 (простой строковый матч). Предыдущий файл `_test.json` имел визуальную проблему — линии от Switch к Append-нодам не отображались после импорта. FIXED-версия это исправляет.
+> **Используй DYNAMIC SHEET-версию файла.** Файл `_dynamic_sheet.json` убирает узел Switch by Route и шесть отдельных Append-нодов. Вместо них — **один** узел Google Sheets, который пишет в ту вкладку, имя которой лежит в поле `$json.route`. Это устраняет визуальную путаницу с линиями Switch и упрощает схему.
+>
+> Предыдущие версии (`_test.json`, `_fixed.json`) сохранены как история, но для тестов A–E используй именно `_dynamic_sheet.json`.
 
-1. Если в n8n уже импортирован старый workflow с именем **"02 - Claude API Single Record Analysis v2 RESILIENT ROUTER TEST"** — **удали его** перед импортом (открой workflow → три точки → Delete).
+1. Если в n8n уже импортирован старый workflow с именем **"02 - Claude API Single Record Analysis v2 RESILIENT ROUTER TEST"** или **"... FIXED"** — **удали его** перед импортом (открой workflow → три точки → Delete).
 2. Открой n8n в браузере (через SSH-туннель или прямой доступ).
 3. Слева: **Workflows → Import from file**.
 4. Выбери файл:
    ```
-   n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_fixed.json
+   n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json
    ```
-5. Workflow откроется с именем **"02 - Claude API Single Record Analysis v2 RESILIENT ROUTER TEST FIXED"**.
+5. Workflow откроется с именем **"02 - Claude API Single Record Analysis v2 RESILIENT ROUTER TEST DYNAMIC SHEET"**.
 6. Убедись, что `active = false` (переключатель вверху выключен). **Не активируй workflow.**
+
+### Как работает динамическая маршрутизация
+
+`Normalize + Route` всегда выставляет поле `route` в одно из шести значений:
+`results`, `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`, `technical_errors`.
+
+Узел **"Append to Dynamic Route Sheet"** использует выражение `={{ $json.route }}` в поле Sheet Name, поэтому строка попадает во вкладку с именем, равным значению `route`. Шесть вкладок в Google Sheets создавать всё равно нужно (см. Шаг 4) — имена вкладок должны точно совпадать со значениями `route`.
+
+**Защита от неверного route:** если `route` отсутствует или не входит в список шести значений, `Normalize + Route` принудительно ставит `route = technical_errors`, `processing_status = technical_error`, `needs_manual_review = true` и добавляет `invalid_route` в `parse_error`. Запись не теряется — она уходит во вкладку `technical_errors`.
+
+> **Fallback, если n8n не принимает выражение в Sheet Name:** в редких сборках n8n поле Sheet Name (resourceLocator) может не принимать выражение `={{ $json.route }}`. В этом случае вернись к маршрутизации через ветвление: добавь шесть узлов IF (по одному на каждое значение `route`) вместо Switch by Route, каждый со своим Append-нодом на фиксированную вкладку. Используй для этого файл `_fixed.json` как основу.
 
 ---
 
@@ -55,16 +68,17 @@ Workflow использует два credential:
 2. Имя: `Google Sheets - Marketing Scout Service Account`.
 3. Загрузи JSON-ключ сервисного аккаунта.
 4. Сохрани. Скопируй ID credential.
-5. Открой все 6 nodes **"Append to ..."** (results, review_queue, monitor_queue, content_queue, skipped_log, technical_errors).
-6. В каждом: замени `PASTE_CREDENTIAL_ID_HERE` на ID credential.
+5. Открой узел **"Append to Dynamic Route Sheet"**.
+6. Замени `PASTE_CREDENTIAL_ID_HERE` на ID credential.
 
 ---
 
 ## Шаг 3 — Прописать Spreadsheet ID
 
-В каждом из 6 Append-nodes:
+В узле **"Append to Dynamic Route Sheet"**:
 - Найди поле `documentId` → значение `PASTE_SPREADSHEET_ID_HERE`
 - Замени на реальный ID Google Sheets таблицы (из URL: `https://docs.google.com/spreadsheets/d/<ID>/edit`)
+- Поле Sheet Name оставь как выражение `={{ $json.route }}` — не меняй на конкретную вкладку.
 
 ---
 

@@ -100,9 +100,10 @@ Router    Claude JSON Repair Formatter
 - If successful: routes to Router with `parse_method=json_repaired`, `processing_status=parsed_repaired`.
 - If failed: routes to `technical_errors` tab with `processing_status=technical_error`.
 
-**Router** _(new node — replaces current Quality Gate)_
+**Router** _(implemented in the `Normalize + Route` Code node — replaces current Quality Gate)_
 - Reads parsed fields and assigns a `route` value.
-- Appends to the correct Google Sheets tab.
+- The `route` value names the target Google Sheets tab directly.
+- A single dynamic Google Sheets node (`Append to Dynamic Route Sheet`, Sheet Name = `={{ $json.route }}`) appends to that tab (DEC-035 — no Switch node, no per-tab Append nodes).
 - See Section 5 for routing logic.
 
 ---
@@ -158,10 +159,19 @@ platform, source_url, parsed_at, published_at, created_at, profile_url}
 
 ---
 
+> **Routing implementation update (2026-06-06, DEC-035):** The routing destination is now
+> implemented as **dynamic Google Sheets routing**, not a Switch by Route node. The
+> `Normalize + Route` Code node computes the `route` value, and a single Google Sheets
+> "Append to Dynamic Route Sheet" node writes to the tab named by `={{ $json.route }}`.
+> The Switch by Route node and the six per-tab Append nodes are removed. The routing
+> *logic* in Section 5 is unchanged — only the n8n implementation of the destination changed.
+> See `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json`.
+
 ## 5. Router Logic
 
-The Router replaces the current binary Quality Gate (`quality_score >= 60`).
-It reads the parsed output and assigns one `route` value per record.
+The routing logic below is computed in the `Normalize + Route` Code node. The resulting
+`route` value drives a single dynamic Google Sheets append (DEC-035) — it no longer feeds
+a Switch by Route node.
 
 ### 5.1 Routing Rules (evaluated in priority order)
 

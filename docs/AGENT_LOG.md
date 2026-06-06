@@ -5,6 +5,43 @@ Most recent first.
 
 ---
 
+## 2026-06-06 — Resilient Router DYNAMIC SHEET Copy (Switch Removed)
+
+**Agent role:** project-engineer
+**Session goal:** Refactor the Resilient Router TEST HARNESS to use one dynamic Google Sheets append node instead of Switch by Route + 6 per-tab Append nodes, removing visual/import complexity.
+
+**Context:** The FIXED copy imported but left a messy canvas — shifted append nodes, unclear lines, redundant six-node fan-out. Since `route` already holds the exact target tab name, a single Google Sheets node with Sheet Name = `={{ $json.route }}` is cleaner.
+
+**What was done:**
+- Created `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json` by patching the FIXED copy with Python:
+  - Workflow name → `...RESILIENT ROUTER TEST DYNAMIC SHEET`; versionId `...v003-dynamic-20260606`
+  - Removed `Switch by Route` node + 6 Append nodes (results, review_queue, monitor_queue, content_queue, skipped_log, technical_errors)
+  - Added one `Append to Dynamic Route Sheet` node (googleSheets v4): operation=append, documentId=PASTE_SPREADSHEET_ID_HERE, sheetName expression `={{ $json.route }}` (mode=name), autoMapInputData, credential by name only
+  - Connection: `Normalize + Route` → `Append to Dynamic Route Sheet` (Switch connections entry deleted)
+  - Position: dynamic node at [2620, 200]; upstream nodes unchanged
+- Added route-validation safety to `Normalize + Route` jsCode: if `route` not in the six valid values → `route=technical_errors`, `processing_status=technical_error`, `needs_manual_review=true`, `parse_error += 'invalid_route'`. Wired `parseError` into the returned `parse_error` field.
+- Validated JSON: `python3 -m json.tool` → VALID (`/tmp/v2_resilient_router_dynamic_validated.json`). 15 nodes total.
+- active=false; no real credentials, API keys, or Spreadsheet ID.
+- Added DEC-035 to `docs/DECISIONS.md`.
+- Updated `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md` (import DYNAMIC file, dynamic-routing explanation, IF-node fallback), `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md` (routing now dynamic-sheet), `docs/NEXT_ACTIONS.md`, `core/hot/recent.md`.
+
+**Source files not modified:** `_test.json` and `_fixed.json` — untouched (kept as history).
+
+**Files created:**
+- `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json`
+
+**Files updated:**
+- `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`
+- `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`
+- `docs/DECISIONS.md` (DEC-035 added)
+- `docs/NEXT_ACTIONS.md`
+- `docs/AGENT_LOG.md`
+- `core/hot/recent.md`
+
+**Next:** Operator deletes old imports, imports the DYNAMIC SHEET file, sets credential + Spreadsheet ID (Sheet Name stays as expression), creates 6 tabs, runs Tests A–E.
+
+---
+
 ## 2026-06-06 — Resilient Router TEST HARNESS FIXED Copy Created
 
 **Agent role:** project-engineer

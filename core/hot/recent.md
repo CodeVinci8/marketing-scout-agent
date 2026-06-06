@@ -4,6 +4,26 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-06 — Resilient Router DYNAMIC SHEET Copy (Switch Removed)
+
+**What was done:**
+- Created `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json` (DEC-035).
+- Removed Switch by Route + 6 per-tab Append nodes. Added ONE `Append to Dynamic Route Sheet` node: googleSheets v4, Sheet Name = `={{ $json.route }}`, documentId=PASTE_SPREADSHEET_ID_HERE, autoMap, credential by name. Connected `Normalize + Route` → dynamic node.
+- `route` already holds the exact tab name (results/review_queue/monitor_queue/content_queue/skipped_log/technical_errors), so one node routes dynamically. 15 nodes total.
+- Added route-validation safety to Normalize + Route: invalid/missing route → technical_errors + processing_status=technical_error + needs_manual_review=true + parse_error includes 'invalid_route'.
+- JSON validated VALID. `_test.json` and `_fixed.json` untouched (history).
+- Updated RU guide (import DYNAMIC file + IF-node fallback), RESILIENT_OUTPUT_LAYER.md (routing now dynamic-sheet), DECISIONS.md (DEC-035), NEXT_ACTIONS.md.
+
+**What is next (in order):**
+1. **Operator: commit** (new dynamic_sheet workflow + doc updates).
+2. **Operator**: Delete old `RESILIENT ROUTER TEST` / `... FIXED` imports in n8n.
+3. **Operator Phase 1**: Create 6 Sheets tabs (names must match route values exactly) with 47-column headers.
+4. **Operator Phase 3**: Import `_dynamic_sheet.json`, set credential + Spreadsheet ID (keep Sheet Name as expression), run Tests A–E.
+5. If all 5 pass: Phase 4 — production migration.
+6. Fallback if Sheet Name expression unsupported: six IF nodes from `_fixed.json` base.
+
+---
+
 ## Session: 2026-06-06 — Resilient Router TEST HARNESS FIXED Copy
 
 **What was done:**

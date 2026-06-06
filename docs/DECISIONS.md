@@ -5,6 +5,26 @@ Most recent first.
 
 ---
 
+## DEC-035 — Dynamic Google Sheets Routing Replaces Switch by Route
+
+**Date:** 2026-06-06
+**Context:** The Switch by Route node (6 outputs → 6 separate Google Sheets Append nodes) caused recurring visual/import problems in the n8n UI: append nodes shifted position, connection lines from Switch did not render reliably, and the six near-identical Append nodes were redundant. Two prior attempts (`_test.json` typeVersion 3 rules-mode, `_fixed.json` typeVersion 1 string-match) both imported but left a cluttered, hard-to-read canvas.
+
+**Decision:** Replace the Switch by Route node and the six per-tab Append nodes with a **single dynamic Google Sheets Append Row node**. The `route` field already contains the exact target tab name (`results`, `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`, `technical_errors`), so the node uses Sheet Name expression `={{ $json.route }}` with Map Automatically. `Normalize + Route` connects directly to this one node.
+
+**Routing logic unchanged.** All thresholds and priority ordering stay in `Normalize + Route`. Only the n8n destination implementation changed: 7 nodes (1 Switch + 6 Append) → 1 node.
+
+**Route-validation safety added to `Normalize + Route`:** if `route` is missing or not one of the six valid values, the node forces `route = technical_errors`, `processing_status = technical_error`, `needs_manual_review = true`, and appends `invalid_route` to `parse_error`. No record can be lost to a bad/empty tab name.
+
+**Fallback:** if a given n8n build rejects an expression in the Google Sheets Sheet Name resourceLocator, revert to branch-based routing — six IF nodes (one per `route` value), each feeding a fixed-tab Append node — using `_fixed.json` as the base. Documented in `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`.
+
+**Credential/secret pattern unchanged:** `PASTE_CREDENTIAL_ID_HERE`, `PASTE_SPREADSHEET_ID_HERE`, credentials by name only. active=false.
+
+**File:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json`
+**Supersedes (for testing):** `_test.json` and `_fixed.json` (kept as history, not deleted).
+
+---
+
 ## DEC-034 — Resilient Router TEST HARNESS: 21-Node Workflow with Mock Modes
 
 **Date:** 2026-06-06
