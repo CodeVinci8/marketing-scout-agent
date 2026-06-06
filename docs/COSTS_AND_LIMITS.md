@@ -117,11 +117,16 @@ Cost-control rules baked into the first Firecrawl test:
 - **Record balance before/after.** Log Firecrawl credits (if visible) and the Claude balance delta below.
 - **No scheduled scraping** until the per-URL cost profile is known.
 
-| Run | Firecrawl credits before/after | Claude before | Claude after | Claude delta | Outcome |
-|-----|-------------------------------|---------------|--------------|--------------|---------|
-| Firecrawl single-URL #1 | _record_ | _record_ | _record_ | _record_ | _pending_ |
+| Run | Firecrawl credits | Claude today before | Claude today after | Claude today delta | Claude total before | Claude total after | Outcome |
+|-----|-------------------|---------------------|--------------------|--------------------|---------------------|--------------------|---------|
+| Firecrawl single-URL #1 (`mosinvestfinans.ru/`) | **1** | $0.0136 | $0.0365 | **$0.0229** | $0.4983 | $0.5211 (delta $0.0228) | Firecrawl OK; primary parse failed → repair OK → row (pre-patch) `review_queue` with bad scores. Patched (DEC-043/044); retest pending. |
 
-> Real competitor pages are longer than the ~200-char test record, so the per-record Claude cost will be **higher** than the $0.0115 short-record baseline (even with the 6000-char cap). Measure on this first run and update the estimate table.
+**Notes (DEC-043/044):**
+- **1 Firecrawl credit** per single-URL scrape. Claude delta **$0.0229** here — ~2× the $0.0115 short-record baseline because (a) the page is large (markdown capped to 6000 chars still ~big) and (b) the **repair call fired** (primary parse failed → second Claude call).
+- **Homepages are long and multi-product** → higher token cost AND higher chance of a primary-parse failure that triggers the (paid) repair call. **Prefer a specific service page** (e.g. one product/offer page) for lower cost and clearer single-product analysis.
+- The post-repair hardening adds **no extra API calls** — it is pure n8n Code-node logic, so it does not change cost.
+
+> Real competitor pages are longer than the ~200-char test record, so per-record Claude cost is **higher** than the $0.0115 baseline (≈$0.023 measured here on a large homepage). Specific service pages should cost less.
 
 ---
 

@@ -296,16 +296,17 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 
 **Guide:** `docs/N8N_WORKFLOW_03_FIRECRAWL_SINGLE_URL_RU.md` · **Setup/safety:** `docs/FIRECRAWL_SETUP.md`
 
-**Operator tasks (in order):**
-1. [ ] Create Firecrawl credential in n8n — Header Auth, name `Firecrawl API - Marketing Scout`, Header Name `Authorization`, Header Value `Bearer <FIRECRAWL_API_KEY>`, allowed domain `api.firecrawl.dev`.
-2. [ ] Import Workflow 03; set Firecrawl + Claude + Google Sheets credentials + real Spreadsheet ID (keep Sheet Name expression `={{ $json.route }}`). Confirm the 6 tabs exist with the 33-column header.
-3. [ ] Set one public competitor URL in `Set Firecrawl URL → target_url`.
-4. [ ] Record Firecrawl + Claude balance, run once manually.
-5. [ ] Verify a row in `monitor_queue` (competitor) — or `technical_errors` if Firecrawl/Claude failed.
-6. [ ] Record cost delta in `docs/COSTS_AND_LIMITS.md`.
-7. [ ] Only after this passes, consider a real competitor URL **list** (then Avito/Apify → Telegram → Instagram).
+**First real test done (2026-06-08, `mosinvestfinans.ru/`):** Firecrawl OK (1 credit, Claude delta ≈$0.0229); primary parse failed → repair OK → row landed in `review_queue` with contradictory scores + Chinese `reason`. **Patched** (DEC-043/044): post-repair consistency hardening in `Normalize + Route` (competitor floors, rich-competitor → `monitor_queue`, language guard, multi-product → `generic_lending`, compact preview). JSON valid; simulation + regression pass.
 
-> Not approved this phase (DEC-039/040): multi-URL crawl, batch scrape, search, scheduled scraping, Firecrawl MCP/CLI, automated outreach.
+**Operator retest tasks (in order):**
+1. [ ] **Re-import** the patched `03_firecrawl_single_url_resilient.json` (active stays false).
+2. [ ] **Bind credentials if needed** (import often drops them): `Firecrawl Scrape API`→`Firecrawl API - Marketing Scout`; both Claude nodes→`Claude API - Marketing Scout`; `Append to Dynamic Route Sheet`→`Google Sheets - Marketing Scout Service Account` + real Spreadsheet ID. Confirm 6 tabs / 33-col header.
+3. [ ] **Retest the same URL** `https://mosinvestfinans.ru/` (record Firecrawl + Claude balance). **Expected: `route=monitor_queue`**, `entity_type=competitor`, `recommended_action=monitor`, `competitor_strength≈70–90`, `quality_score≈70–90`, `service_type=generic_lending`/`secured_real_estate_loan`, Russian `reason`.
+4. [ ] **Then test a specific service page** for lower cost / clearer single-product analysis — preferably `https://mosinvestfinans.ru/kredit/pod-zalog-avto/` (or another one-page competitor offer).
+5. [ ] Record both cost deltas in `docs/COSTS_AND_LIMITS.md`.
+6. [ ] Only after these pass, consider a real competitor URL **list** (then Avito/Apify → Telegram → Instagram).
+
+> Not approved this phase (DEC-039/040): multi-page crawl, batch scrape, search, scheduled scraping, Firecrawl MCP/CLI, automated outreach. **Firecrawl batch remains blocked.**
 
 #### Step E (legacy plan) — Workflow 03: Firecrawl Website Analysis _(superseded by the active Step E above)_
 

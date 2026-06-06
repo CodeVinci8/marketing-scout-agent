@@ -5,6 +5,36 @@ Most recent first.
 
 ---
 
+## DEC-043 — Post-Repair Business-Consistency Hardening for Scraped Competitor Pages
+
+**Date:** 2026-06-08
+**Context:** First real-source test (Firecrawl on `https://mosinvestfinans.ru/`, a rich secured-lending homepage). Firecrawl succeeded (1 credit); the **primary** Claude analysis failed JSON parse; the **repair** branch succeeded (`parse_method=repaired_json`, `repair_used=true`, `repair_status=success`). But the repaired output was internally contradictory and was routed to `review_queue`: `entity_type=competitor` yet `competitor_strength=1`, `quality_score=6`, `recommended_action=investigate`, `service_type=pts_loan` (despite many real-estate/refinancing products), and a **reason written in Chinese** ("活跃抵押贷款竞争对手…"). Architecture worked; the **repaired JSON is structurally valid but not trustworthy for business values**.
+
+**Decision:** `Normalize + Route` now distrusts repaired/low-confidence output and enforces business invariants for scraped website pages (it does **not** change any prompt):
+
+1. **Competitor signal counting** over `text_context + offer_text + terms + reason + scraped markdown` using a Russian secured-lending term list (кредит, займ, залог, ПТС, авто, недвиж, рефинанс, ипотек, ставка, сумма, одобрен, плохая кредитн, просрочк, телефон, москва, московск).
+2. **Competitor consistency rule (≥3 signals, `entity_type=competitor`, `source_type=scraped_web`, `platform=website`):** `competitor_strength=max(cur,65)`, `quality_score=max(cur,65)`, `recommended_action=monitor`, `route=monitor_queue`, `needs_manual_review=false` unless `parse_error` exists, `processing_status` stays `parsed_success`. **≥5 signals:** floors raised to 75.
+3. **Repaired-JSON trust rule:** if `repair_used=true` and `entity_type=competitor`, never allow `competitor_strength<45` unless the scraped text is empty/unusable (<80 chars); rich competitor website pages must **never** land in `review_queue` (route forced to `monitor_queue` before the weak-lead branch).
+4. **Language guard:** if the source text contains Cyrillic but `reason` contains CJK characters or is mostly non-Cyrillic/non-Latin, replace `reason` with a Russian fallback (a fixed competitor sentence, or a templated sentence from entity/company/service/terms/region/scores for non-competitors).
+5. **`raw_response_preview`** capped at **200** chars on `parsed_success` (still 500 on `technical_error`) — no need to store large model output after a clean parse.
+
+**Verification:** Node simulation of the mosinvest repaired output → `monitor_queue`, `entity_type=competitor`, `company_name=МосИнвестФинанс`, `service_type=generic_lending`, `competitor_strength=75`, `quality_score=75`, `recommended_action=monitor`, Russian `reason`, `needs_manual_review=false`, 33 fields. Regression (hot lead→results, weak lead→review_queue, skip→skipped_log, technical_error passthrough, auto/PTS-only competitor→monitor_queue keeping `pts_loan`) all pass with 33 fields.
+
+**File:** `n8n/workflows/03_firecrawl_single_url_resilient.json` (`Normalize + Route` only). No new workflow copy (validation passed). No prompt change, no new fields.
+
+---
+
+## DEC-044 — Multi-Product Website Pages Classify as generic_lending Unless One Product Dominates
+
+**Date:** 2026-06-08
+**Context:** The mosinvest homepage advertises залог недвижимости, рефинансирование, ипотека, and залог авто/ПТС together. The repaired `service_type` came back `pts_loan` merely because "ПТС" appeared, misrepresenting a multi-product lender as an auto-collateral specialist.
+
+**Decision:** In `Normalize + Route`, when `source_type=scraped_web` and `platform=website`, detect product categories (real-estate collateral, refinancing, mortgage, auto/PTS). If **two or more** categories are present, set `service_type=generic_lending` — a single keyword (e.g. "ПТС") must not force a narrow type. A genuinely single-product page (e.g. only `кредит под залог авто`/ПТС) keeps its specific enum (`pts_loan`/`secured_auto_loan`). Expected for the mosinvest homepage: `generic_lending` (or `secured_real_estate_loan`), never `pts_loan`.
+
+**File:** `n8n/workflows/03_firecrawl_single_url_resilient.json` (`Normalize + Route`).
+
+---
+
 ## DEC-039 — First Scraper Source Is Firecrawl Single URL (Not Crawl / Batch / Search)
 
 **Date:** 2026-06-07

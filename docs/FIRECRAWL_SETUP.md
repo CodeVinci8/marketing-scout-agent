@@ -82,6 +82,10 @@ Safety rules carried from the project:
 - The repair Claude call only fires on a primary parse failure.
 - No crawl, no batch, no schedule until the per-URL cost profile is known and approved.
 
+### Prefer specific service pages over homepages
+
+First real test (`mosinvestfinans.ru/` homepage, 2026-06-08): Firecrawl used **1 credit**, but the page was large and multi-product, the **primary Claude parse failed**, and the **repair call fired** (≈$0.0229 Claude delta — ~2× the short-record baseline). Large homepages cost more **and** are more likely to trigger the paid repair pass and produce a multi-product `service_type`. **Prefer a single specific offer/service page** (e.g. `…/kredit/pod-zalog-avto/`) for lower cost and a cleaner single-product analysis. The post-repair consistency hardening (DEC-043/044) fixes the routing/scoring/language for homepages, but specific pages remain cheaper and clearer.
+
 ---
 
 ## 5. Do NOT (this phase)

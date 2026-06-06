@@ -4,6 +4,31 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Workflow 03 Patch: Post-Repair Consistency Hardening (DEC-043/044)
+
+**What was done:**
+- First real Firecrawl test on `https://mosinvestfinans.ru/`: success, **1 credit**, Claude delta **$0.0229**. Primary parse failed → **repair succeeded** → but row was contradictory and landed in `review_queue`: `entity_type=competitor` yet `competitor_strength=1`, `quality_score=6`, Chinese `reason`, `service_type=pts_loan`.
+- Patched **`Normalize + Route` only** (no new copy, no prompt change, still 33 fields):
+  - Language guard (Cyrillic source + CJK reason → Russian fallback).
+  - Competitor signal-count floors (≥3→65, ≥5→75) + rich competitor → `monitor_queue`/`monitor`, never `review_queue`.
+  - Repaired-JSON trust rule (competitor strength never <45 unless text unusable).
+  - Multi-product website → `service_type=generic_lending` (don't let "ПТС" force `pts_loan`).
+  - `raw_response_preview` 200 chars on `parsed_success`.
+  - Verified all 4 credential references by name (placeholder IDs).
+- Decisions DEC-043 (consistency hardening) + DEC-044 (multi-product → generic_lending).
+- Verified: JSON VALID; mosinvest simulation → `monitor_queue`, competitor, `generic_lending`, strength/quality 75, monitor, Russian reason, 33 fields; regression (results/review_queue/skipped_log/technical_errors/auto-competitor) all pass.
+
+**Active workflow candidate:** `03_firecrawl_single_url_resilient.json` (patched, active=false).
+
+**What is next (in order):**
+1. **Operator: commit** patch + doc updates.
+2. **Operator (NEXT_ACTIONS Step E):** re-import WF03; **re-bind credentials** (import drops them) + real Spreadsheet ID; confirm 6 tabs / 33-col header.
+3. **Retest `https://mosinvestfinans.ru/`** → expect `route=monitor_queue`, competitor, monitor, strength/quality ~70–90, `generic_lending`, Russian reason.
+4. Then test a **specific service page** (`…/kredit/pod-zalog-avto/`) for lower cost/clearer analysis. Record both cost deltas.
+5. Batch/crawl/schedule stay blocked.
+
+---
+
 ## Session: 2026-06-07 — Workflow 03: Firecrawl Single URL → Resilient Analyzer (DEC-039–042)
 
 **What was done:**

@@ -5,6 +5,31 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Workflow 03 Patch: Post-Repair Business-Consistency Hardening (DEC-043/044)
+
+**Agent role:** project-engineer
+**Session goal:** Patch `Normalize + Route` in Workflow 03 after the first real Firecrawl test produced a structurally-valid-but-contradictory repaired row.
+
+**First real test:** Firecrawl on `https://mosinvestfinans.ru/` — success, 1 credit; Claude today delta **$0.0229** ($0.0136→$0.0365), total delta $0.0228 ($0.4983→$0.5211). Primary parse failed → repair succeeded (`repaired_json`, `repair_used=true`). Problem row went to `review_queue` with `entity_type=competitor` but `competitor_strength=1`, `quality_score=6`, `recommended_action=investigate`, `service_type=pts_loan`, and a **Chinese `reason`**.
+
+**What was done (Normalize + Route only — no new copy, no prompt change, no new fields):**
+- **A. Language guard** — Cyrillic source + CJK/foreign `reason` → Russian fallback (fixed competitor sentence, or templated sentence for non-competitors).
+- **B. Competitor consistency rule** — count Russian secured-lending signals; ≥3 → `competitor_strength`/`quality_score` floor 65, `recommended_action=monitor`, `route=monitor_queue`, `needs_manual_review=false` unless `parse_error`; ≥5 → floor 75.
+- **C. Repaired-JSON trust rule** — `repair_used=true` + competitor → never `competitor_strength<45` (unless text unusable); rich competitor websites never `review_queue`.
+- **D. Multi-product service_type** — scraped website with ≥2 product categories → `generic_lending` (don't let "ПТС" force `pts_loan`); single-product pages keep their enum.
+- **E. recommended_action** normalized to route (competitor→monitor, lead→contact, weak→investigate, errors/skip→ignore).
+- **F. Routing priority** — rich competitor placed before weak-lead so a competitor page can't fall into `review_queue`.
+- **G. raw_response_preview** — 200 chars on `parsed_success` (500 on technical_error).
+- **H. Credentials** — verified all four nodes reference the correct credential by name (placeholder IDs only); documented manual re-binding after import in the RU guide.
+
+**Verification:** `python3 -m json.tool` VALID. Node simulation of the mosinvest repaired output → `monitor_queue`, competitor, `company_name=МосИнвестФинанс`, `service_type=generic_lending`, strength 75, quality 75, action monitor, Russian reason, `needs_manual_review=false`, 33 fields. Regression (hot lead→results, weak lead→review_queue, skip→skipped_log, technical_error passthrough, auto/PTS-only competitor→monitor_queue keeping `pts_loan`) all pass, 33 fields each. No tool_use / KEY=VALUE; active=false; placeholders only.
+
+**Files updated:** `n8n/workflows/03_firecrawl_single_url_resilient.json`, `docs/N8N_WORKFLOW_03_FIRECRAWL_SINGLE_URL_RU.md`, `docs/FIRECRAWL_SETUP.md`, `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`, `docs/NEXT_ACTIONS.md`, `docs/DECISIONS.md` (DEC-043/044), `docs/COSTS_AND_LIMITS.md`, `docs/AGENT_CAPABILITIES.md`, `docs/AGENT_LOG.md`, `core/hot/recent.md`
+
+**Next:** operator re-imports, re-binds credentials, retests `mosinvestfinans.ru/` (expect `monitor_queue`), then a specific service page. Batch/crawl/schedule stay blocked.
+
+---
+
 ## 2026-06-07 — Workflow 03: Firecrawl Single URL → Resilient Analyzer (DEC-039–042)
 
 **Agent role:** project-engineer
