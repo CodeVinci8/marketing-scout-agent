@@ -117,16 +117,19 @@ Cost-control rules baked into the first Firecrawl test:
 - **Record balance before/after.** Log Firecrawl credits (if visible) and the Claude balance delta below.
 - **No scheduled scraping** until the per-URL cost profile is known.
 
-| Run | Firecrawl credits | Claude today before | Claude today after | Claude today delta | Claude total before | Claude total after | Outcome |
-|-----|-------------------|---------------------|--------------------|--------------------|---------------------|--------------------|---------|
-| Firecrawl single-URL #1 (`mosinvestfinans.ru/`) | **1** | $0.0136 | $0.0365 | **$0.0229** | $0.4983 | $0.5211 (delta $0.0228) | Firecrawl OK; primary parse failed → repair OK → row (pre-patch) `review_queue` with bad scores. Patched (DEC-043/044); retest pending. |
+| Run | Firecrawl credits | Claude today delta | Outcome |
+|-----|-------------------|--------------------|---------|
+| Firecrawl single-URL #1 (`mosinvestfinans.ru/`) | **1** | **$0.0229** ($0.0136→$0.0365; total $0.4983→$0.5211) | Pre-patch: primary parse failed → repair OK → `review_queue` with bad scores. **Post-patch (DEC-043/044): PASSED → `monitor_queue`**, competitor, `generic_lending`, strength/quality 78, `primary_json`, `repair_used=false`. |
+| Firecrawl single-URL #2 (`lioncredit.ru/…/kredit-pod-zalog-nedvizhimosti`) | _record_ | _record_ | **PASSED → `monitor_queue`**, competitor `LionCredit`, `generic_lending`, strength/quality 75, `primary_json`, `repair_used=false`. |
 
-**Notes (DEC-043/044):**
-- **1 Firecrawl credit** per single-URL scrape. Claude delta **$0.0229** here — ~2× the $0.0115 short-record baseline because (a) the page is large (markdown capped to 6000 chars still ~big) and (b) the **repair call fired** (primary parse failed → second Claude call).
-- **Homepages are long and multi-product** → higher token cost AND higher chance of a primary-parse failure that triggers the (paid) repair call. **Prefer a specific service page** (e.g. one product/offer page) for lower cost and clearer single-product analysis.
-- The post-repair hardening adds **no extra API calls** — it is pure n8n Code-node logic, so it does not change cost.
+**Notes (DEC-043/044/045):**
+- **1 Firecrawl credit** per single-URL scrape (observed on `mosinvestfinans.ru/`).
+- Single-URL Firecrawl + Claude cost appears **manageable** (~$0.01–0.023 per URL; the $0.0229 homepage figure included a one-off repair call before hardening). After hardening both tests parsed on the **primary** pass (`repair_used=false`), so steady-state per-URL cost trends toward the ~$0.0115 baseline plus page length.
+- **Homepages are longer and more expensive** than specific service pages, and more likely to trigger the (paid) repair call. Prefer specific service pages.
+- The post-repair hardening adds **no extra API calls** — pure n8n Code-node logic.
+- **Mini-batch (Workflow 04) must start at 3–5 URLs max** (DEC-047). Per-URL cost ≈ single-URL cost; budget = (URLs × per-URL) + repair headroom. Record Firecrawl credits + Claude balance before/after each mini-batch run; pre-run balance buffer ≥ $0.20 for a 5-URL run.
 
-> Real competitor pages are longer than the ~200-char test record, so per-record Claude cost is **higher** than the $0.0115 baseline (≈$0.023 measured here on a large homepage). Specific service pages should cost less.
+> Real competitor pages are longer than the ~200-char test record, so per-record Claude cost is **higher** than the $0.0115 baseline (≈$0.01–0.023 measured on single URLs). Specific service pages cost less than multi-product homepages.
 
 ---
 

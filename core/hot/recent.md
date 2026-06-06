@@ -4,6 +4,28 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Firecrawl Single URL PASSED; Workflow 04 Mini-Batch Planned (DEC-045/046/047)
+
+**What was done (docs/planning only — no workflow JSON edited):**
+- **Two real single-URL tests PASSED** after DEC-043/044 hardening:
+  - `mosinvestfinans.ru/` → `monitor_queue`, competitor `МосИнвестФинанс`, `generic_lending`, strength/quality **78**, `primary_json`, `repair_used=false`.
+  - `lioncredit.ru/…/kredit-pod-zalog-nedvizhimosti` → `monitor_queue`, competitor `LionCredit`, `generic_lending`, strength/quality **75**, `primary_json`, `repair_used=false`.
+- **DEC-045:** Firecrawl single-URL competitor website ingestion + competitor → `monitor_queue` **APPROVED** (manual, controlled).
+- **DEC-046:** manual credential rebinding after every import is an operational requirement (credential IDs are local).
+- **DEC-047:** Workflow 04 may process a manual 3–5 URL list (max 5, no schedule, no crawl); dedup by `source_url` first-class.
+- Created **`docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`** (plan only, build gated on operator approval).
+- Updated RU guide (success table + approval status + rebinding checklist), FIRECRAWL_SETUP (validated + page-selection), COSTS (both tests + mini-batch note), CAPABILITIES (moved to approved; crawl/batch/schedule/Avito/TG/IG still blocked), NEXT_ACTIONS (Step E ✅, Step F active), ROADMAP (Stage 2 ✅, Stage 2.1 next), AGENT_LOG.
+
+**Active candidate:** `03_firecrawl_single_url_resilient.json` (passed, approved, active=false). Workflow 04 = plan only.
+
+**What is next (in order):**
+1. **Operator: commit** doc updates + new Workflow 04 plan.
+2. **Operator: review/approve** `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`.
+3. On approval → build session creates `04_firecrawl_url_list_resilient.json` + RU guide (3 URLs first, then 5; dedup by `source_url`).
+4. Crawl/batch/schedule remain blocked.
+
+---
+
 ## Session: 2026-06-08 — Workflow 03 Patch: Post-Repair Consistency Hardening (DEC-043/044)
 
 **What was done:**

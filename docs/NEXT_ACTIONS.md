@@ -290,23 +290,25 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 
 > Design spec: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`. Results: `docs/WORKFLOW_02_V2_TEST_RESULTS.md`. Cleanup plan: `docs/PROJECT_CLEANUP_AUDIT.md`.
 
-#### Step E — Firecrawl Single URL Test ← ACTIVE STAGE (2026-06-07)
+#### Step E — Firecrawl Single URL Test ✅ PASSED (2026-06-08)
 
-**Context:** Production smoke test passed (competitor → `monitor_queue`, `parsed_success`, `primary_json`, dynamic routing confirmed). Workflow 03 built (DEC-039–042): `n8n/workflows/03_firecrawl_single_url_resilient.json` (17 nodes; Firecrawl single-URL scrape → copied resilient analyzer; Firecrawl failures → `technical_errors` without Claude; `text_context`≤6000; active=false; JSON valid).
+**Result:** Two real single-URL competitor tests passed after DEC-043/044 hardening (DEC-045). Firecrawl single-URL competitor ingestion is **APPROVED** for manual controlled use.
+- `https://mosinvestfinans.ru/` → `monitor_queue`, competitor, `МосИнвестФинанс`, `generic_lending`, strength/quality **78**, `monitor`, `parsed_success`, `primary_json`, `repair_used=false`.
+- `https://www.lioncredit.ru/uslugi/kredit-pod-zalog-nedvizhimosti` → `monitor_queue`, competitor, `LionCredit`, `generic_lending`, strength/quality **75**, `monitor`, `parsed_success`, `primary_json`, `repair_used=false`.
 
-**Guide:** `docs/N8N_WORKFLOW_03_FIRECRAWL_SINGLE_URL_RU.md` · **Setup/safety:** `docs/FIRECRAWL_SETUP.md`
+**Operational note (DEC-046):** after every import, n8n requires manual credential rebinding (`Firecrawl Scrape API`→`Firecrawl API - Marketing Scout`; both Claude nodes→`Claude API - Marketing Scout`; `Append to Dynamic Route Sheet`→`Google Sheets - Marketing Scout Service Account` + real Spreadsheet ID). Expected — credential IDs are local.
 
-**First real test done (2026-06-08, `mosinvestfinans.ru/`):** Firecrawl OK (1 credit, Claude delta ≈$0.0229); primary parse failed → repair OK → row landed in `review_queue` with contradictory scores + Chinese `reason`. **Patched** (DEC-043/044): post-repair consistency hardening in `Normalize + Route` (competitor floors, rich-competitor → `monitor_queue`, language guard, multi-product → `generic_lending`, compact preview). JSON valid; simulation + regression pass.
+> Still blocked (DEC-039/040): multi-page crawl, batch scrape, search, scheduled scraping, Firecrawl MCP/CLI, automated outreach.
 
-**Operator retest tasks (in order):**
-1. [ ] **Re-import** the patched `03_firecrawl_single_url_resilient.json` (active stays false).
-2. [ ] **Bind credentials if needed** (import often drops them): `Firecrawl Scrape API`→`Firecrawl API - Marketing Scout`; both Claude nodes→`Claude API - Marketing Scout`; `Append to Dynamic Route Sheet`→`Google Sheets - Marketing Scout Service Account` + real Spreadsheet ID. Confirm 6 tabs / 33-col header.
-3. [ ] **Retest the same URL** `https://mosinvestfinans.ru/` (record Firecrawl + Claude balance). **Expected: `route=monitor_queue`**, `entity_type=competitor`, `recommended_action=monitor`, `competitor_strength≈70–90`, `quality_score≈70–90`, `service_type=generic_lending`/`secured_real_estate_loan`, Russian `reason`.
-4. [ ] **Then test a specific service page** for lower cost / clearer single-product analysis — preferably `https://mosinvestfinans.ru/kredit/pod-zalog-avto/` (or another one-page competitor offer).
-5. [ ] Record both cost deltas in `docs/COSTS_AND_LIMITS.md`.
-6. [ ] Only after these pass, consider a real competitor URL **list** (then Avito/Apify → Telegram → Instagram).
+#### Step F — Workflow 04: Firecrawl URL List Mini-Batch ← ACTIVE STAGE (plan only, 2026-06-08)
 
-> Not approved this phase (DEC-039/040): multi-page crawl, batch scrape, search, scheduled scraping, Firecrawl MCP/CLI, automated outreach. **Firecrawl batch remains blocked.**
+**Plan:** `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` (DEC-047). **Documentation only — do not build until the operator approves the plan.**
+
+**Scope:** one manual run over a **manually provided list of 3–5 competitor URLs**, reusing the Workflow 03 chain (scrape → normalize → resilient analyzer → dynamic Sheets) with a per-URL loop.
+
+**Hard limits:** max 5 URLs · manual trigger only · no crawl · no schedule · `text_context`≤6000 · continue-on-failure per URL (failed URL → `technical_errors`). **Dedup by `source_url` is a first-class requirement** (in-run de-dup always; cross-run Sheets lookup recommended).
+
+**Operator next action:** review `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` and approve/adjust. On approval, the build session creates `04_firecrawl_url_list_resilient.json` + RU guide (3 URLs first, then 5).
 
 #### Step E (legacy plan) — Workflow 03: Firecrawl Website Analysis _(superseded by the active Step E above)_
 
@@ -368,4 +370,5 @@ Not technically blocked. Deliberately paused on paid scraping (DEC-021).
 5. **Step D — Implement Resilient Output Layer** ← CURRENT (design spec: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`, DEC-033)
    — Phase 1: operator creates 6 Sheets tabs; Phase 2: TEST HARNESS JSON built ✓; Phase 3: operator runs Tests A–E (NEXT); Phase 4: production migration
 6. Step B — remaining minor doc fixes (`README.md`, `tools/TOOLS.md`, `core/warm/decisions.md`)
-7. **Step E — Firecrawl Single URL Test** ← ACTIVE. Workflow 03 built (DEC-039–042); operator creates Firecrawl credential, sets one URL, runs once, verifies `monitor_queue`/`technical_errors`, records cost.
+7. ~~Step E — Firecrawl Single URL Test~~ ✅ PASSED (2026-06-08; DEC-045) — two competitor URLs → `monitor_queue`. Firecrawl single-URL ingestion approved (manual).
+8. **Step F — Workflow 04: Firecrawl URL List mini-batch** ← ACTIVE (plan only). Operator reviews/approves `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` (3–5 URLs, manual, no schedule, dedup by `source_url`). Build only after approval.

@@ -1,6 +1,6 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-08 (Workflow 03 first real test + post-repair consistency hardening — DEC-043/044)
+**Last updated:** 2026-06-08 (Workflow 03 passed two real single-URL tests; Firecrawl single-URL competitor ingestion APPROVED — DEC-045; Workflow 04 mini-batch planned — DEC-047)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
 **Active workflow candidate:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json`
 **Test status:** Resilient Router Tests A–E **all pass**. Production workflow built (33 columns). **First manual production smoke test FAILED** (repair API 502 → technical_errors with lost diagnostics); workflow **patched** (DEC-038): primary raw preserved, compact repair payload, dual Primary+Repair diagnostics, primary prompt reminder. **Production workflow is NOT approved for Firecrawl until the patched manual smoke test passes.**
@@ -14,19 +14,16 @@
 - **Technical-error visibility** → `technical_errors` tab with `needs_manual_review=true`.
 - **Dynamic-sheet routing** — one Google Sheets node, `Sheet Name = {{ $json.route }}`, route validation enforces a valid tab.
 - **Production workflow** `02_claude_api_single_record_v2_resilient_router_production.json` — no test/mock fields, 33 output columns, `raw_response_preview` capped at 500, `recommended_action` normalized to route.
-
-**Under-tested but improving — Firecrawl single-URL competitor ingestion:**
-- `03_firecrawl_single_url_resilient.json` (DEC-039–044). Scrapes one public URL via `POST /v2/scrape` (markdown only), normalizes to a source record (`text_context`≤6000), feeds the copied resilient analyzer; Firecrawl failures route to `technical_errors` without a Claude call.
-- **First real test (2026-06-08, `mosinvestfinans.ru/`):** Firecrawl OK (1 credit); primary parse failed → repair succeeded; but repaired output was contradictory (competitor with strength 1, quality 6, Chinese `reason`, `service_type=pts_loan`) and went to `review_queue`.
-- **Patched (DEC-043/044):** `Normalize + Route` now applies post-repair business-consistency hardening (competitor signal floors, rich-competitor → `monitor_queue`, language guard for `reason`, multi-product → `generic_lending`, compact `raw_response_preview`). Simulation + regression pass (33 fields). **Retest pending** on the same URL, then a specific service page.
+- **Firecrawl single-URL competitor website ingestion** ✅ APPROVED (manual, controlled — DEC-045). `03_firecrawl_single_url_resilient.json` scrapes one public URL via `POST /v2/scrape` (markdown only), normalizes (`text_context`≤6000), feeds the copied resilient analyzer with post-repair consistency hardening (DEC-043/044); Firecrawl failures → `technical_errors` without a Claude call. Two passing real tests (2026-06-08): `mosinvestfinans.ru/` and `lioncredit.ru/…/kredit-pod-zalog-nedvizhimosti`.
+- **Competitor website → `monitor_queue` routing** ✅ APPROVED — competitor pages with offer/rates/region/contact route to `monitor_queue` with `recommended_action=monitor`.
 
 **Still NOT approved:**
-- Multi-URL crawl (`/v2/crawl`).
-- Batch scrape (`/v2/batch/scrape`).
+- Multi-page crawl (`/v2/crawl`).
+- Batch scraping over large URL lists (`/v2/batch/scrape`). _(A small manual 3–5 URL mini-batch is planned — Workflow 04, DEC-047 — but not yet built or approved for use.)_
 - Scheduled scraping (cron trigger).
+- Avito / Telegram / Instagram real ingestion.
 - Automated lead outreach.
 - Firecrawl MCP/CLI (deferred — DEC-040).
-- Other scraper sources (Apify/Telegram/Instagram) — after the Firecrawl single-URL test passes.
 - Deduplication at scale (v0.1 uses `source_url` as the first manual dedup key only).
 - Telegram Control Bot.
 - Fully autonomous multi-source agent.

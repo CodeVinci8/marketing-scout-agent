@@ -25,6 +25,20 @@ Until that need is concrete, the HTTP Request node is the only Firecrawl integra
 
 ---
 
+## 1a. Status — single URL validated (2026-06-08, DEC-045)
+
+**Firecrawl single-URL scraping is validated and approved** (manual, controlled). Two real competitor
+pages passed end-to-end via Workflow 03:
+- `https://mosinvestfinans.ru/` (multi-product homepage) → `monitor_queue`, `generic_lending`.
+- `https://www.lioncredit.ru/uslugi/kredit-pod-zalog-nedvizhimosti` (specific service page) → `monitor_queue`, `generic_lending`.
+
+**Page selection guidance:**
+- **Prefer service-specific pages** (one product/offer) → clearer `service_type`, lower cost, less likely to trigger the paid repair pass.
+- **Homepages are acceptable** for competitor discovery, but multi-product homepages will usually classify as `service_type=generic_lending` (DEC-044) — fine for `monitor_queue`, just less specific.
+- **Avoid pages with login / captcha / heavy JS** until a later phase — they tend to return empty/unusable markdown (→ `technical_errors`).
+
+The next step up is the **3–5 URL mini-batch** (Workflow 04, DEC-047) — still manual, no crawl, no schedule, no batch.
+
 ## 2. First phase scope — single URL only
 
 | Allowed now | Deferred / not allowed yet |

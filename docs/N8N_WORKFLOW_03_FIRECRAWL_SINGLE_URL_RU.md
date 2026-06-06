@@ -78,30 +78,29 @@ route, needs_manual_review, repair_used, repair_status`.
 
 ---
 
-## 4а. Результат первого реального теста (2026-06-08)
+## 4а. Успешные реальные тесты (2026-06-08) — ПРОЙДЕНЫ
 
-**URL:** `https://mosinvestfinans.ru/` (большая главная страница, много продуктов залогового кредитования:
-залог земли, коммерческой недвижимости, рефинансирование, ипотека, залог квартиры, залог авто; ставки от 5.9%, авто от 2%, Москва).
+После харденинга (DEC-043/044) два реальных теста по одному URL **прошли успешно** (DEC-045):
 
-- **Firecrawl:** успех, израсходован **1 кредит**, markdown извлечён.
-- **Claude:** primary-анализ **не прошёл разбор JSON** → сработала ветка ремонта (`repaired_json`, `repair_used=true`, `repair_status=success`). Дельта Claude ≈ **$0.0229**.
-- **Проблема:** ремонт-вывод был противоречив и ушёл в `review_queue`:
-  `entity_type=competitor`, но `competitor_strength=1`, `quality_score=6`, `recommended_action=investigate`,
-  `service_type=pts_loan` (хотя на странице много недвижимости/рефинансирования), а `reason` был **на китайском**.
+| URL | route | entity | company_name | service_type | strength | quality | action | parse_method | repair_used |
+|-----|-------|--------|--------------|--------------|----------|---------|--------|--------------|-------------|
+| `https://mosinvestfinans.ru/` | `monitor_queue` | competitor | МосИнвестФинанс | generic_lending | 78 | 78 | monitor | primary_json | false |
+| `https://www.lioncredit.ru/uslugi/kredit-pod-zalog-nedvizhimosti` | `monitor_queue` | competitor | LionCredit | generic_lending | 75 | 75 | monitor | primary_json | false |
 
-**Патч (DEC-043/044):** `Normalize + Route` теперь не доверяет ремонт-выводу и навязывает бизнес-инварианты:
-- подсчёт сигналов конкурента → пол для `competitor_strength`/`quality_score` (≥3 сигналов: 65; ≥5: 75);
-- богатая страница конкурента → `route=monitor_queue`, `recommended_action=monitor`, не `review_queue`;
-- языковой страж: русский источник + китайский/иностранный `reason` → русский fallback;
-- мультипродуктовая страница → `service_type=generic_lending` (а не `pts_loan`).
+- Test 1: мультипродуктовая главная — корректно ушла в `monitor_queue` благодаря competitor-харденингу. Firecrawl 1 кредит; Claude-дельта ≈ $0.0229.
+- Test 2: конкретная страница залога недвижимости — маршрут верный. `service_type` позже можно уточнить до `secured_real_estate_loan` для одиночных продуктовых страниц.
 
-**Ожидаемо после патча для этого URL:** `route=monitor_queue`, `entity_type=competitor`,
-`recommended_action=monitor`, `competitor_strength≈75`, `quality_score≈75`, `service_type=generic_lending`,
-`reason` на русском, `parse_method=repaired_json`.
+**История проблемы (до харденинга):** на Test 1 primary-разбор JSON упал → ремонт сработал, но вывод был противоречив (`competitor_strength=1`, `quality_score=6`, `reason` на китайском, `service_type=pts_loan`) и попал в `review_queue`. Исправлено в `Normalize + Route` (DEC-043/044): пол сигналов конкурента, богатый конкурент → `monitor_queue`, языковой страж reason, мультипродукт → `generic_lending`.
+
+### Статус одобрения
+- ✅ **Одобрено:** ручной тест одного URL по сайту конкурента; маршрут конкурента → `monitor_queue`.
+- ⛔ **Не одобрено пока:** crawl, batch, расписание, списки URL >5. Мини-батч 3–5 URL — следующий этап (Workflow 04, план: `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`).
 
 ---
 
-## 4б. Чек-лист привязки креденшлов (после импорта)
+## 4б. Чек-лист привязки креденшлов (ПОСЛЕ КАЖДОГО ИМПОРТА)
+
+n8n **не сохраняет** привязку креденшлов из импортированного JSON (ID креденшлов локальны для инстанса — в файле только плейсхолдеры). Это ожидаемо (DEC-046). После **каждого** импорта проверить вручную каждый нод:
 
 n8n часто **не сохраняет** привязку креденшлов из импортированного JSON (в файле только плейсхолдеры).
 Проверить вручную каждый нод:

@@ -5,6 +5,31 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Workflow 03 Firecrawl Single URL PASSED; Workflow 04 Mini-Batch Planned (DEC-045/046/047)
+
+**Agent role:** project-engineer
+**Session goal:** Document the two successful Firecrawl single-URL tests, mark competitor-website single-URL ingestion as approved, and prepare a careful plan for Workflow 04 (URL list mini-batch). Documentation/planning only — no workflow JSON edited.
+
+**Successful tests (after DEC-043/044 hardening):**
+- `https://mosinvestfinans.ru/` → `monitor_queue`, competitor, `МосИнвестФинанс`, `Москва`, `generic_lending`, strength/quality **78**, `monitor`, `parsed_success`, `primary_json`, `repair_used=false` (multi-product homepage correctly routed after competitor consistency hardening).
+- `https://www.lioncredit.ru/uslugi/kredit-pod-zalog-nedvizhimosti` → `monitor_queue`, competitor, `LionCredit`, `generic_lending`, strength/quality **75**, `monitor`, `parsed_success`, `primary_json`, `repair_used=false` (specific real-estate page; `service_type` may later refine to `secured_real_estate_loan`).
+
+**Operational note:** after import n8n required manual credential rebinding of all four credential-bearing nodes (IDs are local) — recorded as a standing requirement (DEC-046).
+
+**Decisions added:** DEC-045 (Firecrawl single-URL competitor websites approved, manual), DEC-046 (credential rebinding after import is operational), DEC-047 (Workflow 04 may process a manual 3–5 URL list, max 5, no schedule).
+
+**What was done (docs only):**
+- Created `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` — purpose, architecture (Manual Start → Set URL List → Split In Batches → per-URL scrape/normalize/analyze → dynamic Sheets), hard limits (≤5 URLs, manual, no crawl/schedule, ≤6000 chars, continue-on-failure), dedup as first-class requirement, cost tracking, expected outputs, 3-then-5 test plan, build gate (no JSON until approved).
+- Marked Workflow 03 single-URL as PASSED / approved across NEXT_ACTIONS (Step E ✅, new Step F active), ROADMAP (Stage 2 ✅, new Stage 2.1 next), AGENT_CAPABILITIES (moved to approved + kept crawl/batch/schedule/Avito/TG/IG blocked), FIRECRAWL_SETUP (validated status + page-selection guidance), COSTS (both tests logged + mini-batch note), RU guide (success table + approval status + rebinding checklist).
+
+**Files updated:** `docs/N8N_WORKFLOW_03_FIRECRAWL_SINGLE_URL_RU.md`, `docs/FIRECRAWL_SETUP.md`, `docs/COSTS_AND_LIMITS.md`, `docs/AGENT_CAPABILITIES.md`, `docs/NEXT_ACTIONS.md`, `docs/DECISIONS.md` (DEC-045/046/047), `docs/ROADMAP.md`, `docs/AGENT_LOG.md`, `core/hot/recent.md`
+**Files created:** `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`
+**No workflow JSON changed.**
+
+**Next:** operator reviews/approves `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`; on approval the build session creates Workflow 04 (3 URLs first, then 5). Crawl/batch/schedule remain blocked.
+
+---
+
 ## 2026-06-08 — Workflow 03 Patch: Post-Repair Business-Consistency Hardening (DEC-043/044)
 
 **Agent role:** project-engineer

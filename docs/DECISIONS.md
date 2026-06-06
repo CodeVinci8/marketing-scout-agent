@@ -5,6 +5,47 @@ Most recent first.
 
 ---
 
+## DEC-045 — Firecrawl Single-URL Competitor Websites Approved (After Two Successful Tests)
+
+**Date:** 2026-06-08
+**Context:** Workflow 03 (`03_firecrawl_single_url_resilient.json`), after the DEC-043/044 hardening, passed two real single-URL tests:
+- **Test 1 — `https://mosinvestfinans.ru/`** (multi-product homepage): `route=monitor_queue`, `entity_type=competitor`, `company_name=МосИнвестФинанс`, `region=Москва`, `service_type=generic_lending`, `competitor_strength=78`, `quality_score=78`, `recommended_action=monitor`, `processing_status=parsed_success`, `parse_method=primary_json`, `repair_used=false`.
+- **Test 2 — `https://www.lioncredit.ru/uslugi/kredit-pod-zalog-nedvizhimosti`** (specific real-estate collateral page): `route=monitor_queue`, `entity_type=competitor`, `company_name=LionCredit`, `service_type=generic_lending`, `competitor_strength=75`, `quality_score=75`, `recommended_action=monitor`, `parsed_success`, `primary_json`, `repair_used=false`.
+
+**Decision:** **Firecrawl single-URL ingestion of competitor websites is approved** for controlled, manual use, and competitor-website → `monitor_queue` routing is approved. This is now a known-good source type for the pipeline.
+
+**Still blocked:** multi-page crawl, batch scraping over large URL lists, scheduled scraping, and real ingestion of Avito/Telegram/Instagram. The next step up is the **small mini-batch** (DEC-047), not a crawler.
+
+**Note:** `service_type` may later be refined to `secured_real_estate_loan` for clearly single-product real-estate pages (Test 2 returned `generic_lending`); not a blocker.
+
+---
+
+## DEC-046 — n8n Credential Rebinding After Import Is an Operational Requirement
+
+**Date:** 2026-06-08
+**Context:** Workflow JSON stores credentials by **name + a placeholder ID** (`PASTE_CREDENTIAL_ID_HERE`). n8n credential IDs are **local to each instance**, so on every import the four credential-bearing nodes lost their binding and required manual reselection before the workflow could run.
+
+**Decision:** Treat **manual credential rebinding after every import** as a standard operational step, documented in each workflow's RU guide. After importing Workflow 03 (and future Firecrawl workflows), rebind:
+- `Firecrawl Scrape API` → `Firecrawl API - Marketing Scout`
+- `Claude Primary API Request` → `Claude API - Marketing Scout`
+- `Claude Repair API Request` → `Claude API - Marketing Scout`
+- `Append to Dynamic Route Sheet` → `Google Sheets - Marketing Scout Service Account` (+ real Spreadsheet ID)
+
+This is expected behavior, not a bug. Keeping credential IDs as placeholders in the repo is correct (no secret leakage); the cost is one manual rebinding pass per import.
+
+---
+
+## DEC-047 — Workflow 04 May Process a Small Manual URL List (Max 5, No Schedule)
+
+**Date:** 2026-06-08
+**Context:** With single-URL competitor ingestion approved (DEC-045), the next step is to iterate over a few URLs — but without jumping to crawl/batch/schedule, which multiply cost and failure surface.
+
+**Decision:** Workflow 04 (planned, not built) may process a **manually provided list of 3–5 competitor URLs in one manual run**. Hard limits: **max 5 URLs**, **manual trigger only**, **no crawl**, **no schedule**, `text_context`≤6000, continue-on-failure per URL (failed URL → `technical_errors`). **Deduplication by `source_url` is a first-class requirement** for Workflow 04 (in-run de-dup always; cross-run Sheets lookup recommended). Reuses Workflow 03's analyzer/normalize/routing nodes verbatim.
+
+**Build gate:** plan documented in `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`. **Do not build until the operator approves the plan.**
+
+---
+
 ## DEC-043 — Post-Repair Business-Consistency Hardening for Scraped Competitor Pages
 
 **Date:** 2026-06-08

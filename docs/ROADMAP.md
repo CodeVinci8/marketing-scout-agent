@@ -1,7 +1,7 @@
 # ROADMAP.md — Marketing Scout Stages
 
-**Near-term sequence (updated 2026-06-06, DEC-037):**
-1.5 Resilient Output Layer ✅ done → **2 First Real Source Test (Firecrawl single competitor URL) — next** → 3 Competitor Monitor Agent → 4 Content Agent → 5 Telegram Control Bot. Stages 6–8 (Inbound Lead Bot, CRM, Analytics) follow. Stage numbers are canonical labels; the Telegram bot (Stage 5) block appears before the Content Agent block in this file for historical reasons.
+**Near-term sequence (updated 2026-06-08, DEC-045/047):**
+1.5 Resilient Output Layer ✅ done → 2 First Real Source Test (Firecrawl single competitor URL) ✅ **done** → **2.1 Firecrawl URL List mini-batch (3–5 URLs, manual) — next** → 3 Competitor Monitor Agent → 4 Content Agent → 5 Telegram Control Bot. Stages 6–8 (Inbound Lead Bot, CRM, Analytics) follow. Stage numbers are canonical labels; the Telegram bot (Stage 5) block appears before the Content Agent block in this file for historical reasons.
 
 ---
 
@@ -47,19 +47,33 @@
 
 ---
 
-## Stage 2 — First Real Source Test: Firecrawl Single Competitor URL (Current)
+## Stage 2 — First Real Source Test: Firecrawl Single Competitor URL ✅ COMPLETED 2026-06-08
 
-**Status:** Workflow built (2026-06-07, DEC-039–042). Production smoke test passed. Awaiting operator manual Firecrawl test.
-**Goal:** Prove the full chain on one real source: Firecrawl scrape of one public competitor secured-lending page → resilient router → `monitor_queue`.
+**Status:** ✅ Complete. Two real single-URL competitor tests passed after DEC-043/044 hardening (DEC-045).
+**Goal (met):** Prove the full chain on one real source: Firecrawl scrape of one public competitor secured-lending page → resilient router → `monitor_queue`.
 
-**Why Firecrawl single URL first:** lowest risk, one URL at a time, clean text output, deterministic, low anti-bot exposure; the competitor → `monitor_queue` path is already validated by Test C and the production smoke test (DEC-039).
+**Passing tests (2026-06-08):**
+- `https://mosinvestfinans.ru/` → `monitor_queue`, competitor, `МосИнвестФинанс`, `generic_lending`, strength/quality 78, `monitor`, `parsed_success`, `primary_json`, `repair_used=false`.
+- `https://www.lioncredit.ru/uslugi/kredit-pod-zalog-nedvizhimosti` → `monitor_queue`, competitor, `LionCredit`, `generic_lending`, strength/quality 75, `monitor`, `parsed_success`, `primary_json`, `repair_used=false`.
 
-**Deliverables:**
-- [x] `03_firecrawl_single_url_resilient.json` — Firecrawl single-URL scrape fronting the (copied) production resilient analyzer; 17 nodes; Firecrawl failures route to `technical_errors` without Claude (DEC-041); `text_context` capped at 6000 chars (DEC-042). JSON valid; active=false.
-- [x] `docs/N8N_WORKFLOW_03_FIRECRAWL_SINGLE_URL_RU.md` + `docs/FIRECRAWL_SETUP.md` written.
-- [ ] Firecrawl credential created in n8n + free-tier limits recorded in `COSTS_AND_LIMITS.md`.
-- [ ] One manual run with a real competitor URL; cost delta recorded.
-- [ ] `source_url` dedup check before append (deferred to next iteration; v0.1 dedup key documented).
+**Delivered:**
+- [x] `03_firecrawl_single_url_resilient.json` (17 nodes; Firecrawl failure → `technical_errors` without Claude, DEC-041; `text_context`≤6000, DEC-042; post-repair consistency hardening, DEC-043/044). active=false.
+- [x] `docs/N8N_WORKFLOW_03_FIRECRAWL_SINGLE_URL_RU.md` + `docs/FIRECRAWL_SETUP.md`.
+- [x] Manual runs with real competitor URLs; cost deltas recorded in `COSTS_AND_LIMITS.md`.
+- [x] Operational requirement recorded: manual credential rebinding after import (DEC-046).
+
+**Approved (DEC-045):** Firecrawl single-URL competitor website ingestion + competitor → `monitor_queue`, for manual controlled use.
+
+---
+
+## Stage 2.1 — Firecrawl URL List Mini-Batch (Next)
+
+**Status:** Plan only — `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` (DEC-047). Not built; awaiting operator approval of the plan.
+**Goal:** Process a manually provided list of **3–5 competitor URLs in one manual run**, reusing the Workflow 03 chain with a per-URL loop.
+
+**Hard limits:** max 5 URLs, manual trigger only, no crawl, no schedule, `text_context`≤6000, continue-on-failure per URL (failed URL → `technical_errors`). **Dedup by `source_url` is a first-class requirement.**
+
+**Why a mini-batch (not crawl/batch):** smallest safe step up from single-URL — tests iteration, per-URL failure isolation, and cost-per-URL before any real batch/crawl/schedule.
 
 **Later sources (in order):** Avito/Apify → Telegram → Instagram.
 
