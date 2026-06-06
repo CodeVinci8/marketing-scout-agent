@@ -164,45 +164,70 @@ Workflows are built incrementally — no external APIs until the platform is ver
 
 > Schema unchanged — same 25 output fields as v1. New fields planned for v2.1+.
 
-#### Step D — Test Prompt v2.5 MICRO via TEST HARNESS _(before any paid scraping)_
+#### Step D0 — Project Cleanup _(before Resilient Output Layer build)_
 
-**Goal:** Verify v2.5 MICRO prompt (~2 KB) resolves the 502 gateway errors from v2.4 (5.3 KB).
-**v2.5 MICRO status:** 1997 chars / ~2 KB runtime prompt. max_tokens 450. No tools. No tool_choice. See DEC-027, DEC-028.
-History: v2.0/v2.1 JSON parse; v2.2 502 tool_use; v2.3 502 at 9.2 KB; v2.4 502 at 5.3 KB.
+**Goal:** Remove experiment clutter before building new TEST HARNESS JSON to avoid confusion.
+**Audit:** `docs/PROJECT_CLEANUP_AUDIT.md`
 
-**Cost:** ~$0.02–0.06 for 7 calls (≈ 1.5–4 RUB). Approved under DEC-021.
-**TEST HARNESS JSON:** `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` (v2.5, 24,138 bytes)
-**Node names:** `Build Claude Request v2.5 MICRO` / `Parse Claude Line Response`
-**Connection chain:** Manual Start → Set Test Selector → Select Test Record → Build Claude Request v2.5 MICRO → Claude API Request → Parse Claude Line Response → Quality Gate → Append Row to Google Sheets
+**Phase 1 — Audit (done):** `docs/PROJECT_CLEANUP_AUDIT.md` created 2026-06-06.
 
-**Current approach: Baseline raw JSON (d350069). Extended tests 8–12 ready. DEC-029, DEC-031.**
+**Phase 2 — Operator approval (next):**
+Review `docs/PROJECT_CLEANUP_AUDIT.md` Section 10. Confirm yes/no for each delete candidate:
+- [ ] Root ghost files (8 zero-byte untracked files: `=70`, `Append`, `Build`, `Claude`, `Parse`, `Quality`, `Select`, `Set`) — confirm delete
+- [ ] `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` — archive or delete?
+- [ ] `n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json` — archive or delete?
+- [ ] `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md` — archive or delete?
+- [ ] `modules/marketing-scout-v0/SYSTEM_PROMPT.md` — archive or delete?
+- [ ] `modules/marketing-scout-v0/TEST_DATA.md` — archive or delete?
+- [ ] `docs/MILESTONE_REVIEW_02.md` — archive or delete?
 
-**Active harnesses:**
-- `02_claude_api_single_record_v2_baseline_short_test5.json` (33,018 bytes) — Test 5 only
-- `02_claude_api_single_record_v2_extended_tests.json` (30,879 bytes) — Tests 8–12
+**Phase 3 — Git add untracked files (must run before any deletions):**
+- [ ] `git add n8n/workflows/02_claude_api_single_record_v2_baseline_raw_json.json` — untracked baseline
+- [ ] `git add docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md` — new design spec
+- [ ] Commit all pending modified docs (recent.md, DECISIONS.md, etc.)
 
-**Step 1 — Test 5 (short):**
-- [ ] Import `baseline_short_test5.json` → set test_id=5 → run → confirm entity_type=content_idea, no JSON parse error
-- [ ] Record result in `docs/WORKFLOW_02_V2_TEST_RESULTS.md`
+**Phase 4 — Execute approved deletions:**
+- [ ] `rm` ghost files (untracked, zero-byte — no git rm needed)
+- [ ] `git rm` approved experiment workflow JSONs and module files
+- [ ] Commit cleanup
 
-**Step 2 — Extended tests 8–12:**
-- [ ] Record API balance before
-- [ ] Import `extended_tests.json`
-- [ ] Run test_id=8 → 9 → 10 → 11 → 12
-- [ ] Record results in `docs/WORKFLOW_02_V2_TEST_RESULTS.md`
-- [ ] Record API balance after; compute cost per test
+> Full detail: `docs/PROJECT_CLEANUP_AUDIT.md`
 
-**Step 3 — Close Workflow 02 v2 testing stage:**
-- [ ] Minimum 4/5 extended tests pass + Test 1 confirmed + zero JSON parse failures
-- [ ] Present to operator for approval
-- [ ] After approval: update production `02_claude_api_single_record_analysis.json`
+---
 
-**Step 4 — Move to first real source test (Step E):**
-- [ ] Get Firecrawl API key → create n8n credential
-- [ ] Create `n8n/workflows/03_firecrawl_website_analysis.json`
-- [ ] Choose one real competitor URL, run end-to-end
+#### Step D — Implement Resilient Output Layer in TEST HARNESS _(immediate next step)_
 
-> Full procedure: `docs/N8N_WORKFLOW_02_V2_TEST_PLAN_RU.md`. Results: `docs/WORKFLOW_02_V2_TEST_RESULTS.md`.
+**Context:** Extended tests 8–12 ran. Tests 1 and 8 (hot PTS leads) passed strongly. Tests 9–12 and 5 failed with output-contract errors — Markdown blocks, no-text responses, invalid JSON. The model reasoned correctly; serialization failed. See `docs/WORKFLOW_02_V2_TEST_RESULTS.md` and DEC-033.
+
+**Decision:** Stop prompt format experiments. Fix architecture with a two-pass Repair + multi-tab Router.
+**Design spec:** `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`
+
+**Phase 1 — Google Sheets setup (operator, no code):**
+- [ ] Create 5 new tabs in "Marketing Scout Results": `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`, `technical_errors`
+- [ ] Add header row to each tab — 25 existing columns + 6 new technical columns: `processing_status`, `parse_method`, `parse_error`, `raw_response_preview`, `route`, `needs_manual_review`
+- [ ] Update existing `results` tab header row to include the same 6 new columns
+
+**Phase 2 — Build Resilient Output Layer in TEST HARNESS (Claude Code generates JSON):**
+- [ ] Add `Claude JSON Repair Formatter` node (HTTP Request → same gateway, Haiku model, ~400-char prompt, max_tokens=600, temp=0.0)
+- [ ] Add `Parse Repaired JSON` Code node (same parse logic as primary)
+- [ ] Replace `Quality Gate` IF node with `Router` Switch node (6 branches per routing table in design spec)
+- [ ] Add 5 new `Append Row` Google Sheets nodes (one per new tab)
+- [ ] Update `Parse Claude JSON Response` Code node: add `processing_status`, `parse_method`, `parse_error`, `raw_response_preview` fields to output
+- [ ] Validate full JSON with `python3 -m json.tool`
+
+**Phase 3 — Run Tests A–E (per design spec Section 8):**
+- [ ] Test A: hot lead → primary parse → `results` tab. Verify `parse_method=json_primary`, `needs_manual_review=false`
+- [ ] Test B: weak lead → `review_queue`. Verify routing threshold correct
+- [ ] Test C: competitor → `monitor_queue`. Verify `competitor_strength >= 45` condition
+- [ ] Test D: inject forced Markdown input → Repair Formatter → repaired JSON → correct tab. Verify `parse_method=json_repaired`, `needs_manual_review=true`
+- [ ] Test E: inject malformed/empty input → `technical_errors` tab. Verify `parse_method=failed`, `processing_status=technical_error`
+- [ ] All 5 pass → present to operator for approval
+
+**Phase 4 — Migrate to production Workflow 02:**
+- [ ] After operator approval: apply Resilient Output Layer to `02_claude_api_single_record_analysis.json`
+- [ ] Re-run Tests 9, 10, 11, 12 on production workflow. Confirm routing (not just "pass/fail")
+
+> Design spec: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`. Results: `docs/WORKFLOW_02_V2_TEST_RESULTS.md`.
 
 #### Step E — Workflow 03: Firecrawl Website Analysis _(after Steps A–D complete)_
 
@@ -265,9 +290,9 @@ Not technically blocked. Deliberately paused on paid scraping (DEC-021).
 **Next actions (in order):**
 1. ~~Step A — consult uncle~~ ✓ Done — `docs/BUSINESS_REQUIREMENTS.md`
 2. ~~Step C — write Prompt v2~~ ✓ Done — `MARKETING_AGENT_PROMPT_V2.md`
-3. **Step D — Run Test 5 (short), then Extended Tests 8–12** (~$0.05–0.10 total, DEC-021, DEC-029, DEC-031)
-   — Test 5 first on `baseline_short_test5.json`; then tests 8–12 on `extended_tests.json`;
-   record all results in `WORKFLOW_02_V2_TEST_RESULTS.md`; get operator approval to close stage
-4. After approval: update production Workflow 02 with v2 baseline structure
-5. Step B — remaining minor doc fixes (`README.md`, `tools/TOOLS.md`, `core/warm/decisions.md`)
-6. **Step E — Workflow 03 Firecrawl** (first real source; competitor website)
+3. ~~Extended tests 8–12 run~~ ✓ Done — Tests 1 and 8 passed; Tests 9–12 failed with output-contract errors
+4. **Step D0 — Project cleanup** (audit done: `docs/PROJECT_CLEANUP_AUDIT.md` — operator approval required)
+5. **Step D — Implement Resilient Output Layer** (design spec: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`, DEC-033)
+   — Phase 1: create Sheets tabs; Phase 2: build TEST HARNESS nodes; Phase 3: Tests A–E; Phase 4: production
+6. Step B — remaining minor doc fixes (`README.md`, `tools/TOOLS.md`, `core/warm/decisions.md`)
+7. **Step E — Workflow 03 Firecrawl** (first real source; competitor website) — after Step D approved

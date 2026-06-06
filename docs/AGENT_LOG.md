@@ -5,6 +5,102 @@ Most recent first.
 
 ---
 
+## 2026-06-06 — Project Cleanup Audit
+
+**Agent role:** project-engineer
+**Session goal:** Audit accumulated experiment files before implementing Resilient Output Layer.
+
+**Context:**
+- Workflow 02 v2 experiment phase generated: baseline raw JSON, TEST HARNESS, short test 5, extended tests, plus multiple planning and prompt docs.
+- 8 zero-byte ghost files found at project root (untracked artifacts: `=70`, `Append`, `Build`, `Claude`, `Parse`, `Quality`, `Select`, `Set`).
+- `02_claude_api_single_record_v2_baseline_raw_json.json` (33,250 bytes, d350069) is untracked — must be added to git before any cleanup.
+- No files deleted. Audit only.
+
+**What was done:**
+- Inspected `n8n/workflows/` (7 JSON files), `modules/marketing-scout-v0/` (9 files), `docs/` (20 files).
+- Ran `git status` to identify tracked vs. untracked state of all files.
+- Created `docs/PROJECT_CLEANUP_AUDIT.md`:
+  - Section 1: cleanup objective
+  - Section 2: active/keep file list (all foundation docs, 3 baseline workflows, 2 active module files)
+  - Section 3: workflow JSON inventory (7 files classified)
+  - Section 4: ghost file identification (8 zero-byte untracked files at root)
+  - Section 5: module file audit (3 archive candidates: V2_PLAN.md, SYSTEM_PROMPT.md, TEST_DATA.md)
+  - Section 6: docs audit (MILESTONE_REVIEW_02.md archive candidate; N8N test plan needs update)
+  - Section 7: proposed cleanup commands (NOT TO RUN YET)
+  - Section 8: risk controls
+  - Section 9: 6-phase cleanup plan
+  - Section 10: decision table for operator (9 items to approve or deny)
+- Updated `docs/NEXT_ACTIONS.md`: added Step D0 (cleanup) before Step D (Resilient Output Layer).
+- Updated `docs/AGENT_LOG.md` and `core/hot/recent.md`.
+
+**Files created:**
+- `docs/PROJECT_CLEANUP_AUDIT.md`
+
+**Files updated:**
+- `docs/NEXT_ACTIONS.md`
+- `docs/AGENT_LOG.md`
+- `core/hot/recent.md`
+
+**No files were deleted or moved in this session.**
+
+**Delete candidates identified (pending operator approval):**
+- Root ghost files: `=70`, `Append`, `Build`, `Claude`, `Parse`, `Quality`, `Select`, `Set` (untracked, zero-byte)
+- `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` (v2.5 MICRO, gateway 502)
+- `n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json` (Test 5 only, superseded)
+- `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md` (plan executed, now redundant)
+- `modules/marketing-scout-v0/SYSTEM_PROMPT.md` (v1.0 draft, superseded)
+- `modules/marketing-scout-v0/TEST_DATA.md` (v1 test data, superseded by TEST_RECORDS_V2.md)
+- `docs/MILESTONE_REVIEW_02.md` (historical audit, lower priority)
+
+**Add to git (untracked files that must be preserved):**
+- `n8n/workflows/02_claude_api_single_record_v2_baseline_raw_json.json` — d350069 working baseline
+- `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md` — Resilient Output Layer design spec
+
+---
+
+## 2026-06-06 — Resilient Output Layer Design (DEC-033)
+
+**Agent role:** project-engineer
+**Session goal:** Diagnose output-contract failures from extended tests 8–12 and design a structural fix.
+
+**Context:**
+- Extended tests 8–12 were run by operator. Results confirmed: Tests 1 and 8 (hot PTS leads) passed strongly.
+- Tests 9 (Instagram competitor), 10 (Avito refinancing), 11 (weak website competitor), 12 (out-of-region SPb) all failed with output-contract errors: no `text` item, Markdown analysis blocks, invalid JSON.
+- Test 5 (content_idea, short) remains unstable. Reasoning appears correct in all cases.
+- Five prompt-format experiments (v2.0–v2.5) did not resolve the failure mode. Prompt-level fixes insufficient.
+
+**What was done:**
+- Created `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md` — full design spec for two-pass architecture:
+  - Problem statement: single-step output contract is structurally unstable for non-obvious inputs.
+  - Three-state classification: `parsed_success`, `technical_error`, `business_skip`.
+  - Two-pass architecture: Primary Parse → (on failure) Repair Formatter → Router.
+  - JSON Repair Formatter: second Claude call (Haiku, ~400-char schema-only prompt, temp=0.0).
+  - Multi-tab Router: replaces binary Quality Gate; routes to 6 Sheets tabs.
+  - 6 new technical fields: `processing_status`, `parse_method`, `parse_error`, `raw_response_preview`, `route`, `needs_manual_review`.
+  - 5 Tests A–E for validation before production migration.
+  - Rollout plan: 6 phases from Sheets setup to production re-test.
+- Added DEC-033 to `docs/DECISIONS.md`.
+- Updated `docs/WORKFLOW_02_V2_TEST_RESULTS.md`: filled actual test results 8–12; updated approval gate (Tests A–E replace old 4/5 gate).
+- Updated `docs/AGENT_CAPABILITIES.md`: status header, not-approved list, risks table.
+- Updated `docs/ROADMAP.md`: Stage 1 status to "in progress"; added Stage 1.5 (Resilient Output Layer).
+- Updated `docs/NEXT_ACTIONS.md`: Step D rewritten — now tracks 4 implementation phases for Resilient Output Layer.
+
+**Files created:**
+- `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`
+
+**Files updated:**
+- `docs/DECISIONS.md` (DEC-033 added)
+- `docs/WORKFLOW_02_V2_TEST_RESULTS.md`
+- `docs/AGENT_CAPABILITIES.md`
+- `docs/ROADMAP.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/AGENT_LOG.md`
+- `core/hot/recent.md`
+
+**Key decisions:** DEC-033 — stop prompt format experiments; fix with two-pass repair + routing.
+
+---
+
 ## 2026-06-05 — Extended Tests 8–12 + Final Test Documentation
 
 **Agent role:** project-engineer
