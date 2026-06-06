@@ -5,6 +5,27 @@ Most recent first.
 
 ---
 
+## DEC-037 — Production Resilient Workflow Strips Test Fields; Test Harness Retained as Evidence
+
+**Date:** 2026-06-06
+**Context:** Tests A–E passed on the dynamic-sheet test harness. The harness writes 14 test-only columns (`test_id`, `expected_*`, `actual_*`, `test_pass_basic`, `test_notes`, `source_record_type`) plus mock-mode logic — correct for testing, wrong for production tabs.
+
+**Decision:**
+1. **Create a separate production workflow** `02_claude_api_single_record_v2_resilient_router_production.json` (name: `... RESILIENT ROUTER PRODUCTION`). It removes `Set Test Selector`, `Select Test Record`, `IF Skip Primary API?`, all mock-mode logic (`mock_markdown`, `mock_unrepairable`), and every test-only output field. Production emits exactly **33 fields = 25 core + 8 technical**.
+2. **Production input** is a single `Set Source Record` node with a safe placeholder (`source_url=https://example.com/source`, `text_context=PLACEHOLDER_TEXT_REPLACE_BEFORE_RUN`, `parsed_at={{ $today }}`) until a scraper is connected.
+3. **Test harness retained** (`..._resilient_router_test_dynamic_sheet.json`) as A–E evidence — not the production artifact.
+4. **Obsolete Switch-based workflows removed** via `git rm`: `..._resilient_router_test.json` (Switch v3) and `..._resilient_router_test_fixed.json` (Switch v1). Superseded by dynamic-sheet routing (DEC-035).
+5. **`repair_used` and `repair_status` retained** as production technical fields — they tell the operator whether the JSON Repair Formatter ran and whether it succeeded, which is operationally important for trust and cost.
+6. **`raw_response_preview` capped at 500 chars** in production (was 1200 in the harness) — enough for debugging, not too wide for Sheets, reduces noise/leakage.
+7. **`recommended_action` normalized to the route** in `Normalize + Route`: results→contact (lead), review_queue→investigate (unless lead contact & score≥70), monitor_queue→monitor (competitor), technical_errors/skipped_log→ignore, content_queue→create_content (unless a stronger action is justified).
+8. **`source_url` is the first v0.1 dedup key.** No dedup column yet; a future scraper workflow should check existing `source_url` before append. Any future `dedup_key` column requires a documented justification and a matching schema/header update.
+
+**Verification:** logic simulation of production `Normalize + Route` — A→results/contact/pts_loan, B→review_queue/investigate/secured_auto_loan, C→monitor_queue/monitor/`МФО / частный кредитор`, D→results/contact/pts_loan, E→technical_errors/ignore, skip→skipped_log/ignore; all emit exactly 33 fields. `python3 -m json.tool` VALID. No test/mock/tool_use/KEY=VALUE leakage.
+
+**Files:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json` (created); two Switch workflows removed. active=false, placeholders only, no real secrets.
+
+---
+
 ## DEC-036 — Routing Priority Fix + service_type/company_name Normalization (Post Tests A–E)
 
 **Date:** 2026-06-06

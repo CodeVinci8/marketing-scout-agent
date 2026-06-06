@@ -75,7 +75,7 @@ Operator reviews and approves deletions before any `git rm` is run.
 ## Cleanup Phase 2 — after dynamic router tests
 
 **Date prepared:** 2026-06-06
-**Status:** Planned — **NOT executed. Blocked until Tests A–E pass on the dynamic-sheet workflow.**
+**Status:** ✅ **EXECUTED 2026-06-06.** Tests A–E passed; production workflow built (DEC-037); the two obsolete Switch-based workflows were removed via `git rm`.
 **Trigger:** Creation of the dynamic-sheet resilient router (DEC-035), which supersedes the Switch-based resilient router workflows.
 
 ### Background
@@ -92,14 +92,15 @@ Once the dynamic-sheet workflow passes Tests A–E, iterations 1 and 2 become re
 
 | File | Classification | Reason |
 |------|---------------|--------|
-| `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json` | **keep active candidate** | Current resilient router test workflow (DEC-035). The one to run Tests A–E on. |
+| `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json` | **keep — ACTIVE production candidate** | Production resilient analyzer (DEC-037). Test/mock fields stripped; 33 output columns. The workflow to import and smoke-test before the scraper. |
+| `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json` | **keep historical test harness** | A–E test evidence (DEC-035/036). Retained; not the production artifact. |
 | `n8n/workflows/02_claude_api_single_record_v2_baseline_raw_json.json` | **keep reference** | d350069 baseline — confirmed working for hot leads (Tests 1, 8). Reference for the primary analysis path. |
 | `n8n/workflows/02_claude_api_single_record_v2_extended_tests.json` | **keep historical evidence** | Tests 8–12 were run on this. Test-evidence record; do not delete. |
-| `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_fixed.json` | **delete after A–E pass** | Switch-based (typeVersion 1) iteration. Superseded by dynamic-sheet. Keep only as the documented fallback source (six-IF-node routing) until dynamic-sheet is proven. |
-| `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test.json` | **delete after A–E pass** | Original Switch-based (typeVersion 3) iteration. Superseded by dynamic-sheet. Rendering issue is the reason it was replaced. |
+| `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_fixed.json` | ✅ **DELETED 2026-06-06 (git rm)** | Switch-based (typeVersion 1) iteration. Superseded by dynamic-sheet + production. |
+| `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test.json` | ✅ **DELETED 2026-06-06 (git rm)** | Original Switch-based (typeVersion 3) iteration. Superseded. |
 | `n8n/workflows/00_healthcheck_manual_test.json` | **keep — baseline** | Platform healthcheck baseline. Do not modify or delete. |
 | `n8n/workflows/01_google_sheets_append_row_test.json` | **keep — baseline** | Google Sheets baseline. Do not modify or delete. |
-| `n8n/workflows/02_claude_api_single_record_analysis.json` | **keep — baseline** | Production Workflow 02 v1. Source of truth until Resilient Output Layer is migrated to production. Do not modify or delete. |
+| `n8n/workflows/02_claude_api_single_record_analysis.json` | **keep — baseline** | Production Workflow 02 v1. Source of truth until the resilient production workflow fully replaces it. Do not modify or delete. |
 
 ### Phase 2 Deferred (carried over from Phase 1, still not approved)
 
@@ -110,23 +111,23 @@ Once the dynamic-sheet workflow passes Tests A–E, iterations 1 and 2 become re
 | `modules/marketing-scout-v0/TEST_DATA.md` | **delete later / deferred** | v1 test data; superseded by TEST_RECORDS_V2*. No operator approval yet. |
 | `docs/MILESTONE_REVIEW_02.md` | **delete later / deferred** | Historical audit; findings addressed; low priority. No operator approval yet. |
 
-### Phase 2 Proposed Cleanup Commands — **NOT TO RUN YET**
+### Phase 2 Cleanup Commands — ✅ EXECUTED 2026-06-06
 
-> **BLOCKER: Do not run any of these until the dynamic-sheet workflow passes Tests A–E.**
-> Until then, the Switch-based workflows are the only proven-importable resilient router copies and the `_fixed.json` six-IF-node fallback may still be needed.
+Tests A–E passed and the production workflow was built (DEC-037), so the two Switch-based iterations were removed:
 
 ```bash
-# NOT TO RUN YET — only after Tests A–E pass on the dynamic-sheet workflow
+# EXECUTED 2026-06-06 (staged for commit)
 git rm n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_fixed.json
 git rm n8n/workflows/02_claude_api_single_record_v2_resilient_router_test.json
 ```
 
-After the above (only when approved), commit:
+Operator commits these staged deletions together with the new production workflow and doc updates:
 
 ```bash
-# NOT TO RUN YET
-git commit -m "Clean up superseded Switch-based resilient router workflows (DEC-035)"
+git commit -m "Add production resilient router; remove obsolete Switch-based workflows (DEC-037)"
 ```
+
+> The dynamic-sheet **test harness** is retained as A–E evidence and is NOT deleted. The deferred module/docs cleanup (PROMPT_V2_PLAN, SYSTEM_PROMPT, TEST_DATA, MILESTONE_REVIEW_02) remains pending operator approval.
 
 ### Phase 2 Gate
 

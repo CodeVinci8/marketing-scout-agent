@@ -5,6 +5,31 @@ Most recent first.
 
 ---
 
+## 2026-06-06 — Production Hardening + Cleanup (DEC-037)
+
+**Agent role:** project-engineer
+**Session goal:** Create a production-ready single-record resilient analyzer (no test/mock fields) and remove obsolete Switch-based workflows.
+
+**What was done:**
+- Created `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json` (name `... RESILIENT ROUTER PRODUCTION`), based on the dynamic-sheet test harness:
+  - Removed `Set Test Selector`, `Select Test Record`, `IF Skip Primary API?`, all mock-mode logic, and every test-only field.
+  - Added `Set Source Record` (placeholder: `source_type=scraped_web`, `platform=website`, `source_url=https://example.com/source`, `parsed_at={{ $today }}`, `text_context=PLACEHOLDER_TEXT_REPLACE_BEFORE_RUN`).
+  - Chain: Manual Start → Set Source Record → Build Primary → Claude Primary → Parse Primary → IF Primary Parse OK? → [true] Normalize+Route / [false] Build Repair → Claude Repair → Parse Repaired → Normalize+Route → Append to Dynamic Route Sheet.
+  - Production `Normalize + Route` emits exactly 33 fields (25 core + 8 technical); added `recommended_action` route-normalization; `raw_response_preview` capped at 500; route validation retained; service_type + company_name normalization retained.
+  - Kept one dynamic Google Sheets node (`Sheet Name = {{ $json.route }}`), credentials by name, `PASTE_SPREADSHEET_ID_HERE`. active=false. No tool_use, no KEY=VALUE.
+- Verified: `python3 -m json.tool` VALID; leakage scan shows 0 test/mock/tool_use/KEY=VALUE tokens; logic simulation of `Normalize + Route` → A=results/contact/pts_loan, B=review_queue/investigate/secured_auto_loan, C=monitor_queue/monitor/`МФО / частный кредитор`, D=results/contact/pts_loan, E=technical_errors/ignore, skip=skipped_log/ignore; all 33 fields.
+- `git rm` removed obsolete `..._resilient_router_test.json` and `..._resilient_router_test_fixed.json` (staged).
+- Added DEC-037. Updated TABLE_SCHEMA (6 tabs + 33 cols + test-only marked non-production), RESILIENT_OUTPUT_LAYER (status + impl note), TEST_RESULTS (productionization section), CLEANUP_AUDIT (Phase 2 executed), CAPABILITIES (approved/not-approved), COSTS (production cost model), ROADMAP (Stage 1.5 done, Stage 2 Firecrawl, renumbered), NEXT_ACTIONS (Step D6/D7), PROJECT_REVIEW_03 (hardening status).
+
+**Files created:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json`
+**Files deleted (git rm, staged):** `..._resilient_router_test.json`, `..._resilient_router_test_fixed.json`
+**Files updated:** TABLE_SCHEMA, WORKFLOW_02_RESILIENT_OUTPUT_LAYER, WORKFLOW_02_V2_TEST_RESULTS, PROJECT_CLEANUP_AUDIT, PROJECT_REVIEW_03_RESILIENT_ROUTER, AGENT_CAPABILITIES, NEXT_ACTIONS, DECISIONS (DEC-037), COSTS_AND_LIMITS, ROADMAP, AGENT_LOG, core/hot/recent.md
+
+**Active workflow candidate:** `02_claude_api_single_record_v2_resilient_router_production.json`
+**Next:** operator imports production workflow, sets credential + Spreadsheet ID, creates 6 tabs, runs one manual smoke test → then Firecrawl single-URL scraper.
+
+---
+
 ## 2026-06-06 — Full Project Review After Resilient Router A–E (Review 03)
 
 **Agent role:** project-engineer

@@ -3,7 +3,47 @@
 One row per analyzed item. All columns populated by the pipeline.
 Claude API fills the analysis columns; n8n fills the metadata columns.
 
-**Last updated:** 2026-06-05 — scoring scale corrected to 1–100; entity/status values updated to match active prompt v1; uncle field mapping added.
+**Last updated:** 2026-06-06 — production reality for the Resilient Router added: 6 tabs, 8 technical columns, test-only columns marked non-production (DEC-037).
+
+---
+
+## Production Reality — Resilient Router (DEC-037)
+
+The production workflow `02_claude_api_single_record_v2_resilient_router_production.json` writes one row to **one of six tabs**, chosen dynamically by the `route` field (Sheet Name = `={{ $json.route }}`).
+
+### Six tabs (names must match `route` exactly)
+
+| Tab | Receives |
+|-----|----------|
+| `results` | Hot leads — `lead_signal`, `lead_signal_score ≥ 70`, action `contact` |
+| `review_queue` | Weak/potential leads — score 30–69, `investigate`, or social/classified product mention; fallback bucket |
+| `monitor_queue` | Competitors — `competitor_strength ≥ 45` |
+| `content_queue` | Pure content ideas — `content_idea`, `content_idea_score ≥ 50`, not a weak lead |
+| `skipped_log` | Business skips — `status=skipped` or `entity_type=irrelevant` |
+| `technical_errors` | Parse failures after repair, or invalid route — `needs_manual_review=true` |
+
+### Production columns = 25 core + 8 technical = **33 columns**
+
+Every tab uses the same header row. The **25 core columns** are the Column Reference table below. The **8 technical columns** are:
+
+| Column | Type | Values |
+|--------|------|--------|
+| `processing_status` | string | `parsed_success` / `business_skip` / `technical_error` |
+| `parse_method` | string | `primary_json` / `repaired_json` |
+| `parse_error` | string | error text or empty (may include `invalid_route`) |
+| `raw_response_preview` | string | first **500** chars of the raw model response (debugging) |
+| `route` | string | one of the six tab names |
+| `needs_manual_review` | boolean | `true` for repaired/technical_error rows |
+| `repair_used` | boolean | `true` if the JSON Repair Formatter ran |
+| `repair_status` | string | `success` / `failed` / empty |
+
+### Test-only columns — NOT production
+
+These exist only in the **test harness** (`..._resilient_router_test_dynamic_sheet.json`) and must NOT appear in production tabs: `test_id`, `expected_route`, `expected_entity_type`, `expected_recommended_action`, `expected_quality_range`, `actual_entity_type`, `actual_recommended_action`, `actual_quality_score`, `actual_lead_signal_score`, `actual_content_idea_score`, `actual_competitor_strength`, `test_pass_basic`, `test_notes`, and `source_record_type`. The production workflow does not emit them.
+
+### Dedup (v0.1)
+
+No dedup column is emitted yet. For v0.1, **`source_url` is the first dedup key**: a future scraper workflow should check whether `source_url` already exists in the target tab before appending. A dedicated `dedup_key` column will only be added later, with a documented justification and a matching header change (DEC-037).
 
 ---
 
@@ -51,7 +91,7 @@ All numeric scores use the **1–100 integer scale** (not 0–10).
 | 20–39 | Low — sparse or ambiguous, minimal value |
 | 1–19 | Skip — noise, boilerplate, or irrelevant (status = skipped) |
 
-**Quality gate:** Only rows with `status = analyzed` AND `quality_score >= 60` are written to the sheet.
+**Quality gate (v1 only):** In the legacy single-step Workflow 02 v1, only rows with `status = analyzed` AND `quality_score >= 60` were written. The **Resilient Router replaces this binary gate with multi-tab routing** (DEC-035/036): every analyzed record is written to the tab named by `route` — low-value rows land in `skipped_log` rather than being dropped.
 
 ---
 

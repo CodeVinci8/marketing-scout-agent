@@ -244,14 +244,30 @@ Workflows are built incrementally — no external APIs until the platform is ver
 Review verdict: **GO for first scraper, conditional on hardening.** Architecture approved; productionization required first.
 
 **Blockers before first scraper (from the review):**
-- [ ] Build a **production** resilient Workflow 02 (or new Workflow 03) whose `Normalize + Route` emits only 25 business + 6 technical fields — **no test-harness columns** (`test_id/expected_*/actual_*/test_pass_basic/test_notes`).
-- [ ] Reconcile `TABLE_SCHEMA.md` — document the production 31-column header + all six tab names (operator-facing source of truth).
+- [x] Build a **production** resilient workflow with no test-harness columns → `02_claude_api_single_record_v2_resilient_router_production.json` (DEC-037). 33 output columns (25 core + 8 technical). ✓
+- [x] Reconcile `TABLE_SCHEMA.md` — production 33-column header + six tab names documented. ✓
 - [ ] Operator pre-creates all six tabs (dynamic node does not create missing tabs).
 - [ ] Record Firecrawl credential + free-tier limits in `COSTS_AND_LIMITS.md`.
 
-**Important fixes before first scraper:** reconcile `raw_response_preview` length (code 1200 vs doc 300 → pick 500); add dedup key (`source_url + parsed_at`); add append-node error handling; confirm B live retest logged (done).
+**Important fixes:** [x] `raw_response_preview` capped at 500 (code + docs aligned). [x] `recommended_action` normalized to route. [ ] dedup — `source_url` documented as v0.1 first key (full dedup later). [ ] append-node error handling (nice-to-have).
 
-**First scraper recommendation:** Firecrawl on one public competitor website (lowest risk; `monitor_queue` path already validated by Test C). Then Avito/Apify → Telegram → Instagram later.
+#### Step D6 — Production hardening + cleanup ✓ DONE 2026-06-06 (DEC-037)
+
+- [x] Production workflow created (test/mock fields stripped); JSON validated VALID; routing logic-simulated for A/B/C/D/E + skip.
+- [x] Obsolete Switch-based workflows removed via `git rm` (`..._test.json`, `..._test_fixed.json`).
+- [x] Docs updated: TABLE_SCHEMA, RESILIENT_OUTPUT_LAYER, TEST_RESULTS, CLEANUP_AUDIT, CAPABILITIES, COSTS, ROADMAP, DECISIONS (DEC-037).
+
+#### Step D7 — Production smoke test, then Firecrawl ← NEXT
+
+1. [ ] Import `02_claude_api_single_record_v2_resilient_router_production.json` into n8n (active stays false).
+2. [ ] Set the Google Sheets credential (`Google Sheets - Marketing Scout Service Account`) and the real **Spreadsheet ID** on `Append to Dynamic Route Sheet`; set the Claude credential (`Claude API - Marketing Scout`) on both HTTP nodes.
+3. [ ] Create the 6 tabs (`results, review_queue, monitor_queue, content_queue, skipped_log, technical_errors`) with the 33-column header row from `docs/TABLE_SCHEMA.md`.
+4. [ ] In `Set Source Record`, replace `PLACEHOLDER_TEXT_REPLACE_BEFORE_RUN` with one real competitor record; set `source_url`.
+5. [ ] Record Claude balance, run once manually, record balance after.
+6. [ ] Verify: a single row appears in the correct tab, **no test columns present**, `route`/`processing_status`/`parse_method` correct.
+7. [ ] If smoke passes → proceed to **Firecrawl single-URL scraper** (Stage 2 / review §10): build `03_firecrawl_single_url_resilient.json` fronting the production resilient layer; check `source_url` before append.
+
+**First scraper recommendation:** Firecrawl on one public competitor website (lowest risk; `monitor_queue` path validated by Test C). Then Avito/Apify → Telegram → Instagram later.
 
 **Next implementation prompt + smoke tests:** see `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md` §10–11.
 

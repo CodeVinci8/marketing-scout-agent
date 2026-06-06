@@ -155,6 +155,19 @@ The core AI loop is **proven for single, hand-fed records**. It is **not yet wir
 
 ---
 
+## 11b. Hardening Status Update (2026-06-06, DEC-037)
+
+Productionization from §4–5 is now **done**:
+
+- ✅ Production workflow `02_claude_api_single_record_v2_resilient_router_production.json` created — test/mock fields stripped, 33 output columns (25 core + 8 technical), JSON VALID, routing logic-simulated.
+- ✅ `TABLE_SCHEMA.md` reconciled — 6 tabs + 33-column production header documented; test-only columns marked non-production.
+- ✅ `raw_response_preview` capped at **500** in code and docs.
+- ✅ `recommended_action` normalized to route.
+- ✅ Obsolete Switch-based workflows removed via `git rm`.
+- ⏳ Operator pre-creates 6 tabs; records Firecrawl credential/limits — pending operator action.
+- ⏳ Dedup: `source_url` documented as v0.1 first key; full dedup deferred to the scraper workflow.
+- ⏳ One manual production smoke test (NEXT_ACTIONS Step D7) before Firecrawl.
+
 ## 12. Final Recommendation
 
 **GO for the first scraper — conditional on completing the Section 4 blockers and Section 5 important fixes.**

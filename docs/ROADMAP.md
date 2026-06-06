@@ -1,5 +1,8 @@
 # ROADMAP.md — Marketing Scout Stages
 
+**Near-term sequence (updated 2026-06-06, DEC-037):**
+1.5 Resilient Output Layer ✅ done → **2 First Real Source Test (Firecrawl single competitor URL) — next** → 3 Competitor Monitor Agent → 4 Content Agent → 5 Telegram Control Bot. Stages 6–8 (Inbound Lead Bot, CRM, Analytics) follow. Stage numbers are canonical labels; the Telegram bot (Stage 5) block appears before the Content Agent block in this file for historical reasons.
+
 ---
 
 ## Stage 1 — Marketing Scout v0.1 (Current)
@@ -25,28 +28,42 @@
 
 ---
 
-## Stage 1.5 — Resilient Output Layer (Current — Next Immediate Step)
+## Stage 1.5 — Resilient Output Layer ✓ COMPLETED 2026-06-06
 
-**Status:** Design complete, implementation pending
+**Status:** ✅ Complete. Tests A–E passed; production workflow built (DEC-037).
 **Design spec:** `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`
-**Decision:** DEC-033
+**Decisions:** DEC-033 (design), DEC-035 (dynamic-sheet routing), DEC-036 (routing priority + normalization), DEC-037 (production strip + cleanup)
 
-**Goal:** Fix output-contract instability discovered in Tests 9–12 without changing the primary prompt.
+**Goal (met):** Fixed output-contract instability without changing the primary prompt.
 
-**Problem:** Tests 9–12 and 5 all failed with JSON serialization errors — the model reasoned correctly but returned Markdown blocks, thinking-only responses, or invalid JSON. Five prompt-format experiments (v2.0–v2.5) did not resolve this. A structural fix is required.
+**Delivered:**
+- JSON Repair Formatter node (second Claude call, schema-only prompt, no re-analysis, no invented facts)
+- Dynamic-sheet routing — one Google Sheets node, `Sheet Name = {{ $json.route }}` (replaced Switch by Route)
+- 6 tabs: `results`, `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`, `technical_errors`
+- 8 production technical fields; route validation; service_type + company_name normalization; recommended_action normalization
+- Tests A–E all pass; production workflow `02_claude_api_single_record_v2_resilient_router_production.json` created (test fields stripped)
 
-**Deliverables:**
-- JSON Repair Formatter node (second Claude call — Haiku model, schema-only prompt)
-- Multi-tab Router (replaces current binary Quality Gate)
-- 6 Google Sheets tabs: `results`, `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`, `technical_errors`
-- 6 new technical fields per record: `processing_status`, `parse_method`, `parse_error`, `raw_response_preview`, `route`, `needs_manual_review`
-- TEST HARNESS Tests A–E all passing
-
-**Completion gate:** Tests A–E pass + operator approval → migrate to production Workflow 02.
+**Remaining before scraper:** import production workflow, set credential + Spreadsheet ID, create 6 tabs, run one manual smoke test.
 
 ---
 
-## Stage 2 — Competitor Intelligence
+## Stage 2 — First Real Source Test: Firecrawl Single Competitor URL (Next)
+
+**Status:** Next immediate step (after production smoke test).
+**Goal:** Prove the full chain on one real source: Firecrawl scrape of one public competitor secured-lending page → resilient router → `monitor_queue`.
+
+**Why Firecrawl single URL first:** lowest risk, one URL at a time, clean text output, deterministic, low anti-bot exposure; the competitor → `monitor_queue` path is already validated by Test C.
+
+**Deliverables:**
+- Firecrawl credential + free-tier limits recorded in `COSTS_AND_LIMITS.md`
+- `03_firecrawl_single_url_resilient.json` fronting the production resilient layer
+- `source_url` dedup check before append (v0.1 dedup key)
+
+**Later sources (in order):** Avito/Apify → Telegram → Instagram.
+
+---
+
+## Stage 3 — Competitor Monitor Agent
 
 **Status:** Planned
 **Module directory:** `modules/competitor-intelligence-v0/`
@@ -61,7 +78,7 @@
 
 ---
 
-## Stage 2.5 — Operator Telegram Control Bot / Assistant
+## Stage 5 — Operator Telegram Control Bot / Assistant
 
 **Status:** Future roadmap (after stable data collection and first real source tests)
 **Module directory:** `modules/telegram-control-bot-v0/` _(planned)_
@@ -96,9 +113,9 @@ The operator does not need the n8n UI for routine analysis. A Telegram interface
 
 ---
 
-## Stage 3 — Content Agent
+## Stage 4 — Content Agent
 
-**Status:** Planned
+**Status:** Planned (later)
 **Module directory:** `modules/content-agent-v0/`
 
 **Goal:** Generate content ideas from competitor and industry content.
@@ -111,7 +128,7 @@ The operator does not need the n8n UI for routine analysis. A Telegram interface
 
 ---
 
-## Stage 4 — Inbound Lead Bot
+## Stage 6 — Inbound Lead Bot
 
 **Status:** Planned
 **Module directory:** `modules/inbound-lead-bot-v0/`
@@ -126,7 +143,7 @@ The operator does not need the n8n UI for routine analysis. A Telegram interface
 
 ---
 
-## Stage 5 — CRM Assistant
+## Stage 7 — CRM Assistant
 
 **Status:** Planned
 **Module directory:** `modules/crm-assistant-v0/`
@@ -140,7 +157,7 @@ The operator does not need the n8n UI for routine analysis. A Telegram interface
 
 ---
 
-## Stage 6 — Analytics Agent
+## Stage 8 — Analytics Agent
 
 **Status:** Planned
 **Module directory:** `modules/analytics-agent-v0/`

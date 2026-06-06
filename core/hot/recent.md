@@ -4,6 +4,27 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-06 — Production Hardening + Cleanup (DEC-037)
+
+**What was done:**
+- Created **production** workflow `02_claude_api_single_record_v2_resilient_router_production.json` from the dynamic-sheet test harness:
+  - Stripped test harness: removed Set Test Selector, Select Test Record, IF Skip Primary API?, all mock logic, and all test-only fields.
+  - Added `Set Source Record` placeholder node (`text_context=PLACEHOLDER_TEXT_REPLACE_BEFORE_RUN`, `parsed_at={{ $today }}`).
+  - Production `Normalize + Route`: 33 output fields (25 core + 8 technical), `recommended_action` normalized to route, `raw_response_preview` capped 500, route validation + service_type/company_name normalization kept.
+  - One dynamic Google Sheets node (`Sheet Name = {{ $json.route }}`), placeholders only, active=false, no tool_use/KEY=VALUE.
+- Verified VALID + leakage-clean + logic simulation A/B/C/D/E + skip all route correctly with 33 fields.
+- `git rm` removed obsolete Switch workflows `..._test.json` + `..._test_fixed.json` (staged). Test harness dynamic_sheet retained as evidence.
+- Added DEC-037; updated TABLE_SCHEMA, RESILIENT_OUTPUT_LAYER, TEST_RESULTS, CLEANUP_AUDIT, CAPABILITIES, COSTS, ROADMAP, NEXT_ACTIONS, PROJECT_REVIEW_03.
+
+**Active workflow candidate:** `02_claude_api_single_record_v2_resilient_router_production.json`
+
+**What is next (in order):**
+1. **Operator: commit** (new production workflow + 2 staged deletions + doc updates) — suggested message: "Add production resilient router; remove obsolete Switch-based workflows (DEC-037)".
+2. **Operator smoke test (NEXT_ACTIONS Step D7):** import production workflow, set Claude + Sheets credentials + real Spreadsheet ID, create 6 tabs (33-col header), replace placeholder text, run once, verify one row in correct tab with no test columns.
+3. If smoke passes → **Firecrawl single-URL scraper** (`03_firecrawl_single_url_resilient.json`) fronting the production resilient layer; check `source_url` before append.
+
+---
+
 ## Session: 2026-06-06 — Full Project Review After A–E (Review 03)
 
 **What was done:**

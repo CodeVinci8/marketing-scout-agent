@@ -1,9 +1,11 @@
 # WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md — Resilient Output Layer Design
 
-**Version:** v1.0
+**Version:** v1.1
 **Date:** 2026-06-06
-**Status:** Design — approved for implementation
-**Related decision:** DEC-033
+**Status:** ✅ Implemented & tested (A–E pass). Production workflow built with test fields stripped.
+**Related decisions:** DEC-033 (design), DEC-035 (dynamic-sheet routing), DEC-036 (routing priority + normalization), DEC-037 (production strip + cleanup)
+
+> **Implementation note (2026-06-06):** The final implementation uses **dynamic-sheet routing** (one Google Sheets node, `Sheet Name = {{ $json.route }}`) instead of the Switch-by-Route node described in older sections, and the **Repair Formatter uses `claude-sonnet-4-6`** (same gateway), not Haiku — gateway model availability drove this. The **production** workflow is `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json` (no test/mock fields; 33 output columns; `raw_response_preview` capped at 500). The dynamic-sheet **test harness** (`..._test_dynamic_sheet.json`) is retained as A–E evidence. Sections below are the original design; where they differ, DEC-035/036/037 and this note govern.
 
 ---
 

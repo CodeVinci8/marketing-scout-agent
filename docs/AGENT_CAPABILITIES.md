@@ -1,17 +1,28 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-06 (updated after full project review — `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md`)
+**Last updated:** 2026-06-06 (production hardening + cleanup — DEC-037)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
-**Test status:** Resilient Router (dynamic-sheet) Tests A–E **all pass live**. B retest confirmed (`review_queue`, `primary_json`, lead≈38) after DEC-036 routing patch. Repair Formatter validated by Test D; technical_errors path validated by Test E.
+**Active workflow candidate:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json`
+**Test status:** Resilient Router Tests A–E **all pass**. Production workflow built (test/mock fields stripped, 33 columns). Obsolete Switch-based workflows removed. Remaining gate: one manual smoke test of the production workflow before connecting Firecrawl.
 
-## Currently Approved Capabilities (Post Tests A–E, 2026-06-06)
+## Currently Approved Capabilities (Production-hardened, 2026-06-06, DEC-037)
 
-- **Two-pass resilient analysis** of a single Russian secured-lending record: Primary Claude → parse → conditional JSON repair → parse → normalize → route.
-- **Six-way routing** via one dynamic Google Sheets node: `results`, `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`, `technical_errors`.
-- **Field hardening:** route validation (invalid → technical_errors), `service_type` enum normalization, `recommended_action` enum guard, competitor `company_name` descriptive fallback (DEC-036).
-- **Failure isolation:** technical errors separated from business skips; `needs_manual_review` flag set.
+- **Hot lead detection** → `results` tab (lead_signal, score ≥ 70, action `contact`).
+- **Weak/potential lead review routing** → `review_queue` (score 30–69 / investigate / social-classified product mention), normalized action `investigate`.
+- **Competitor monitor routing** → `monitor_queue` (competitor_strength ≥ 45), with descriptive `company_name` fallback.
+- **Repair Formatter fallback** — second Claude call reformats unparseable output without re-analysis or invented facts.
+- **Technical-error visibility** → `technical_errors` tab with `needs_manual_review=true`.
+- **Dynamic-sheet routing** — one Google Sheets node, `Sheet Name = {{ $json.route }}`, route validation enforces a valid tab.
+- **Production workflow** `02_claude_api_single_record_v2_resilient_router_production.json` — no test/mock fields, 33 output columns, `raw_response_preview` capped at 500, `recommended_action` normalized to route.
 
-**Not yet approved:** production resilient Workflow 02 (still a test harness with test-only columns), any real-source ingestion, multi-item/batch, `content_idea` production handling. See `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md` §3–4.
+**Still NOT approved:**
+- Real scraper ingestion (Firecrawl/Apify/Telegram/Instagram) — next step is a Firecrawl single-URL test.
+- Deduplication at scale (v0.1 uses `source_url` as the first manual dedup key only).
+- Telegram Control Bot.
+- Fully autonomous multi-source agent.
+- `content_idea` production handling (content_queue exists; review process deferred to Stage 4).
+
+See `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md` and DEC-037.
 **Business requirements:** `docs/BUSINESS_REQUIREMENTS.md`
 
 ---

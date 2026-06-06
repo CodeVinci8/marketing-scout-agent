@@ -1,0 +1,424 @@
+{
+  "name": "02 - Claude API Single Record Analysis v2 RESILIENT ROUTER PRODUCTION",
+  "nodes": [
+    {
+      "id": "rr000000-0000-0000-0000-0000000000p1",
+      "name": "Production Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        -120
+      ],
+      "parameters": {
+        "content": "RESILIENT ROUTER — PRODUCTION (single record).\n\nBEFORE RUN:\n1. Set Google Sheets credential + real Spreadsheet ID on 'Append to Dynamic Route Sheet'.\n2. Create 6 tabs: results, review_queue, monitor_queue, content_queue, skipped_log, technical_errors (headers per docs/TABLE_SCHEMA.md, 33 production columns).\n3. Replace PLACEHOLDER_TEXT_REPLACE_BEFORE_RUN in 'Set Source Record' with a real record.\n\nNo test/mock fields. raw_response_preview capped at 500 chars. Route validation forces technical_errors on bad route. active=false — manual run only.",
+        "height": 260,
+        "width": 460,
+        "color": 4
+      }
+    },
+    {
+      "id": "rr000000-0000-0000-0000-000000000002",
+      "name": "Manual Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        120,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "rr000000-0000-0000-0000-0000000000s1",
+      "name": "Set Source Record",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        340,
+        300
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "src-01",
+              "name": "source_type",
+              "value": "scraped_web",
+              "type": "string"
+            },
+            {
+              "id": "src-02",
+              "name": "platform",
+              "value": "website",
+              "type": "string"
+            },
+            {
+              "id": "src-03",
+              "name": "source_url",
+              "value": "https://example.com/source",
+              "type": "string"
+            },
+            {
+              "id": "src-04",
+              "name": "profile_url",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "src-05",
+              "name": "published_at",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "src-06",
+              "name": "parsed_at",
+              "value": "={{ $today }}",
+              "type": "string"
+            },
+            {
+              "id": "src-07",
+              "name": "text_context",
+              "value": "PLACEHOLDER_TEXT_REPLACE_BEFORE_RUN",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "rr000000-0000-0000-0000-000000000005",
+      "name": "Build Primary Claude Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const record = $json;\n\nconst systemPrompt = `You are Marketing Scout Agent v2 -- a market intelligence analyst for a secured lending business in Moscow and Moscow Oblast, Russia.\n\nFor every record ask: What does this mean for the operator's business and what should they do? Reason like a business owner.\n\nANALYSIS PRIORITY ORDER:\n1. LEAD SIGNAL first -- potential client needing secured loan? Moscow/MO? PTS/auto/real estate collateral? Urgency? Contactable?\n2. COMPETITOR second -- active secured lending business Moscow/MO? Threat level?\n3. CONTENT IDEA third -- client fear/objection/knowledge gap for secured lending?\n4. IRRELEVANT if none apply.\n\nIDEAL CLIENT: Car owner (PTS clean title), Moscow/MO, needs cash urgently, bank-rejected, 50k-500k RUB.\n\nHigh-urgency signals (raise lead_signal_score): срочно, сегодня, банки отказали, не дают кредит, испорчена кредитная история + specific amount + collateral type.\n\nREGION RULES:\n- Moscow/MO explicit: lead_signal_score 60-100\n- Region ambiguous: eligible up to 55\n- Another city/region: lead_signal_score capped at 40\nCompetitors: Moscow/MO or national coverage -> score normally; other region only -> cap competitor_strength at 50.\n\nlead_signal_score calibration:\n- 85-100: fit + urgency + readiness + Moscow/MO confirmed\n- 70-84: strong fit+urgency, region confirmed, readiness partial\n- 55-69: clear product fit, one signal confirmed, region present\n- 35-54: intent apparent, fit unclear or region outside MO\n- 1-34: no real lead signal\n\nrecommended_action=contact requires lead_signal_score>=70.\n\ncompetitor_strength calibration:\n- 85-100: fresh (<=30d), Moscow/MO, stated rate, same-day, bad-credit accepted, contactable\n- 65-84: active professional, Moscow/MO confirmed, rate absent or one signal missing\n- 45-64: present but older content or uncertain coverage\n- 25-44: weak - stale or different region\n- 1: not a competitor\n\nSKIP RULES -- return status=skipped, quality_score=1, all scores=1 when:\n- Fewer than 40 meaningful chars\n- Pure navigation boilerplate\n- No connection to financial services\n- published_at >180 days before parsed_at with no fresh signals\n\nREASON FIELD (3 sentences required):\n1. WHAT: what is this record, key evidence from text\n2. WHY: why scores are what they are, cite specific signals\n3. NEXT: what operator should do and why\n\nOUTPUT FORMAT -- CRITICAL:\nRespond with ONLY a valid JSON object.\nNo markdown, no code fences, no preamble.\nFirst character must be {. Last must be }.\nAll 25 fields required. Empty string for unknown strings. 1 for unknown integers.\n\nREQUIRED JSON SCHEMA:\n{\n  \"created_at\": \"<parsed_at value ISO 8601>\",\n  \"source_type\": \"<from input>\",\n  \"platform\": \"<from input>\",\n  \"source_url\": \"<from input>\",\n  \"parsed_at\": \"<from input>\",\n  \"published_at\": \"<from input or empty>\",\n  \"freshness_status\": \"<fresh|recent|old|unknown>\",\n  \"entity_type\": \"<competitor|lead_signal|market_signal|content_idea|irrelevant>\",\n  \"company_name\": \"<explicitly in text only or empty>\",\n  \"profile_name\": \"<explicitly in text only or empty>\",\n  \"profile_url\": \"<from input or empty>\",\n  \"region\": \"<explicitly mentioned or empty>\",\n  \"service_type\": \"<secured_auto_loan|secured_real_estate_loan|pts_loan|refinancing|mortgage_adjacent|generic_lending|unknown>\",\n  \"offer_text\": \"<1 sentence: what offered/sought or content angle title>\",\n  \"terms\": \"<explicit rate/conditions only or empty>\",\n  \"contact_public\": \"<phone/email/Telegram from text only or empty>\",\n  \"text_context\": \"<cleaned summary max 300 chars>\",\n  \"detected_need\": \"<lead_signal only: need+amount+urgency+bank rejection+region or empty>\",\n  \"competitor_strength\": <integer 1-100; 1 if not competitor>,\n  \"lead_signal_score\": <integer 1-100>,\n  \"content_idea_score\": <integer 1-100>,\n  \"quality_score\": <integer 1-100>,\n  \"reason\": \"<3 sentences: what+evidence; why scores; next action>\",\n  \"recommended_action\": \"<monitor|contact|create_content|ignore|investigate>\",\n  \"status\": \"<analyzed|skipped>\"\n}`;\n\nreturn [{ json: {\n  model: 'claude-sonnet-4-6',\n  max_tokens: 1400,\n  temperature: 0.2,\n  system: systemPrompt,\n  messages: [{\n    role: 'user',\n    content: JSON.stringify({\n      source_type: record.source_type || '',\n      platform: record.platform || '',\n      source_url: record.source_url || '',\n      profile_url: record.profile_url || '',\n      parsed_at: record.parsed_at || '',\n      published_at: record.published_at || '',\n      text_context: record.text_context || ''\n    })\n  }]\n}}];"
+      }
+    },
+    {
+      "id": "rr000000-0000-0000-0000-000000000007",
+      "name": "Claude Primary API Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        820,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://aiprimetech.io/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: $json.model, max_tokens: $json.max_tokens, temperature: $json.temperature, system: $json.system, messages: $json.messages }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Claude API - Marketing Scout"
+        }
+      }
+    },
+    {
+      "id": "rr000000-0000-0000-0000-000000000008",
+      "name": "Parse Primary JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const response = $json;\nconst srcRecord = $('Set Source Record').first().json;\n\n// Handle HTTP error responses\nif (response.error || response.status >= 400) {\n  return [{ json: {\n    parse_ok: false,\n    parse_method: 'primary_json',\n    repair_used: false,\n    processing_status: 'technical_error_candidate',\n    parse_error: 'HTTP error: ' + JSON.stringify(response.error || response.status),\n    raw_response_preview: JSON.stringify(response).substring(0, 500),\n    original_record: srcRecord\n  }}];\n}\n\n// Find text item\nlet textItem;\ntry {\n  if (!response.content || !Array.isArray(response.content)) throw new Error('No content array');\n  textItem = response.content.find(c => c.type === 'text');\n} catch(e) {\n  return [{ json: {\n    parse_ok: false, parse_method: 'primary_json', repair_used: false,\n    processing_status: 'technical_error_candidate',\n    parse_error: 'No content array: ' + e.message,\n    raw_response_preview: JSON.stringify(response).substring(0, 500),\n    original_record: srcRecord\n  }}];\n}\n\nif (!textItem || !textItem.text) {\n  return [{ json: {\n    parse_ok: false, parse_method: 'primary_json', repair_used: false,\n    processing_status: 'technical_error_candidate',\n    parse_error: 'No text item in content array',\n    raw_response_preview: JSON.stringify(response.content || response).substring(0, 500),\n    original_record: srcRecord\n  }}];\n}\n\nconst rawPreview = textItem.text.substring(0, 500);\n\n// Parse with defensive cleanup\nlet parsed;\ntry {\n  let txt = textItem.text.trim();\n  txt = txt.replace(/^```json\\s*/i, '').replace(/\\s*```$/,'').trim();\n  txt = txt.replace(/^```\\s*/,'').replace(/\\s*```$/,'').trim();\n  const bStart = txt.indexOf('{');\n  const bEnd = txt.lastIndexOf('}');\n  if (bStart !== -1 && bEnd !== -1) txt = txt.substring(bStart, bEnd + 1);\n  txt = txt.replace(/[\\u2018\\u2019]/g, \"'\").replace(/[\\u201C\\u201D\\u00AB\\u00BB]/g, '\"');\n  parsed = JSON.parse(txt);\n} catch(e) {\n  return [{ json: {\n    parse_ok: false, parse_method: 'primary_json', repair_used: false,\n    processing_status: 'technical_error_candidate',\n    parse_error: 'JSON.parse failed: ' + e.message,\n    raw_response_preview: rawPreview,\n    original_record: srcRecord\n  }}];\n}\n\nreturn [{ json: {\n  parse_ok: true,\n  parse_method: 'primary_json',\n  repair_used: false,\n  repair_status: '',\n  parse_error: '',\n  raw_response_preview: rawPreview,\n  ...parsed\n}}];"
+      }
+    },
+    {
+      "id": "rr000000-0000-0000-0000-000000000009",
+      "name": "IF Primary Parse OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "rr000000-0000-0000-0000-000000000091",
+              "leftValue": "={{ $json.parse_ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "rr000000-0000-0000-0000-000000000010",
+      "name": "Build Repair Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        560
+      ],
+      "parameters": {
+        "jsCode": "const input = $json;\nconst srcRecord = $('Set Source Record').first().json;\n\nconst rawPreview = input.raw_response_preview || 'empty';\nconst parseErr = input.parse_error || 'Primary parse failed';\n\nconst repairSystem = `You are a JSON repair formatter. Convert the provided raw model response into one strict JSON object matching the schema below. Rules:\n- Do not add new facts. Do not invent contacts, regions, scores, or terms.\n- Extract only what is explicitly stated in the raw response.\n- If a value is unknown use empty string for text fields and 1 for score fields.\n- If the raw response contains no useful market facts at all: return status=skipped, entity_type=irrelevant, recommended_action=ignore, all scores=1.\n- Return JSON only. No markdown. No explanation. First char must be {, last must be }.\nSchema fields required: created_at, source_type, platform, source_url, parsed_at, published_at, freshness_status, entity_type, company_name, profile_name, profile_url, region, service_type, offer_text, terms, contact_public, text_context, detected_need, competitor_strength, lead_signal_score, content_idea_score, quality_score, reason, recommended_action, status.\nEnum values: entity_type=[competitor,lead_signal,market_signal,content_idea,irrelevant]; recommended_action=[monitor,contact,create_content,ignore,investigate]; status=[analyzed,skipped]; freshness_status=[fresh,recent,old,unknown].`;\n\nconst userMsg = JSON.stringify({\n  original_record: {\n    source_type: srcRecord.source_type || '',\n    platform: srcRecord.platform || '',\n    source_url: srcRecord.source_url || '',\n    published_at: srcRecord.published_at || '',\n    parsed_at: srcRecord.parsed_at || ''\n  },\n  raw_primary_response: rawPreview,\n  parse_error: parseErr,\n  instruction: 'Convert raw_primary_response into the required JSON schema. Return JSON only.'\n});\n\nreturn [{ json: {\n  model: 'claude-sonnet-4-6',\n  max_tokens: 900,\n  temperature: 0.0,\n  system: repairSystem,\n  messages: [{ role: 'user', content: userMsg }]\n}}];"
+      }
+    },
+    {
+      "id": "rr000000-0000-0000-0000-000000000011",
+      "name": "Claude Repair API Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1620,
+        560
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://aiprimetech.io/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: $json.model, max_tokens: $json.max_tokens, temperature: $json.temperature, system: $json.system, messages: $json.messages }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Claude API - Marketing Scout"
+        }
+      }
+    },
+    {
+      "id": "rr000000-0000-0000-0000-000000000012",
+      "name": "Parse Repaired JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        560
+      ],
+      "parameters": {
+        "jsCode": "const response = $json;\n\n// Handle HTTP error from repair call\nif (response.error || response.status >= 400) {\n  return [{ json: {\n    parse_ok: false, parse_method: 'repaired_json', repair_used: true,\n    repair_status: 'failed', processing_status: 'technical_error', route: 'technical_errors',\n    needs_manual_review: true,\n    parse_error: 'Repair HTTP error: ' + JSON.stringify(response.error || response.status),\n    raw_response_preview: JSON.stringify(response).substring(0, 500)\n  }}];\n}\n\nlet textItem;\ntry {\n  textItem = (response.content || []).find(c => c.type === 'text');\n} catch(e) { textItem = null; }\n\nif (!textItem || !textItem.text) {\n  return [{ json: {\n    parse_ok: false, parse_method: 'repaired_json', repair_used: true,\n    repair_status: 'failed', processing_status: 'technical_error', route: 'technical_errors',\n    needs_manual_review: true,\n    parse_error: 'No text item in repair response',\n    raw_response_preview: JSON.stringify(response.content || response).substring(0, 500)\n  }}];\n}\n\nconst rawPreview = textItem.text.substring(0, 500);\n\nlet parsed;\ntry {\n  let txt = textItem.text.trim();\n  txt = txt.replace(/^```json\\s*/i,'').replace(/\\s*```$/,'').trim();\n  txt = txt.replace(/^```\\s*/,'').replace(/\\s*```$/,'').trim();\n  const bStart = txt.indexOf('{'); const bEnd = txt.lastIndexOf('}');\n  if (bStart !== -1 && bEnd !== -1) txt = txt.substring(bStart, bEnd + 1);\n  txt = txt.replace(/[‘’]/g,\"'\").replace(/[“”«»]/g,'\"');\n  parsed = JSON.parse(txt);\n} catch(e) {\n  return [{ json: {\n    parse_ok: false, parse_method: 'repaired_json', repair_used: true,\n    repair_status: 'failed', processing_status: 'technical_error', route: 'technical_errors',\n    needs_manual_review: true,\n    parse_error: 'Repair JSON.parse failed: ' + e.message,\n    raw_response_preview: rawPreview\n  }}];\n}\n\nreturn [{ json: {\n  parse_ok: true,\n  parse_method: 'repaired_json',\n  repair_used: true,\n  repair_status: 'success',\n  parse_error: '',\n  raw_response_preview: rawPreview,\n  ...parsed\n}}];"
+      }
+    },
+    {
+      "id": "rr000000-0000-0000-0000-000000000013",
+      "name": "Normalize + Route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const data = $json;\nconst srcRecord = $('Set Source Record').first().json;\n\nfunction clamp(v) { const n = parseInt(v); return isNaN(n) ? 1 : Math.min(100, Math.max(1, n)); }\nfunction truncate(s, n) { return (s == null ? '' : String(s)).substring(0, n); }\n\n// Normalize free-text service_type into allowed enum values\nfunction normalizeServiceType(raw, hay) {\n  const allowed = ['secured_auto_loan','secured_real_estate_loan','pts_loan','refinancing','mortgage_adjacent','generic_lending'];\n  const r = (raw || '').toLowerCase().trim();\n  if (allowed.includes(r)) return r;\n  const s = r + ' ' + (hay || '');\n  if (s.includes('птс') || s.includes('pts')) return 'pts_loan';\n  if ((s.includes('авто') || s.includes('машин')) && (s.includes('залог') || s.includes('collateral') || s.includes('ломбард'))) return 'secured_auto_loan';\n  if (s.includes('недвиж') || s.includes('квартир') || s.includes('дом') || s.includes('земл')) return 'secured_real_estate_loan';\n  if (s.includes('рефинанс') || s.includes('refinanc')) return 'refinancing';\n  if (s.includes('ипотек') || s.includes('mortgage')) return 'mortgage_adjacent';\n  if (s.includes('бизнес') || s.includes('business')) {\n    if (s.includes('недвиж') || s.includes('квартир')) return 'secured_real_estate_loan';\n    return 'generic_lending';\n  }\n  return 'unknown';\n}\n\n// Descriptive company_name fallback for competitors (never invent a brand)\nfunction companyNameFallback(existing, entity, hay) {\n  if (existing && String(existing).trim() !== '') return existing;\n  if (entity === 'competitor' && (hay.includes('мфо') || hay.includes('микрофинанс') || hay.includes('mfo'))) return 'МФО / частный кредитор';\n  if (hay.includes('частный инвестор')) return 'Частный инвестор';\n  if (hay.includes('автоломбард')) return 'Автоломбард';\n  if (hay.includes('брокер')) return 'Брокер';\n  if (entity === 'competitor') return 'Конкурент без бренда';\n  return '';\n}\n\n// recommended_action normalization driven by final route\nfunction normalizeAction(route, entity, action, leadScore) {\n  if (route === 'technical_errors') return 'ignore';\n  if (route === 'skipped_log') return 'ignore';\n  if (route === 'results' && entity === 'lead_signal') return 'contact';\n  if (route === 'review_queue') {\n    if (entity === 'lead_signal' && action === 'contact' && leadScore >= 70) return 'contact';\n    return 'investigate';\n  }\n  if (route === 'monitor_queue' && entity === 'competitor') return 'monitor';\n  if (route === 'content_queue') {\n    if (action === 'contact' || action === 'investigate') return action;\n    return 'create_content';\n  }\n  return action;\n}\n\n// Pass-through for confirmed technical_error (from Parse Repaired JSON)\nif (data.processing_status === 'technical_error' && data.route === 'technical_errors') {\n  return [{ json: {\n    created_at: data.created_at || srcRecord.parsed_at || '',\n    source_type: data.source_type || srcRecord.source_type || '',\n    platform: data.platform || srcRecord.platform || '',\n    source_url: data.source_url || srcRecord.source_url || '',\n    parsed_at: data.parsed_at || srcRecord.parsed_at || '',\n    published_at: data.published_at || srcRecord.published_at || '',\n    freshness_status: data.freshness_status || 'unknown',\n    entity_type: data.entity_type || 'irrelevant',\n    company_name: data.company_name || '',\n    profile_name: data.profile_name || '',\n    profile_url: data.profile_url || srcRecord.profile_url || '',\n    region: data.region || '',\n    service_type: data.service_type || 'unknown',\n    offer_text: data.offer_text || '',\n    terms: data.terms || '',\n    contact_public: data.contact_public || '',\n    text_context: data.text_context || srcRecord.text_context || '',\n    detected_need: data.detected_need || '',\n    competitor_strength: clamp(data.competitor_strength),\n    lead_signal_score: clamp(data.lead_signal_score),\n    content_idea_score: clamp(data.content_idea_score),\n    quality_score: clamp(data.quality_score),\n    reason: data.reason || '',\n    recommended_action: 'ignore',\n    status: data.status || 'analyzed',\n    processing_status: 'technical_error',\n    parse_method: data.parse_method || 'repaired_json',\n    parse_error: data.parse_error || '',\n    raw_response_preview: truncate(data.raw_response_preview, 500),\n    route: 'technical_errors',\n    needs_manual_review: true,\n    repair_used: data.repair_used || false,\n    repair_status: data.repair_status || ''\n  }}];\n}\n\n// Normalize schema fields\nconst entity = data.entity_type || 'irrelevant';\nconst status = data.status || 'analyzed';\nconst recAction = data.recommended_action || 'ignore';\nconst leadScore = clamp(data.lead_signal_score);\nconst compScore = clamp(data.competitor_strength);\nconst contentScore = clamp(data.content_idea_score);\nconst qualScore = clamp(data.quality_score);\n\nconst validEntities = ['competitor','lead_signal','market_signal','content_idea','irrelevant'];\nconst validActions = ['monitor','contact','create_content','ignore','investigate'];\nconst safeEntity = validEntities.includes(entity) ? entity : 'irrelevant';\nconst safeAction = validActions.includes(recAction) ? recAction : 'ignore';\nconst safeStatus = (status === 'skipped') ? 'skipped' : 'analyzed';\n\n// Derived text haystacks for normalization and routing keyword checks\nconst hay = ((data.text_context||'') + ' ' + (data.offer_text||'') + ' ' + (data.detected_need||'') + ' ' + (data.reason||'') + ' ' + (data.service_type||'') + ' ' + (srcRecord.text_context||'')).toLowerCase();\nconst companyHay = ((data.text_context||'') + ' ' + (data.reason||'') + ' ' + (data.offer_text||'') + ' ' + (data.source_url||srcRecord.source_url||'') + ' ' + (data.detected_need||'')).toLowerCase();\n\nconst safeServiceType = normalizeServiceType(data.service_type, hay);\nconst safeCompanyName = companyNameFallback(data.company_name, safeEntity, companyHay);\n\n// Determine processing_status\nlet procStatus = 'parsed_success';\nif (safeStatus === 'skipped' || safeEntity === 'irrelevant') procStatus = 'business_skip';\n\n// Weak / potential lead detection (must run before content_queue routing)\nconst srcType = (data.source_type || srcRecord.source_type || '').toLowerCase();\nconst isSocialOrClassified = (srcType === 'social' || srcType === 'classified');\nconst productTerms = ['loan','collateral','pts','auto','real estate','refinanc','займ','кредит','залог','птс','авто','машин','недвиж','квартир','земл','рефинанс','ипотек'];\nconst mentionsProduct = productTerms.some(t => hay.includes(t));\n\nconst weakLead = (\n  (safeEntity === 'lead_signal' && leadScore >= 30 && leadScore <= 69) ||\n  (safeAction === 'investigate') ||\n  (leadScore >= 30 && isSocialOrClassified && mentionsProduct) ||\n  (safeEntity === 'content_idea' && leadScore >= 30 && isSocialOrClassified && safeServiceType !== 'unknown')\n);\n\n// Routing priority:\n// 1 technical_errors (handled above) 2 skipped/irrelevant 3 hot lead 4 weak lead\n// 5 competitor 6 pure content idea 7 fallback review_queue\nlet route;\nlet needsReview;\n\nif (safeStatus === 'skipped' || safeEntity === 'irrelevant') {\n  route = 'skipped_log'; needsReview = false;\n} else if (safeEntity === 'lead_signal' && leadScore >= 70 && safeAction === 'contact') {\n  route = 'results'; needsReview = false;\n} else if (weakLead) {\n  route = 'review_queue'; needsReview = true;\n} else if (safeEntity === 'competitor' && compScore >= 45) {\n  route = 'monitor_queue'; needsReview = false;\n} else if (safeEntity === 'content_idea' && contentScore >= 50) {\n  route = 'content_queue'; needsReview = true;\n} else {\n  route = 'review_queue'; needsReview = true;\n}\n\n// Safety: enforce route is exactly one of the six valid sheet tabs\nconst validRoutes = ['results','review_queue','monitor_queue','content_queue','skipped_log','technical_errors'];\nlet parseError = data.parse_error || '';\nif (!validRoutes.includes(route)) {\n  route = 'technical_errors';\n  procStatus = 'technical_error';\n  needsReview = true;\n  parseError = (parseError ? parseError + '; ' : '') + 'invalid_route';\n}\n\n// Final recommended_action consistent with the route\nconst finalAction = normalizeAction(route, safeEntity, safeAction, leadScore);\n\n// v0.1 dedup hint: source_url is the first dedup key. Real scraper workflow\n// should check existing source_url in the target tab before append. No dedup\n// column is emitted yet (see DEC-037 / TABLE_SCHEMA notes).\n\nreturn [{ json: {\n  created_at: data.created_at || srcRecord.parsed_at || '',\n  source_type: data.source_type || srcRecord.source_type || '',\n  platform: data.platform || srcRecord.platform || '',\n  source_url: data.source_url || srcRecord.source_url || '',\n  parsed_at: data.parsed_at || srcRecord.parsed_at || '',\n  published_at: data.published_at || srcRecord.published_at || '',\n  freshness_status: data.freshness_status || 'unknown',\n  entity_type: safeEntity,\n  company_name: safeCompanyName,\n  profile_name: data.profile_name || '',\n  profile_url: data.profile_url || srcRecord.profile_url || '',\n  region: data.region || '',\n  service_type: safeServiceType,\n  offer_text: data.offer_text || '',\n  terms: data.terms || '',\n  contact_public: data.contact_public || '',\n  text_context: data.text_context || '',\n  detected_need: data.detected_need || '',\n  competitor_strength: compScore,\n  lead_signal_score: leadScore,\n  content_idea_score: contentScore,\n  quality_score: qualScore,\n  reason: data.reason || '',\n  recommended_action: finalAction,\n  status: safeStatus,\n  processing_status: procStatus,\n  parse_method: data.parse_method || 'primary_json',\n  parse_error: parseError,\n  raw_response_preview: truncate(data.raw_response_preview, 500),\n  route: route,\n  needs_manual_review: needsReview,\n  repair_used: data.repair_used || false,\n  repair_status: data.repair_status || ''\n}}];"
+      }
+    },
+    {
+      "id": "rr000000-0000-0000-0000-000000000099",
+      "name": "Append to Dynamic Route Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2440,
+        300
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $json.route }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Set Source Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Source Record": {
+      "main": [
+        [
+          {
+            "node": "Build Primary Claude Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Primary Claude Request": {
+      "main": [
+        [
+          {
+            "node": "Claude Primary API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Primary API Request": {
+      "main": [
+        [
+          {
+            "node": "Parse Primary JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Primary JSON": {
+      "main": [
+        [
+          {
+            "node": "IF Primary Parse OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Primary Parse OK?": {
+      "main": [
+        [
+          {
+            "node": "Normalize + Route",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Repair Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Repair Request": {
+      "main": [
+        [
+          {
+            "node": "Claude Repair API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Repair API Request": {
+      "main": [
+        [
+          {
+            "node": "Parse Repaired JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Repaired JSON": {
+      "main": [
+        [
+          {
+            "node": "Normalize + Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize + Route": {
+      "main": [
+        [
+          {
+            "node": "Append to Dynamic Route Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "rr000000-resilient-router-v004-production-20260606",
+  "meta": {
+    "instanceId": "marketing-scout-v2-resilient-router-production"
+  }
+}

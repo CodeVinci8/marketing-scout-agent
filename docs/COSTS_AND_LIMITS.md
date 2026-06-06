@@ -167,6 +167,13 @@ Record actual cost in `docs/WORKFLOW_02_V2_TEST_RESULTS.md` after the run.
 
 Covers ~5 primary Claude calls plus repair calls triggered by Test D (mock_markdown) and Test E (mock_unrepairable). ≈ $0.015/test including repair overhead — consistent with the ~$0.0115 baseline plus the second (repair) call on D and E. Repair pass roughly doubles per-record cost when triggered; it only fires on parse failure, so steady-state cost stays near baseline for clean records.
 
+### Production cost model (resilient router)
+
+- **Clean record (primary parse OK):** 1 Claude call ≈ baseline (~$0.0115).
+- **Failed parse (repair fires):** 2 Claude calls ≈ ~2× baseline for that record. The repair call only happens on parse failure, so total cost depends on the **primary failure rate**.
+- **Estimate:** `cost ≈ N × baseline × (1 + failure_rate)`. At a 20–30% failure rate, ~1.2–1.3× baseline overall.
+- **Before any scraper run, the operator must record the Claude balance before and after** the run and log the delta here. Real scraped pages are longer than test records, so per-record cost will be higher than the $0.0115 short-record baseline — measure on the first Firecrawl run.
+
 ---
 
 ## Budget Alerts

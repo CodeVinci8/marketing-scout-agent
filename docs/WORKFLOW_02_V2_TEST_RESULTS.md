@@ -96,6 +96,13 @@ See: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md` — DEC-033.
 
 **Retest status:** ✅ Test B re-run live — passes (`route=review_queue`). A/C/D/E confirmed. All A–E green. Next gate is productionization, not more A–E runs — see `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md`.
 
+### Productionization complete (2026-06-06, DEC-037)
+
+- ✅ Dynamic-sheet architecture **approved** (A–E all pass).
+- ✅ **Production workflow created:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json` — test/mock fields removed, 33 output columns (25 core + 8 technical), `raw_response_preview` capped at 500, `recommended_action` normalized to route, route validation retained. JSON validated VALID; logic simulation confirms A/B/C/D/E + skip all route correctly.
+- ✅ Obsolete Switch-based workflows removed via `git rm` (`..._test.json`, `..._test_fixed.json`).
+- ⏳ **Remaining smoke test before scraper:** run **one manual placeholder record** through the production workflow in n8n (replace `PLACEHOLDER_TEXT_REPLACE_BEFORE_RUN` in `Set Source Record`) and confirm a row lands in the correct tab with no test columns. See `docs/NEXT_ACTIONS.md`.
+
 ### API cost — Tests A–E run
 
 | | Balance |
