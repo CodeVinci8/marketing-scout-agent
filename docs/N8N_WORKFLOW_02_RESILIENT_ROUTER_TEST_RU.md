@@ -233,6 +233,11 @@ created_at | source_type | platform | source_url | parsed_at | published_at | fr
 
 ## Что делать при ошибках
 
+### Линии от Switch by Route к Append-нодам не видны после импорта
+
+Это визуальный артефакт n8n. Соединения присутствуют в JSON и будут работать при запуске.
+Если линии не отображаются, **удали workflow из n8n и импортируй патченый JSON заново** (Workflows → Import from file → выбери `02_claude_api_single_record_v2_resilient_router_test.json`). После повторного импорта все 6 линий Switch by Route → Append-ноды должны появиться.
+
 ### `test_pass_basic = FALSE` для теста A, B или C
 
 Claude вернул другой entity_type или score — это не технический сбой, а вариативность модели. Проверь поле `reason` в таблице. Если аргументация логична — score порогово допустим. Если нет — скорректируй тестовый текст.

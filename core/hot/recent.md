@@ -4,6 +4,23 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-06 — Resilient Router Switch Connections Audit
+
+**What was done:**
+- Audited `02_claude_api_single_record_v2_resilient_router_test.json` — all 6 Switch by Route → Append node connections confirmed present and correct in `connections` map (outputs 0–5, routes results/review_queue/monitor_queue/content_queue/skipped_log/technical_errors).
+- No workflow JSON changes needed — connections were already correct from the prior build session.
+- JSON validated with python3 — VALID.
+- Added troubleshooting note to `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`: visual missing lines after import = n8n rendering artifact; fix by re-importing the JSON.
+- Updated NEXT_ACTIONS.md Phase 3 import step with the re-import note.
+
+**What is next (in order):**
+1. **Operator: commit** current changes (troubleshooting note + doc updates).
+2. **Operator Phase 1**: Create 6 Sheets tabs with 47-column header rows (see guide Step 4).
+3. **Operator Phase 3**: Import workflow, set credentials + Spreadsheet ID, run Tests A–E. If Switch by Route lines not visible → delete and re-import.
+4. If all 5 pass: approve for Phase 4 — production migration.
+
+---
+
 ## Session: 2026-06-06 — Resilient Router TEST HARNESS Build
 
 **What was done:**

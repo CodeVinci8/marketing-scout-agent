@@ -5,6 +5,38 @@ Most recent first.
 
 ---
 
+## 2026-06-06 — Resilient Router Switch Connections Audit and JSON Validation
+
+**Agent role:** project-engineer
+**Session goal:** Verify and confirm Switch by Route → 6 Append node connections in the Resilient Router TEST HARNESS; add troubleshooting note to RU guide.
+
+**Context:** Operator reported that after importing the workflow into n8n, visual inspection showed no lines from Switch by Route to the six Google Sheets append nodes. This is a known n8n import-rendering artifact — the connections were already correct in the JSON from the previous build session.
+
+**What was done:**
+- Inspected `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test.json` — confirmed all 6 Switch by Route connections present in `connections` map:
+  - output 0 (route=results) → Append to results
+  - output 1 (route=review_queue) → Append to review_queue
+  - output 2 (route=monitor_queue) → Append to monitor_queue
+  - output 3 (route=content_queue) → Append to content_queue
+  - output 4 (route=skipped_log) → Append to skipped_log
+  - output 5 (route=technical_errors) → Append to technical_errors
+- Confirmed Switch by Route has 6 explicit routing rules (outputKey 0–5) matching the 6 routes.
+- Confirmed fallbackOutput = 5 (technical_errors).
+- Validated JSON: `python3 -m json.tool` → VALID. Output written to `/tmp/v2_resilient_router_validated.json`.
+- Added troubleshooting note to `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md`: if lines are missing after import, delete workflow and re-import the patched JSON.
+- Updated `docs/NEXT_ACTIONS.md` — Phase 3 import note updated.
+- Updated `docs/AGENT_LOG.md` and `core/hot/recent.md`.
+
+**Files updated:**
+- `docs/N8N_WORKFLOW_02_RESILIENT_ROUTER_TEST_RU.md` — troubleshooting note added
+- `docs/AGENT_LOG.md`
+- `docs/NEXT_ACTIONS.md`
+- `core/hot/recent.md`
+
+**No workflow JSON changes were needed** — connections were already correct.
+
+---
+
 ## 2026-06-06 — Resilient Router TEST HARNESS Build
 
 **Agent role:** project-engineer
