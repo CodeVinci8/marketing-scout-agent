@@ -1,7 +1,7 @@
 # PROJECT_CLEANUP_AUDIT.md — Pre-Implementation Cleanup Audit
 
 **Date:** 2026-06-06
-**Status:** Audit only — no files deleted yet
+**Status:** Phase 1 complete — approved files deleted 2026-06-06
 **Prepared by:** project-engineer agent
 **Trigger:** Preparation for implementing Resilient Output Layer (DEC-033)
 
@@ -19,7 +19,55 @@ experimental prompt docs, and planning files. Before implementing the Resilient 
 - The new TEST HARNESS for the Resilient Output Layer has a clear, unambiguous name.
 - Untracked ghost files left by earlier tooling are removed from the working tree.
 
-**This audit is Phase 1 only.** No files are deleted during this session.
+---
+
+## Phase 1 Execution Summary (2026-06-06)
+
+**Executed by:** project-engineer agent, operator approval confirmed.
+
+### Deleted (git rm)
+
+| File | Size | Reason |
+|------|------|--------|
+| `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` | 28,139 bytes | v2.5 MICRO experiment harness — all gateway 502; superseded by Resilient Output Layer |
+| `n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json` | 33,018 bytes | Test 5 short-text variant only; superseded by extended tests and Resilient Output Layer approach |
+
+### Ghost files (untracked zero-byte files)
+
+Ghost files (`=70`, `Append`, `Build`, `Claude`, `Parse`, `Quality`, `Select`, `Set`) were
+confirmed absent from the filesystem at execution time — already removed prior to this session.
+No `rm` action was needed.
+
+### Intentionally kept (confirmed present after cleanup)
+
+| File | Status |
+|------|--------|
+| `n8n/workflows/00_healthcheck_manual_test.json` | ✓ present |
+| `n8n/workflows/01_google_sheets_append_row_test.json` | ✓ present |
+| `n8n/workflows/02_claude_api_single_record_analysis.json` | ✓ present |
+| `n8n/workflows/02_claude_api_single_record_v2_baseline_raw_json.json` | ✓ present (33,250 bytes) |
+| `n8n/workflows/02_claude_api_single_record_v2_extended_tests.json` | ✓ present (30,879 bytes) |
+| `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md` | ✓ present |
+| `docs/WORKFLOW_02_V2_TEST_RESULTS.md` | ✓ present |
+| `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2.md` | ✓ present |
+| `modules/marketing-scout-v0/TEST_RECORDS_V2.md` | ✓ present |
+| `modules/marketing-scout-v0/TEST_RECORDS_V2_EXTENDED.md` | ✓ present |
+
+### Deferred to cleanup phase 2 (not deleted in this session)
+
+| File | Deferred reason |
+|------|----------------|
+| `modules/marketing-scout-v0/MARKETING_AGENT_PROMPT_V2_PLAN.md` | Operator did not approve in this phase |
+| `modules/marketing-scout-v0/SYSTEM_PROMPT.md` | Operator did not approve in this phase |
+| `modules/marketing-scout-v0/TEST_DATA.md` | Operator did not approve in this phase |
+| `docs/MILESTONE_REVIEW_02.md` | Operator did not approve in this phase |
+
+Deeper prompt/doc cleanup is deferred to a future session after the Resilient Output Layer
+TEST HARNESS is built and Tests A–E are confirmed.
+
+---
+
+**Original audit note:** Phase 1 is now complete.
 Operator reviews and approves deletions before any `git rm` is run.
 
 ---

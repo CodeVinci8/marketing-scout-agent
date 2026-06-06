@@ -5,6 +5,49 @@ Most recent first.
 
 ---
 
+## 2026-06-06 — Cleanup Phase 1 Execution
+
+**Agent role:** project-engineer
+**Session goal:** Execute operator-approved cleanup — delete 2 experiment workflow JSONs, remove ghost files, update docs.
+
+**Context:**
+- Cleanup audit completed in prior session (`docs/PROJECT_CLEANUP_AUDIT.md`).
+- Operator approved deletion of: `02_claude_api_single_record_v2_test_harness.json` and `02_claude_api_single_record_v2_baseline_short_test5.json`.
+- Ghost files (`=70`, `Append`, `Build`, `Claude`, `Parse`, `Quality`, `Select`, `Set`) were confirmed absent from the filesystem — already removed prior to this session. No `rm` action needed.
+- Working tree was clean at start (all prior session changes committed in c8a3f08, 9008d9b).
+
+**What was done:**
+- Verified all keep files present and all delete candidates still tracked in git.
+- `git rm n8n/workflows/02_claude_api_single_record_v2_test_harness.json` — staged for deletion.
+- `git rm n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json` — staged for deletion.
+- Confirmed 5 keep workflow JSONs still present on disk after removal.
+- Updated `docs/PROJECT_CLEANUP_AUDIT.md`: Phase 1 execution summary added (deleted files, kept files, deferred files).
+- Updated `docs/NEXT_ACTIONS.md`: Step D0 marked complete; Step D (Resilient Output Layer) marked CURRENT.
+- Updated `docs/AGENT_LOG.md` and `core/hot/recent.md`.
+
+**Files deleted (git rm, staged):**
+- `n8n/workflows/02_claude_api_single_record_v2_test_harness.json` (28,139 bytes)
+- `n8n/workflows/02_claude_api_single_record_v2_baseline_short_test5.json` (33,018 bytes)
+
+**Files updated:**
+- `docs/PROJECT_CLEANUP_AUDIT.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/AGENT_LOG.md`
+- `core/hot/recent.md`
+
+**Remaining workflow JSONs (5):**
+- `00_healthcheck_manual_test.json` — baseline
+- `01_google_sheets_append_row_test.json` — baseline
+- `02_claude_api_single_record_analysis.json` — production v1
+- `02_claude_api_single_record_v2_baseline_raw_json.json` — d350069 reference
+- `02_claude_api_single_record_v2_extended_tests.json` — test evidence
+
+**Deferred to phase 2:** `MARKETING_AGENT_PROMPT_V2_PLAN.md`, `SYSTEM_PROMPT.md`, `TEST_DATA.md`, `MILESTONE_REVIEW_02.md`.
+
+**Next action:** Commit staged deletions + doc updates. Then proceed to Resilient Output Layer (Step D).
+
+---
+
 ## 2026-06-06 — Project Cleanup Audit
 
 **Agent role:** project-engineer
