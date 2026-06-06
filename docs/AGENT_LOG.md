@@ -5,6 +5,39 @@ Most recent first.
 
 ---
 
+## 2026-06-06 — Cleanup Phase 2 Plan Prepared (Blocked on Tests A–E)
+
+**Agent role:** project-engineer
+**Session goal:** Prepare cleanup phase 2 plan after the dynamic-sheet resilient router was created. Plan only — no deletions, no git rm, no workflow JSON edits.
+
+**Context:** The dynamic-sheet workflow (`..._dynamic_sheet.json`, DEC-035) is now the active resilient router test candidate. The two earlier Switch-based iterations (`_test.json`, `_fixed.json`) become cleanup candidates — but only after Tests A–E pass.
+
+**What was done:**
+- Updated `docs/PROJECT_CLEANUP_AUDIT.md`:
+  - Status header updated to note Phase 2 planned + blocked on Tests A–E.
+  - Added section "Cleanup Phase 2 — after dynamic router tests" with: background on the 3 router iterations, a workflow classification table (keep active candidate / keep reference / keep historical evidence / delete after A–E pass / keep baseline), deferred carry-overs from Phase 1, proposed `git rm` commands marked NOT TO RUN YET, and an explicit Phase 2 gate (blocker = Tests A–E pass).
+- Updated `docs/NEXT_ACTIONS.md`: added a Cleanup Phase 2 block under Step D — do not delete Switch-based workflows until A–E pass; after pass, run cleanup phase 2; classification list included.
+- Updated `docs/AGENT_LOG.md` (this entry) and `core/hot/recent.md`.
+
+**Classification recorded:**
+- Keep active candidate: `02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json`
+- Keep reference: `02_claude_api_single_record_v2_baseline_raw_json.json`
+- Keep historical evidence: `02_claude_api_single_record_v2_extended_tests.json`
+- Delete after A–E pass: `..._resilient_router_test_fixed.json`, `..._resilient_router_test.json`
+- Keep baselines: `00_healthcheck_manual_test.json`, `01_google_sheets_append_row_test.json`, `02_claude_api_single_record_analysis.json`
+
+**Blocker before any deletion:** Tests A–E must pass on the dynamic-sheet workflow.
+
+**Files updated:**
+- `docs/PROJECT_CLEANUP_AUDIT.md`
+- `docs/NEXT_ACTIONS.md`
+- `docs/AGENT_LOG.md`
+- `core/hot/recent.md`
+
+**No files deleted. No git rm run. No workflow JSON edited.**
+
+---
+
 ## 2026-06-06 — Resilient Router DYNAMIC SHEET Copy (Switch Removed)
 
 **Agent role:** project-engineer

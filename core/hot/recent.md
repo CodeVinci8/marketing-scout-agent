@@ -4,6 +4,31 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-06 — Cleanup Phase 2 Plan Prepared (Blocked on Tests A–E)
+
+**What was done:**
+- Prepared cleanup phase 2 plan (docs only — no deletions, no git rm, no workflow edits).
+- Dynamic-sheet workflow (`..._dynamic_sheet.json`, DEC-035) recorded as the **current active resilient router candidate**.
+- Added "Cleanup Phase 2 — after dynamic router tests" to `docs/PROJECT_CLEANUP_AUDIT.md`: classification table + proposed `git rm` commands marked NOT TO RUN YET + Phase 2 gate.
+- Updated NEXT_ACTIONS.md with the Cleanup Phase 2 block.
+
+**Classification:**
+- Keep active candidate: `..._resilient_router_test_dynamic_sheet.json`
+- Keep reference: `..._v2_baseline_raw_json.json`
+- Keep historical evidence: `..._v2_extended_tests.json`
+- Delete after A–E pass: `..._resilient_router_test_fixed.json`, `..._resilient_router_test.json`
+- Keep baselines: `00_healthcheck`, `01_google_sheets_append_row`, `02_claude_api_single_record_analysis`
+
+**Blocker before any deletion:** Tests A–E must pass on the dynamic-sheet workflow. Cleanup phase 2 is prepared but blocked.
+
+**What is next (in order):**
+1. **Operator: commit** the doc updates from this session.
+2. **Operator Phase 1**: Create 6 Sheets tabs (names = route values) with 47-column headers.
+3. **Operator Phase 3**: Import `_dynamic_sheet.json`, set credential + Spreadsheet ID, run Tests A–E.
+4. If all 5 pass: execute Cleanup Phase 2 (`git rm` the 2 Switch-based workflows) + Phase 4 production migration.
+
+---
+
 ## Session: 2026-06-06 — Resilient Router DYNAMIC SHEET Copy (Switch Removed)
 
 **What was done:**

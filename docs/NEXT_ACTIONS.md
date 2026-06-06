@@ -238,7 +238,16 @@ Workflows are built incrementally — no external APIs until the platform is ver
 - [ ] After operator approval: apply Resilient Output Layer to `02_claude_api_single_record_analysis.json`
 - [ ] Re-run Tests 9, 10, 11, 12 on production workflow. Confirm routing (not just "pass/fail")
 
-> Design spec: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`. Results: `docs/WORKFLOW_02_V2_TEST_RESULTS.md`.
+**Cleanup Phase 2 — after dynamic-sheet workflow passes Tests A–E:**
+- [ ] **Do NOT delete** the Switch-based resilient workflows (`_fixed.json`, `_test.json`) until the dynamic-sheet workflow passes Tests A–E. They remain the only proven-importable copies and `_fixed.json` is the documented six-IF-node fallback source.
+- [ ] **After A–E pass:** perform cleanup phase 2 — `git rm` the two superseded Switch-based iterations. See `docs/PROJECT_CLEANUP_AUDIT.md` → "Cleanup Phase 2 — after dynamic router tests".
+  - Delete after pass: `02_claude_api_single_record_v2_resilient_router_test_fixed.json`
+  - Delete after pass: `02_claude_api_single_record_v2_resilient_router_test.json`
+  - Keep active candidate: `02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json`
+  - Keep reference: `02_claude_api_single_record_v2_baseline_raw_json.json`
+  - Keep historical evidence: `02_claude_api_single_record_v2_extended_tests.json`
+
+> Design spec: `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`. Results: `docs/WORKFLOW_02_V2_TEST_RESULTS.md`. Cleanup plan: `docs/PROJECT_CLEANUP_AUDIT.md`.
 
 #### Step E — Workflow 03: Firecrawl Website Analysis _(after Steps A–D complete)_
 
