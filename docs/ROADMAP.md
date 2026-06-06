@@ -4,19 +4,45 @@
 
 ## Stage 1 — Marketing Scout v0.1 (Current)
 
-**Status:** In design
+**Status:** In progress
 **Module directory:** `modules/marketing-scout-v0/`
 
 **Goal:** Manual end-to-end pipeline. Prove the concept works.
 
 **Deliverables:**
 - n8n workflow: trigger → scrape → split → normalize → analyze → score → aggregate → store → notify
-- System prompt for Claude API analysis node
+- System prompt for Claude API analysis node (v2 written, baseline d350069 stable for hot leads)
 - Google Sheets schema with all required columns
 - Telegram summary template
 - 3+ test records processed successfully
 
 **Stack:** n8n + Apify/Firecrawl + Claude API + Google Sheets + Telegram Bot
+
+**Completed milestones:**
+- Workflow 00 (healthcheck), 01 (Sheets), 02 (Claude API single record) all working
+- Prompt v2 written and tested — hot leads (Tests 1, 8) confirmed
+- Extended tests 8–12 run — output-contract failures identified on non-obvious records
+
+---
+
+## Stage 1.5 — Resilient Output Layer (Current — Next Immediate Step)
+
+**Status:** Design complete, implementation pending
+**Design spec:** `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`
+**Decision:** DEC-033
+
+**Goal:** Fix output-contract instability discovered in Tests 9–12 without changing the primary prompt.
+
+**Problem:** Tests 9–12 and 5 all failed with JSON serialization errors — the model reasoned correctly but returned Markdown blocks, thinking-only responses, or invalid JSON. Five prompt-format experiments (v2.0–v2.5) did not resolve this. A structural fix is required.
+
+**Deliverables:**
+- JSON Repair Formatter node (second Claude call — Haiku model, schema-only prompt)
+- Multi-tab Router (replaces current binary Quality Gate)
+- 6 Google Sheets tabs: `results`, `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`, `technical_errors`
+- 6 new technical fields per record: `processing_status`, `parse_method`, `parse_error`, `raw_response_preview`, `route`, `needs_manual_review`
+- TEST HARNESS Tests A–E all passing
+
+**Completion gate:** Tests A–E pass + operator approval → migrate to production Workflow 02.
 
 ---
 

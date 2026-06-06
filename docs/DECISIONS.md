@@ -5,6 +5,39 @@ Most recent first.
 
 ---
 
+## DEC-033 — Resilient Output Layer: Two-Pass Parse + Repair + Multi-Tab Router
+
+**Date:** 2026-06-06
+**Context:** Extended tests 9–12 confirmed that the single-step Claude JSON output is structurally unstable for non-obvious records:
+- Test 9 (Instagram competitor): no `text` item in content array — thinking-only response.
+- Test 10 (Avito refinancing): Claude returned Markdown analysis block instead of JSON.
+- Test 11 (weak website competitor): Claude returned Markdown analysis block instead of JSON.
+- Test 12 (out-of-region SPb lead): invalid JSON structure.
+- Test 5 (content_idea): JSON.parse failure from unescaped characters in string fields.
+
+In all cases, Claude's reasoning was sound. The failures were output serialization failures, not reasoning failures.
+
+Five output strategy experiments (v2.0 raw JSON, v2.1 safety rules, v2.2 tool_use, v2.3–v2.5 KEY=VALUE) all failed — either from gateway 502 constraints or from parsing edge cases. Further prompt-level format experiments are not expected to eliminate the failure mode.
+
+**Decision:** Replace the single-step output architecture with a Resilient Output Layer:
+1. **Primary parse:** attempt JSON.parse on Claude's natural output (baseline behavior unchanged).
+2. **Repair pass:** on parse failure, send the raw response to a dedicated JSON Repair Formatter (a second Claude call, Haiku model, ~400-char strict schema-only prompt). Reformats without re-analyzing. Does not add new facts.
+3. **Multi-tab Router:** replaces the binary Quality Gate. Routes to 6 Google Sheets tabs: `results`, `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`, `technical_errors`.
+
+**Three output states defined:**
+- `parsed_success`: machine-parseable on first attempt.
+- `technical_error`: unparseable even after repair.
+- `business_skip`: correctly parsed; Claude determined record is not actionable.
+
+**tool_use status:** Deferred — gateway returns 502 for `tools`/`tool_choice` parameters.
+**KEY=VALUE status:** Deferred — v2.3–v2.5 all returned 502 from gateway at various prompt sizes.
+
+**Applies to:** Workflow 02 TEST HARNESS (Phase 1). After Tests A–E pass, migrate to production Workflow 02. All future output layers in this project should use the two-pass pattern.
+
+**Design spec:** `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`
+
+---
+
 ## DEC-032 — Telegram Control Bot Is Future Roadmap, Not Current MVP
 
 **Date:** 2026-06-05

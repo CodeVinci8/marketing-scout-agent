@@ -1,8 +1,8 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-05 (updated after extended test design)
+**Last updated:** 2026-06-06 (updated after extended test results and Resilient Output Layer design)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
-**Test status:** Baseline Test 1 confirmed. Extended tests 8–12 ready to run.
+**Test status:** Tests 1 and 8 passed strongly. Tests 9–12 and 5 failed with output-contract errors. Resilient Output Layer designed (DEC-033).
 **Business requirements:** `docs/BUSINESS_REQUIREMENTS.md`
 
 ---
@@ -96,6 +96,7 @@ The false branch of Quality Gate currently ends silently. No Telegram notificati
 - Telegram Control Bot: future roadmap stage. Not in current MVP. See ROADMAP.md.
 - Workflow not connected to real scraping: all tests use synthetic records.
 - Gateway stability: tool_use, KEY=VALUE line protocol, and compact prompts all returned 502 from current gateway. Baseline raw JSON is the only stable format.
+- Output contract reliability: Tests 9–12 and 5 failed with JSON serialization errors (Markdown blocks, no-text responses, invalid JSON). Resilient Output Layer (two-pass repair + multi-tab routing) designed to fix this. See DEC-033 and `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`.
 
 ---
 
@@ -177,6 +178,7 @@ Full schema: `docs/TABLE_SCHEMA.md`
 |------|----------|--------|
 | content_idea not production-approved in Workflow 02 | Medium | Deferred to Stage 3 (Content Agent). DEC-030. |
 | Gateway unstable for tool_use, KEY=VALUE, compact prompts | High | Baseline raw JSON is the only stable format. DEC-026–028. |
+| Output contract unstable for non-obvious records | High | Tests 9–12 failed with Markdown output or no-text response. Resilient Output Layer design ready (DEC-033). Not yet implemented. |
 | Workflow not connected to real scraping | High | Extended tests use synthetic records. Real source test is Step E. |
 | Telegram Control Bot not implemented | Low | Future roadmap (Stage 2.5). DEC-032. |
 | No pre-filter node — all records hit Claude API | Medium | Design in progress. |
