@@ -1,10 +1,16 @@
 # LEAD_SOURCE_CONNECTORS_PLAN.md — Source-by-Source Connector Plan (DESIGN ONLY)
 
 **Status:** 📐 DESIGN ONLY — no connector is built. Companion to `docs/LEAD_DISCOVERY_ARCHITECTURE.md`.
-**Date:** 2026-06-07
+**Date:** 2026-06-07 (Stage-3-entry note added 2026-06-08)
 
 > **Build gate:** This plan is for evaluation and design. Do **not** build any connector, parser, or bot from
 > it. The first connector is chosen **after** Stage 3.0 (Lead Source Evaluation) is written and approved.
+
+> **Stage 3 entry (DEC-076):** with Stage 2 approved, the **first Stage 3 step is Stage 3.0 — Lead Source
+> Evaluation** (compare Avito vs Telegram vs VK on data availability, cost, risk, lead quality, implementation
+> complexity), **not** the Telegram bot. Preliminary recommendation: **Avito/Classifieds first**, **Telegram
+> second** (parser ≠ control bot; separate access/client design), VK/Instagram/Yandex later. Build nothing
+> until Stage 3.0 is approved.
 
 All connectors share one output contract: normalize to `raw_market_records` (see `TABLE_SCHEMA.md` →
 "Proposed — Lead Discovery Layer"), compute a composite `dedup_key`, check `market_record_registry`, and set

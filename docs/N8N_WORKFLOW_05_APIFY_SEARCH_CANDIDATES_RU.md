@@ -1,8 +1,8 @@
 # Workflow 05 — Apify Search Candidate Discovery (RU гайд)
 
 **Файл:** `n8n/workflows/05_apify_search_candidate_discovery.json`
-**Статус:** 🔧 BUILT + патч качества кандидатов (active=false) — 2026-06-08, повторный тест требуется
-**Связано:** `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`, `docs/URL_DISCOVERY_STRATEGY.md`, `docs/TABLE_SCHEMA.md`, DEC-059/060/061
+**Статус:** ✅ ОДОБРЕН (Stage 2) — коннектор веб-поиска кандидатов (active=false) — 2026-06-08. Test 1 PASS: запрос «автоломбард Москва займ под ПТС без проверки кредитной истории» → 9 кандидатов; классификация (`direct_competitor`/`aggregator`/`directory`/`media_article`); извлечение домена; дедуп через `url_registry`; 0 Firecrawl/0 Claude. `url_candidates`=26 полей, `discovery_requests`=18 полей. Быстрый ревью в этом проходе — багов нет, без изменений. См. `docs/STAGE_2_FINAL_TEST_RESULTS.md`.
+**Связано:** `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`, `docs/URL_DISCOVERY_STRATEGY.md`, `docs/TABLE_SCHEMA.md`, `docs/STAGE_2_FINAL_TEST_RESULTS.md`, DEC-059/060/061/074
 
 ## 0. Итог первого реального теста (запрос «займ под залог ПТС Москва»)
 

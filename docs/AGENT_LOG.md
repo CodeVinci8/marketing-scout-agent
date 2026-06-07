@@ -5,6 +5,34 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Stage 2 FINALIZED (approved w/ limitations) + Auto-Handoff Evaluated & Deferred (DEC-073/074/075/076)
+
+**Agent role:** project-engineer
+**Session goal:** Finalize Stage 2, record real test results, evaluate safe auto-handoff (06→04), and set up Stage 3.0. **Docs/finalization only — no workflow logic changed.**
+
+**Part A — final test results** (`docs/STAGE_2_FINAL_TEST_RESULTS.md`, new): recorded inputs/expected/actual/pass-fail/notes for Tests 1–6.
+- T1 WF05 discovery ✅ PASS (9 candidates, classification, domain extraction, registry dedup, 0 spend).
+- T4 WF06 runtime registry recheck ✅ PASS (re-approved processed URLs → `selected_count=0`, `skipped_count=18`: `registry_recheck_duplicate`/`already_processed`/`duplicate_status`/`approval_status_not_approved`).
+- T5/T5b WF06 runner modes 🟡 implemented + **simulation-validated, not fully live-validated** (deep run respected registry recheck but selected 0 as all candidates already processed; fresh same-domain field test pending — watch item W1). Recorded honestly.
+- T6 WF04 PTS override ✅ PASS (`autolombardn1.ru/` → `pts_loan`, `monitor_queue`, `repaired_json`); contact empty this run = acceptable (no reliable full contact). Contact blanking ✅; valid-contact preservation = watch item W2.
+- Manual handoff ✅ PASS.
+
+**Part B — auto-handoff evaluation** (`docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md`, new): inspected WF04 (25 nodes, branching/looped, **no `source_candidate_id` threading**, 35-field-locked output, no Execute Workflow Trigger) and WF06. Designed the safe path (WF04 callable Execute Workflow Trigger → existing analyzer; WF06 Execute Workflow node + confirm-then-mark; default stays manual). **DEFERRED to Stage 2.4** (DEC-075): non-trivial identity threading + the confirm-then-mark safety property cannot be live-tested here. Manual handoff remains approved.
+
+**Part C — Stage 2 review finalized** (`docs/STAGE_2_WEB_PIPELINE_REVIEW.md` §10): **APPROVED WITH MINOR LIMITATIONS**; listed approved capabilities, manual limitations, watch items W1/W2.
+
+**Part D — cleanup audit** (`docs/PROJECT_CLEANUP_AUDIT.md`): added Stage 2 section — KEEP (00/01/02-prod/03/04/05/06 + key docs); flagged the three `02_*` test/baseline variants as **archive candidates (move, not delete)**; **no deletions, no `git rm`**.
+
+**Part E — Stage 3 planning:** affirmed **Stage 3.0 Lead Source Evaluation first, not the bot** (DEC-076; Avito first, Telegram second, parser ≠ control bot) in LEAD_DISCOVERY_ARCHITECTURE, LEAD_SOURCE_CONNECTORS_PLAN, ROADMAP (added Stage 2.4), NEXT_ACTIONS, AGENT_CAPABILITIES.
+
+**Part F — decisions + docs:** DEC-073 (always re-check url_registry, reaffirmed), DEC-074 (Stage 2 approved w/ manual-handoff limitation; stays modular), DEC-075 (auto-handoff only if safe + no analyzer duplication; deferred), DEC-076 (Stage 3 starts with Lead Source Evaluation). Updated WF04/05/06 RU guides, URL_DISCOVERY_STRATEGY, WORKFLOW_04/05 plans, TABLE_SCHEMA, COSTS, AGENT_LOG, core/hot/recent.md.
+
+**Verification:** all 3 workflows `python3 -m json.tool` VALID; active=false ×3; placeholders only; no schedule/tool_use/KEY=VALUE; WF04 35+10 fields; WF05 26+18; WF06 runner_mode + registry recheck + default domain diversity + deep mode all preserved; **manual handoff preserved (auto mode NOT implemented)**; no lead-connector or Telegram workflow created. `git status` clean before edits (prior work committed); this session adds docs only.
+
+**Operator next steps:** commit the finalization (docs), optionally clear W1/W2 with live re-tests, then write/approve **Stage 3.0 Lead Source Evaluation**.
+
+---
+
 ## 2026-06-07 — Stage 2 Final Hardening: WF06 Runner Modes + WF04 PTS/Contact + Review Doc (DEC-070/071/072)
 
 **Agent role:** project-engineer

@@ -2,10 +2,18 @@
 
 **Status:** 📐 DESIGN ONLY — nothing in this document is built. No connector, no parser, no bot.
 **Stage:** prerequisite for Stage 3.0 (Lead Source Evaluation) → 3.1 (first connector) → 3.2 (analyzer integration).
-**Date:** 2026-06-07
+**Date:** 2026-06-07 (Stage-3-entry note added 2026-06-08)
 
 > **Build gate:** Do **not** implement any source connector, Telegram parser, or Telegram Control Bot from
 > this document. It exists to lock the architecture so the later build stages are incremental and safe.
+
+> **Stage 2 is finalized (APPROVED, 2026-06-08, DEC-074)** — the web pipeline (05→06→04) is the proven,
+> human-approval-gated, modular template this layer generalizes. **Stage 3 starts with Stage 3.0 — Lead
+> Source Evaluation, NOT the Telegram bot (DEC-076).** Preliminary (non-binding) source order:
+> **Avito/Classifieds first** (public, high-intent, most tractable — pending actor/API + compliance check);
+> **Telegram second** — the Telegram **Parser** (a source connector needing a separate client/MTProto access
+> design) is **distinct** from the Telegram **Control Bot** (a Stage 4 controller); VK/Instagram/Yandex later.
+> Manual Records Intake is wired first to validate the lead schema + analyzer at zero source risk.
 
 ---
 

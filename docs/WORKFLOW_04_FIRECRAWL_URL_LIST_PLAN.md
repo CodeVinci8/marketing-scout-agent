@@ -175,3 +175,14 @@ still 35 business + 10 `url_registry`):
   (RU phone 10–11 digits, email, `@handle`/`t.me`, `wa.me`, contact/profile/application URL ≠ source_url),
   blank partial/hallucinated values; prefer extracted over model partials. See
   `docs/STAGE_2_WEB_PIPELINE_REVIEW.md` for the T1–T11 approval matrix.
+
+---
+
+## 11. Stage 2 finalization (2026-06-08)
+
+Workflow 04 is **APPROVED** as the Stage 2 URL consumer (manual ≤5 URLs). Test 6 confirmed the stronger PTS
+override live (`autolombardn1.ru/` → `pts_loan`, via repaired JSON). Contact sanitation blanks partials;
+valid-contact preservation is watch item W2. **35** business fields + **10** `url_registry` fields unchanged.
+A future **callable Execute Workflow Trigger** entry path (for auto-handoff from Workflow 06) is designed in
+`docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md` (Stage 2.4) — **not** implemented; the manual `Set URL List` path is
+unchanged and remains the only entry.

@@ -3,7 +3,14 @@
 **Файл:** `n8n/workflows/04_firecrawl_url_list_resilient.json`
 **Имя в n8n:** `04 - Firecrawl URL List Mini-Batch to Resilient Analyzer`
 **Дата:** 2026-06-08
-**Статус:** ✅ ОДОБРЕН как потребитель URL (ручные запуски ≤5 URL) + хардненг PTS-override и контактов (DEC-066). НЕ активировать.
+**Статус:** ✅ ОДОБРЕН (Stage 2) как потребитель URL (ручные запуски ≤5 URL) + хардненг PTS-override и контактов (DEC-066/070). НЕ активировать.
+
+> **Test 6 (2026-06-08) — PASS.** Оператор удалил `autolombardn1.ru` из `url_registry` и запустил WF04:
+> `source_url=https://autolombardn1.ru/`, `entity_type=competitor`, **`service_type=pts_loan`**,
+> `route=monitor_queue`, `processing_status=parsed_success`, `parse_method=repaired_json`, `repair_used=true`
+> — усиленный PTS-override работает (даже через repaired-JSON). `contact_public` в этом прогоне пуст —
+> допустимо: надёжного полного контакта в тексте не было; частичные контакты гасятся. Сохранение валидных
+> контактов (autolombardn1/cashmotor-стиль) видели ранее — watch item W2. См. `docs/STAGE_2_FINAL_TEST_RESULTS.md`.
 **План:** `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` · **Связано:** DEC-045–054, DEC-062, DEC-063, DEC-066
 
 > **Патч 2026-06-08 (под тестом):** дедуп переведён на отдельную вкладку **`url_registry`** (по `normalized_source_url`) вместо обхода 6 бизнес-вкладок; добавлены **детерминированный fallback по конкуренту** после провала primary+repair, **очистка markdown** (картинки/svg) + cap `text_context` **3500**, обновление `url_registry` после каждой не-дублирующей обработки, чистый layout. Остаётся **под тестом** до прохождения ретеста на 3 URL.

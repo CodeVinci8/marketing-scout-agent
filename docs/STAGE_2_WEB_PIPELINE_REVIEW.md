@@ -2,7 +2,9 @@
 
 **Status:** 🔎 REVIEW for final Stage 2 approval. Date: 2026-06-07.
 **Scope:** the manual, human-approval-gated **web competitor discovery** pipeline (Workflows 05 → 06 → 04).
-**Verdict:** ready for **final retest → commit → Stage 3.0**. See §8 test matrix and §9 recommendation.
+**Verdict:** ✅ **APPROVED WITH MINOR LIMITATIONS** (final status in §10). Real-run results in
+`docs/STAGE_2_FINAL_TEST_RESULTS.md`; auto-handoff evaluated and deferred to Stage 2.4
+(`docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md`). See §8 test matrix and §9–§10.
 
 ---
 
@@ -170,3 +172,42 @@ credits, and Claude balance deltas where applicable.
 3. On green, **commit the Stage 2 web pipeline** and mark Stage 2 approved/closed.
 4. Move to **Stage 3.0 — Lead Source Evaluation** (Avito vs Telegram vs VK), design-only, before building any
    connector. Keep the pipeline modular; do not merge into a monolith.
+
+---
+
+## 10. FINAL STATUS (2026-06-07) — ✅ APPROVED WITH MINOR LIMITATIONS
+
+Stage 2 is **APPROVED with minor limitations.** Real-run results are recorded in
+`docs/STAGE_2_FINAL_TEST_RESULTS.md`. Auto-handoff (06 → 04) was **evaluated and deferred** — see
+`docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md` (becomes Stage 2.4). The pipeline stays **modular** (DEC-071); it is
+**not** merged into a monolith.
+
+### Approved capabilities
+- Workflow 05 — web candidate discovery (Apify search; 0 Firecrawl/0 Claude; 26-col `url_candidates` + 18-col
+  `discovery_requests`; classification + domain extraction + `url_registry` duplicate detection).
+- Workflow 06 — approved-candidate runner (manual handoff producer).
+- Workflow 06 — **runtime `url_registry` recheck** (ignores editable `dedup_status`/`registry_status`).
+- Workflow 06 — **`first_pass_domain_diversity`** mode (default; implemented + simulation-validated, live
+  re-test recommended — watch item W1).
+- Workflow 06 — **`deep_domain_analysis`** mode (explicit; implemented + simulation-validated; live run
+  confirmed it does not bypass dedup — watch item W1).
+- Workflow 04 — website analyzer.
+- Workflow 04 — resilient parse/repair (primary → repair → deterministic fallback).
+- Workflow 04 — placeholder prefilter (skip parked/not-connected pages before any spend).
+- Workflow 04 — **PTS `service_type` override** (live-confirmed on `autolombardn1.ru`).
+- Workflow 04 — **contact sanitation** (blanks partials confirmed; valid-contact preservation = watch item W2).
+- `url_registry` URL-level dedup (full normalized URL).
+
+### Manual limitations (accepted for Stage 2)
+- **Human approval** still required (`approval_status=approved` is the spend gate).
+- **Workflow 06 → Workflow 04 handoff is manual** (paste the `Set URL List` block) — remains until auto mode
+  is implemented **and** live-validated (Stage 2.4).
+- **Candidates are marked `processed` manually** after Workflow 04 confirmation (enable the disabled
+  `Mark Candidates Processed` node, or edit the sheet) — unless/until safe auto status-update ships.
+- **Telegram Control Bot** not built (Stage 4; controller ≠ parser).
+- **Lead-source connectors** not built (Stage 3.x).
+- **Universal `market_profile`** schema deferred.
+
+### Outstanding watch items (non-blocking)
+- **W1:** live re-test of both runner modes with *fresh* same-domain unprocessed candidates.
+- **W2:** re-confirm valid full-contact preservation on a page with a clearly published contact.

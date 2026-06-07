@@ -5,6 +5,46 @@ Most recent first.
 
 ---
 
+## DEC-076 — Stage 3 Starts With Lead Source Evaluation, Not the Telegram Bot
+
+**Date:** 2026-06-07
+**Context:** With Stage 2 approved, the temptation is to jump to a visible feature (the Telegram Control Bot). But the bot is a *controller*; without evaluated, compliant lead sources behind it, it would have nothing to drive.
+**Decision:** **Stage 3.0 = Lead Source Evaluation** is the first Stage 3 step. Compare Avito/Classifieds vs Telegram vs VK on data availability, cost, risk, lead quality, and implementation complexity **before** building any connector. Preliminary (non-binding) recommendation: **Avito/Classifieds first** (public, high-intent, most tractable — pending actor/API + compliance check); **Telegram second** (the Telegram **Parser** is a source connector needing a separate client/MTProto access design, distinct from the Telegram **Control Bot**); VK/Instagram/Yandex later. The Telegram Control Bot stays Stage 4. **Do not build lead connectors or the Telegram bot yet.**
+**Reason:** evaluate data/cost/risk before sinking build effort; avoid conflating controller vs parser; sequence value by accessibility and lead quality.
+**Files:** `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`, `docs/ROADMAP.md`, `docs/NEXT_ACTIONS.md`.
+
+---
+
+## DEC-075 — Auto-Handoff (06 → 04) Allowed Only If Implemented Safely Without Duplicating Workflow 04
+
+**Date:** 2026-06-07
+**Context:** Manual copying of Workflow 06's URL block into Workflow 04 is the one remaining manual step in the chain. Auto-handoff was evaluated this pass (`docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md`).
+**Decision:** Auto-handoff is **permitted only** via a *callable entry path on Workflow 04* (Execute Workflow Trigger feeding the **existing** analyzer chain) driven by an Execute Workflow node in Workflow 06 — **never** by duplicating Workflow 04's Firecrawl+Claude logic into Workflow 06. It must keep manual mode (`Manual Start` + `Set URL List`) intact, default `processing_mode=manual_handoff_to_workflow_04`, `active=false`, `max_per_run=5`, the runtime `url_registry` recheck, and must mark candidates `processed` **only after** Workflow 04 confirms success per candidate (`technical_error` → `error`/`approved+note`, never `processed`). **This pass: DEFERRED** — a safe implementation is non-trivial (no `source_candidate_id` threading through Workflow 04's 25-node, 35-field-locked, branching/looped analyzer; the confirm-then-mark safety property cannot be live-tested in this environment). Scheduled as **Stage 2.4** before the Telegram bot; manual handoff remains the approved Stage 2 path.
+**Reason:** stability over removing one manual copy step; the riskiest behavior (confirm-then-mark) must be live-validated, which is impossible here.
+**Files:** `docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md`, `docs/STAGE_2_WEB_PIPELINE_REVIEW.md`.
+
+---
+
+## DEC-074 — Stage 2 Web Pipeline APPROVED With Manual-Handoff Limitation; Stays Modular (Not a Monolith)
+
+**Date:** 2026-06-07
+**Context:** Stage 2 (05 → approval → 06 → manual handoff → 04) passed real tests (see `docs/STAGE_2_FINAL_TEST_RESULTS.md`): WF05 discovery PASS, WF06 runtime registry recheck PASS, WF04 PTS override PASS, contact-partial blanking PASS, manual handoff PASS. Runner modes are implemented + simulation-validated (live re-test with fresh same-domain candidates recommended — watch item W1).
+**Decision:** **Stage 2 is APPROVED with minor limitations** — human approval required; **manual** 06→04 handoff; candidates marked `processed` manually after WF04 confirmation; Telegram bot / lead connectors / universal `market_profile` not built. The three workflows **remain modular** (discovery / approval-runner / analyzer) and are **not** merged into one monolith: separation preserves the human-approval spend gate, auditability, independent failure/reuse, and incremental change.
+**Reason:** the chain is proven and safe as separate, inspectable stages; the remaining manual steps are deliberate safety gates, not defects.
+**Files:** `docs/STAGE_2_WEB_PIPELINE_REVIEW.md`, `docs/STAGE_2_FINAL_TEST_RESULTS.md`.
+
+---
+
+## DEC-073 — Workflow 06 Must Always Re-Check `url_registry` at Runtime (Reaffirmed)
+
+**Date:** 2026-06-07
+**Context:** Test 4 re-confirmed live: when the operator re-set already-processed URLs to `approval_status=approved`, Workflow 06 returned `selected_count=0`, `skipped_count=18` with `registry_recheck_duplicate` / `already_processed` / `duplicate_status` / `approval_status_not_approved`.
+**Decision (reaffirms DEC-065):** Workflow 06 **must always** re-read `url_registry` at runtime and re-normalize each `candidate_url`, and must **never** trust the editable `url_candidates` `dedup_status`/`registry_status` fields. This holds in **both** runner modes (`first_pass_domain_diversity` and `deep_domain_analysis`) — Test 5 confirmed deep mode does not bypass the recheck. This is the primary guard against duplicate Firecrawl/Claude spend.
+**Reason:** editable sheet fields are advisory and can be wrong/stale; the registry is the source of truth.
+**Files:** `n8n/workflows/06_approved_candidates_runner.json`, `docs/STAGE_2_FINAL_TEST_RESULTS.md`.
+
+---
+
 ## DEC-072 — Workflow 06 Default Is Domain-Diverse First Pass; deep_domain_analysis Is Explicit, Not Default
 
 **Date:** 2026-06-07

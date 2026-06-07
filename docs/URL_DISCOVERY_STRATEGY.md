@@ -204,3 +204,15 @@ DEC-071). Workflow 06 now exposes two **runner modes** (Set Runner Config → `r
 URL) in both modes; domain diversity is a per-run *selection* rule only. Workflow 04 hardened: stronger PTS
 `service_type` override + deterministic `contact_public` extraction. Full pre-approval review +
 test matrix: `docs/STAGE_2_WEB_PIPELINE_REVIEW.md`.
+
+---
+
+## Stage 2 finalization note (2026-06-08, DEC-074/075/076)
+
+The discovery → approval → consume chain (05 → 06 → 04) is **APPROVED with minor limitations** and stays
+**modular** (not a monolith). Real results: `docs/STAGE_2_FINAL_TEST_RESULTS.md`. The one manual step
+(copying Workflow 06's URL block into Workflow 04) was evaluated for automation and **deferred** to **Stage
+2.4** (`docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md`) — manual handoff remains approved; auto-handoff must be built
+callable (no analyzer duplication) and **live-validated** (confirm-then-mark) first. **Next strategic step is
+Stage 3.0 — Lead Source Evaluation** (Avito first, Telegram second; parser ≠ control bot), not the Telegram
+bot (DEC-076).

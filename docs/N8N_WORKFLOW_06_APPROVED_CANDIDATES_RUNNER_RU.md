@@ -2,7 +2,14 @@
 
 **Файл:** `n8n/workflows/06_approved_candidates_runner.json`
 **Имя в n8n:** `06 - Approved Candidates Runner`
-**Статус:** 🔧 BUILT + ПАТЧИ registry recheck (DEC-065) + доменное разнообразие (DEC-066) + **режимы прогона `runner_mode` (DEC-072)**, `active=false` — мост одобрение → обработка (Stage 2.2c). **Под финальным ретестом Stage 2.** НЕ активировать.
+**Статус:** ✅ ОДОБРЕН (Stage 2, с ограничениями) — registry recheck (DEC-065) + доменное разнообразие (DEC-066) + режимы `runner_mode` (DEC-072), `active=false`. Передача в WF04 — **ручная** (`manual_handoff_to_workflow_04`); авто-handoff отложен в Stage 2.4 (`docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md`). Результаты: `docs/STAGE_2_FINAL_TEST_RESULTS.md`. НЕ активировать.
+
+> **Результаты тестов (2026-06-08).** Test 4 (registry recheck) — ✅ PASS: после возврата уже обработанных URL
+> в `approved` прогон дал `selected_count=0`, `skipped_count=18` (`registry_recheck_duplicate`,
+> `already_processed`, `duplicate_status`, `approval_status_not_approved`). Режимы `first_pass_domain_diversity`
+> и `deep_domain_analysis` — реализованы и проверены симуляцией; «живой» тест со свежими необработанными
+> URL одного домена рекомендован (watch item W1 в STAGE_2_FINAL_TEST_RESULTS).
+> **Авто-handoff (processing_mode=auto_execute_workflow_04) пока НЕ реализован** — только ручная передача.
 
 ---
 

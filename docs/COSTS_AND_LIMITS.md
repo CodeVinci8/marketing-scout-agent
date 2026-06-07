@@ -310,3 +310,18 @@ The first manual production smoke test consumed a **primary call + a repair atte
 - **Contact extraction is free** and reduces wasted manual review (no partial/hallucinated contacts stored).
 - Per-URL Workflow 04 cost is unchanged (~1 Firecrawl credit + ~$0.01–0.023 Claude per non-duplicate URL;
   duplicates 0). See the Workflow 04 mini-batch cost model above.
+
+---
+
+## Stage 2 finalization — cost posture (2026-06-08, DEC-074/075)
+
+- **No new spend this finalization pass** — docs only; no workflow logic changed; no external API called.
+- **Stage 2 spend model is unchanged and bounded:** WF05 = Apify search cost only (0 Firecrawl/0 Claude);
+  WF06 = 0 (pure selection logic); WF04 ≈ 1 Firecrawl credit + ~$0.01–0.023 Claude per **non-duplicate** URL,
+  hard-capped at 5 URLs/run; duplicates cost 0 (url_registry recheck + dedup before spend).
+- **Auto-handoff deferral (Stage 2.4) has no cost impact now.** When built, auto mode would run the **same**
+  WF04 analyzer per selected URL — same per-URL cost, still gated by human approval and `max_per_run=5`; it
+  removes a manual copy step, not a cost. The confirm-then-mark path adds only Google Sheets writes (no AI).
+- **Stage 3 reminder:** lead-source acquisition cost (Apify actors / APIs / sessions) must be tracked
+  **separately** from Claude analysis cost, and estimated per source during Stage 3.0 before any connector is
+  built.

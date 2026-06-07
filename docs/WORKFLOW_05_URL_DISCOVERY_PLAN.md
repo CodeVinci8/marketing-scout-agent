@@ -254,3 +254,12 @@ Reviewed (not patched) during the Stage 2 final hardening pass — **no bug foun
 - `candidate_type` classification present; domain extraction present; `duplicate_in_registry` dedup works
   (reads `url_registry`).
 - `active=false`. Confirmed in the Stage 2 review: `docs/STAGE_2_WEB_PIPELINE_REVIEW.md` §2/§8 (test T1/T11).
+
+---
+
+## 15. Stage 2 finalization (2026-06-08)
+
+Workflow 05 is **APPROVED** as the Stage 2 web search candidate discovery connector. Test 1 PASS (9 candidates,
+classification + domain extraction + `url_registry` dedup, 0 Firecrawl/0 Claude). Quick-reviewed this pass —
+no bug, no change. `url_candidates`=26 fields, `discovery_requests`=18 fields. Next: **Stage 3.0 Lead Source
+Evaluation** generalizes this discovery→approval→consume shape to non-web lead sources (Avito first).

@@ -108,18 +108,33 @@ insufficient. Firecrawl `/v2/search` parked. All reuse the same `url_candidates`
 
 ---
 
-## Stage 2 — Web competitor pipeline — ✅ COMPLETING / CLOSING (2026-06-07)
+## Stage 2 — Web competitor pipeline — ✅ APPROVED WITH MINOR LIMITATIONS (2026-06-07)
 
-The web competitor discovery pipeline **05 (discovery) → 06 (approval runner) → 04 (analyzer)** has passed a
-full manual E2E test and is the proven, human-approval-gated competitor path. It stays **modular — not merged
-into a monolith** (DEC-071). A final hardening pass landed (DEC-070/072: WF06 runner modes, WF04 PTS/contact
-hardening); see the technical review **`docs/STAGE_2_WEB_PIPELINE_REVIEW.md`** with the **T1–T11** approval
-matrix. Remaining Stage 2 item: run T1–T11, then commit. After that, **Stage 2 is closed** and the focus
-shifts to **lead** discovery (Stage 3).
+The web competitor discovery pipeline **05 (discovery) → 06 (approval runner) → 04 (analyzer)** has passed
+real tests and is **APPROVED with minor limitations** (DEC-074). It stays **modular — not merged into a
+monolith** (DEC-071/074). Final results: **`docs/STAGE_2_FINAL_TEST_RESULTS.md`**; technical review +
+T1–T11 matrix: **`docs/STAGE_2_WEB_PIPELINE_REVIEW.md`** §10.
+**Approved:** WF05 discovery, WF06 runner + runtime registry recheck (DEC-073), WF06 `first_pass_domain_diversity`
++ `deep_domain_analysis` modes (DEC-072; runner modes implemented + simulation-validated, live re-test
+recommended — watch item W1), WF04 analyzer + resilient parse/repair + placeholder prefilter + PTS override +
+contact sanitation, `url_registry` dedup.
+**Manual limitations (accepted):** human approval required; **manual** 06→04 handoff; candidates marked
+`processed` manually after WF04 confirmation; Telegram bot / lead connectors / universal `market_profile` not
+built.
+
+### Stage 2.4 — Auto-Handoff 06 → 04 (DEFERRED future improvement, DEC-075)
+
+**Status:** 🟥 DEFERRED — evaluated this pass, **not implemented**. A safe design (Workflow 04 callable
+Execute Workflow Trigger feeding the existing analyzer; Workflow 06 Execute Workflow node + confirm-then-mark
+status update; default stays `manual_handoff_to_workflow_04`) is documented in
+**`docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md`**. Blockers: no `source_candidate_id` threading through WF04's
+25-node, 35-field-locked, branching/looped analyzer; the confirm-then-mark safety property cannot be
+live-tested in this environment. **Comes before** the Telegram Control Bot (Stage 4); manual handoff remains
+the approved path until Stage 2.4 is built and live-validated.
 
 ---
 
-## Stage 3.0 — Lead Source Evaluation (NEXT, design/eval only — DEC-069)
+## Stage 3.0 — Lead Source Evaluation (NEXT, design/eval only — DEC-069/076)
 
 **Status:** 📐 NEXT — **evaluation, no build.** Goal: choose the first lead source by comparing
 **Avito vs Telegram vs VK** on **data availability, cost, risk, lead quality, implementation complexity**.

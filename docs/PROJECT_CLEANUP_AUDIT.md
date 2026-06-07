@@ -407,3 +407,50 @@ The operator needs to confirm each of the following before Phase 3 begins:
 
 Next action: Operator reviews this document and states which files to delete.
 Agent then executes approved deletions in Phase 3.
+
+---
+
+# Stage 2 Cleanup Audit (2026-06-07) — document only, NO deletions
+
+This section audits the workflow + doc inventory at the close of Stage 2. **Nothing is deleted here.**
+No `git rm` is run. Deletions require explicit operator approval in a later phase.
+
+## KEEP — active production / test assets (do not touch)
+
+| File | Role |
+|------|------|
+| `n8n/workflows/04_firecrawl_url_list_resilient.json` | **Active** — Stage 2 URL consumer (Firecrawl + resilient analyzer) |
+| `n8n/workflows/05_apify_search_candidate_discovery.json` | **Active** — Stage 2 candidate discovery (Apify search) |
+| `n8n/workflows/06_approved_candidates_runner.json` | **Active** — Stage 2 approval runner + runner modes |
+| `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json` | **Keep** — production resilient router (analyzer brain reused by 03/04 lineage) |
+| `n8n/workflows/03_firecrawl_single_url_resilient.json` | **Keep** — single-URL analyzer; basis/reference for WF04; still useful for one-off URL tests |
+| `n8n/workflows/00_healthcheck_manual_test.json` | **Keep** — baseline healthcheck |
+| `n8n/workflows/01_google_sheets_append_row_test.json` | **Keep** — baseline Sheets append |
+| `n8n/workflows/02_claude_api_single_record_analysis.json` | **Keep** — production v1 Claude analysis baseline |
+| Key docs: `STAGE_2_WEB_PIPELINE_REVIEW.md`, `STAGE_2_FINAL_TEST_RESULTS.md`, `WORKFLOW_06_AUTO_HANDOFF_PLAN.md`, `TABLE_SCHEMA.md`, `DECISIONS.md`, `ROADMAP.md`, `NEXT_ACTIONS.md`, `AGENT_CAPABILITIES.md`, `COSTS_AND_LIMITS.md`, the three `N8N_WORKFLOW_0{4,5,6}_*_RU.md` guides, `LEAD_DISCOVERY_ARCHITECTURE.md`, `LEAD_SOURCE_CONNECTORS_PLAN.md` | **Keep** — current architecture + Stage 3 planning |
+
+## CLEANUP CANDIDATES — flagged only, DO NOT DELETE (need operator approval)
+
+| File | Why a candidate | Recommendation |
+|------|-----------------|----------------|
+| `n8n/workflows/02_claude_api_single_record_v2_baseline_raw_json.json` | Early v2 baseline; superseded by the production resilient router | **Keep for now** as a historical baseline; candidate for archive only after Stage 3 stabilizes |
+| `n8n/workflows/02_claude_api_single_record_v2_extended_tests.json` | Test-evidence harness for v2 extended tests; superseded | **Candidate to archive** (move to an `archive/` folder, not delete) once Stage 2 is committed |
+| `n8n/workflows/02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json` | Test-harness variant of the resilient router; production version is the keeper | **Candidate to archive** after operator confirms the production router is the sole keeper |
+
+> The three `02_*` test/baseline variants are **not part of the active Stage 2 architecture** (05→06→04 +
+> the production analyzer). They are retained as history/evidence. If the operator wants a leaner tree, the
+> recommended action is **archive (move), not delete**, so the test evidence is preserved.
+
+## Docs — possible duplication to review (no action now)
+
+- Multiple Workflow 02 test docs (`WORKFLOW_02_V2_TEST_RESULTS.md`, `WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`,
+  `N8N_WORKFLOW_02_*_RU.md`, `MILESTONE_REVIEW_02.md`) overlap. **Review for consolidation later**; keep all
+  until Stage 3 begins. No duplication found among the Stage 2 (04/05/06) docs.
+
+## Stale workflow JSONs not part of active architecture
+
+- None outside the `02_*` variants above. The 00/01/02-prod/03/04/05/06 set is coherent; 04/05/06 are the
+  active Stage 2 chain.
+
+**No files deleted. No `git rm` executed. This is an audit only — awaiting operator approval before any
+archive/delete.**
