@@ -317,20 +317,22 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 > **Backfill note:** `url_registry` is the dedup source of truth. Rows analyzed before the registry existed re-process once until backfilled (optional maintenance) — see `TABLE_SCHEMA.md`.
 > Still blocked: >5 URLs, scheduled runs, crawler, batch/search endpoints, URL-discovery agent, Telegram bot, Avito/Telegram/Instagram (DEC-050).
 
-#### Step G — Stage 2.2: URL Discovery Layer 📋 PLANNING DONE, build gated on approval (2026-06-08)
+#### Step G — Stage 2.2: Apify Search Candidate Discovery (Workflow 05) 📋 PLANNING DONE, build gated on approval (2026-06-08)
 
-**Plans:** `docs/URL_DISCOVERY_STRATEGY.md` (selected **Hybrid A+B+D**, risks, gates G1–G5), `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md` (`url_candidates` **25-col** schema + manual intake). Workflow 04 stays the URL **consumer**; this designs the URL **supplier**. **No JSON built; no external calls.**
+**Plans:** `docs/URL_DISCOVERY_STRATEGY.md` (Level 2 Apify, risks, gates G1–G5), `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md` (node plan + schemas). Workflow 04 stays the URL **consumer**; Workflow 05 is the URL **supplier**. **No JSON built; no external calls; do not call Apify yet.**
 
-**Selected architecture (DEC-058):** Hybrid — Option A (manual intake) first → Option B (search API/actor, measured) → Stage 2.2c Approved Candidates Runner → Telegram bot (interface). Option C (Firecrawl `/v2/search`) parked. **Default: collect 10 candidates; Workflow 04 processes ≤5/run → two batches of 5.**
+**Selected architecture (DEC-059):** **Level 2 — Apify Search Candidate Discovery.** Query → Apify Google Search actor → normalize → check `url_registry` → deterministic score → write `url_candidates` + `discovery_requests`. **0 Firecrawl/Claude** (Apify search cost only); human approval before Workflow 04. Manual URL entry is an optional fallback mode. **Default collect 10; Workflow 04 processes ≤5/run → two batches of 5.**
 
 **Operator tasks (in order):**
-1. [ ] **Review + approve the `url_candidates` 25-column schema** (incl. `discovery_request_id`/`requested_by`/`requested_limit` + `approval_status`/`source`/`dedup_status` value sets) — gate G1.
-2. [ ] **Create the `url_candidates` sheet** with the 25-column header (see `WORKFLOW_05_URL_DISCOVERY_PLAN.md` §2 / `TABLE_SCHEMA.md`).
-3. [ ] **Confirm Option A first** (manual intake before any automated search).
-4. [ ] **Approve building `05 - URL Candidates Manual Intake`** (Manual Start → Set Candidate URLs + Query → Normalize → Check `url_registry` → Build Candidate Rows → Append `url_candidates`; no Firecrawl/Claude; default 10, cap 20/intake; `approval_status=new`, dups → `duplicate`).
-5. [ ] Validate per `WORKFLOW_05_URL_DISCOVERY_PLAN.md` §9, then manually approve rows and feed ≤5 into Workflow 04.
+1. [ ] **Approve the schemas** (gate G1): `discovery_requests` (18 cols) + `url_candidates` (25 cols) + status/value sets — see `WORKFLOW_05_URL_DISCOVERY_PLAN.md` §2 / `TABLE_SCHEMA.md`.
+2. [ ] **Create the `discovery_requests` sheet** (18-column header).
+3. [ ] **Create the `url_candidates` sheet** (25-column header).
+4. [ ] **Get an Apify API token** (Google Search Results Scraper actor).
+5. [ ] **Create the n8n credential** `Apify API - Marketing Scout` — Header Auth, Header Name `Authorization`, Value `Bearer <APIFY_API_TOKEN>`, allowed domain `api.apify.com`. (Do not put the token in any repo file.)
+6. [ ] **Authorize building `05 - Apify Search Candidate Discovery`** (Manual Start → Set Discovery Request → Build Apify Search Request → Apify Search Actor API Request → Normalize Search Results → Normalize Candidate URLs → Check `url_registry` → Build Candidate Rows → Append `url_candidates` → Append/Update `discovery_requests`; no Firecrawl/Claude; default 10).
+7. [ ] Validate per `WORKFLOW_05_URL_DISCOVERY_PLAN.md` §11, then approve rows and feed ≤5 into Workflow 04.
 
-> **Do not** build automated search (Option B), Firecrawl `/v2/search` (Option C), the Approved Candidates Runner (Stage 2.2c), or the Telegram bot (Stage 2.3) yet — each is gated (DEC-056/057/058).
+> **Do not** call Apify, build the Approved Candidates Runner (Stage 2.2c), use Firecrawl `/v2/search` (parked), build SerpAPI/Google-CSE fallbacks, or build the Telegram bot (Stage 2.3) yet — each is gated (DEC-056/057/059).
 
 #### Step E (legacy plan) — Workflow 03: Firecrawl Website Analysis _(superseded by the active Step E above)_
 

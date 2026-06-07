@@ -82,37 +82,46 @@
 
 ---
 
-## Stage 2.2 — URL Discovery Layer (Planning, DEC-055/056/057/058)
+## Stage 2.2 — Apify Search Candidate Discovery (Planning, DEC-055/056/057/058/059)
 
-**Status:** 📋 PLANNED — **planning complete, build gated on operator approval.** No JSON built.
-**Selected architecture:** **Hybrid A + B + D** (manual → search/API → Telegram interface); Option C (Firecrawl `/v2/search`) parked (DEC-058).
-**Goal:** Add a URL **supplier** that turns an operator topic/query (e.g. «займ под залог ПТС Москва») into vetted candidate URLs for Workflow 04 (the URL **consumer**, unchanged). Separate layer, **`url_candidates` (25 columns)**, human approval before any spend, reuses `url_registry` dedup.
-**Plans:** `docs/URL_DISCOVERY_STRATEGY.md` (hybrid model, risks, gates G1–G5), `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md` (`url_candidates` 25-col schema + manual intake).
-**Default volumes:** collect up to **10** candidates/request; Workflow 04 processes **≤5/run** → 10 approved run as **two batches of 5**.
+**Status:** 📋 PLANNED — **planning complete, build gated on operator approval + Apify credential.** No JSON built.
+**Selected architecture:** **Level 2 — Apify Search Candidate Discovery** (Workflow 05). Manual entry is an optional fallback mode; Telegram is a later interface; Firecrawl `/v2/search` parked (DEC-059).
+**Goal:** A URL **supplier** that turns an operator query (e.g. «займ под залог ПТС Москва») into vetted candidate URLs for Workflow 04 (the URL **consumer**, unchanged), via an Apify Google Search actor. Separate layer, **`url_candidates` (25 cols)** + **`discovery_requests` (18 cols)**, human approval before any spend, reuses `url_registry` dedup.
+**Plans:** `docs/URL_DISCOVERY_STRATEGY.md` (Level 2 Apify, risks, gates G1–G5), `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md` (node plan + schemas + Apify credential).
+**Default volumes:** collect up to **10** candidates/request; Workflow 04 processes **≤5/run** → 10 approved run as **two batches of 5**. **0 Firecrawl/Claude in Workflow 05** (Apify search cost only).
 
-### Stage 2.2a — Manual Candidate Intake (Option A, next build candidate)
+### Stage 2.2 build — `05 - Apify Search Candidate Discovery` (next build)
 
-**Status:** 📋 PLANNED — build only after operator approves the `url_candidates` 25-col schema (gate G1).
-**Goal:** `05 - URL Candidates Manual Intake` — operator pastes candidate URLs + query; workflow normalizes, checks `url_registry`, classifies duplicates, estimates cost, writes `url_candidates` (`approval_status=new`, or `duplicate` for dups). **No Firecrawl, no Claude, 0 cost.** Default 10 candidates, hard cap 20/intake.
-
-### Stage 2.2b — Search / API Candidate Discovery (Option B, later)
-
-**Status:** 📋 LATER — after Option A is validated and a source is evaluated (gate G4).
-**Goal:** A small, measured test of a search provider / Apify actor that fills the **same** `url_candidates` sheet from a query (reusing normalization, dedup, approval). Cost + rate-limit + ToS risk; never auto-approves; human gate stays.
+**Status:** 📋 PLANNED — build after operator approves schemas (G1) and the `Apify API - Marketing Scout` credential exists (G2).
+**Goal:** Query → Apify Google Search actor → normalize → check `url_registry` → deterministic score → write `url_candidates` (`new`/`duplicate`) + `discovery_requests` (`status=needs_review`). No Firecrawl/Claude, no auto-processing.
 
 ### Stage 2.2c — Approved Candidates Runner (hand-off, later)
 
-**Status:** 📋 LATER — after Option A + approval flow proven (gates G2–G3). Manual hand-off until then.
+**Status:** 📋 LATER — after discovery + approval flow proven (gates G3–G4). Manual hand-off until then.
 **Goal:** Pick `approval_status=approved` candidates and feed Workflow 04 in **controlled batches of 5**, marking rows `processed`. No new analysis logic — it only orchestrates the existing consumer.
+
+### Stage 2.2 fallbacks (later, parked)
+
+Google Custom Search JSON API (low-cost) and SerpAPI (paid, stable) are evaluated only if Apify proves
+insufficient. Firecrawl `/v2/search` parked. All reuse the same `url_candidates`/approval spine.
 
 ---
 
-## Stage 2.3 — Telegram Control Bot Planning (Later, DEC-057)
+## Stage 2.3 — Telegram Control Bot Planning (Later, DEC-057/059)
 
-**Status:** 📋 LATER — deferred until Stage 2.2a + approval flow exist (gates G1–G3).
-**Goal:** Operator requests analysis in natural language; bot proposes URLs + cost, asks approval, calls Workflow 04, returns a summary. The bot is an **interface**, not a discovery source.
-**Flow:** operator request → bot creates discovery query → gets candidates → shows estimated cost → operator approves → writes approved URLs → triggers the Approved Candidates Runner / Workflow 04. The bot **calls** the existing workflows and **duplicates no discovery/processing logic**. `url_registry` dedup prevents repeat processing.
-**Prerequisites:** Stage 2.2a candidate + approval flow (and ideally 2.2c runner); Telegram bot token + n8n webhook.
+**Status:** 📋 LATER — deferred until discovery (Stage 2.2) + approval flow exist (gates G1–G4).
+**Goal:** Operator requests analysis in natural language; bot proposes candidates + cost, asks approval, triggers processing, returns a summary. The bot is a **control interface**, not a data-processing engine.
+**Flow:** request text → bot creates `discovery_requests` row → Workflow 05 collects candidates → bot shows candidates + estimated cost → operator approves → Approved Candidates Runner / Workflow 04 processes → bot returns summary. The bot **calls** the existing workflows and **duplicates no discovery/processing logic**. `url_registry` dedup prevents repeat processing.
+**Prerequisites:** Stage 2.2 discovery + approval flow (and ideally 2.2c runner); Telegram bot token + n8n webhook.
+
+---
+
+## Future — Source Connectors (social / classified, later)
+
+Add **source connectors** (not per-platform agents): *Classifieds Connector* and *Social Connector* (Apify
+actors) feed the **same** core analyzers as websites. Analyzers (Market Record / Lead Signal / Content
+Insight / Report) classify records **independent of source**; social/classified are stronger for lead
+signals and client pain but also show competitor activity. Not approved yet.
 
 ---
 

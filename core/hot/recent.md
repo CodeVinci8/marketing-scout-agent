@@ -4,6 +4,19 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Stage 2.2 PIVOT: Workflow 05 = Apify Search Candidate Discovery (DEC-059)
+
+**What was done (planning/docs only — no JSON, no Apify/external calls):**
+- **Workflow 05 repointed to `05 - Apify Search Candidate Discovery`** (Level 2 automated): query → **Apify Google Search actor** → normalize → check `url_registry` → deterministic score → write `url_candidates` + `discovery_requests`. **0 Firecrawl/Claude** (Apify search cost only); human approval before Workflow 04. Manual URL entry demoted to optional fallback (Workflow 04 already does manual lists).
+- **Primary API = Apify.** Credential (later, no token in repo): `Apify API - Marketing Scout`, Header Auth, `Authorization: Bearer <token>`, domain `api.apify.com`. Fallbacks later: Google CSE, SerpAPI. Firecrawl `/v2/search` parked.
+- **New sheet `discovery_requests` (18 cols)**; `url_candidates` confirmed 25 cols. Counts now 35 (business ×6) / 10 (url_registry) / 25 (url_candidates) / 18 (discovery_requests). Nothing removed.
+- **Source connectors vs core analyzers** documented (don't split agents per platform; analyzers are source-agnostic). Telegram = interface only, later.
+- Decisions: **DEC-059** (refines DEC-058). Updated STRATEGY, WORKFLOW_05 PLAN (full rewrite), TABLE_SCHEMA, COSTS, AGENT_CAPABILITIES, ROADMAP, NEXT_ACTIONS (Step G).
+
+**Next operator decision:** approve schemas (discovery_requests 18 + url_candidates 25) → create both sheets → get Apify token → create `Apify API - Marketing Scout` credential → authorize building Workflow 05. **Do not call Apify / build Telegram yet.**
+
+---
+
 ## Session: 2026-06-08 — Stage 2.2 URL Discovery REFINED: Hybrid A+B+D + 25-col `url_candidates` (DEC-058)
 
 **What was done (planning/docs only — no JSON, no external calls):**

@@ -1,9 +1,9 @@
 # URL_DISCOVERY_STRATEGY.md — Stage 2.2 URL Discovery Layer (Planning)
 
 **Status:** 📋 PLANNING ONLY — nothing built. No workflow JSON, no external calls.
-**Selected architecture:** **Hybrid A + B + D** (manual intake first → search/API later → Telegram as interface), with C parked. See §5.
+**Selected architecture (DEC-059):** **Level 2 — Apify Search Candidate Discovery** is the next build (Workflow 05). Manual URL entry is only an optional input mode (manual *lists* are already covered by Workflow 04). Telegram is a deferred interface layer; Firecrawl `/v2/search` parked. See §5.
 **Date:** 2026-06-08
-**Related:** `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`, `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`, `docs/TABLE_SCHEMA.md`, DEC-050/051/054/055/056/057/058
+**Related:** `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`, `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`, `docs/TABLE_SCHEMA.md`, DEC-050/051/054/055/056/057/058/059
 
 ---
 
@@ -14,6 +14,10 @@ scrapes (Firecrawl), analyzes (Claude), and routes results. It is the **URL cons
 
 What is missing is the **URL supplier**: a controlled way to turn an operator's topic/query
 (e.g. *«займ под залог ПТС Москва»*) into a vetted list of candidate URLs to feed Workflow 04.
+**Level 2** of this layer is *automated* discovery — `05 - Apify Search Candidate Discovery` runs an
+Apify Google-Search actor against a query and writes scored, deduped candidates for human approval.
+(A manual URL *list* is already handled by Workflow 04, so Workflow 05 is not "manual intake"; manual
+entry survives only as an optional fallback input mode.)
 
 Keeping the supplier separate from the consumer is deliberate:
 - **Different cost profiles.** Discovery may use a search API/actor (its own cost + rate limits);
@@ -27,66 +31,89 @@ Keeping the supplier separate from the consumer is deliberate:
 
 ## 2. URL consumer vs URL supplier
 
-| | URL Supplier (Stage 2.2, new) | URL Consumer (Workflow 04, done) |
+| | URL Supplier — Workflow 05 (Stage 2.2, new) | URL Consumer — Workflow 04 (done) |
 |---|---|---|
-| Input | topic/query or pasted candidate URLs | ≤5 approved URLs |
-| Output | rows in `url_candidates` (status `new`) | rows in 6 business tabs + `url_registry` |
-| Cost | 0 (manual) or search-API cost (later) | Firecrawl + Claude |
+| Input | search topic/query (Apify) — or pasted URLs (fallback mode) | ≤5 approved URLs |
+| Output | rows in `url_candidates` + a `discovery_requests` row | rows in 6 business tabs + `url_registry` |
+| Cost | **Apify search call only** (0 Firecrawl / 0 Claude) | Firecrawl + Claude |
 | Gate | human sets `approval_status=approved` | `url_registry` dedup + placeholder pre-filter |
-| Built? | No (planning) | Yes (approved, ≤5 URLs manual) |
+| Built? | No (planning) | Yes (approved, ≤5 URLs) |
 
 ## 3. Safe staged rollout
 
-1. **Stage 2.2a — Manual Candidate Intake (Option A).** Operator pastes candidate URLs; the workflow
-   normalizes, checks `url_registry`, and writes `url_candidates` with `approval_status=new`. **0 cost.**
-2. **Stage 2.2b — Search/API candidate discovery (Option B).** A small, measured test of a search
-   provider / Apify actor that fills `url_candidates` from a query. Source must be evaluated first.
-3. **Stage 2.2c — Approved Candidates Runner (hand-off).** A workflow that picks `approval_status=approved`
+1. **Stage 2.2 — Apify Search Candidate Discovery (Workflow 05, next build).** Given a query, an Apify
+   Google-Search actor returns candidate URLs; the workflow normalizes, checks `url_registry`, scores and
+   marks duplicates, writes `url_candidates` (`approval_status=new`/`duplicate`) and a `discovery_requests`
+   row. **Apify search cost only — 0 Firecrawl / 0 Claude.** Manual URL entry is an optional fallback mode.
+2. **Stage 2.2c — Approved Candidates Runner (hand-off).** A workflow that picks `approval_status=approved`
    candidates and feeds them to Workflow 04 in **controlled batches of 5** (Workflow 04's per-run limit).
    Until built, the hand-off is **manual** (operator copies approved URLs into Workflow 04, ≤5 at a time).
-4. **Stage 2.3 — Telegram Control Bot.** Operator-facing interface (submit query → see candidates + cost →
+3. **Stage 2.3 — Telegram Control Bot.** Operator-facing interface (submit request → see candidates + cost →
    approve → launch). Not discovery itself; calls the workflows above, never duplicates their logic.
 
 Each stage is gated: do not start the next until the previous one is approved.
 
 ## 4. Source options (A/B/C/D)
 
-- **Option A — Manual URL Candidates.** Operator pastes URLs into the intake. Cheapest, safest, no
-  search API. **Recommended first step.**
-- **Option B — Search API / SERP actor.** A search provider or Apify actor returns URLs from a query.
-  More automated, but carries cost + rate-limit risk and needs source evaluation (quality, ToS, region).
-- **Option C — Firecrawl `/v2/search`.** Only if it proves appropriate *later*. **Currently blocked**
-  until evaluated; do not assume it is the best option.
+- **Option A — Manual URL Candidates.** Operator pastes URLs. Already covered by Workflow 04's manual list;
+  survives only as an optional fallback input mode of Workflow 05. **Not the main next step.**
+- **Option B — Search API / SERP actor (SELECTED for Level 2).** A search provider / **Apify Google Search
+  Results Scraper** actor returns URLs+title+snippet from a query. Automated; carries cost + rate-limit risk;
+  source evaluated before scale. **This is Workflow 05.**
+- **Option C — Firecrawl `/v2/search`.** **Parked** — evaluation only; do not use yet. If ever tested, use
+  for candidate discovery only, never as a combined search+scrape+analyze step.
 - **Option D — Telegram Control Bot.** An *interface*, not a discovery source: lets the operator submit
-  queries, approve URLs, and launch Workflow 04. Comes after a candidate workflow exists.
+  requests, approve URLs, and launch processing. Deferred until the candidate + approval flow exists.
 
-## 5. Selected architecture — Hybrid A + B + D (C parked)
+## 5. Selected architecture — Level 2 Apify Search (Option B), then runner, then Telegram
 
-**Decision (DEC-058):** the discovery layer is a **hybrid** of Option A (manual), Option B (search/API),
-and Option D (Telegram as interface), rolled out in that order. **Option C (Firecrawl `/v2/search`) is
-parked.**
+**Decision (DEC-059, refines DEC-058):** Stage 2.2 is **Level 2 automated discovery via Apify** (Option B),
+not manual intake. Manual lists are already Workflow 04's job, so Workflow 05 leads with the Apify Google
+Search actor. Order: **Workflow 05 (Apify search) → Stage 2.2c Approved Candidates Runner → Telegram
+(interface)**. Manual entry stays as an optional Workflow 05 input mode; Option C (Firecrawl `/v2/search`)
+stays parked.
 
-- **A is built first** (Workflow 05, manual intake) — proves the `url_candidates` + normalization +
-  `url_registry` dedup + human-approval flow at **0 cost**, with no new external dependency.
-- **B follows** once a search provider/actor is evaluated (gate G4). B reuses the *same* `url_candidates`
-  sheet, normalization, dedup, and approval gate — it only changes the *source* of candidates.
-- **D (Telegram) is last and is interface-only:** it submits discovery requests, shows candidates + cost
-  estimates, asks for approval, and triggers the existing workflows. It performs **no scraping or analysis
-  itself** and duplicates no discovery/processing logic.
+- **Primary API: Apify** with the **Google Search Results Scraper** actor. Apify is already in the planned
+  stack for future Avito/social/classified actors, and Apify actors suit search-result candidate discovery.
+  **Firecrawl stays the content-extraction layer for known approved URLs** (Workflow 04), not for discovery.
+- **Fallbacks (later, not now):** Google Custom Search JSON API (low-cost), SerpAPI (paid, stable). Firecrawl
+  `/v2/search` parked.
+- **B reuses the shared spine:** the *same* `url_candidates` sheet, the Workflow 04 normalizer, `url_registry`
+  dedup, and the human approval gate. Only the candidate *source* differs.
+- **Runner (2.2c)** is hand-off only — approved candidates → Workflow 04 in batches of 5; no new analysis.
+- **D (Telegram) is interface-only:** submits discovery requests, shows candidates + cost, asks approval,
+  triggers the existing workflows; **no scraping/analysis, no duplicated logic.**
 
-**Why Firecrawl `/v2/search` (C) is parked:** it bundles search + scrape in one provider, which couples
-discovery cost/quality to the scraping vendor and tempts a single search→scrape→analyze step. We
-deliberately keep discovery, approval, and processing as **separate, independently testable** stages, and
-do not combine search+scrape+analysis initially. C may be evaluated later as a *candidate-discovery-only*
-source (write `url_candidates`, still require approval) — never as a combined pipeline.
+**Credential (create later in n8n — never put a token in any file):** `Apify API - Marketing Scout`, Header
+Auth, header `Authorization` = `Bearer <APIFY_API_TOKEN>`, allowed domain `api.apify.com`.
+
+**Why Firecrawl `/v2/search` (C) is parked:** it bundles search + scrape in one provider, coupling discovery
+cost/quality to the scraping vendor and tempting a single search→scrape→analyze step. We keep discovery,
+approval, and processing as **separate, independently testable** stages.
 
 **Why Telegram is interface, not core logic:** putting discovery/scraping/analysis inside the bot would
-duplicate Workflow 04/05 logic, hide cost, and remove the human gate. The bot must call the workflows and
-relay results, so the core logic stays in one place and remains usable without Telegram.
+duplicate Workflow 04/05 logic, hide cost, and remove the human gate. The bot calls the workflows and relays
+results, so core logic stays in one place and remains usable without Telegram.
 
-**Default volumes:** a discovery request **collects up to 10 candidates** by default (`requested_limit=10`).
-Workflow 04 still **processes max 5 URLs per run**, so 10 approved candidates are processed as **two
-controlled batches of 5**. **No candidate reaches Firecrawl/Claude until `approval_status=approved`.**
+**Default volumes:** a discovery request **collects up to 10 candidates** (`requested_limit=10`). Workflow 04
+still **processes max 5 URLs per run**, so 10 approved candidates are processed as **two controlled batches
+of 5**. **No candidate reaches Firecrawl/Claude until `approval_status=approved`.**
+
+## 5b. Source connectors vs core analyzers
+
+Do **not** over-split agents by platform name (one per Avito/VK/Instagram). Instead, separate **source
+connectors** (acquire raw records/URLs) from **core analyzers** (classify content), so a website, a
+classified, and a social post all flow into the same analyzers:
+
+- **Source connectors:** *Web Search Connector* (Workflow 05 / Apify search — discovery), *Website Scrape
+  Connector* (Workflow 04 / Firecrawl), *Classifieds Connector* (future, Apify), *Social Connector* (future, Apify).
+- **Core analyzers:** *Market Record Analyzer*, *Lead Signal Analyzer*, *Content Insight Analyzer*,
+  *Report/Summary Agent* — these classify a record as **competitor / lead_signal / content_idea /
+  market_signal / irrelevant independent of source** (today this is the Workflow 04 Claude analyzer + routing).
+
+**Source ≠ meaning.** Websites yield competitor intelligence, offers/conditions, SEO/content ideas, FAQs and
+pain points; social/classified sources are stronger for lead signals and client pain but also show competitor
+activity. New platforms add a *connector*, not a new analyzer; analyzers stay source-agnostic.
 
 ## 5a. Future expansion rules (new agents/features)
 
@@ -115,16 +142,28 @@ controlled batches of 5**. **No candidate reaches Firecrawl/Claude until `approv
 
 ## 7. Decision gates before automation
 
-- **G1 — Schema approval.** Operator approves the `url_candidates` **25-column** schema and `approval_status` values.
-- **G2 — Manual intake (Option A) validated.** Workflow 05 normalizes + dedups + writes candidates correctly at 0 cost.
-- **G3 — Approval flow proven.** A human can move `new → approved` and only approved URLs reach Workflow 04.
-- **G4 — Source evaluation (Option B).** A named search provider/actor is evaluated for quality, ToS, cost, and rate limits **before** any automated discovery.
-- **G5 — Cost ceiling agreed.** Per-intake and per-run cost ceilings are set before Option B or the Telegram bot.
+- **G1 — Schema approval.** Operator approves the `discovery_requests` (18-col) + `url_candidates` (25-col) schemas and the status/value sets.
+- **G2 — Apify source + credential ready.** Apify API token obtained and the `Apify API - Marketing Scout` Header Auth credential created in n8n; actor evaluated for quality, ToS, cost, and rate limits.
+- **G3 — Discovery validated.** Workflow 05 returns ≤10 candidates, normalizes + dedups + scores correctly, writes `url_candidates` + `discovery_requests`, at **0 Firecrawl / 0 Claude**.
+- **G4 — Approval flow proven.** A human can move `new → approved` and only approved URLs reach Workflow 04 (≤5/run).
+- **G5 — Cost ceiling agreed.** Per-request Apify cost and per-run processing ceilings are set before scaling or before the Telegram bot.
 
-Telegram Control Bot is deferred until G1–G3 are passed (candidate + approval flow exists).
+Telegram Control Bot is deferred until G1–G4 are passed (discovery + approval flow exists).
+
+## 6a. Future Telegram Control Bot flow (deferred)
+
+1. operator sends request text (e.g. «найди конкурентов по займам под ПТС в Москве»);
+2. bot creates a `discovery_requests` row (`requested_by=telegram_operator`);
+3. **Workflow 05** collects candidates into `url_candidates`;
+4. bot shows the candidate list + estimated cost;
+5. operator approves (sets `approval_status=approved`);
+6. approved candidates are processed by **Workflow 04** (via the Approved Candidates Runner / manual);
+7. bot returns a summary.
+
+The bot orchestrates and reports only — it **must not** duplicate scraping or analyzer logic.
 
 ---
 
 ## See also
-- `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md` — the manual-intake workflow plan + `url_candidates` schema.
+- `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md` — the Apify Search Candidate Discovery plan + schemas.
 - `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` — the URL consumer (approved).

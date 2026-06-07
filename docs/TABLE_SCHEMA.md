@@ -86,7 +86,7 @@ A separate registry tab, written/read only by Workflow 04. Its own header (10 co
 | 9 | `batch_index` | integer | 1-based URL position |
 | 10 | `note` | string | `processed_by_workflow_04` |
 
-**Column counts:** the **6 business tabs use 35 columns**; **`url_registry` uses its own 10 columns**; the planned **`url_candidates` discovery tab uses 25 columns** (Stage 2.2, not built yet — see below). **Workflows 02/03 may leave `run_id`/`batch_index` empty**; **Workflow 04 fills `run_id`/`batch_index`** on every business path and populates `url_registry`.
+**Column counts:** the **6 business tabs use 35 columns**; **`url_registry` uses its own 10 columns**; the planned discovery tabs are **`url_candidates` = 25 columns** and **`discovery_requests` = 18 columns** (Stage 2.2, not built yet — see below). **No existing sheet is removed.** **Workflows 02/03 may leave `run_id`/`batch_index` empty**; **Workflow 04 fills `run_id`/`batch_index`** on every business path and populates `url_registry`.
 
 **Placeholder pre-filter (DEC-054).** Before the Claude call, `Normalize Firecrawl Output` detects obvious placeholder/parking/domain-not-connected pages (e.g. Wix "domain not connected", parking page, `сайт/домен не подключен`, `заглушка сайта`, or bare "coming soon" with no business content) and emits a **35-field `skipped_log`** row with `parse_method=firecrawl_placeholder_prefilter` (`processing_status=business_skip`, scores 1, `recommended_action=ignore`) — **no Claude cost**. The row still appends to `url_registry` so the URL is not re-processed by default.
 
@@ -127,7 +127,35 @@ normalizer so it matches `url_registry` exactly. Header (25 columns, in order):
 | 24 | `estimated_claude_cost_usd` | number | estimate if processed (0 for duplicates) |
 | 25 | `notes` | string | free text |
 
-**Tab column counts:** 6 business tabs = **35**; `url_registry` = **10**; `url_candidates` = **25**.
+### `discovery_requests` tab — 18 columns (PLANNED, Stage 2.2 — not built, DEC-059)
+
+One row per discovery request (Workflow 05). Groups all `url_candidates` of that request via
+`discovery_request_id`; used for summaries and the future Telegram bot. Header (18 columns, in order):
+
+| # | Column | Type | Description |
+|---|--------|------|-------------|
+| 1 | `discovery_request_id` | string | `disc_YYYYMMDD_HHmmss` |
+| 2 | `created_at` | string | ISO 8601 |
+| 3 | `requested_by` | string | `manual` / `operator` / `telegram_operator` / `system` |
+| 4 | `request_text` | string | raw operator request (NL, esp. from Telegram) |
+| 5 | `query` | string | search query sent to Apify |
+| 6 | `region` | string | e.g. `Москва` |
+| 7 | `service_focus` | string | e.g. `pts_loan` / `secured_auto_loan` / blank |
+| 8 | `requested_limit` | integer | candidate target (default 10) |
+| 9 | `source_mode` | string | `search` / `manual` |
+| 10 | `source_api` | string | `apify_search` / `google_cse` / `serpapi` / `manual` / `unknown` |
+| 11 | `status` | string | `new` / `search_done` / `needs_review` / `approved` / `processing` / `processed` / `error` / `cancelled` |
+| 12 | `candidate_count` | integer | total candidates written |
+| 13 | `unique_candidate_count` | integer | `dedup_status=unique` count |
+| 14 | `duplicate_count` | integer | duplicate (registry + batch) count |
+| 15 | `approved_count` | integer | candidates moved to `approved` |
+| 16 | `estimated_firecrawl_credits` | integer | sum over unique candidates |
+| 17 | `estimated_claude_cost_usd` | number | sum over unique candidates |
+| 18 | `notes` | string | free text |
+
+**`status` values:** `new`, `search_done`, `needs_review`, `approved`, `processing`, `processed`, `error`, `cancelled`.
+
+**Tab column counts:** 6 business tabs = **35**; `url_registry` = **10**; `url_candidates` = **25**; `discovery_requests` = **18**. Existing sheets (`results`, `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`, `technical_errors`, `url_registry`) are **kept — nothing is removed**.
 
 ---
 

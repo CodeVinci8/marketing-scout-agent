@@ -5,6 +5,23 @@ Most recent first.
 
 ---
 
+## DEC-059 — Stage 2.2 = Apify Search Candidate Discovery (Level 2); Manual Intake Demoted; `discovery_requests` Added
+
+**Date:** 2026-06-08
+**Context:** Manual URL *lists* are already handled by Workflow 04 (the URL consumer). Positioning Workflow 05 as "manual candidate intake" added little. The real gap is **automated** candidate discovery from a search query, with a human gate before paid processing.
+**Decision (refines DEC-058):**
+1. **Stage 2.2 becomes `05 - Apify Search Candidate Discovery` (Level 2).** Given a query, an **Apify Google Search Results Scraper** actor returns up to 10 candidate URLs (+title/snippet/rank); Workflow 05 normalizes, checks `url_registry`, scores deterministically, marks duplicates, writes `url_candidates`, and writes/updates a `discovery_requests` row. **Workflow 05 calls neither Firecrawl nor Claude and never auto-processes.**
+2. **Manual URL intake is demoted** to an optional fallback input mode of Workflow 05 — **not** the main next step (DEC-058's "Option A first" is superseded on ordering).
+3. **Primary discovery API = Apify** (Header Auth credential `Apify API - Marketing Scout`, `Authorization: Bearer <token>`, domain `api.apify.com`). Apify is already the planned stack for future Avito/social/classified actors; **Firecrawl stays the content-extraction layer for known approved URLs**, not for discovery. Fallbacks: Google CSE (low-cost), SerpAPI (paid) — later. Firecrawl `/v2/search` parked.
+4. **New sheet `discovery_requests` (18 cols)** groups candidates per request (id, query, region, counts, estimates, lifecycle `status`); `url_candidates` confirmed at 25 cols. No existing sheet removed.
+5. **Telegram Control Bot is a control interface later, not a data-processing engine** — it orchestrates `discovery_requests` + `url_candidates` + Workflow 04 and duplicates no scraping/analysis logic.
+6. **Source connectors are separate from core analyzers** — new platforms add a *connector* (Web Search / Website Scrape / Classifieds / Social); analyzers (Market Record / Lead Signal / Content Insight / Report) classify records as competitor/lead_signal/content_idea/market_signal/irrelevant **independent of source**.
+**Reason:** Workflow 04 already covers manual lists; the valuable next capability is query→candidates automation with approval. Apify fits and is already planned. Keeping discovery, approval, and processing separate preserves cost control and testability.
+**Default volumes:** collect 10 candidates; Workflow 04 processes ≤5/run → two batches of 5; nothing processed until `approval_status=approved`.
+**File:** planning — `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`, `docs/URL_DISCOVERY_STRATEGY.md`, `docs/TABLE_SCHEMA.md`.
+
+---
+
 ## DEC-058 — URL Discovery = Hybrid A+B+D; `url_candidates` Grows to 25 Columns; Collect 10 / Process 5
 
 **Date:** 2026-06-08

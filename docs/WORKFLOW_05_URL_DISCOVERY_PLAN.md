@@ -1,149 +1,219 @@
-# WORKFLOW_05_URL_DISCOVERY_PLAN.md — 05 - URL Candidates Manual Intake (Planning)
+# WORKFLOW_05_URL_DISCOVERY_PLAN.md — 05 - Apify Search Candidate Discovery (Planning)
 
-**Status:** 📋 PLANNING ONLY — **not building yet.** No workflow JSON, no Firecrawl, no Claude, no schedule.
+**Status:** 📋 PLANNING ONLY — **not building yet.** No workflow JSON, no Apify call, no Firecrawl, no Claude, no schedule.
 **Date:** 2026-06-08
-**Stage:** 2.2a (Manual Candidate Intake, Option A — first step of the selected hybrid A+B+D, DEC-058)
-**Related:** `docs/URL_DISCOVERY_STRATEGY.md`, `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`, `docs/TABLE_SCHEMA.md`, DEC-055/056/057/058
+**Stage:** 2.2 (Level 2 — automated candidate URL discovery from search queries, DEC-059)
+**Related:** `docs/URL_DISCOVERY_STRATEGY.md`, `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`, `docs/TABLE_SCHEMA.md`, DEC-055/056/057/058/059
 
 ---
 
 ## 1. Purpose
 
-`05 - URL Candidates Manual Intake` takes **manually provided candidate URLs** (and the query that
-produced them), normalizes them, checks `url_registry`, classifies duplicates, estimates cost, and writes
-rows to a new **`url_candidates`** sheet with `approval_status=new`. This is **candidate collection +
-dedup classification only** — no page analysis.
+`05 - Apify Search Candidate Discovery` takes a **search topic/query** (e.g. «займ под залог ПТС Москва»),
+calls an **Apify Google Search Results Scraper actor** to collect up to **10 candidate URLs** (+ title,
+snippet, rank), normalizes them, checks `url_registry`, marks duplicates, scores each candidate
+deterministically, writes rows to **`url_candidates`**, and creates/updates a **`discovery_requests`** row.
 
-Approved candidates feed Workflow 04 **later**: manually for now (operator copies ≤5 approved URLs into
-Workflow 04's `Set URL List`); a future **Stage 2.2c Approved Candidates Runner** may automate the
-hand-off in **batches of 5**. Neither is built yet.
+This is the URL **supplier** (Level 2, automated). Workflow 04 remains the URL **consumer**. Manual URL
+intake is **not** the headline of this workflow — Workflow 04 already accepts a manual URL list; manual
+candidate entry survives only as an optional simple input mode (see §3 / Strategy doc).
 
-**Workflow name:** `05 - URL Candidates Manual Intake`
-**Does NOT:** call Firecrawl, call Claude, scrape, analyze pages, schedule, or auto-process.
+**Workflow name:** `05 - Apify Search Candidate Discovery`
+**Does:** call Apify Search actor (candidate discovery only), normalize, dedup-classify, score, write sheets.
+**Does NOT:** call Firecrawl, call Claude (no page analysis), scrape page content, schedule, or auto-process.
+**Human approval is required** before any candidate reaches Workflow 04 (paid Firecrawl/Claude).
 
-## 2. Sheet schema — `url_candidates` (25 columns)
+## 2. Sheets
 
-Separate from the 6 business tabs (35 cols) and `url_registry` (10 cols). Header, in order. The first
-five columns are **request-level grouping fields** (shared by every candidate from one operator request)
-so future summaries and the Telegram bot can group/report per request:
+### 2.1 `url_candidates` (25 columns) — confirmed
+
+The first five columns are **request-level grouping fields** (shared by every candidate of one request)
+so `discovery_requests`, summaries, and the future Telegram bot can group/report per request.
 
 | # | Column | Type | Description |
 |---|--------|------|-------------|
-| 1 | `candidate_id` | string | stable id, e.g. `cand_YYYYMMDD_HHmmss_<index>` |
-| 2 | `discovery_request_id` | string | groups all candidates from one request, e.g. `disc_YYYYMMDD_HHmmss` |
-| 3 | `created_at` | string | ISO 8601 intake time |
+| 1 | `candidate_id` | string | `cand_YYYYMMDD_HHmmss_<index>` |
+| 2 | `discovery_request_id` | string | groups all candidates of one request, `disc_YYYYMMDD_HHmmss` |
+| 3 | `created_at` | string | ISO 8601 |
 | 4 | `requested_by` | string | `manual` / `operator` / `telegram_operator` / `system` |
-| 5 | `requested_limit` | integer | default candidate count for the request (usually 10) |
-| 6 | `query` | string | original topic/query (e.g. «займ под залог ПТС Москва») |
-| 7 | `source` | string | one of the `source` values (below) |
-| 8 | `candidate_url` | string | raw URL as provided |
-| 9 | `normalized_source_url` | string | normalized key (same rules as Workflow 04) — matches `url_registry` |
-| 10 | `title` | string | optional page/result title (blank for manual) |
-| 11 | `snippet` | string | optional result snippet (blank for manual) |
+| 5 | `requested_limit` | integer | candidate target for the request (default 10) |
+| 6 | `query` | string | search query (e.g. «займ под залог ПТС Москва») |
+| 7 | `source` | string | `manual` / `apify_search` / `search_api` / `serp_actor` / `telegram_operator` / `unknown` |
+| 8 | `candidate_url` | string | raw URL from the search result |
+| 9 | `normalized_source_url` | string | normalized key (Workflow 04 rules) — matches `url_registry` |
+| 10 | `title` | string | search-result title |
+| 11 | `snippet` | string | search-result snippet |
 | 12 | `domain` | string | host of the normalized URL |
-| 13 | `rank` | integer | position in the source result list (manual = paste order) |
+| 13 | `rank` | integer | position in the search result list |
 | 14 | `region_hint` | string | e.g. `Москва` / `MSK` / blank |
 | 15 | `service_hint` | string | e.g. `pts_loan` / `secured_auto_loan` / `secured_real_estate_loan` / blank |
-| 16 | `confidence_score` | integer | 1–100 heuristic relevance (deterministic, no model) |
+| 16 | `confidence_score` | integer | 1–100 deterministic relevance (title/snippet/domain/query match, no LLM) |
 | 17 | `dedup_status` | string | `unique` / `duplicate_in_batch` / `duplicate_in_registry` |
 | 18 | `registry_status` | string | `not_in_registry` / `in_registry` |
 | 19 | `approval_status` | string | `new` / `approved` / `rejected` / `processed` / `duplicate` / `error` |
-| 20 | `approved_by` | string | operator id/name (blank until approved) |
+| 20 | `approved_by` | string | operator id (blank until approved) |
 | 21 | `approved_at` | string | ISO 8601 (blank until approved) |
-| 22 | `rejection_reason` | string | free text (blank unless rejected) |
+| 22 | `rejection_reason` | string | free text |
 | 23 | `estimated_firecrawl_credits` | integer | estimate if processed (0 for duplicates) |
 | 24 | `estimated_claude_cost_usd` | number | estimate if processed (0 for duplicates) |
 | 25 | `notes` | string | free text |
 
-**`approval_status` values:** `new` (default), `approved`, `rejected`, `processed`, `duplicate`, `error`.
-**`requested_by` values:** `manual`, `operator`, `telegram_operator`, `system`.
-**`source` values:** `manual`, `search_api`, `apify_search`, `serp_actor`, `telegram_operator`, `unknown`.
-**`dedup_status` values:** `unique`, `duplicate_in_batch` (repeated within the same intake), `duplicate_in_registry` (already in `url_registry`).
-**`registry_status` values:** `not_in_registry`, `in_registry`.
+**`approval_status`:** `new` (default), `approved`, `rejected`, `processed`, `duplicate`, `error`.
+**`source`:** `manual`, `apify_search`, `search_api`, `serp_actor`, `telegram_operator`, `unknown`.
+**`dedup_status`:** `unique`, `duplicate_in_batch`, `duplicate_in_registry`.
+**`registry_status`:** `not_in_registry`, `in_registry`.
 
-## 3. Manual intake workflow (proposed structure)
+### 2.2 `discovery_requests` (18 columns) — one row per request
+
+| # | Column | Type | Description |
+|---|--------|------|-------------|
+| 1 | `discovery_request_id` | string | `disc_YYYYMMDD_HHmmss` |
+| 2 | `created_at` | string | ISO 8601 |
+| 3 | `requested_by` | string | `manual` / `operator` / `telegram_operator` / `system` |
+| 4 | `request_text` | string | raw operator request (NL text, esp. from future Telegram) |
+| 5 | `query` | string | the search query actually sent to Apify |
+| 6 | `region` | string | e.g. `Москва` |
+| 7 | `service_focus` | string | e.g. `pts_loan` / `secured_auto_loan` / blank |
+| 8 | `requested_limit` | integer | candidate target (default 10) |
+| 9 | `source_mode` | string | `search` / `manual` (how candidates were gathered) |
+| 10 | `source_api` | string | `apify_search` / `google_cse` / `serpapi` / `manual` / `unknown` |
+| 11 | `status` | string | request lifecycle (values below) |
+| 12 | `candidate_count` | integer | total candidates written |
+| 13 | `unique_candidate_count` | integer | `dedup_status=unique` count |
+| 14 | `duplicate_count` | integer | duplicate (registry+batch) count |
+| 15 | `approved_count` | integer | candidates moved to `approved` (filled at approval time) |
+| 16 | `estimated_firecrawl_credits` | integer | sum over unique candidates |
+| 17 | `estimated_claude_cost_usd` | number | sum over unique candidates |
+| 18 | `notes` | string | free text |
+
+**`status` values:** `new`, `search_done`, `needs_review`, `approved`, `processing`, `processed`, `error`, `cancelled`.
+
+## 3. n8n node plan (build next — no JSON yet)
 
 ```
 Manual Start
-  → Set Candidate URLs + Query   (operator pastes URLs + query; source=manual, requested_by=operator,
-                                  discovery_request_id=disc_<ts>, requested_limit=10)
-  → Normalize Candidate URLs     (same normalizer as Workflow 04 → normalized_source_url)
-  → Check url_registry           (Google Sheets read on url_registry, by normalized_source_url)
-  → Build Candidate Rows         (dedup_status, registry_status, confidence_score, estimates,
-                                  approval_status = new, or duplicate if a dup)
+  → Set Discovery Request        (Code: build discovery_request_id=disc_<ts>, query, region,
+                                  service_focus, requested_limit=10, requested_by=operator,
+                                  source=apify_search, source_mode=search, source_api=apify_search)
+  → Build Apify Search Request   (Code: build actor input JSON: queries=[query], resultsPerPage,
+                                  maxPagesPerQuery, countryCode=ru, languageCode=ru; cap to requested_limit)
+  → Apify Search Actor API Request (HTTP Request: POST run-sync-get-dataset-items; Header Auth cred)
+  → Normalize Search Results     (Code: map dataset items → {candidate_url,title,snippet,rank})
+  → Normalize Candidate URLs     (Code: Workflow 04 normalizer → normalized_source_url, domain)
+  → Check url_registry           (Google Sheets read on url_registry by normalized_source_url, read-only)
+  → Build Candidate Rows         (Code: dedup_status, registry_status, confidence_score, service_hint,
+                                  region_hint, estimates, approval_status; 25-field rows)
   → Append url_candidates        (Google Sheets append, Mapping=Automatically, Sheet=url_candidates name)
+  → Append/Update discovery_requests (Google Sheets: write the 18-field request row; status=search_done
+                                  → needs_review)
 ```
 
 No Firecrawl node, no Claude node, no schedule trigger, no auto-processing.
 
-**Row defaults:** `approval_status=new` for unique not-in-registry candidates; **`approval_status=duplicate`**
-when `dedup_status` is `duplicate_in_batch` or `duplicate_in_registry`. All candidates in one run share the
-same `discovery_request_id`, `requested_by`, `requested_limit`, and `query`.
+**Optional manual input mode:** the same workflow may accept `source=manual` (operator pastes URLs in
+`Set Discovery Request` instead of querying Apify), skipping the Apify nodes. This is a fallback input
+mode, not the primary purpose.
 
-## 4. Normalization rules (reuse Workflow 04)
+## 4. Apify actor — credential + expected behavior
+
+**Credential (create later in n8n — do NOT add keys to any file):**
+- **Name:** `Apify API - Marketing Scout`
+- **Type:** Header Auth
+- **Header Name:** `Authorization`
+- **Header Value:** `Bearer <APIFY_API_TOKEN>` (placeholder; real token entered only in n8n)
+- **Allowed domain:** `api.apify.com`
+
+**Primary actor:** Apify **Google Search Results Scraper**.
+**Call pattern (planned):** `POST https://api.apify.com/v2/acts/<actor-id>/run-sync-get-dataset-items`
+with a JSON body containing the query, region/language, and result caps. Run-sync-get-dataset-items
+returns the result items directly so no separate dataset poll is needed for a small request.
+
+**Expected behavior:** for one query, return up to `requested_limit` (10) organic results, each with at
+least `url`, `title`, and a snippet/description, plus position/rank. Workflow 05 keeps only organic web
+results (drops ads, maps, "people also ask", and obvious non-business result types where identifiable).
+
+**Fallback APIs (later, not now):** Google Custom Search JSON API (low-cost fallback), SerpAPI (paid
+stable fallback). **Firecrawl `/v2/search` is parked** — evaluation only, do not use yet.
+
+## 5. Normalization rules (reuse Workflow 04)
 
 Identical to `Normalize URL for Dedup` so `url_candidates.normalized_source_url` matches
 `url_registry.normalized_source_url` exactly:
-- lowercase **scheme and host only** (preserve path/case where meaningful);
+- lowercase **scheme and host only**;
 - drop `#fragment`;
 - drop tracking params: `utm_source/medium/campaign/term/content`, `fbclid`, `gclid`, `yclid`;
 - preserve meaningful query params and the path;
 - strip trailing slash on **non-root** paths; normalize root consistently;
 - **full URL with path, never reduced to domain.** Root variants dedup; distinct service paths do not.
 
-## 5. `url_registry` lookup
+## 6. `url_registry` dedup
 
-`Registry Lookup` reads `url_registry` (read-only — Workflow 05 never writes `url_registry`). For each
-candidate:
-- if `normalized_source_url` ∈ `url_registry` → `registry_status=in_registry`, `dedup_status=duplicate_in_registry`,
-  `approval_status=duplicate`, estimates 0 (already processed; no need to re-spend).
-- if repeated within the same intake → `dedup_status=duplicate_in_batch`, `approval_status=duplicate`.
+`Check url_registry` reads `url_registry` (read-only — Workflow 05 never writes `url_registry`). Per candidate:
+- in `url_registry` → `registry_status=in_registry`, `dedup_status=duplicate_in_registry`,
+  `approval_status=duplicate`, estimates 0 (already processed; do not re-spend).
+- repeated within the same request → `dedup_status=duplicate_in_batch`, `approval_status=duplicate`.
 - else → `registry_status=not_in_registry`, `dedup_status=unique`, `approval_status=new`.
 
-## 6. Approval flow (human gate)
+## 7. Candidate confidence scoring (deterministic, no LLM)
 
-- New unique candidates land as `approval_status=new`.
-- **Operator manually reviews** and sets `approval_status=approved` (filling `approved_by`/`approved_at`)
-  or `rejected` (filling `rejection_reason`).
-- Only `approved` rows are eligible to feed Workflow 04. **For now the hand-off is manual** (operator
-  copies approved URLs into Workflow 04's `Set URL List`, ≤5 at a time). A future **Stage 2.2c Approved
-  Candidates Runner** may pick approved candidates and call Workflow 04 in **batches of 5** — **not built yet**.
-- **Default volumes:** a request collects up to **10** candidates (`requested_limit=10`); Workflow 04 still
-  processes **≤5 per run**, so 10 approved candidates run as **two batches of 5**.
-- When a candidate has been processed by Workflow 04, its row may be marked `processed` (manual or future runner).
+Score over `query` + `title` + `snippet` + `domain`, clamp **1–100**:
+- **+30** contains `залог`
+- **+25** contains `ПТС` or `авто`/`автомобиль`
+- **+20** contains `Москва` / `московск` / `msk` / `mo`
+- **+15** contains `кредит` / `займ`
+- **+10** contains `ставка` / `сумма` / `одобрен`
+- **−30** irrelevant domain / unrelated marketplace (e.g. generic marketplace, news, gov)
+- **−50** if `duplicate_in_registry`
 
-## 7. Cost estimation (before any processing)
+`service_hint` is derived deterministically (same token logic as Workflow 04's service-type override:
+`pts`/`pledge-pts` → `pts_loan`; `pod-zalog-avto` → `secured_auto_loan`; `pod-zalog-nedvizhimosti`/
+`недвижимост` → `secured_real_estate_loan`). `region_hint` from the query/snippet.
 
-- **Manual intake itself costs 0** Firecrawl / 0 Claude (no scraping/analysis).
-- Per unique, not-in-registry candidate the estimate columns show what processing *would* cost:
-  - `estimated_firecrawl_credits` = 1 per candidate.
-  - `estimated_claude_cost_usd` ≈ $0.01–0.023 per candidate (see `docs/COSTS_AND_LIMITS.md`; repair adds a second call only on parse failure).
-  - Duplicates (registry or batch) = 0 / 0.
-- Operator sees the **total estimate** for `approval_status in (new, approved)` before approving, so
-  spend is decided **before** Workflow 04 runs.
+## 8. Approval gate (human)
 
-## 8. Hard limits
+- Unique candidates land `approval_status=new`; duplicates land `approval_status=duplicate`.
+- **Operator reviews** `url_candidates` and sets `approved` (filling `approved_by`/`approved_at`) or
+  `rejected` (filling `rejection_reason`). `discovery_requests.status` moves `needs_review → approved`.
+- Only `approved` rows feed Workflow 04. **Hand-off is manual for now** (copy ≤5 approved URLs into
+  Workflow 04). Stage 2.2c Approved Candidates Runner may automate it later, in **batches of 5**.
+- **No candidate reaches Firecrawl/Claude until `approval_status=approved`.**
 
-- **Default 10 candidates per request** (`requested_limit=10`); **hard cap 20 candidate URLs per intake**.
-- No Firecrawl, no Claude (intake is classification only).
-- No schedule / no auto-trigger.
-- No automatic processing — **human approval required** before Workflow 04.
-- Workflow 04's own limits stay (≤5 URLs per processing run; 10 approved → two batches of 5).
+## 9. Cost (Workflow 05 vs processing)
 
-## 9. Test plan (when built — not now)
+- **Workflow 05 itself must not spend Firecrawl or Claude.** Its only cost is the **Apify search call**
+  (per-request, to be measured — see `docs/COSTS_AND_LIMITS.md`).
+- Per unique not-in-registry candidate, the estimate columns show *future* processing cost:
+  `estimated_firecrawl_credits=1`, `estimated_claude_cost_usd` ≈ a configurable rough **$0.01–0.03/URL**
+  until measured. Duplicates = 0/0.
+- Default 10 candidates → if all approved, processed by Workflow 04 as **two batches of 5** (≈10 Firecrawl
+  credits + ~$0.10–0.30 Claude), only after approval.
 
-1. Create `url_candidates` sheet with the 25-column header.
-2. Paste ~5 candidate URLs incl.: one already in `url_registry`, one duplicated within the paste, and
-   2–3 fresh ones; set `query` and `source=manual`.
-3. Run once. Verify: each row has correct `normalized_source_url` (matches registry format),
-   `dedup_status`/`registry_status`/`approval_status`, `domain`, deterministic `confidence_score`, and
-   non-zero estimates only for unique not-in-registry rows.
-4. Confirm **0 Firecrawl / 0 Claude** spend.
-5. Manually approve 1–2 rows, then copy them into Workflow 04 (≤5) and confirm normal processing +
-   that re-running the same URLs in Workflow 04 dedups via `url_registry`.
+## 10. Hard limits
 
-## 10. Not building yet
+- **Default `requested_limit=10` candidates/request** (Apify result cap aligned to this).
+- Apify call is **search/discovery only** — no scraping of page content, no crawl/batch.
+- No Firecrawl, no Claude, no schedule, no auto-processing.
+- Human approval required before Workflow 04; Workflow 04 keeps ≤5 URLs/run.
 
-This is **planning only**. Build is gated on: operator approval of this schema (G1), then a decision to
-start Option A (manual intake). Search/API discovery (Option B), Firecrawl `/v2/search` (Option C), and
-the Telegram Control Bot (Option D / Stage 2.3) are **deferred**.
+## 11. Test plan (when built — not now)
+
+1. Create `discovery_requests` (18 cols) and confirm `url_candidates` (25 cols).
+2. Create the `Apify API - Marketing Scout` Header Auth credential in n8n.
+3. Run one query (e.g. «займ под залог ПТС Москва», limit 10). Verify: ≤10 `url_candidates` rows with
+   normalized URLs (registry format), `dedup_status`/`registry_status`/`approval_status`, deterministic
+   `confidence_score`/`service_hint`/`region_hint`; one `discovery_requests` row with counts +
+   `status=needs_review`; **0 Firecrawl / 0 Claude**.
+4. Include a query likely to hit an already-registered URL → confirm it lands `duplicate`.
+5. Approve 1–5 rows, copy into Workflow 04 (≤5), confirm normal processing + `url_registry` dedup on re-run.
+6. Record the Apify cost for the request.
+
+## 12. Telegram-ready (future, not now)
+
+The schema is built so a future Telegram Control Bot is a thin interface over `discovery_requests` +
+`url_candidates` + Workflow 04 (see Strategy §). The bot **must not** duplicate scraping/analyzer logic.
+
+## 13. Not building yet
+
+Planning only. Build is gated on: operator approval of `discovery_requests` (18) + `url_candidates` (25)
+schemas, obtaining an Apify API token, and creating the n8n Header Auth credential. SerpAPI / Google CSE
+fallbacks and Firecrawl `/v2/search` (parked) and the Telegram bot remain deferred.

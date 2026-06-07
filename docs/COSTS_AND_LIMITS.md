@@ -153,15 +153,17 @@ Cost-control rules baked into the first Firecrawl test:
 
 ---
 
-## URL Discovery Layer (Stage 2.2, planning — DEC-055/056/057/058)
+## URL Discovery Layer (Stage 2.2, planning — DEC-055/056/057/058/059)
 
-Selected architecture: **Hybrid A+B+D** (manual → search/API → Telegram interface), C parked. `url_candidates` = 25 columns.
+Selected: **Level 2 — Apify Search Candidate Discovery** (Workflow 05). `url_candidates` = 25 cols; `discovery_requests` = 18 cols. Manual entry is an optional fallback mode.
 
-- **Cost must be estimated before processing.** Workflow 05 writes `estimated_firecrawl_credits` and `estimated_claude_cost_usd` per candidate so the operator sees the total *before* approving anything. The approval gate is the spend gate: **no candidate is processed until `approval_status=approved`.**
-- **Manual candidate intake (Option A / Workflow 05) costs 0 Firecrawl / 0 Claude** — it only normalizes, dedups, and classifies; no scraping/analysis.
+- **Workflow 05 must NOT spend Firecrawl or Claude.** It only calls the Apify search actor, normalizes, dedups, scores, and writes sheets. Its only cost is the **Apify search call** (measure on first real run; do not call Apify yet).
+- **Apify Search cost tracking (placeholder — fill on first run):** record per `discovery_request_id`: query, `requested_limit`, candidates returned, Apify cost (USD), unique, duplicates.
+- **Cost must be estimated before processing.** Workflow 05 writes `estimated_firecrawl_credits` (=1/unique candidate) and `estimated_claude_cost_usd` (configurable rough **$0.01–0.03/URL** until measured) per candidate and sums them onto the `discovery_requests` row, so the operator sees the total *before* approving. The approval gate is the spend gate: **no candidate is processed until `approval_status=approved`.**
 - Per unique, not-in-registry candidate the *processing* estimate ≈ **1 Firecrawl credit + ~$0.01–0.023 Claude** (same per-URL model as Workflow 04). Duplicates (registry or batch) estimate 0/0.
 - **Default volumes:** collect up to **10** candidates/request; processing stays **≤5/run** in Workflow 04, so 10 approved candidates cost **two batches of 5** — a worst-case ≈ 10 Firecrawl credits + ~$0.10–0.23 Claude, only after explicit approval.
-- **Automated search sources (Option B/C) must be measured separately** — search-API / Apify-actor / Firecrawl `/v2/search` cost and rate limits are evaluated on their own before any automated discovery (gate G4). **Discovery cost ≠ processing cost.**
+- **Processing cost stays controlled by Workflow 04 after approval.** Default collect **10** candidates → if all approved, processed as **two batches of 5** (≤5/run) ≈ worst-case 10 Firecrawl credits + ~$0.10–0.30 Claude. Duplicates (registry/batch) estimate 0/0.
+- **Fallback sources measured separately (later):** Google CSE (low-cost), SerpAPI (paid). Firecrawl `/v2/search` parked. **Discovery cost ≠ processing cost** — track in separate columns.
 - Workflow 04's ≤5-URL processing limit and the approval gate together cap spend — discovery cannot trigger large spend on its own.
 
 ---

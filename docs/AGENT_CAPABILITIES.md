@@ -1,6 +1,6 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-08 (Workflow 04 APPROVED as URL consumer; **Stage 2.2 URL Discovery refined** — selected Hybrid A+B+D, `url_candidates` 25-col schema, collect 10 / process ≤5, human approval before spend, DEC-055/056/057/058)
+**Last updated:** 2026-06-08 (Workflow 04 APPROVED as URL consumer; **Stage 2.2 = Apify Search Candidate Discovery (Level 2)** planned — Workflow 05 via Apify Google Search actor, `url_candidates` 25-col + `discovery_requests` 18-col, 0 Firecrawl/Claude, human approval before spend, DEC-059)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
 **Active workflow candidate:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json`
 **Test status:** Resilient Router Tests A–E **all pass**. Production workflow built (33 columns). **First manual production smoke test FAILED** (repair API 502 → technical_errors with lost diagnostics); workflow **patched** (DEC-038): primary raw preserved, compact repair payload, dual Primary+Repair diagnostics, primary prompt reminder. **Production workflow is NOT approved for Firecrawl until the patched manual smoke test passes.**
@@ -23,8 +23,9 @@
 - **Workflow 04 as URL consumer** ✅ APPROVED (DEC-055) — Workflow 04 is the URL **consumer** (≤5 approved URLs → dedup → Firecrawl → Claude → routing). The URL **supplier** (discovery) is a separate, planned layer.
 
 **Planned (designed, NOT built — planning only):**
-- **URL Discovery Layer (Stage 2.2)** 📋 PLANNED (DEC-055/056/057/058) — separate URL supplier; selected **Hybrid A+B+D** (manual → search/API → Telegram interface), C parked; `url_candidates` sheet (**25 cols**, request-level grouping) with `approval_status`; human approval before any spend; reuses `url_registry`. Default collect 10 / process ≤5. Plans: `docs/URL_DISCOVERY_STRATEGY.md`, `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`.
-- **URL Candidates Manual Intake (Workflow 05, Stage 2.2a)** 📋 PLANNED — manual paste → normalize → check `url_registry` → build rows → append `url_candidates` (`new`, dups → `duplicate`), **0 Firecrawl/Claude**, default 10 / cap 20 candidates/intake. Build gated on operator schema approval (G1).
+- **Apify Search Candidate Discovery (Workflow 05, Stage 2.2 — Level 2)** 📋 PLANNED (DEC-059) — query → **Apify Google Search actor** → normalize → check `url_registry` → deterministic score → write `url_candidates` (25 cols) + `discovery_requests` (18 cols). **0 Firecrawl / 0 Claude** (Apify search cost only); no auto-processing; human approval before Workflow 04. Default collect 10 / process ≤5 (two batches). Credential (later): `Apify API - Marketing Scout` (Header Auth, `api.apify.com`). Plans: `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`, `docs/URL_DISCOVERY_STRATEGY.md`.
+- **Manual URL candidate entry** 📋 optional fallback input mode of Workflow 05 (manual URL *lists* are already handled by Workflow 04).
+- **Approved Candidates Runner (Stage 2.2c)** 📋 PLANNED — feeds `approved` candidates to Workflow 04 in batches of 5; manual hand-off until built.
 
 **Still NOT approved:**
 - More than 5 URLs per run.
@@ -32,11 +33,12 @@
 - Batch scraping over large URL lists (`/v2/batch/scrape`).
 - Firecrawl search endpoint (`/v2/search`).
 - Scheduled scraping (cron trigger).
-- **Automatic search discovery** (search API / Apify actor / Firecrawl `/v2/search`) — Option B/C, blocked until source evaluated (DEC-056).
-- **Telegram Control** / NL query interface — deferred until candidate + approval flow exists (DEC-057).
+- **Apify search calls (Workflow 05)** — planned next build, but **not yet authorized**: needs schema approval, an Apify token, and the `Apify API - Marketing Scout` credential first (DEC-059). No Apify call until then.
+- **Firecrawl `/v2/search`** — parked, evaluation only (DEC-056/059).
+- **Telegram Control** / NL query interface — deferred until discovery + approval flow exists (DEC-057/059).
 - **Auto-triggered processing** — no candidate may reach Firecrawl/Claude without human `approval_status=approved` (DEC-055).
 - URL-discovery agent / Telegram Control Bot (DEC-050).
-- Avito / Telegram / Instagram real ingestion.
+- **Social / classified ingestion** (Avito / Telegram / Instagram) — future Apify connectors, not approved.
 - Automated lead outreach.
 - Firecrawl MCP/CLI (deferred — DEC-040).
 - Deduplication at scale (Workflow 04 dedups a small manual list via `url_registry` by `normalized_source_url`; large-scale/automated dedup is not approved).

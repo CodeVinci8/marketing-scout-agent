@@ -5,6 +5,25 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Stage 2.2 PIVOT: Workflow 05 = Apify Search Candidate Discovery (DEC-059)
+
+**Agent role:** project-architect
+**Session goal:** Repoint Stage 2.2 from "manual candidate intake" to **Level 2 automated discovery** via Apify, since Workflow 04 already covers manual URL lists. **Planning/docs only — no JSON, no Apify call, no external calls.**
+
+**What changed:**
+- **Workflow 05 is now `05 - Apify Search Candidate Discovery`** (DEC-059): query → **Apify Google Search Results Scraper** actor → normalize → check `url_registry` → deterministic confidence score + `service_hint`/`region_hint` → write `url_candidates` + a `discovery_requests` row. **0 Firecrawl / 0 Claude** (Apify search cost only); no auto-processing; human approval before Workflow 04.
+- **Manual URL entry demoted** to an optional fallback input mode (manual lists already handled by Workflow 04).
+- **Primary API = Apify**; credential (create later in n8n, no token in repo): `Apify API - Marketing Scout`, Header Auth, `Authorization: Bearer <token>`, domain `api.apify.com`. Fallbacks later: Google CSE, SerpAPI. Firecrawl `/v2/search` parked.
+- **New sheet `discovery_requests` (18 cols)** added (groups candidates per request, lifecycle `status`); `url_candidates` confirmed 25 cols. Existing 6 business tabs (35) + `url_registry` (10) kept — nothing removed.
+- **Source connectors vs core analyzers** documented: connectors (Web Search / Website Scrape / Classifieds / Social) acquire records; analyzers (Market Record / Lead Signal / Content Insight / Report) classify competitor/lead_signal/content_idea/market_signal/irrelevant **independent of source**. Don't over-split agents by platform.
+- **Telegram** = control interface later (orchestrates `discovery_requests` + `url_candidates` + Workflow 04, no duplicated logic).
+- **Default volumes:** collect 10 candidates; Workflow 04 processes ≤5/run → two batches of 5; nothing processed until `approval_status=approved`.
+- **Updated docs:** `WORKFLOW_05_URL_DISCOVERY_PLAN.md` (full rewrite as Apify discovery + node plan + scoring + credential), `URL_DISCOVERY_STRATEGY.md` (Level 2 Apify selected, connectors vs analyzers, Telegram flow, gates G1–G5), `TABLE_SCHEMA.md` (added `discovery_requests` 18-col; counts 35/10/25/18), `DECISIONS.md` (DEC-059), `COSTS_AND_LIMITS.md` (Apify cost tracking; Workflow 05 spends 0 Firecrawl/Claude), `AGENT_CAPABILITIES.md`, `ROADMAP.md`, `NEXT_ACTIONS.md` (Step G).
+
+**Next operator decision:** approve the `discovery_requests` (18) + `url_candidates` (25) schemas → create both sheets → get an Apify token → create the `Apify API - Marketing Scout` credential → authorize building Workflow 05.
+
+---
+
 ## 2026-06-08 — Stage 2.2 URL Discovery REFINED: Hybrid A+B+D + 25-col `url_candidates` (DEC-058)
 
 **Agent role:** project-architect
