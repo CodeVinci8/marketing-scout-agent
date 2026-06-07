@@ -263,6 +263,31 @@ https://example.com/kredit/refinansirovanie/ → https://example.com/kredit/refi
 
 ---
 
+## 11d. Сквозной (E2E) тест с Workflow 05 + патч service_type (DEC-062)
+
+**Первый сквозной тест прошёл:** Workflow 05 нашёл кандидата `https://carcapital.ru/`
+(`candidate_type=direct_competitor`, `service_hint=pts_loan`, confidence 100) → **оператор одобрил вручную**
+→ Workflow 04 обработал URL → `route=monitor_queue`, competitor, `CarCapital`, `Москва и Московская область`,
+`competitor_strength=87`, `parsed_success`.
+
+**Проблема:** `service_type=generic_lending` — неверно. Текст страницы — явно про ПТС/авто (займы под залог
+ПТС, ставка 2%/мес, автомобиль остаётся у владельца, ПТС, автоломбард, Москва и МО).
+
+**Исправление (DEC-062, нода `Normalize + Route`):** прежний override `service_type` срабатывал только на
+НЕ-корневых URL, поэтому корневая страница оставалась `generic_lending`. Теперь добавлен детерминированный
+подсчёт сигналов:
+- мультипродуктовый корень (недвижимость ≥2 + рефинанс ≥1) → остаётся `generic_lending`;
+- иначе ПТС/авто-сигналов ≥3 и недвижимость ≤1 и рефинанс =0 → **`pts_loan`** (даже для корня);
+- иначе ПТС/авто ≥3 и в URL есть pts/avto/car/zalog → `pts_loan`;
+- иначе недвижимость ≥3 и ПТС/авто ≤1 и рефинанс =0 → `secured_real_estate_loan`.
+
+Ожидаемо после патча: `carcapital.ru/`→`pts_loan`, `cashmotor.ru/`→`pts_loan`,
+`autolombard-moskva.ru/pledge-pts/`→`pts_loan`, `mosinvestfinans.ru/`→`generic_lending` (много категорий),
+`…/kredit/pod-zalog-avto/`→`pts_loan`/`secured_auto_loan`, `lioncredit…/kredit-pod-zalog-nedvizhimosti`→
+`secured_real_estate_loan`. Дедуп и архитектура не менялись; 35 бизнес-колонок без изменений.
+
+---
+
 ## 12. Troubleshooting
 
 | Симптом | Действие |

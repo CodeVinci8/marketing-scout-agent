@@ -1,6 +1,8 @@
 # WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md — Firecrawl URL List Mini-Batch
 
-**Status:** ✅ BUILD COMPLETED, dedup VALIDATED on **3-URL and 5-URL** runs, **APPROVED for manual ≤5-URL mini-batch** (2026-06-08, DEC-053/054) — `n8n/workflows/04_firecrawl_url_list_resilient.json`. active=false. Larger automation (schedule / crawl / batch / search / >5 URLs / discovery / Telegram) **still blocked.**
+**Status:** ✅ BUILD COMPLETED, dedup VALIDATED on **3-URL and 5-URL** runs + **manual E2E with Workflow 05**, **APPROVED for manual ≤5-URL mini-batch** (2026-06-08, DEC-053/054/062) — `n8n/workflows/04_firecrawl_url_list_resilient.json`. active=false. Larger automation (schedule / crawl / batch / search / >5 URLs / discovery / Telegram) **still blocked.**
+
+> **service_type patch (DEC-062):** after the E2E test (`carcapital.ru/` came back `generic_lending`), the `Normalize + Route` override now lets a **root homepage** receive a specific `service_type` when content is overwhelmingly PTS/auto-focused (deterministic signal counts), while genuine multi-product roots stay `generic_lending`. No dedup/architecture change; 35/10 field counts unchanged.
 **Guide:** `docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md`
 **Date:** 2026-06-08
 **Related:** Workflow 03 (`03_firecrawl_single_url_resilient.json`), DEC-039–052, `docs/FIRECRAWL_SETUP.md`, `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`

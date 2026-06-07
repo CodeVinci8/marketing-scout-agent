@@ -5,6 +5,23 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Workflow 04 service_type Patch After Manual E2E Test (DEC-062)
+
+**Agent role:** project-engineer
+**Session goal:** Fix Workflow 04 `service_type` after the first manual end-to-end test (Workflow 05 discovered `carcapital.ru/` → operator approved → Workflow 04 → `monitor_queue`, competitor, strength 87, but `service_type=generic_lending` — wrong for a PTS/auto autolombard root page).
+
+**What changed (patched `Normalize + Route` B2 only, in place — no architecture/dedup change):**
+- The prior override (DEC-053/054) only fired on **non-root** URLs, so a single-product root homepage stayed `generic_lending`. Added **content-based deterministic signal scoring**: count distinct `pts_auto` / `real_estate` / `refinancing` tokens over `source_url + evidence`.
+- Rules: multi-product root (`real_estate≥2 & refinancing≥1`) → stay `generic_lending`; else `pts_auto≥3 & real_estate≤1 & refinancing==0` → `pts_loan` (even for a root); else `pts_auto≥3 & url has pts|avto|car|zalog` → `pts_loan`; else `real_estate≥3 & pts_auto≤1 & refinancing==0` → `secured_real_estate_loan`. Non-root path-token overrides unchanged.
+
+**Verified:** `python3 -m json.tool` VALID; active=false; 35 business + 10 registry fields unchanged; dedup nodes intact; no secrets/tool_use/KEY=VALUE; single-line jsCode diff. Simulation of all 6 documented cases PASS — `carcapital.ru/`→`pts_loan`, `cashmotor.ru/`→`pts_loan`, `autolombard-moskva.ru/pledge-pts/`→`pts_loan`, `mosinvestfinans.ru/`→`generic_lending`, `…/kredit/pod-zalog-avto/`→`pts_loan`, `lioncredit…/nedvizhimosti`→`secured_real_estate_loan`.
+
+**Docs:** DEC-062; WF04 RU guide (§11d E2E + fix), WF04 plan, AGENT_CAPABILITIES, COSTS (E2E note), ROADMAP (Stage 2.2c = next build), NEXT_ACTIONS (Step H).
+
+**Next:** re-import Workflow 04; optionally retest `carcapital.ru/` → `pts_loan`; then build Workflow 06 (Approved Candidates Runner).
+
+---
+
 ## 2026-06-08 — Workflow 05 Candidate-Quality Patch: candidate_type, Domain Fix, Competitor-First Scoring (DEC-061)
 
 **Agent role:** project-engineer

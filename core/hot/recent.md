@@ -4,6 +4,18 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Workflow 04 service_type Patch after manual E2E test (DEC-062)
+
+**What was done (patch in place, no architecture/dedup change; 0 new spend):**
+- **First manual E2E passed:** WF05 discovered `carcapital.ru/` → operator approved → WF04 → `monitor_queue`, competitor, `CarCapital`, strength 87. But `service_type=generic_lending` was wrong (page is PTS/auto autolombard).
+- Patched `Normalize + Route` B2: prior override only fired on non-root URLs. Added **deterministic signal counts** (pts_auto / real_estate / refinancing). Root page now → `pts_loan` when overwhelmingly PTS/auto-focused; genuine multi-product root stays `generic_lending`.
+- **Verified by simulation (all 6 cases PASS):** carcapital.ru/ → pts_loan, cashmotor.ru/ → pts_loan, autolombard-moskva.ru/pledge-pts/ → pts_loan, mosinvestfinans.ru/ → generic_lending, …/pod-zalog-avto/ → pts_loan, lioncredit…/nedvizhimosti → secured_real_estate_loan. JSON VALID; 35/10 fields intact; active=false; no secrets/tool_use/KEY=VALUE; single-line diff.
+- Docs: DEC-062, WF04 RU guide §11d, WF04 plan, AGENT_CAPABILITIES, COSTS, ROADMAP, NEXT_ACTIONS (Step H).
+
+**Next operator action:** re-import WF04 → optionally retest `carcapital.ru/` (expect `pts_loan`) → then build **Workflow 06 Approved Candidates Runner** (Stage 2.2c). Telegram/search fallbacks still deferred.
+
+---
+
 ## Session: 2026-06-08 — Workflow 05 Candidate-Quality Patch: candidate_type + domain fix + competitor-first scoring (DEC-061)
 
 **What was done (no architecture change; 0 Firecrawl/Claude):**

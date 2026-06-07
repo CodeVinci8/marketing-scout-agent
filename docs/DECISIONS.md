@@ -5,6 +5,23 @@ Most recent first.
 
 ---
 
+## DEC-062 — Workflow 04 service_type: Root Page May Get a Specific Type When Content Is Overwhelmingly Focused
+
+**Date:** 2026-06-08
+**Context:** First manual **end-to-end** test of the discovery→consume chain passed: Workflow 05 discovered `https://carcapital.ru/` (`candidate_type=direct_competitor`, `service_hint=pts_loan`, confidence 100) → operator approved → Workflow 04 processed it → `monitor_queue`, competitor, `CarCapital`, strength 87. **But `service_type=generic_lending` was wrong** — the page text is overwhelmingly PTS/auto (займы под залог ПТС, ставка 2%/мес, автомобиль остаётся у владельца, ПТС, автоломбард, Москва и МО). The prior B2 override (DEC-053/054) only fired on **non-root** URLs, so a single-product *root* homepage kept `generic_lending`.
+**Decision (patch `Normalize + Route` B2 only — no architecture/dedup change):** keep the rule that a genuine multi-product root stays `generic_lending`, but add **content-based deterministic scoring** that lets a root page receive a specific `service_type` when its content is overwhelmingly focused:
+- count distinct `pts_auto` / `real_estate` / `refinancing` signal tokens over `source_url + evidence`;
+- **multi-product root** (`real_estate ≥ 2 AND refinancing ≥ 1`) → keep `generic_lending`;
+- else **`pts_auto ≥ 3 AND real_estate ≤ 1 AND refinancing == 0`** → `pts_loan` (applies even to a root homepage);
+- else `pts_auto ≥ 3 AND url/path has pts|avto|car|zalog` → `pts_loan`;
+- else `real_estate ≥ 3 AND pts_auto ≤ 1 AND refinancing == 0` → `secured_real_estate_loan`;
+- existing non-root path-token overrides (pts/auto/real-estate) unchanged.
+**Reason:** competitor monitoring needs an accurate product label; a focused autolombard homepage is a PTS lender, not generic. Multi-product portals (e.g. `mosinvestfinans.ru/`) still resolve to `generic_lending`.
+**Verification:** `python3 -m json.tool` VALID; 35 business + 10 registry fields unchanged; dedup architecture untouched; simulation of all 6 documented cases PASS — `carcapital.ru/`→`pts_loan`, `cashmotor.ru/`→`pts_loan`, `autolombard-moskva.ru/pledge-pts/`→`pts_loan`, `mosinvestfinans.ru/`→`generic_lending`, `…/kredit/pod-zalog-avto/`→`pts_loan`, `lioncredit…/kredit-pod-zalog-nedvizhimosti`→`secured_real_estate_loan`.
+**File:** `n8n/workflows/04_firecrawl_url_list_resilient.json`.
+
+---
+
 ## DEC-061 — Workflow 05 Candidate Quality: `candidate_type`, Fixed Domain, Competitor-First Scoring
 
 **Date:** 2026-06-08

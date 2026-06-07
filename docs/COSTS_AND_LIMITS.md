@@ -151,6 +151,8 @@ Cost-control rules baked into the first Firecrawl test:
 
 **5-URL test 2026-06-08 (DEC-054, `firecrawl_20260607_100715`):** 5 URLs = 2 duplicates (`skipped_log`, 0 cost) + 1 placeholder (`skipped_log`) + 2 competitors (`monitor_queue`). **Claude Today before $0.2773 → after $0.3202 = Δ $0.0429.** Firecrawl expected **~3 credits** (1 per non-duplicate; the 2 duplicates spent 0). The **placeholder pre-filter** (`firecrawl_placeholder_prefilter`) now skips parked/not-connected domains **before** the Claude call, reducing future spend on dead domains (the `zalogpts.ru` Wix placeholder previously cost one Claude call). **Future tests must still record before/after Firecrawl credits + Claude balance.**
 
+**Manual E2E test 2026-06-08 (DEC-062):** Workflow 05 discovered `carcapital.ru/` → operator approved 1 URL → Workflow 04 processed it = **1 Firecrawl credit + 1 Claude call** (one URL, `primary_json`, no repair) → `monitor_queue`. Confirms the discovery→approval→consume chain spends only on approved URLs. The `service_type` patch (DEC-062) costs nothing extra (deterministic post-model override).
+
 ---
 
 ## URL Discovery Layer (Stage 2.2 — Workflow 05 BUILT/under test — DEC-055/056/057/058/059/060)

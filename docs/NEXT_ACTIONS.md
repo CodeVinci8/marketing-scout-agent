@@ -331,6 +331,17 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 
 > **Do not** build the Approved Candidates Runner (Stage 2.2c), use Firecrawl `/v2/search` (parked), build SerpAPI/Google-CSE fallbacks, or build the Telegram bot (Stage 2.3) yet — each is gated (DEC-056/057/059).
 
+#### Step H — Workflow 04 service_type patch (DEC-062) + next: Workflow 06 Approved Candidates Runner (2026-06-08)
+
+**Done this session:** patched `Normalize + Route` so a **root homepage** gets a specific `service_type` when content is overwhelmingly PTS/auto-focused (deterministic signal counts), while multi-product roots stay `generic_lending`. Fixes the E2E finding (`carcapital.ru/` was `generic_lending`, now `pts_loan`). JSON valid; 35/10 field counts and dedup unchanged.
+
+**Operator next steps:**
+1. [ ] Re-import the patched **Workflow 04** (active stays false); rebind credentials (Firecrawl, both Claude, 4 Google Sheets nodes + real Spreadsheet ID).
+2. [ ] *(Optional)* **Retest `https://carcapital.ru/`** via Workflow 04 (force_reprocess or a fresh registry) → expect `route=monitor_queue`, **`service_type=pts_loan`**, competitor.
+3. [ ] Then **build Workflow 06 — Approved Candidates Runner** (Stage 2.2c): pick `approval_status=approved` from `url_candidates`, feed Workflow 04 in batches of 5, mark rows `processed`. No new analysis logic. (Separate authorization.)
+
+> Still deferred: Telegram bot (Stage 2.3), automated search fallbacks (SerpAPI/Google CSE), Firecrawl `/v2/search` (parked), lead-source connectors.
+
 #### Step E (legacy plan) — Workflow 03: Firecrawl Website Analysis _(superseded by the active Step E above)_
 
 **Goal:** Take a real competitor URL, extract clean text via Firecrawl, pass to Claude v2, verify full chain.
