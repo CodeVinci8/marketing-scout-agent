@@ -355,6 +355,21 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 
 > Still deferred: Telegram bot (Stage 2.3), automated search fallbacks (SerpAPI/Google CSE), Firecrawl `/v2/search` (parked), lead-source connectors.
 
+#### Step J — Workflow 06 registry-recheck patch (DEC-065) → RETEST ← NEXT (2026-06-07)
+
+**Done this session:** patched `06_approved_candidates_runner.json` (active=false) so it **re-reads `url_registry` at runtime** and re-normalizes `candidate_url` (same rules as WF04/05) before selecting. Editable `dedup_status`/`registry_status` in `url_candidates` are now **advisory only** — a URL already in `url_registry` is skipped as `registry_recheck_duplicate`, even if the operator manually marked it `unique`/`not_in_registry`. Added `Read url_registry` node; relaxed the aggregator hard-block to a per-item `warning`; renamed `over_max_5_limit` → `over_limit`. JSON valid; no Apify/Firecrawl/Claude node. Guide/DECISIONS/TABLE_SCHEMA/COSTS/CAPABILITIES/ROADMAP updated.
+
+**Operator next steps (in order):**
+1. [ ] **Re-import the patched Workflow 06** (active stays false). Rebind the **Google Sheets** credential on all three nodes (`Read url_candidates`, `Read url_registry`, disabled `Mark Candidates Processed`) and paste the real **Spreadsheet ID**. No Apify/Firecrawl/Claude creds.
+2. [ ] **Test with the approved old duplicate:** keep `https://www.autolombard-moskva.ru/pledge-pts/` marked `approval_status=approved` (+ `dedup_status=unique`/`registry_status=not_in_registry`). Run WF06 → expect it **skipped** with `reason_category=registry_recheck_duplicate`, **not** selected.
+3. [ ] **Run Workflow 05 with a new query** to discover fresh candidates (0 Firecrawl/Claude).
+4. [ ] **Approve one new `direct_competitor`** whose normalized URL is **not** in `url_registry` (`approval_status=approved` + `approved_by`/`approved_at`).
+5. [ ] **Test Workflow 06 selection:** run WF06 → expect the new competitor in `selected[]`/`selected_urls`; the old duplicate still in `skipped[]` (`registry_recheck_duplicate`).
+6. [ ] **Then manually run Workflow 04** with the selected ≤5 URLs → expect `monitor_queue` + a new `url_registry` row. After confirming, set `approval_status=processed` (manual or via the disabled node).
+
+> Stage 2.2c (Workflow 06) **remains under test** until the registry recheck is validated.
+> Still deferred: Telegram bot (Stage 2.3), automated search fallbacks (SerpAPI/Google CSE), Firecrawl `/v2/search` (parked), lead-source connectors.
+
 #### Step E (legacy plan) — Workflow 03: Firecrawl Website Analysis _(superseded by the active Step E above)_
 
 **Goal:** Take a real competitor URL, extract clean text via Firecrawl, pass to Claude v2, verify full chain.

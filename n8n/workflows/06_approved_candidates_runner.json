@@ -11,8 +11,8 @@
         -180
       ],
       "parameters": {
-        "content": "## 06 — Запуск одобренных кандидатов (Approved Candidates Runner)\n\nМост между обнаружением (Workflow 05) и потребителем URL (Workflow 04).\n\nЧто делает:\n1. Ручной старт.\n2. Читает вкладку url_candidates.\n3. Фильтрует строки: approval_status=approved И dedup_status=unique И registry_status=not_in_registry И candidate_url не пуст.\n4. Приоритезация: сначала direct_competitor, затем выше confidence_score, затем ниже rank.\n5. Жёсткая отсечка — максимум 5 кандидатов за прогон.\n6. Готовит батч URL в формате Workflow 04 (target_url, source_type=scraped_web, platform=website, source_candidate_id, discovery_request_id, candidate_type, run_id, batch_index).\n7. Формирует Execution Summary + готовый блок для вставки в Workflow 04 → Set URL List.\n8. Узел обновления статуса (approval_status=processed) ВЫКЛЮЧЕН по умолчанию: включить вручную ПОСЛЕ подтверждённой обработки.\n\nЧЕГО НЕ ДЕЛАЕТ (архитектурно):\n- НЕ дублирует логику обнаружения, НЕ вызывает Apify, НЕ ищет новые URL.\n- НЕ вызывает Firecrawl/Claude напрямую — анализ только через Workflow 04.\n- НЕ Telegram, НЕ расписание, НЕ авто-одобрение, НЕ обработка дублей.\n- НЕ обрабатывает агрегаторы/каталоги/маркетплейсы/соцсети без явного одобрения оператора (метка aggregator_approved в notes).\n\nv0.1: ручная передача (manual handoff). Workflow 06 не вызывает Workflow 04 как подворкфлоу — у Workflow 04 ручной триггер и фиксированный Set URL List; превращение его в callable subworkflow — рискованный рефактор, отложено. Поток: Workflow 05 → url_candidates → одобрение → Workflow 06 → (ручная вставка) → Workflow 04 → monitor_queue.",
-        "height": 520,
+        "content": "## 06 — Запуск одобренных кандидатов (Approved Candidates Runner)\n\nМост между обнаружением (Workflow 05) и потребителем URL (Workflow 04).\n\nЧто делает:\n1. Ручной старт.\n2. Читает вкладку url_candidates.\n3. Читает вкладку url_registry (источник правды дедупа) ПОВТОРНО, в момент прогона.\n4. Заново нормализует candidate_url теми же правилами, что Workflow 04/05, и сверяет normalized_source_url с url_registry.\n5. Фильтрует строки: approval_status=approved И candidate_url не пуст И normalized_source_url ОТСУТСТВУЕТ в url_registry. approval_status processed/duplicate/rejected/error — пропуск.\n6. ВАЖНО: dedup_status / registry_status в url_candidates — это подсказки времени обнаружения (advisory), а НЕ финальная проверка. Workflow 06 НЕ доверяет им и перепроверяет url_registry. Если оператор вручную поставил unique/not_in_registry, но URL уже в реестре — кандидат пропускается с причиной registry_recheck_duplicate.\n7. Приоритезация: сначала direct_competitor, затем выше confidence_score, затем ниже rank.\n8. Жёсткая отсечка — максимум 5 кандидатов за прогон.\n9. Готовит батч URL в формате Workflow 04 + готовый блок для вставки в Set URL List.\n10. Узел обновления статуса (approval_status=processed) ВЫКЛЮЧЕН по умолчанию: включить вручную ПОСЛЕ подтверждённой обработки.\n\nАгрегатор/каталог/маркетплейс/соцсеть/медиа можно выбрать, ЕСЛИ approval_status=approved, но в выбранном элементе ставится предупреждение: candidate_type не direct_competitor; проверить перед Workflow 04.\n\nЧЕГО НЕ ДЕЛАЕТ (архитектурно):\n- НЕ дублирует логику обнаружения, НЕ вызывает Apify, НЕ ищет новые URL.\n- НЕ вызывает Firecrawl/Claude напрямую — анализ только через Workflow 04.\n- НЕ Telegram, НЕ расписание, НЕ авто-одобрение, НЕ авто-перевод в processed в v0.1.\n\nv0.1: ручная передача (manual handoff). Поток: Workflow 05 → url_candidates → одобрение → Workflow 06 (recheck url_registry) → (ручная вставка) → Workflow 04 → monitor_queue.",
+        "height": 560,
         "width": 560,
         "color": 4
       }
@@ -27,8 +27,8 @@
         -180
       ],
       "parameters": {
-        "content": "## Настройка и тест (вручную)\n\n1. НЕ активировать workflow (active=false).\n2. Вкладки уже есть: url_candidates (26 колонок), url_registry (10 колонок). Новых вкладок НЕ требуется.\n3. ПОСЛЕ ИМПОРТА перепривязать креденшл (ID локальны):\n   - Read url_candidates → Google Sheets - Marketing Scout Service Account\n   - Mark Candidates Processed (DISABLED) → тот же креденшл\n4. На обоих Google Sheets нодах вставить реальный Spreadsheet ID (заменить PASTE_SPREADSHEET_ID_HERE).\n5. Никаких внешних API-ключей здесь нет (нет Apify/Firecrawl/Claude).\n\nПервый тест:\n1. В url_candidates одобрить ОДНУ строку direct_competitor: approval_status=approved, заполнить approved_by/approved_at. Убедиться: dedup_status=unique, registry_status=not_in_registry.\n2. Execute Workflow один раз.\n3. Открыть выход узла Build Execution Summary & Handoff: selected_count=1, в selected_urls — нужный URL, готовый блок workflow_04_set_url_list_block.\n4. Скопировать URL (≤5) в Workflow 04 → Set URL List, запустить Workflow 04 → ожидать monitor_queue + строку в url_registry.\n5. ПОСЛЕ подтверждения: либо включить узел Mark Candidates Processed (DISABLED) и перезапустить 06, либо вручную поставить approval_status=processed.\n\nОжидаемо: 0 трат в самом 06; стоимость — только Workflow 04 (≤5 URL).",
-        "height": 520,
+        "content": "## Настройка и тест (вручную)\n\n1. НЕ активировать workflow (active=false).\n2. Вкладки уже есть: url_candidates (26 колонок), url_registry (10 колонок). Новых вкладок НЕ требуется.\n3. ПОСЛЕ ИМПОРТА перепривязать креденшл (ID локальны):\n   - Read url_candidates → Google Sheets - Marketing Scout Service Account\n   - Read url_registry → тот же креденшл\n   - Mark Candidates Processed (DISABLED) → тот же креденшл\n4. На всех Google Sheets нодах вставить реальный Spreadsheet ID (заменить PASTE_SPREADSHEET_ID_HERE).\n5. Никаких внешних API-ключей здесь нет (нет Apify/Firecrawl/Claude).\n\nРетест (после патча registry recheck):\nа) Старый дубликат, помеченный оператором approved/unique/not_in_registry, но уже присутствующий в url_registry → ДОЛЖЕН быть пропущен с причиной registry_recheck_duplicate (НЕ выбран).\nб) Новый direct_competitor с approval_status=approved, которого НЕТ в url_registry → ДОЛЖЕН быть выбран.\n\nПервый/обычный тест:\n1. В url_candidates одобрить ОДНУ строку direct_competitor: approval_status=approved, заполнить approved_by/approved_at.\n2. Execute Workflow один раз.\n3. Открыть выход узла Build Execution Summary & Handoff: selected_count, selected_urls, skipped (с reason_category), готовый блок workflow_04_set_url_list_block.\n4. Скопировать URL (≤5) в Workflow 04 → Set URL List, запустить Workflow 04 → ожидать monitor_queue + строку в url_registry.\n5. ПОСЛЕ подтверждения: либо включить узел Mark Candidates Processed (DISABLED) и перезапустить 06, либо вручную поставить approval_status=processed.\n\nОжидаемо: 0 трат в самом 06; стоимость — только Workflow 04 (≤5 URL).",
+        "height": 560,
         "width": 560,
         "color": 4
       }
@@ -77,16 +77,48 @@
       }
     },
     {
+      "id": "a6000000-0000-0000-0000-0000000000rg",
+      "name": "Read url_registry",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        540,
+        420
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "url_registry",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
       "id": "a6000000-0000-0000-0000-0000000000se",
       "name": "Select, Prioritize & Annotate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        560,
+        760,
         420
       ],
       "parameters": {
-        "jsCode": "// Single source of truth for selection. Reads url_candidates rows, applies the v0.1\n// approval gate, prioritizes, hard-caps at 5, and annotates every row (_selected / _skip_reason).\nconst rows = $input.all().map(i => i.json).filter(Boolean);\nfunction pad(n){ return String(n).padStart(2, '0'); }\nconst d = new Date();\nconst now = d.toISOString();\nconst stamp = d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'_'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds());\nconst run_id = 'approved_run_' + stamp;\nconst MAX = 5; // HARD CAP: max 5 approved URLs per run\n\nfunction str(v){ return (v==null?'':String(v)).trim(); }\nfunction lc(v){ return str(v).toLowerCase(); }\n\n// Aggregators/directories/marketplaces/socials/media require an explicit operator override\n// (add 'aggregator_approved' to the candidate notes). Direct competitors flow through normally.\nconst BLOCKED_TYPES = ['aggregator','directory','marketplace','social','media_article'];\n\nconst evaluated = [];\nfor (const r of rows){\n  const approval = lc(r.approval_status);\n  const dedup = lc(r.dedup_status);\n  const registry = lc(r.registry_status);\n  const url = str(r.candidate_url);\n  const ctype = lc(r.candidate_type);\n  const notesLc = lc(r.notes);\n  const overrideAggregator = notesLc.includes('aggregator_approved') || notesLc.includes('approved_aggregator');\n\n  let eligible = true; let skip_reason = '';\n  if (approval !== 'approved'){ eligible=false; skip_reason='approval_status=' + (approval||'empty') + ' (need approved)'; }\n  else if (dedup !== 'unique'){ eligible=false; skip_reason='dedup_status=' + (dedup||'empty') + ' (need unique)'; }\n  else if (registry !== 'not_in_registry'){ eligible=false; skip_reason='registry_status=' + (registry||'empty') + ' (need not_in_registry)'; }\n  else if (url === ''){ eligible=false; skip_reason='candidate_url empty'; }\n  else if (BLOCKED_TYPES.includes(ctype) && !overrideAggregator){ eligible=false; skip_reason='candidate_type=' + ctype + ' needs explicit operator approval (add aggregator_approved to notes)'; }\n\n  evaluated.push({ row:r, eligible, skip_reason, ctype, url,\n    confidence: parseInt(r.confidence_score)||0,\n    rank: parseInt(r.rank)||999 });\n}\n\n// Prioritize eligible: direct_competitor first, higher confidence, lower rank.\nconst eligibleList = evaluated.filter(e => e.eligible);\neligibleList.sort((a,b)=>{\n  const ad = a.ctype==='direct_competitor'?0:1;\n  const bd = b.ctype==='direct_competitor'?0:1;\n  if (ad!==bd) return ad-bd;\n  if (b.confidence!==a.confidence) return b.confidence-a.confidence;\n  return a.rank-b.rank;\n});\n\nlet batch_index = 0;\nfor (let i=0;i<eligibleList.length;i++){\n  if (i<MAX){ eligibleList[i]._selected=true; batch_index++; eligibleList[i]._batch_index=batch_index; }\n  else { eligibleList[i]._selected=false; eligibleList[i]._skip_reason='over_max_5_limit (eligible but exceeds 5/run; approve in a later run)'; }\n}\n\nconst out = [];\nfor (const e of evaluated){\n  const r = e.row;\n  const isSel = (e._selected === true);\n  const skip = isSel ? '' : (e._skip_reason || e.skip_reason);\n  out.push({ json: {\n    candidate_id: str(r.candidate_id),\n    discovery_request_id: str(r.discovery_request_id),\n    candidate_url: e.url,\n    normalized_source_url: str(r.normalized_source_url),\n    domain: str(r.domain),\n    candidate_type: str(r.candidate_type),\n    confidence_score: e.confidence,\n    rank: e.rank,\n    approval_status: str(r.approval_status),\n    approved_by: str(r.approved_by),\n    approved_at: str(r.approved_at),\n    service_hint: str(r.service_hint),\n    region_hint: str(r.region_hint),\n    notes: str(r.notes),\n    _selected: isSel,\n    _eligible: e.eligible,\n    _skip_reason: skip,\n    run_id: run_id,\n    batch_index: isSel ? e._batch_index : 0,\n    target_url: isSel ? e.url : '',\n    source_type: 'scraped_web',\n    platform: 'website',\n    source_candidate_id: str(r.candidate_id),\n    parsed_at: now,\n    source_note: 'approved_candidates_runner',\n    force_reprocess: false\n  }});\n}\nreturn out;"
+        "jsCode": "// Single source of truth for selection. Reads url_candidates rows AND RE-READS url_registry\n// at runtime. candidate_url is RE-NORMALIZED with the SAME rules as Workflow 04/05 and\n// verified to NOT already exist in url_registry before selection. The editable\n// dedup_status / registry_status fields in url_candidates are advisory discovery-time hints\n// only and are NOT trusted (DEC: Workflow 06 runtime registry recheck).\nconst rows = $('Read url_candidates').all().map(i => i.json).filter(Boolean);\n\n// Re-read url_registry (source of truth for dedup) and build a set of normalized URLs.\nlet registry = [];\ntry { registry = $('Read url_registry').all().map(i => i.json).filter(Boolean); } catch (e) { registry = []; }\nconst regSet = new Set(registry.map(r => String(r.normalized_source_url || '').trim()).filter(Boolean));\n\nfunction pad(n){ return String(n).padStart(2, '0'); }\nconst d = new Date();\nconst now = d.toISOString();\nconst stamp = d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'_'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds());\nconst run_id = 'approved_run_' + stamp;\nconst MAX = 5; // HARD CAP: max 5 approved URLs per run\n\nfunction str(v){ return (v==null?'':String(v)).trim(); }\nfunction lc(v){ return str(v).toLowerCase(); }\n\n// URL normalizer — SAME rules as Workflow 04/05 (keys must match url_registry).\nfunction normalizeUrl(u){\n  u = String(u || '').trim();\n  if (!u) return '';\n  try {\n    const noFrag = u.split('#')[0];\n    const url = new URL(noFrag);\n    url.protocol = (url.protocol || '').toLowerCase();\n    url.hostname = (url.hostname || '').toLowerCase();\n    const drop = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','yclid','fbclid'];\n    for (const p of drop) url.searchParams.delete(p);\n    let path = url.pathname || '/';\n    if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);\n    url.pathname = path;\n    return url.toString();\n  } catch (e) { return u; }\n}\n\n// Non-direct-competitor types are allowed when approved, but flagged with a warning.\nconst NON_DIRECT = ['aggregator','directory','marketplace','social','media_article'];\n\nconst evaluated = [];\nfor (const r of rows){\n  // Skip fully blank rows (alwaysOutputData can emit an empty item on an empty sheet).\n  if (!str(r.candidate_id) && !str(r.candidate_url)) continue;\n\n  const approval = lc(r.approval_status);\n  const url = str(r.candidate_url);\n  const ctype = lc(r.candidate_type);\n  const normalized = normalizeUrl(url); // re-normalized at runtime; stored field is NOT trusted\n\n  let eligible = true; let skip_category = ''; let skip_reason = '';\n  if (approval === 'processed'){ eligible=false; skip_category='already_processed'; skip_reason='approval_status=processed (already handed off)'; }\n  else if (approval === 'duplicate' || approval === 'rejected' || approval === 'error'){ eligible=false; skip_category='duplicate_status'; skip_reason='approval_status=' + approval + ' (not eligible)'; }\n  else if (approval !== 'approved'){ eligible=false; skip_category='approval_status_not_approved'; skip_reason='approval_status=' + (approval||'empty') + ' (need approved)'; }\n  else if (url === ''){ eligible=false; skip_category='missing_candidate_url'; skip_reason='candidate_url empty'; }\n  else if (normalized !== '' && regSet.has(normalized)){ eligible=false; skip_category='registry_recheck_duplicate'; skip_reason='registry_recheck_duplicate: normalized_source_url already exists in url_registry (editable dedup_status/registry_status ignored)'; }\n\n  const warning = (eligible && NON_DIRECT.includes(ctype))\n    ? 'not_direct_competitor_optional_warning: candidate_type is not direct_competitor; review before Workflow 04.'\n    : '';\n\n  evaluated.push({ row:r, eligible, skip_category, skip_reason, warning, ctype, url, normalized,\n    confidence: parseInt(r.confidence_score)||0,\n    rank: parseInt(r.rank)||999 });\n}\n\n// Prioritize eligible: direct_competitor first, higher confidence, lower rank.\nconst eligibleList = evaluated.filter(e => e.eligible);\neligibleList.sort((a,b)=>{\n  const ad = a.ctype==='direct_competitor'?0:1;\n  const bd = b.ctype==='direct_competitor'?0:1;\n  if (ad!==bd) return ad-bd;\n  if (b.confidence!==a.confidence) return b.confidence-a.confidence;\n  return a.rank-b.rank;\n});\n\nlet batch_index = 0;\nfor (let i=0;i<eligibleList.length;i++){\n  if (i<MAX){ eligibleList[i]._selected=true; batch_index++; eligibleList[i]._batch_index=batch_index; }\n  else { eligibleList[i]._selected=false; eligibleList[i]._skip_category='over_limit'; eligibleList[i]._skip_reason='over_limit (eligible but exceeds 5/run; approve in a later run)'; }\n}\n\nconst out = [];\nfor (const e of evaluated){\n  const r = e.row;\n  const isSel = (e._selected === true);\n  const skip_category = isSel ? '' : (e._skip_category || e.skip_category);\n  const skip = isSel ? '' : (e._skip_reason || e.skip_reason);\n  out.push({ json: {\n    candidate_id: str(r.candidate_id),\n    discovery_request_id: str(r.discovery_request_id),\n    candidate_url: e.url,\n    normalized_source_url: e.normalized,\n    stored_normalized_source_url: str(r.normalized_source_url),\n    domain: str(r.domain),\n    candidate_type: str(r.candidate_type),\n    confidence_score: e.confidence,\n    rank: e.rank,\n    approval_status: str(r.approval_status),\n    dedup_status: str(r.dedup_status),\n    registry_status: str(r.registry_status),\n    approved_by: str(r.approved_by),\n    approved_at: str(r.approved_at),\n    service_hint: str(r.service_hint),\n    region_hint: str(r.region_hint),\n    notes: str(r.notes),\n    warning: e.warning,\n    _selected: isSel,\n    _eligible: e.eligible,\n    _skip_category: skip_category,\n    _skip_reason: skip,\n    run_id: run_id,\n    batch_index: isSel ? e._batch_index : 0,\n    target_url: isSel ? e.url : '',\n    source_type: 'scraped_web',\n    platform: 'website',\n    source_candidate_id: str(r.candidate_id),\n    parsed_at: now,\n    source_note: 'approved_candidates_runner',\n    force_reprocess: false\n  }});\n}\nreturn out;"
       }
     },
     {
@@ -95,7 +127,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        780,
+        980,
         340
       ],
       "parameters": {
@@ -127,7 +159,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        1000,
+        1200,
         260
       ],
       "disabled": true,
@@ -170,11 +202,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        780,
+        980,
         540
       ],
       "parameters": {
-        "jsCode": "// One summary item per run. Aggregates the annotated rows from the selection node.\nconst all = $('Select, Prioritize & Annotate').all().map(i => i.json);\nconst selected = all.filter(r => r._selected === true);\nconst skipped = all.filter(r => r._selected !== true);\nconst run_id = (all[0] && all[0].run_id) || '';\nconst now = new Date().toISOString();\n\nconst selected_urls = selected.map(r => r.candidate_url);\nconst handoff_lines = selected_urls.map(function(u){ return \"  '\" + u + \"',\"; }).join('\\n');\nconst set_url_list_block = 'const rawUrls = [\\n' + handoff_lines + '\\n];';\n\nreturn [{ json: {\n  workflow: '06 - Approved Candidates Runner',\n  run_id: run_id,\n  generated_at: now,\n  total_candidates_read: all.length,\n  selected_count: selected.length,\n  skipped_count: skipped.length,\n  max_per_run: 5,\n  processing_mode: 'manual_handoff_to_workflow_04',\n  selected_urls: selected_urls,\n  selected: selected.map(function(r){ return { batch_index:r.batch_index, candidate_id:r.candidate_id, candidate_url:r.candidate_url, candidate_type:r.candidate_type, confidence_score:r.confidence_score, service_hint:r.service_hint, discovery_request_id:r.discovery_request_id }; }),\n  skipped: skipped.map(function(r){ return { candidate_id:r.candidate_id, candidate_url:r.candidate_url, candidate_type:r.candidate_type, reason:r._skip_reason }; }),\n  workflow_04_set_url_list_block: set_url_list_block,\n  operator_note: (selected.length === 0)\n    ? 'No approved/unique/not_in_registry candidates to process. Approve at least one direct_competitor candidate in url_candidates, then re-run.'\n    : 'Copy the URLs above into Workflow 04 -> Set URL List (max 5), run Workflow 04, then enable the disabled \"Mark Candidates Processed\" node here (or set approval_status=processed manually) AFTER confirming monitor_queue output.'\n}}];"
+        "jsCode": "// One summary item per run. Aggregates the annotated rows from the selection node.\nconst all = $('Select, Prioritize & Annotate').all().map(i => i.json);\nconst selected = all.filter(r => r._selected === true);\nconst skipped = all.filter(r => r._selected !== true);\nconst run_id = (all[0] && all[0].run_id) || '';\nconst now = new Date().toISOString();\n\nconst selected_urls = selected.map(r => r.candidate_url);\nconst handoff_lines = selected_urls.map(function(u){ return \"  '\" + u + \"',\"; }).join('\\n');\nconst set_url_list_block = 'const rawUrls = [\\n' + handoff_lines + '\\n];';\n\nreturn [{ json: {\n  workflow: '06 - Approved Candidates Runner',\n  run_id: run_id,\n  generated_at: now,\n  total_candidates_read: all.length,\n  selected_count: selected.length,\n  skipped_count: skipped.length,\n  max_per_run: 5,\n  processing_mode: 'manual_handoff_to_workflow_04',\n  registry_recheck: 'enabled: url_registry re-read at runtime, candidate_url re-normalized; editable dedup_status/registry_status are advisory only',\n  selected_urls: selected_urls,\n  selected: selected.map(function(r){ return { batch_index:r.batch_index, candidate_id:r.candidate_id, candidate_url:r.candidate_url, normalized_source_url:r.normalized_source_url, candidate_type:r.candidate_type, confidence_score:r.confidence_score, rank:r.rank, service_hint:r.service_hint, discovery_request_id:r.discovery_request_id, warning:r.warning }; }),\n  skipped: skipped.map(function(r){ return { candidate_id:r.candidate_id, candidate_url:r.candidate_url, candidate_type:r.candidate_type, reason_category:r._skip_category, reason:r._skip_reason }; }),\n  workflow_04_set_url_list_block: set_url_list_block,\n  operator_note: (selected.length === 0)\n    ? 'No eligible candidates after runtime registry recheck. Approve at least one direct_competitor candidate whose normalized URL is NOT already in url_registry, then re-run.'\n    : 'Copy the URLs above into Workflow 04 -> Set URL List (max 5), run Workflow 04, then enable the disabled \"Mark Candidates Processed\" node here (or set approval_status=processed manually) AFTER confirming monitor_queue output. Items carrying a warning are not direct_competitor — review before Workflow 04.'\n}}];"
       }
     }
   ],
@@ -191,6 +223,17 @@
       ]
     },
     "Read url_candidates": {
+      "main": [
+        [
+          {
+            "node": "Read url_registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read url_registry": {
       "main": [
         [
           {
@@ -234,7 +277,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "a6000000-approved-candidates-runner-v001-20260607",
+  "versionId": "a6000000-approved-candidates-runner-v002-registry-recheck-20260607",
   "meta": {
     "instanceId": "marketing-scout-v6-approved-candidates-runner"
   }

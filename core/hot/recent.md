@@ -4,6 +4,20 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-07 — Workflow 06 Runtime Registry Recheck Patch (DEC-065)
+
+**What was done (0 external calls; WF06 patch only):**
+- **First WF06 test exposed a trust bug:** 9 `url_candidates` rows; operator manually edited an old duplicate (`https://www.autolombard-moskva.ru/pledge-pts/`) to `unique`/`not_in_registry`/`direct_competitor`/`approved`. WF06 trusted those editable fields and selected it (`selected_count=1`) — but the URL **is already in `url_registry`**, so handing it to WF04 = duplicate Firecrawl/Claude spend.
+- **Patch (DEC-065):** added a **`Read url_registry`** node (Manual Start → Read url_candidates → Read url_registry → Select). `Select, Prioritize & Annotate` now **re-reads `url_registry` at runtime** and **re-normalizes `candidate_url`** with the same `normalizeUrl()` rules as WF04/05, then compares to the registry. Gate = `approved` + non-empty URL + **URL not in registry**; `processed`/`duplicate`/`rejected`/`error` skipped. Editable `dedup_status`/`registry_status` are **advisory only** and ignored for the decision.
+- A registry-present URL → skipped as **`registry_recheck_duplicate`** even if manually marked unique. Skip categories: `approval_status_not_approved`, `already_processed`, `duplicate_status`, `registry_recheck_duplicate`, `missing_candidate_url`, `not_direct_competitor_optional_warning`, `over_limit`.
+- Aggregators/directories/media **no longer hard-blocked** — when approved they're selected with a per-item `warning`. Priority (`direct_competitor` → confidence → rank), hard cap 5/run, manual hand-off, no auto-`processed` unchanged.
+- **Verified:** JSON VALID; node types = manualTrigger, **3×Sheets** (2 read + disabled update), 2×code, IF, sticky; **no Apify/Firecrawl/Claude/httpRequest**; `normalizeUrl` present; reads both tabs; `registry_recheck_duplicate` present; cap 5; `manual_handoff_to_workflow_04` preserved; active=false; placeholders only (no real Spreadsheet ID); no tool_use/KEY=VALUE.
+- Docs: DEC-065, WF06 RU guide (§0 test result, §4.1 recheck, §8.1 retest, skip categories, diagnostics), TABLE_SCHEMA (dedup fields advisory), NEXT_ACTIONS (Step J), COSTS, AGENT_CAPABILITIES, ROADMAP (2.2c still under test), AGENT_LOG.
+
+**Next operator action:** re-import WF06 → rebind Sheets cred + Spreadsheet ID on all 3 nodes → keep approved old duplicate (expect `registry_recheck_duplicate` skip) → run WF05 with a new query → approve one new `direct_competitor` → run WF06 (expect selected) → manually run WF04.
+
+---
+
 ## Session: 2026-06-07 — Workflow 06 Approved Candidates Runner BUILT + WF04 contact_public sanitation (DEC-063/064)
 
 **What was done (0 external calls; manual chain already proven E2E):**

@@ -5,6 +5,30 @@ Most recent first.
 
 ---
 
+## 2026-06-07 — Workflow 06 Runtime Registry Recheck Patch (DEC-065)
+
+**Agent role:** project-engineer
+**Session goal:** Patch Workflow 06 to re-check `url_registry` at runtime before selecting approved candidates, after the first test exposed a trust bug.
+
+**Context — first test result:** `url_candidates` had 9 rows. The operator manually edited an **old duplicate** (`https://www.autolombard-moskva.ru/pledge-pts/`) to `dedup_status=unique`, `registry_status=not_in_registry`, `candidate_type=direct_competitor`, `approval_status=approved`. WF06 trusted those editable fields and selected it (`selected_count=1`, manual handoff) — but the URL **already exists in `url_registry`**, so handing it to WF04 would cause a duplicate Firecrawl/Claude spend.
+
+**Patch (DEC-065, WF06 only):**
+- Added a **`Read url_registry`** Google Sheets node (Manual Start → Read url_candidates → Read url_registry → Select).
+- `Select, Prioritize & Annotate` now reads both tabs, **re-normalizes `candidate_url`** with the same `normalizeUrl()` rules as WF04/05 (lowercase scheme/host, drop fragment + utm/gclid/yclid/fbclid, strip trailing slash), and compares against the set of `normalized_source_url` in `url_registry`.
+- Selection gate = `approval_status=approved` AND non-empty `candidate_url` AND re-normalized URL **NOT** in `url_registry`. `processed`/`duplicate`/`rejected`/`error` skipped. Editable `dedup_status`/`registry_status` are **ignored** for the decision (advisory only).
+- A URL in the registry is skipped as **`registry_recheck_duplicate`** even if manually marked `unique`/`not_in_registry`.
+- Skip categories: `approval_status_not_approved`, `already_processed`, `duplicate_status`, `registry_recheck_duplicate`, `missing_candidate_url`, `not_direct_competitor_optional_warning`, `over_limit` (renamed from `over_max_5_limit`).
+- Aggregators/directories/media are **no longer hard-blocked** behind an `aggregator_approved` note — when approved they are selected with a per-item `warning`. Priority (`direct_competitor` → confidence → rank), hard cap 5/run, manual hand-off, and no auto-`processed` all unchanged.
+- Output unchanged in shape + adds `registry_recheck`, per-item `warning`, and `reason_category` in `skipped[]`.
+
+**Verified:** `python3 -m json.tool` VALID; node types = manualTrigger, **3×googleSheets** (2 read + disabled update), 2×code, if, 2×stickyNote — **no Apify/Firecrawl/Claude/httpRequest node**; `normalizeUrl` present; reads both `url_candidates` + `url_registry`; `registry_recheck_duplicate` present; hard cap 5; `manual_handoff_to_workflow_04` preserved; active=false; placeholders only (4× `PASTE_SPREADSHEET_ID_HERE`); no real Spreadsheet ID; no tool_use / no KEY=VALUE.
+
+**Docs updated:** DEC-065; WF06 RU guide (test result §0, registry recheck §4.1, retest §8.1, skip categories, diagnostics); TABLE_SCHEMA (`dedup_status`/`registry_status` marked advisory); NEXT_ACTIONS (Step J); COSTS (recheck prevents duplicate spend); AGENT_CAPABILITIES + ROADMAP (2.2c still under test); core/hot/recent.md.
+
+**Next operator action:** re-import WF06 → rebind Sheets cred + Spreadsheet ID on all 3 nodes → keep the approved old duplicate (expect `registry_recheck_duplicate` skip) → run WF05 with a new query → approve one new `direct_competitor` → run WF06 (expect it selected) → manually run WF04.
+
+---
+
 ## 2026-06-07 — Workflow 06 Approved Candidates Runner BUILT + Workflow 04 contact_public Sanitation (DEC-063/064)
 
 **Agent role:** project-engineer

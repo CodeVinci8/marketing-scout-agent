@@ -2,7 +2,33 @@
 
 **Файл:** `n8n/workflows/06_approved_candidates_runner.json`
 **Имя в n8n:** `06 - Approved Candidates Runner`
-**Статус:** 🔧 BUILT, `active=false` — мост одобрение → обработка (Stage 2.2c, DEC-064). НЕ активировать.
+**Статус:** 🔧 BUILT + ПАТЧ registry recheck, `active=false` — мост одобрение → обработка (Stage 2.2c, DEC-064/065). **Под тестом** (до подтверждения runtime-перепроверки реестра). НЕ активировать.
+
+---
+
+## 0. Результат первого теста (2026-06-07) и патч
+
+**Первый тест выявил баг доверия.** В `url_candidates` было 9 строк. Оператор вручную изменил **старый дубликат**:
+
+```
+URL: https://www.autolombard-moskva.ru/pledge-pts/
+dedup_status     = unique
+registry_status  = not_in_registry
+candidate_type   = direct_competitor
+approval_status  = approved
+```
+
+Workflow 06 **доверился** этим редактируемым полям и выбрал URL для передачи:
+
+```
+selected_count   = 1
+processing_mode  = manual_handoff_to_workflow_04
+selected_urls    = https://www.autolombard-moskva.ru/pledge-pts/
+```
+
+**Проблема:** этот URL **уже есть в `url_registry`**. Передача его в Workflow 04 вызвала бы повторную (дублирующую) трату Firecrawl/Claude. Поля `dedup_status`/`registry_status` в `url_candidates` ставятся один раз во время обнаружения (Workflow 05) и редактируются оператором — это **не** безопасный финальный фильтр.
+
+**Патч (DEC-065):** Workflow 06 теперь **повторно читает `url_registry` в момент прогона**, заново нормализует `candidate_url` теми же правилами, что Workflow 04/05, и сверяет с реестром. См. §4.1.
 
 ---
 
@@ -51,7 +77,8 @@ Workflow 04 (Firecrawl URL List → Resilient Analyzer)   ← ручная вс�
 |------|-----|------------|
 | Manual Start | manualTrigger | Ручной запуск |
 | Read url_candidates | googleSheets (read) | Читает всю вкладку `url_candidates` |
-| Select, Prioritize & Annotate | code | Единый источник правды: фильтр + приоритет + отсечка ≤5 + аннотация каждой строки (`_selected`, `_skip_reason`) |
+| Read url_registry | googleSheets (read) | **НОВЫЙ (DEC-065).** Читает `url_registry` в момент прогона — источник правды дедупа |
+| Select, Prioritize & Annotate | code | Единый источник правды: повторная нормализация `candidate_url` + сверка с `url_registry` + фильтр + приоритет + отсечка ≤5 + аннотация каждой строки (`_selected`, `_skip_category`, `_skip_reason`) |
 | IF Selected? | if | Пропускает дальше только выбранные строки |
 | Mark Candidates Processed (DISABLED) | googleSheets (update) | **Выключен по умолчанию.** При включении ставит `approval_status=processed` и дописывает в `notes` `Processed by Workflow 06 run_id=…` |
 | Build Execution Summary & Handoff | code | Один итог на прогон: счётчики, выбранные URL, причины пропуска, готовый блок для `Set URL List` |
@@ -61,17 +88,52 @@ Workflow 04 (Firecrawl URL List → Resilient Analyzer)   ← ручная вс�
 ## 4. Логика отбора
 
 **Строка попадает в обработку только если выполнены ВСЕ условия:**
-- `approval_status = approved`
-- `dedup_status = unique`
-- `registry_status = not_in_registry`
-- `candidate_url` не пуст
-- `candidate_type` НЕ из `aggregator / directory / marketplace / social / media_article` —
-  **если только** оператор явно не разрешил, добавив `aggregator_approved` в `notes` этой строки.
+- `approval_status = approved` (а `processed` / `duplicate` / `rejected` / `error` — пропуск);
+- `candidate_url` не пуст;
+- **повторно нормализованный** `candidate_url` ОТСУТСТВУЕТ в `url_registry` (runtime recheck, §4.1).
+
+`candidate_type` из `aggregator / directory / marketplace / social / media_article` **можно** выбрать,
+если `approval_status = approved`, но в выбранном элементе ставится `warning`:
+`candidate_type is not direct_competitor; review before Workflow 04`.
+
+> **Важно (DEC-065):** `dedup_status` и `registry_status` из `url_candidates` — это **подсказки времени
+> обнаружения (advisory)**, а НЕ финальный фильтр. Workflow 06 их **не** использует для решения и
+> перепроверяет `url_registry` сам. Ручное редактирование этих полей не может протолкнуть дубликат.
 
 **Приоритет (сортировка выбранных):** сначала `direct_competitor`, затем выше `confidence_score`, затем ниже `rank`.
 
 **Жёсткая отсечка:** максимум **5** кандидатов за прогон. Подходящие строки сверх 5 помечаются как пропущенные
-с причиной `over_max_5_limit` (их можно одобрить в следующем прогоне).
+с причиной `over_limit` (их можно одобрить в следующем прогоне).
+
+**Категории причин пропуска (`reason_category` в `skipped[]`):**
+
+| Категория | Когда |
+|-----------|-------|
+| `approval_status_not_approved` | `approval_status` не `approved` (например `new`/пусто) |
+| `already_processed` | `approval_status = processed` (уже передан ранее) |
+| `duplicate_status` | `approval_status` = `duplicate` / `rejected` / `error` |
+| `registry_recheck_duplicate` | нормализованный URL **уже в `url_registry`** (даже если оператор вручную поставил `unique`/`not_in_registry`) |
+| `missing_candidate_url` | `candidate_url` пуст |
+| `not_direct_competitor_optional_warning` | предупреждение на выбранном элементе: тип не `direct_competitor` (не блокирует, см. §4) |
+| `over_limit` | подходит, но сверх лимита 5/прогон |
+
+---
+
+## 4.1. Повторная проверка реестра (registry recheck, DEC-065)
+
+1. Узел `Read url_registry` читает вкладку `url_registry` **в момент прогона** (источник правды дедупа).
+2. Код собирает множество значений `normalized_source_url` из реестра.
+3. Для каждого кандидата `candidate_url` **заново нормализуется** теми же правилами, что в Workflow 04/05:
+   - убрать фрагмент (`#…`);
+   - привести схему и хост к нижнему регистру;
+   - удалить трекинговые параметры (`utm_*`, `gclid`, `yclid`, `fbclid`);
+   - убрать хвостовой слэш пути.
+4. Если результат нормализации **есть** в `url_registry` → кандидат пропускается с
+   `reason_category = registry_recheck_duplicate` (не выбирается), **независимо** от `dedup_status`/`registry_status`.
+
+Почему так: реестр — единственный надёжный источник дедупа; нормализация совпадает с ключами `url_registry`,
+которые пишет Workflow 04. Подсказки в `url_candidates` фиксируются при обнаружении и могут устареть или быть
+изменены вручную, поэтому решение принимается только по реестру.
 
 ---
 
@@ -81,8 +143,9 @@ Workflow 04 (Firecrawl URL List → Resilient Analyzer)   ← ручная вс�
 2. Вкладки уже есть: `url_candidates` (26 колонок), `url_registry` (10 колонок). **Новых вкладок не требуется.**
 3. Перепривязать креденшл (ID локальны, в файле плейсхолдеры):
    - `Read url_candidates` → **Google Sheets - Marketing Scout Service Account**
+   - `Read url_registry` → тот же креденшл
    - `Mark Candidates Processed (DISABLED)` → тот же креденшл
-4. На обоих Google Sheets нодах вставить **реальный Spreadsheet ID** (заменить `PASTE_SPREADSHEET_ID_HERE`).
+4. На **всех трёх** Google Sheets нодах вставить **реальный Spreadsheet ID** (заменить `PASTE_SPREADSHEET_ID_HERE`).
 5. Внешних API-ключей здесь **нет** (нет Apify/Firecrawl/Claude). Если используется Execute Workflow в будущем —
    дополнительных внешних креденшлов Workflow 06 не требует.
 
@@ -93,6 +156,7 @@ Workflow 04 (Firecrawl URL List → Resilient Analyzer)   ← ручная вс�
 | Узел | Креденшл | Примечание |
 |------|----------|------------|
 | Read url_candidates | Google Sheets - Marketing Scout Service Account | чтение |
+| Read url_registry | Google Sheets - Marketing Scout Service Account | чтение (runtime recheck дедупа) |
 | Mark Candidates Processed (DISABLED) | Google Sheets - Marketing Scout Service Account | запись в `url_candidates`, по умолчанию выключен |
 
 Apify / Firecrawl / Claude креденшлы здесь **не нужны и не используются**.
@@ -102,12 +166,14 @@ Apify / Firecrawl / Claude креденшлы здесь **не нужны и н
 ## 7. Как одобрять кандидатов
 
 1. Открыть вкладку `url_candidates`.
-2. Выбрать строку-кандидата (для первого теста — `candidate_type=direct_competitor`, `dedup_status=unique`,
-   `registry_status=not_in_registry`).
+2. Выбрать строку-кандидата (для теста лучше `candidate_type=direct_competitor`).
 3. Поставить `approval_status = approved`; заполнить `approved_by` (id оператора) и `approved_at` (ISO 8601).
-4. Для агрегатора/каталога/маркетплейса/соцсети/медиа, который вы всё же хотите обработать, дополнительно
-   добавить в `notes` метку `aggregator_approved`.
-5. Не одобрять более 5 строк к одному прогону (лишние всё равно будут отсечены до 5).
+4. Агрегатор/каталог/маркетплейс/соцсеть/медиа **тоже можно** одобрить (DEC-065): если `approval_status=approved`,
+   кандидат будет выбран, но в выбранном элементе появится `warning` (тип не `direct_competitor`; проверить перед WF04).
+   Отдельная метка в `notes` больше не требуется.
+5. **Не имеет смысла** подтверждать дубликат: даже если поставить `dedup_status=unique`/`registry_status=not_in_registry`,
+   Workflow 06 перепроверит `url_registry` и пропустит URL как `registry_recheck_duplicate` (DEC-065).
+6. Не одобрять более 5 строк к одному прогону (лишние всё равно будут отсечены до 5 с `over_limit`).
 
 ---
 
@@ -127,12 +193,39 @@ Apify / Firecrawl / Claude креденшлы здесь **не нужны и н
 
 ---
 
+## 8.1. Ретест registry recheck (DEC-065)
+
+Этот ретест подтверждает, что патч работает. Два кейса в одном прогоне:
+
+**а) Старый дубликат, помеченный оператором как approved — должен быть ПРОПУЩЕН.**
+1. Взять строку, чей URL **уже есть в `url_registry`** (например `https://www.autolombard-moskva.ru/pledge-pts/`).
+2. Вручную выставить ей `dedup_status=unique`, `registry_status=not_in_registry`,
+   `candidate_type=direct_competitor`, `approval_status=approved` (воспроизводим баг первого теста).
+3. **Execute Workflow.**
+4. **Ожидается:** этот URL **НЕ** в `selected[]`; он в `skipped[]` с `reason_category = registry_recheck_duplicate`.
+   `selected_urls` его не содержит. Ручные правки `dedup_status`/`registry_status` проигнорированы.
+
+**б) Новый direct_competitor, одобренный — должен быть ВЫБРАН.**
+1. Взять `direct_competitor`, чей нормализованный URL **отсутствует** в `url_registry`.
+2. Поставить `approval_status=approved` (+ `approved_by`/`approved_at`).
+3. **Execute Workflow.**
+4. **Ожидается:** этот URL в `selected[]` и в `selected_urls`; в `selected_count` учтён; готов к Workflow 04.
+
+Если оба кейса в одном прогоне: `selected_count` считает только (б), а (а) попадает в `skipped[]`
+с `registry_recheck_duplicate`.
+
+---
+
 ## 9. Ожидаемый результат
 
 - В самом Workflow 06: **0 трат** (нет Apify/Firecrawl/Claude).
-- Execution Summary: `run_id`, `selected_count`, `skipped_count`, `selected_urls`, причины пропуска,
-  `processing_mode=manual_handoff_to_workflow_04`.
-- Стоимость возникает **только** в Workflow 04 на выбранных ≤5 URL.
+- Execution Summary (узел `Build Execution Summary & Handoff`) содержит:
+  `run_id`, `generated_at`, `total_candidates_read`, `selected_count`, `skipped_count`, `max_per_run`,
+  `processing_mode=manual_handoff_to_workflow_04`, `registry_recheck` (статус перепроверки), `selected_urls`,
+  массив `selected` (с `warning` для не-`direct_competitor`), массив `skipped` (`reason_category` + `reason`),
+  `workflow_04_set_url_list_block`, `operator_note`.
+- Стоимость возникает **только** в Workflow 04 на выбранных ≤5 URL. Runtime-перепроверка реестра
+  предотвращает повторную трату Firecrawl/Claude на URL, уже присутствующий в `url_registry`.
 
 ---
 
@@ -154,10 +247,11 @@ Workflow 06 переводит `approved → processed` (через включа
 
 | Симптом | Причина / решение |
 |---------|-------------------|
-| `selected_count = 0` | Нет строк, проходящих фильтр. Проверьте `approval_status=approved`, `dedup_status=unique`, `registry_status=not_in_registry`, непустой `candidate_url`. |
-| Кандидат-агрегатор пропущен | `candidate_type` из заблокированного набора. Добавьте `aggregator_approved` в `notes`, если действительно нужно обработать. |
-| Подходящих больше 5, часть пропущена | Это норма: отсечка `over_max_5_limit`. Обработайте остаток следующим прогоном. |
-| Узел `Read url_candidates` падает при импорте | Перепривяжите Google Sheets креденшл и вставьте реальный Spreadsheet ID. |
+| `selected_count = 0` | Нет строк, проходящих фильтр. Проверьте `approval_status=approved`, непустой `candidate_url`, и что URL **отсутствует** в `url_registry`. Смотрите `reason_category` в `skipped[]`. |
+| Одобренный кандидат пропущен с `registry_recheck_duplicate` | URL уже есть в `url_registry` (runtime recheck, DEC-065). Это правильно: повторная обработка вызвала бы дублирующую трату. `dedup_status`/`registry_status` в `url_candidates` тут не помогут — они advisory. |
+| Кандидат-агрегатор пропущен | С DEC-065 агрегатор/каталог/медиа **не** блокируется: при `approval_status=approved` он будет выбран с `warning`. Если он всё же в `skipped[]` — смотрите `reason_category` (скорее всего `registry_recheck_duplicate` или `approval_status_not_approved`). |
+| Подходящих больше 5, часть пропущена | Это норма: отсечка `over_limit`. Обработайте остаток следующим прогоном. |
+| Узел `Read url_candidates` / `Read url_registry` падает при импорте | Перепривяжите Google Sheets креденшл и вставьте реальный Spreadsheet ID на обоих read-нодах. |
 | `Mark Candidates Processed` ничего не делает | Узел выключен по умолчанию — включите его вручную после подтверждения обработки. |
 
 ---

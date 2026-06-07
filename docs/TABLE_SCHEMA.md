@@ -119,8 +119,8 @@ candidate reaches Firecrawl/Claude until `approval_status=approved`**. Written b
 | 15 | `region_hint` | string | e.g. `Москва/МО` |
 | 16 | `service_hint` | string | e.g. `pts_loan` |
 | 17 | `confidence_score` | integer | 1–100 deterministic relevance (direct competitors rank above aggregators/directories/media) |
-| 18 | `dedup_status` | string | `unique` / `duplicate_in_batch` / `duplicate_in_registry` |
-| 19 | `registry_status` | string | `not_in_registry` / `in_registry` |
+| 18 | `dedup_status` | string | **discovery-time hint only** (advisory): `unique` / `duplicate_in_batch` / `duplicate_in_registry`. Set once by Workflow 05; operator-editable. **Not** the final dedup gate — Workflow 06 re-checks `url_registry` at runtime (DEC-065). |
+| 19 | `registry_status` | string | **discovery-time hint only** (advisory): `not_in_registry` / `in_registry`. Set once by Workflow 05; operator-editable. **Not** the final dedup gate — Workflow 06 re-checks `url_registry` at runtime (DEC-065). |
 | 20 | `approval_status` | string | `new` / `approved` / `rejected` / `processed` / `duplicate` / `error` |
 | 21 | `approved_by` | string | operator id (blank until approved) |
 | 22 | `approved_at` | string | ISO 8601 (blank until approved) |
@@ -147,9 +147,9 @@ error      — set on runner/processing failure
 - `new` → set by Workflow 05 for unique candidates (and for aggregators/directories/media, with a "review manually" note).
 - `approved` → set **by the operator**; also fill `approved_by` + `approved_at`. This is the spend gate.
 - `processed` → set after **Workflow 06 (DEC-064)** hands the URL to Workflow 04 **and** the operator confirms `monitor_queue` output (via the disabled `Mark Candidates Processed` node or manually). `approved_by`/`approved_at` are preserved; `notes` gets `Processed by Workflow 06 run_id=…`.
-- `duplicate` / `rejected` → terminal; Workflow 06 never selects them (it requires `approved` + `dedup_status=unique` + `registry_status=not_in_registry`).
+- `duplicate` / `rejected` → terminal; Workflow 06 never selects them. Workflow 06 requires `approval_status=approved` + non-empty `candidate_url` + the **re-normalized** URL **absent from `url_registry`** (runtime recheck, DEC-065). `dedup_status`/`registry_status` are advisory hints, **not** the gate: even if the operator manually sets them to `unique`/`not_in_registry`, a URL already in `url_registry` is skipped as `registry_recheck_duplicate`.
 - `error` → reserved for a runner/processing failure on an approved candidate.
-- Workflow 06 also skips `candidate_type` in {`aggregator`,`directory`,`marketplace`,`social`,`media_article`} unless the row's `notes` contains `aggregator_approved` (explicit operator override).
+- `candidate_type` in {`aggregator`,`directory`,`marketplace`,`social`,`media_article`} **can** be selected if `approval_status=approved` (DEC-065 relaxed the old `aggregator_approved` hard block), but the selected item carries a warning (`candidate_type is not direct_competitor; review before Workflow 04`).
 
 > **Google Sheet change required:** the existing `url_candidates` tab must be updated from 25 → 26 columns by
 > inserting **`candidate_type` immediately after `domain`** (col 11), with `domain` positioned before

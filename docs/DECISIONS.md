@@ -5,6 +5,23 @@ Most recent first.
 
 ---
 
+## DEC-065 — Workflow 06 Must Re-Check `url_registry` at Runtime; `url_candidates` Dedup Fields Are Advisory
+
+**Date:** 2026-06-07
+**Context:** First Workflow 06 test exposed a trust bug. The operator manually edited an **old duplicate** candidate (`https://www.autolombard-moskva.ru/pledge-pts/`) in `url_candidates` to `dedup_status=unique`, `registry_status=not_in_registry`, `candidate_type=direct_competitor`, `approval_status=approved`. Workflow 06 trusted those editable discovery-time fields and selected it for hand-off (`selected_count=1`) — even though the URL **already exists in `url_registry`**. Selecting a URL already in the registry would cause a duplicate Firecrawl/Claude spend in Workflow 04. The dedup fields in `url_candidates` are set once at discovery time (Workflow 05) and are operator-editable, so they are not a safe final gate.
+**Decision (patch Workflow 06 only — same node skeleton):** Workflow 06 must perform the **final dedup check at runtime against `url_registry`**, not against the editable candidate fields:
+- Add a **`Read url_registry`** Google Sheets node (Manual Start → Read url_candidates → Read url_registry → Select). The selection code reads both tabs.
+- **Re-normalize** `candidate_url` with the **same `normalizeUrl()` rules as Workflow 04/05** (lowercase scheme/host, drop fragment + utm/gclid/yclid/fbclid params, strip trailing slash) and compare the result against the set of `normalized_source_url` values in `url_registry`.
+- Selection gate is now: `approval_status=approved` **AND** `candidate_url` not empty **AND** re-normalized URL **NOT** in `url_registry`. `approval_status` ∈ {`processed`,`duplicate`,`rejected`,`error`} is skipped. The editable `dedup_status`/`registry_status` are **ignored** for the decision (kept in output only as informational fields).
+- If `url_candidates` says `unique` but the registry contains the URL → **skip** with reason category `registry_recheck_duplicate`. Manual edits to `dedup_status`/`registry_status` cannot force a duplicate through.
+- Skip reason categories: `approval_status_not_approved`, `already_processed`, `duplicate_status`, `registry_recheck_duplicate`, `missing_candidate_url`, `not_direct_competitor_optional_warning`, `over_limit`.
+- **Change vs DEC-064:** aggregators/directories/marketplaces/socials/media are no longer hard-blocked behind an `aggregator_approved` note — if `approval_status=approved` they **can** be selected, but the selected item carries a `warning` (`candidate_type is not direct_competitor; review before Workflow 04`). Priority unchanged (`direct_competitor` → `confidence_score` desc → `rank` asc), hard cap 5/run unchanged, manual hand-off unchanged, no auto-`processed` in v0.1.
+**Reason:** the registry is the single source of truth for dedup; a runtime recheck makes accidental or manual duplicates impossible to hand off and prevents wasted Firecrawl/Claude spend. Candidate-table dedup fields are discovery-time hints, not a final gate.
+**Verification:** `python3 -m json.tool` VALID; node types = manualTrigger, **3×googleSheets** (2 read + 1 disabled update), 2×code, if, 2×stickyNote — **no Apify/Firecrawl/Claude/httpRequest node**; `normalizeUrl` present; reads both `url_candidates` and `url_registry`; `registry_recheck_duplicate` skip present; hard cap 5; `manual_handoff_to_workflow_04` preserved; active=false; placeholders only; no tool_use / no KEY=VALUE.
+**File:** `n8n/workflows/06_approved_candidates_runner.json`. **Stage 2.2c remains under test until the registry recheck is validated.**
+
+---
+
 ## DEC-064 — Workflow 06 Is the Approved-Candidate Bridge; ≤5 Approved URLs per Run
 
 **Date:** 2026-06-07

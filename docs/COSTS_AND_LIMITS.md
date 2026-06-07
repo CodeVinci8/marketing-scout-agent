@@ -153,6 +153,8 @@ Cost-control rules baked into the first Firecrawl test:
 
 **Manual E2E test 2026-06-08 (DEC-062):** Workflow 05 discovered `carcapital.ru/` → operator approved 1 URL → Workflow 04 processed it = **1 Firecrawl credit + 1 Claude call** (one URL, `primary_json`, no repair) → `monitor_queue`. Confirms the discovery→approval→consume chain spends only on approved URLs. The `service_type` patch (DEC-062) costs nothing extra (deterministic post-model override).
 
+**Workflow 06 runtime registry recheck (DEC-065):** Workflow 06 itself costs **0** (no Apify/Firecrawl/Claude). Its runtime re-read of `url_registry` (re-normalizing each `candidate_url` and skipping any URL already in the registry as `registry_recheck_duplicate`) **prevents accidental duplicate Firecrawl/Claude spend** in Workflow 04 — including when an operator has manually (or mistakenly) marked an already-registered URL as `unique`/`not_in_registry`/`approved` in `url_candidates`. The candidate-table dedup fields are advisory; the registry is the spend-safety gate.
+
 ---
 
 ## URL Discovery Layer (Stage 2.2 — Workflow 05 BUILT/under test — DEC-055/056/057/058/059/060)
