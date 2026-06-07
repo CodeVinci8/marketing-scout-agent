@@ -304,17 +304,18 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 
 **Workflow:** `n8n/workflows/04_firecrawl_url_list_resilient.json` (25 nodes; JSON valid; active=false; 35-field business schema + 10-field `url_registry`). **Plan/guide:** `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`, `docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md`.
 
-**Validation (DEC-053):** Run 1 (empty registry, 3 URLs) → all `monitor_queue` + 3 `url_registry` rows. Run 2 (same 3 URLs) → all `skipped_log`/`dedup_source_url`, **0 Firecrawl/Claude**. `url_registry` dedup confirmed. Output hardened: URL/path service-type override (`pod-zalog-avto` → `pts_loan`/`secured_auto_loan`; `pod-zalog-nedvizhimosti` → `secured_real_estate_loan`; root homepage stays `generic_lending`) + Russian output-language guard on `reason`/`offer_text`. **Mini-batch (≤5 URLs, manual) APPROVED.**
+**Validation:** 3-URL run (DEC-053) — Run 1 process / Run 2 all `skipped_log`, 0 cost. **5-URL run (DEC-054, `firecrawl_20260607_100715`)** — 2 duplicates skipped, 1 placeholder skipped, 2 competitors → `monitor_queue`; Claude Δ $0.0429, ~3 Firecrawl credits. **Mini-batch (≤5 URLs, manual) APPROVED.** Minor hardening (DEC-054): placeholder pre-filter before Claude + stronger PTS service-type override + readable node layout.
 
 **Hard limits:** max 5 URLs · manual only · no crawl/batch/search/schedule · `text_context`≤3500 · continue-on-failure per URL. Duplicate → `skipped_log`/`dedup_source_url`, **0** Firecrawl/Claude cost.
 
 **Next steps (in order):**
-1. [ ] **Optional:** one more controlled run with **5 URLs** (record before/after Firecrawl credits + Claude balance this time — they were not captured on the 3-URL run).
-2. [ ] Then **plan** the URL Discovery layer (Stage 2.2) — do **not** build it yet; it needs its own plan + approval.
-3. [ ] Later: **plan** the Telegram Control Bot layer (Stage 2.3).
+1. [ ] **Optional retest after this patch** with a representative 3-URL list: one **duplicate root URL** (already in `url_registry`), one **placeholder URL** (parked/Wix), one **PTS competitor URL** (e.g. a `/pledge-pts` page). Expect: duplicate → `skipped_log`/`dedup_source_url`; placeholder → `skipped_log`/`firecrawl_placeholder_prefilter`; PTS page → `monitor_queue`/`pts_loan`. Record before/after Firecrawl credits + Claude balance.
+2. [ ] After import, confirm `Append url_registry` is set to **Sheet=`url_registry` (name, not dynamic), Mapping=Automatically, real Document ID, Google Sheets credential**.
+3. [ ] Then move to **URL Discovery layer planning** (Stage 2.2) — **do not build discovery yet**; it needs its own plan + approval.
+4. [ ] Later: **plan** the Telegram Control Bot layer (Stage 2.3).
 
 > **Backfill note:** `url_registry` is the dedup source of truth. Rows analyzed before the registry existed re-process once until backfilled (optional maintenance) — see `TABLE_SCHEMA.md`.
-> Still blocked: >5 URLs, scheduled runs, crawler, URL-discovery agent, Telegram bot, Avito/Telegram/Instagram (DEC-050).
+> Still blocked: >5 URLs, scheduled runs, crawler, batch/search endpoints, URL-discovery agent, Telegram bot, Avito/Telegram/Instagram (DEC-050).
 
 #### Step E (legacy plan) — Workflow 03: Firecrawl Website Analysis _(superseded by the active Step E above)_
 

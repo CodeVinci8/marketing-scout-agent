@@ -1,6 +1,6 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-08 (Workflow 04 VALIDATED & APPROVED for manual ≤5-URL mini-batch — `url_registry` dedup confirmed (Run 1 + Run 2), URL/path service-type override + Russian output-language guard added, DEC-051/052/053)
+**Last updated:** 2026-06-08 (Workflow 04 VALIDATED on 3-URL + 5-URL runs & APPROVED for manual ≤5-URL mini-batch — `url_registry` dedup, placeholder pre-filter, stronger PTS service-type override, DEC-051/052/053/054)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
 **Active workflow candidate:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json`
 **Test status:** Resilient Router Tests A–E **all pass**. Production workflow built (33 columns). **First manual production smoke test FAILED** (repair API 502 → technical_errors with lost diagnostics); workflow **patched** (DEC-038): primary raw preserved, compact repair payload, dual Primary+Repair diagnostics, primary prompt reminder. **Production workflow is NOT approved for Firecrawl until the patched manual smoke test passes.**
@@ -16,7 +16,8 @@
 - **Production workflow** `02_claude_api_single_record_v2_resilient_router_production.json` — no test/mock fields, 33 output columns, `raw_response_preview` capped at 500, `recommended_action` normalized to route.
 - **Firecrawl single-URL competitor website ingestion** ✅ APPROVED (manual, controlled — DEC-045). `03_firecrawl_single_url_resilient.json` scrapes one public URL via `POST /v2/scrape` (markdown only), normalizes (`text_context`≤6000), feeds the copied resilient analyzer with post-repair consistency hardening (DEC-043/044); Firecrawl failures → `technical_errors` without a Claude call. Two passing real tests (2026-06-08): `mosinvestfinans.ru/` and `lioncredit.ru/…/kredit-pod-zalog-nedvizhimosti`.
 - **Competitor website → `monitor_queue` routing** ✅ APPROVED — competitor pages with offer/rates/region/contact route to `monitor_queue` with `recommended_action=monitor`.
-- **Firecrawl URL list mini-batch (≤5 URLs, manual)** ✅ APPROVED (2026-06-08, DEC-053) — `04_firecrawl_url_list_resilient.json`. 3–5 URLs/run, manual trigger only, per-URL loop, 35-field business schema (`run_id`+`batch_index`). Validated: Run 1 processed 3 URLs → `monitor_queue`; Run 2 (same 3) → `skipped_log`, 0 cost. Output hardened with URL/path service-type override + Russian output-language guard (DEC-053). 25 nodes; JSON valid; active=false.
+- **Firecrawl URL list mini-batch (≤5 URLs, manual)** ✅ APPROVED (2026-06-08, DEC-053/054) — `04_firecrawl_url_list_resilient.json`. 3–5 URLs/run, manual trigger only, per-URL loop, 35-field business schema (`run_id`+`batch_index`). Validated on a 3-URL run (Run 1 process / Run 2 all `skipped_log`, 0 cost) **and a 5-URL run** (`firecrawl_20260607_100715`: 2 duplicates skipped, 1 placeholder skipped, 2 competitors → `monitor_queue`; Claude Δ $0.0429). Output hardened: URL/path service-type override + Russian output-language guard. 25 nodes; JSON valid; active=false.
+- **Placeholder / parking-page skip** ✅ APPROVED (2026-06-08, DEC-054) — `Normalize Firecrawl Output` detects obvious placeholder/domain-not-connected pages (Wix not-connected, parking page, `сайт/домен не подключен`, bare "coming soon" with no business content) and routes them to `skipped_log` (`parse_method=firecrawl_placeholder_prefilter`) **before** any Claude call; still appended to `url_registry`.
 - **URL `url_registry` dedup** ✅ APPROVED (2026-06-08, DEC-051/053) — dedup keyed on `normalized_source_url` (full URL **with path**, not domain) in a dedicated `url_registry` tab, checked before Firecrawl/Claude; duplicate → `skipped_log`/`dedup_source_url`, **zero cost**. Registry appended after every non-duplicate attempt and is the **source of truth** (old rows dedup only if backfilled — optional).
 - **Deterministic competitor fallback** ✅ APPROVED (2026-06-08, DEC-052) — after primary+repair JSON failure, emits a structured `competitor`/`monitor_queue` row (`needs_manual_review=true`) instead of dropping to `technical_errors`.
 
@@ -24,6 +25,7 @@
 - More than 5 URLs per run.
 - Multi-page crawl (`/v2/crawl`).
 - Batch scraping over large URL lists (`/v2/batch/scrape`).
+- Firecrawl search endpoint (`/v2/search`).
 - Scheduled scraping (cron trigger).
 - URL-discovery agent / Telegram Control Bot (DEC-050).
 - Avito / Telegram / Instagram real ingestion.

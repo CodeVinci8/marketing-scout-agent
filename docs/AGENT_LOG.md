@@ -5,6 +5,28 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Workflow 04: 5-URL Test Passed + Placeholder Pre-Filter + Stronger PTS Override (DEC-054)
+
+**Agent role:** project-engineer
+**Session goal:** Finalize Workflow 04 after a successful 5-URL mini-batch test and apply minor hardening — no architecture/dedup change, no prompt tuning.
+
+**5-URL validation** (`firecrawl_20260607_100715`): 2 duplicates → `skipped_log`/`dedup_source_url` (0 cost); 1 placeholder (`zalogpts.ru`, Wix not-connected) → `skipped_log`/`irrelevant` (but had cost a Claude call — `primary_json`); 2 competitors → `monitor_queue` (`cashmotor.ru` → `pts_loan`; `autolombard-moskva.ru/pledge-pts/` → competitor but mislabelled `generic_lending`). Claude Δ **$0.0429**, Firecrawl ~3 credits.
+
+**What changed (patched `04_firecrawl_url_list_resilient.json` in place; 25 nodes, active=false):**
+- **Placeholder pre-filter (A)** in `Normalize Firecrawl Output` — after markdown cleaning, obvious placeholder/parking/domain-not-connected pages (`domain not connected`, `wix domain not connected`, `parking page`, `сайт/домен не подключен`, `заглушка сайта`, bare `coming soon` with no commercial terms) → 35-field `skipped_log` row (`parse_method=firecrawl_placeholder_prefilter`, `business_skip`, scores 1, `ignore`) **before any Claude call**. Routes via the existing IF-false branch → `Append to Dynamic Route Sheet` → `Build Registry Row` → `Append url_registry` (still recorded, no repeat processing).
+- **Stronger PTS/path service-type override (B)** in `Normalize + Route` — explicit tokens force `pts_loan` (`pledge-pts`, `zalog-pts`, `залог птс`, `под залог птс`, `птс автомобиля`, `займ под залог птс`, bare `птс`/`pts`); `secured_auto_loan` for auto-collateral without PTS; `secured_real_estate_loan` for real-estate tokens; root homepage / multi-product stays `generic_lending`.
+- **Layout (D):** lifted the primary lane (`Build Primary Claude Request`, `Claude Primary API Request`, `Parse Primary JSON`, `IF Primary Parse OK?`) to y=140 so the `IF Firecrawl Normalized OK?` → technical-error arrow at y=300 reads cleanly. No logic change.
+- Dedup architecture untouched; 35 business + 10 registry fields preserved; `text_context` cap 3500 unchanged.
+- **Docs:** DEC-054 added; RU guide §11c (5-URL results) + `Append url_registry` setup detail; PLAN (5-URL passed + hardening); TABLE_SCHEMA (`firecrawl_placeholder_prefilter` + placeholder note); COSTS (5-URL cost Δ $0.0429); AGENT_CAPABILITIES (placeholder skip approved, /v2/search added to blocked); NEXT_ACTIONS (optional post-patch retest); ROADMAP (Stage 2.1 done, next 2.2 discovery planning).
+
+**Decisions:** Workflow 04 **approved for manual ≤5-URL mini-batches**. Placeholder pages skipped before Claude. PTS path/text overrides `generic_lending` → `pts_loan` on specific pages.
+
+**Verified:** `python3 -m json.tool` VALID; 25 nodes; active=false; 35/10 field counts intact; no secrets / no real Spreadsheet ID / no `tool_use` / no `KEY=VALUE` / no crawl-batch-search; `Set URL List` uses only `example.com`. Node sim: `pledge-pts`→`pts_loan`, `pod-zalog-avto`→`secured_auto_loan`, `…nedvizhimosti`→`secured_real_estate_loan`, root→`generic_lending`; Wix-not-connected + bare coming-soon → skip, coming-soon-with-offer + real page → process.
+
+**Next:** optional post-patch 3-URL retest (duplicate + placeholder + PTS); then **plan** URL Discovery (Stage 2.2) — do not build yet.
+
+---
+
 ## 2026-06-08 — Workflow 04 VALIDATED & APPROVED: Language Guard + Service-Type Override (DEC-053)
 
 **Agent role:** project-engineer

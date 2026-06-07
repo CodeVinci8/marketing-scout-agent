@@ -5,6 +5,30 @@ Most recent first.
 
 ---
 
+## DEC-054 — Workflow 04 Approved for Manual ≤5-URL Mini-Batch; Placeholder Pre-Filter + Stronger PTS Override
+
+**Date:** 2026-06-08
+**Context:** 5-URL validation run (`firecrawl_20260607_100715`) passed end-to-end:
+- 2 duplicates (`mosinvestfinans.ru/`, `lioncredit.ru/…/kredit-pod-zalog-nedvizhimosti`) → `skipped_log`/`dedup_source_url`, 0 cost.
+- 1 placeholder (`zalogpts.ru/`, a Wix "domain not connected" page) → `irrelevant`/`skipped_log` but **only after a Claude call** (`parse_method=primary_json`) — wasteful.
+- 2 competitors (`cashmotor.ru/` → `pts_loan`; `autolombard-moskva.ru/pledge-pts/` → competitor but `generic_lending`, should be `pts_loan`).
+- Cost: Claude delta **$0.0429**; Firecrawl ~3 credits (only the 3 non-duplicates).
+
+**Decision:**
+1. **Workflow 04 is APPROVED for manual ≤5-URL mini-batches.** Hard limits unchanged: manual trigger only, max 5 URLs, no schedule, no crawl/batch/search, no Telegram bot yet.
+2. **Placeholder pre-filter (`Normalize Firecrawl Output`):** after markdown cleaning, if the page is an obvious placeholder/parking/domain-not-connected page (`domain not connected`, `wix domain not connected`, `parking page`, `сайт/домен не подключен`, `заглушка сайта`, or bare `coming soon` with **no** business content) → emit a 35-field `skipped_log` row (`parse_method=firecrawl_placeholder_prefilter`, `business_skip`, scores 1, `ignore`) **before any Claude call**. The row still appends to `url_registry` (no repeat processing by default). Strong phrases skip unconditionally; `coming soon` skips only when there are zero commercial terms, to avoid false skips of real pages.
+3. **Stronger PTS/path service-type override (`Normalize + Route`):** explicit tokens now force `pts_loan` (`pledge-pts`, `zalog-pts`, `залог ПТС`, `под залог птс`, `птс автомобиля`, `займ под залог птс`, bare `птс`/`pts`), `secured_auto_loan` (`pod-zalog-avto`, `под залог автомобиля`, …) without explicit PTS, and `secured_real_estate_loan` (`pod-zalog-nedvizhimosti`, `залог недвижимости`, `квартир`, `коммерческ`, `залог дом`). Root homepage / multi-product stays `generic_lending`.
+
+**Reason:** deterministic, no architecture/dedup change, no prompt tuning. Placeholder pre-filter saves Claude spend on parked domains; the PTS override fixes the one mislabelled competitor (`autolombard-moskva.ru/pledge-pts/`).
+
+**Operational note:** after each import, `Append url_registry` must be set manually — **Sheet = `url_registry` (name mode, NOT the dynamic `{{ $json.route }}`), Mapping = Automatically, real Document ID, Google Sheets credential**. `Registry Lookup` also uses Sheet = `url_registry`. Only `Append to Dynamic Route Sheet` uses `{{ $json.route }}`.
+
+**Verification:** `python3 -m json.tool` VALID; 35 business + 10 registry fields preserved; dedup path unchanged; node simulation — `pledge-pts` → `pts_loan`, `pod-zalog-avto` → `secured_auto_loan`, `…nedvizhimosti` → `secured_real_estate_loan`, root → `generic_lending`; Wix-not-connected + bare coming-soon → skip, coming-soon-with-offer + real page → process. Primary lane nodes lifted to y=140 so the technical-error arrow reads cleanly.
+
+**File:** `n8n/workflows/04_firecrawl_url_list_resilient.json`.
+
+---
+
 ## DEC-053 — Workflow 04 Approved for Manual Mini-Batch; Output Language Guard + URL/Path Service-Type Override
 
 **Date:** 2026-06-08

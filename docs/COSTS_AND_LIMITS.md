@@ -147,7 +147,9 @@ Cost-control rules baked into the first Firecrawl test:
 
 > Verify dedup: a **re-run of the same list** should show `duplicates = URL count`, `Firecrawl credits delta = 0`, `Claude delta = 0`, and all rows in `skipped_log` with `parse_method=dedup_source_url`.
 
-**Validated 2026-06-08 (DEC-053):** Run 1 (`firecrawl_20260607_094000`, empty registry) processed 3 URLs → 3 `monitor_queue` rows + 3 `url_registry` rows. Run 2 (`firecrawl_20260607_094303`, same 3 URLs) → all 3 `skipped_log`/`dedup_source_url`, **0 Firecrawl credits, 0 Claude tokens**. The `url_registry` prevents repeated spend on URLs already seen. **Future tests must still record before/after Firecrawl credits + Claude balance** (the operator did not capture exact balances this run — capture them next time).
+**Validated 2026-06-08 (DEC-053):** Run 1 (`firecrawl_20260607_094000`, empty registry) processed 3 URLs → 3 `monitor_queue` rows + 3 `url_registry` rows. Run 2 (`firecrawl_20260607_094303`, same 3 URLs) → all 3 `skipped_log`/`dedup_source_url`, **0 Firecrawl credits, 0 Claude tokens**. The `url_registry` prevents repeated spend on URLs already seen.
+
+**5-URL test 2026-06-08 (DEC-054, `firecrawl_20260607_100715`):** 5 URLs = 2 duplicates (`skipped_log`, 0 cost) + 1 placeholder (`skipped_log`) + 2 competitors (`monitor_queue`). **Claude Today before $0.2773 → after $0.3202 = Δ $0.0429.** Firecrawl expected **~3 credits** (1 per non-duplicate; the 2 duplicates spent 0). The **placeholder pre-filter** (`firecrawl_placeholder_prefilter`) now skips parked/not-connected domains **before** the Claude call, reducing future spend on dead domains (the `zalogpts.ru` Wix placeholder previously cost one Claude call). **Future tests must still record before/after Firecrawl credits + Claude balance.**
 
 ---
 

@@ -68,15 +68,15 @@
 
 ## Stage 2.1 — Firecrawl URL List Mini-Batch ✅ COMPLETED / APPROVED (manual ≤5 URLs, 2026-06-08)
 
-**Status:** ✅ BUILD COMPLETED, `url_registry` dedup VALIDATED, **APPROVED for manual 3–5 URL runs** (DEC-048/049/051/052/053) — `n8n/workflows/04_firecrawl_url_list_resilient.json`, active=false.
+**Status:** ✅ BUILD COMPLETED, dedup VALIDATED on **3-URL and 5-URL** runs, **APPROVED for manual ≤5 URL runs** (DEC-048/049/051/052/053/054) — `n8n/workflows/04_firecrawl_url_list_resilient.json`, active=false.
 **Goal:** Process a manually provided list of **3–5 competitor URLs in one manual run**, reusing the Workflow 03 chain with a per-URL loop and `url_registry` dedup.
 
 **Built:** 25 nodes — Set URL List → Loop Over Items → Normalize URL for Dedup → Registry Lookup → Evaluate Dedup → IF Duplicate? → (dup → skipped_log / new → Firecrawl → resilient analyzer → Append → Build Registry Row → Append url_registry) → loop. 35-field business schema + 10-field `url_registry`.
-**Validated (DEC-053):** Run 1 (empty registry, 3 URLs) → all `monitor_queue` + 3 registry rows; Run 2 (same 3) → all `skipped_log`/`dedup_source_url`, 0 cost. Output hardened: URL/path service-type override + Russian output-language guard. `url_registry` is the dedup source of truth (old rows re-process once until backfilled — optional).
+**Validated:** 3-URL run (DEC-053) — Run 1 process / Run 2 all `skipped_log`, 0 cost. **5-URL run (DEC-054, `firecrawl_20260607_100715`)** — 2 duplicates skipped, 1 placeholder skipped, 2 competitors → `monitor_queue`; Claude Δ $0.0429. Output hardened: placeholder pre-filter before Claude, stronger PTS service-type override, Russian output-language guard. `url_registry` is the dedup source of truth (old rows re-process once until backfilled — optional).
 
-**Hard limits:** max 5 URLs, manual trigger only, no crawl, no schedule, `text_context`≤3500, continue-on-failure per URL (failed URL → `technical_errors`).
+**Hard limits:** max 5 URLs, manual trigger only, no crawl/batch/search, no schedule, `text_context`≤3500, continue-on-failure per URL (failed URL → `technical_errors`).
 
-**Next (optional):** one controlled 5-URL run with before/after balances recorded.
+**Next:** Stage 2.2 — URL Discovery Layer planning (do not build yet).
 
 **Later sources (in order):** Avito/Apify → Telegram → Instagram.
 

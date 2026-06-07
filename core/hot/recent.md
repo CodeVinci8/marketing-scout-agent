@@ -4,6 +4,23 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Workflow 04: 5-URL Test Passed + Placeholder Pre-Filter + Stronger PTS Override (DEC-054)
+
+**What was done:**
+- **5-URL test passed** (`firecrawl_20260607_100715`): 2 duplicates → `skipped_log` (0 cost), 1 placeholder (Wix not-connected) → `skipped_log`, 2 competitors → `monitor_queue`. Claude Δ **$0.0429**, ~3 Firecrawl credits. → **Workflow 04 APPROVED for manual ≤5-URL mini-batches.**
+- Patched `04_firecrawl_url_list_resilient.json` **in place** (25 nodes, active=false):
+  - **(A) Placeholder pre-filter** in `Normalize Firecrawl Output` — parked/domain-not-connected pages → 35-field `skipped_log` (`parse_method=firecrawl_placeholder_prefilter`) **before** Claude; still appends to `url_registry` (via IF-false → Append → Build Registry Row → Append url_registry). Saves Claude spend on dead domains.
+  - **(B) Stronger PTS/path `service_type` override** in `Normalize + Route` — `pledge-pts`/`zalog-pts`/`залог птс`/`pts` → `pts_loan`; auto without PTS → `secured_auto_loan`; real-estate → `secured_real_estate_loan`; root/multi-product stays `generic_lending`. Fixes `autolombard-moskva.ru/pledge-pts/` → `pts_loan`.
+  - **(D) Layout** — primary lane lifted to y=140 so the technical-error arrow reads cleanly. No logic change.
+- Dedup architecture untouched; 35 business + 10 registry fields intact; cap 3500 unchanged.
+- Docs: DEC-054; RU §11c + `Append url_registry` setup (Sheet=`url_registry` name mode, Mapping=Automatically — NOT dynamic); PLAN/ROADMAP/TABLE_SCHEMA/COSTS/AGENT_CAPABILITIES/NEXT_ACTIONS updated.
+
+**Key facts:** `Append url_registry` must be set manually after import (Sheet=`url_registry`, name mode, Mapping=Automatically, real Doc ID, GSheets cred). Only `Append to Dynamic Route Sheet` uses `{{ $json.route }}`. JSON VALID; no secrets/tool_use/KEY=VALUE/crawl-batch-search; `Set URL List` only example.com.
+
+**Next:** optional 3-URL retest (duplicate + placeholder + PTS) → then **plan** URL Discovery (Stage 2.2, do not build yet).
+
+---
+
 ## Session: 2026-06-08 — Workflow 04 VALIDATED & APPROVED: Language Guard + Service-Type Override (DEC-053)
 
 **What was done:**

@@ -97,10 +97,10 @@ n8n не сохраняет привязку из JSON (ID локальны — 
 - [ ] `Firecrawl Scrape API` → `Firecrawl API - Marketing Scout`
 - [ ] `Claude Primary API Request` → `Claude API - Marketing Scout`
 - [ ] `Claude Repair API Request` → `Claude API - Marketing Scout`
-- [ ] `Registry Lookup` → `Google Sheets - Marketing Scout Service Account`
-- [ ] `Append url_registry` → то же
-- [ ] `Append Skipped Log (Duplicate)` → то же
-- [ ] `Append to Dynamic Route Sheet` → то же
+- [ ] `Registry Lookup` → `Google Sheets - Marketing Scout Service Account`; **Sheet = `url_registry`** (режим name).
+- [ ] `Append url_registry` → то же. **Проверить вручную после импорта:** Sheet = **`url_registry`** (режим name, **НЕ** динамический `{{ $json.route }}`), **Mapping = Automatically**, реальный **Document ID**, креденшл Google Sheets. n8n иногда сбрасывает имя листа при импорте.
+- [ ] `Append Skipped Log (Duplicate)` → то же (Sheet = `={{ $json.route }}`, Mapping = Automatically).
+- [ ] `Append to Dynamic Route Sheet` → то же. **Только этот узел** использует динамический Sheet = `={{ $json.route }}`.
 - [ ] На **всех 4 нодах Google Sheets** вставить реальный **Spreadsheet ID** (заменить `PASTE_SPREADSHEET_ID_HERE`).
 
 ---
@@ -237,6 +237,29 @@ https://example.com/kredit/refinansirovanie/ → https://example.com/kredit/refi
 > Бизнес-строки, созданные ДО появления реестра, **не** дедуплицируются, пока их `normalized_source_url`
 > не внесён в `url_registry`. Поэтому в Run 1 ранее обработанный корневой URL был обработан снова — это
 > ожидаемо (реестр был пуст). Backfill старых строк в `url_registry` — **необязательное** будущее обслуживание.
+
+---
+
+## 11c. Результаты теста на 5 URL — Workflow 04 ОДОБРЕН (run `firecrawl_20260607_100715`)
+
+5 URL за один ручной запуск:
+
+| # | URL (пример) | Результат |
+|---|--------------|-----------|
+| 1 | корень домена (уже в реестре) | `skipped_log` / `dedup_source_url` — дубликат, 0 трат |
+| 2 | сервис недвижимости (уже в реестре) | `skipped_log` / `dedup_source_url` — дубликат, 0 трат |
+| 3 | placeholder (Wix «domain not connected») | `skipped_log` / `irrelevant` — заглушка |
+| 4 | ПТС-конкурент | `monitor_queue` / competitor / `pts_loan` |
+| 5 | автоломбард `/pledge-pts/` | `monitor_queue` / competitor → теперь `pts_loan` (патч DEC-054) |
+
+- **2 дубликата** отсеяны через `url_registry` (0 Firecrawl/Claude).
+- **1 placeholder** — раньше уходил в Claude; теперь отсекается ДО Claude (`parse_method=firecrawl_placeholder_prefilter`).
+- **2 конкурента** → `monitor_queue`.
+- Стоимость: Claude Δ **$0.0429**; Firecrawl ~3 кредита (только 3 не-дубликата).
+
+**Статус:** ✅ Workflow 04 **одобрен для ручных запусков на ≤5 URL**.
+**Минорный харденинг (DEC-054):** prefilter заглушек до Claude + усиленный override `service_type` для ПТС-страниц + читаемый layout.
+**Лимиты без изменений:** без расписания, без crawl/batch/search, не более 5 URL, без Telegram-бота.
 
 ---
 
