@@ -135,6 +135,22 @@ candidate reaches Firecrawl/Claude until `approval_status=approved`**. Written b
 `social` (social networks/channels), `unknown` (fallback). **Direct competitors are prioritized for approval;
 aggregators/directories/media are optional intelligence, not direct competitors.**
 
+**`approval_status` lifecycle (no new sheet — Workflow 05 writes, operator approves, Workflow 06 runs):**
+
+```
+new ──(operator approves)──> approved ──(Workflow 06 + confirmed WF04 processing)──> processed
+duplicate  — stays duplicate   (Workflow 05 marked it a dedup/registry duplicate; never processed)
+rejected   — stays rejected    (operator declined; never processed)
+error      — set on runner/processing failure
+```
+
+- `new` → set by Workflow 05 for unique candidates (and for aggregators/directories/media, with a "review manually" note).
+- `approved` → set **by the operator**; also fill `approved_by` + `approved_at`. This is the spend gate.
+- `processed` → set after **Workflow 06 (DEC-064)** hands the URL to Workflow 04 **and** the operator confirms `monitor_queue` output (via the disabled `Mark Candidates Processed` node or manually). `approved_by`/`approved_at` are preserved; `notes` gets `Processed by Workflow 06 run_id=…`.
+- `duplicate` / `rejected` → terminal; Workflow 06 never selects them (it requires `approved` + `dedup_status=unique` + `registry_status=not_in_registry`).
+- `error` → reserved for a runner/processing failure on an approved candidate.
+- Workflow 06 also skips `candidate_type` in {`aggregator`,`directory`,`marketplace`,`social`,`media_article`} unless the row's `notes` contains `aggregator_approved` (explicit operator override).
+
 > **Google Sheet change required:** the existing `url_candidates` tab must be updated from 25 → 26 columns by
 > inserting **`candidate_type` immediately after `domain`** (col 11), with `domain` positioned before
 > `title`/`snippet`. The Workflow 05 append uses auto-mapping by header name, so the header must match exactly.

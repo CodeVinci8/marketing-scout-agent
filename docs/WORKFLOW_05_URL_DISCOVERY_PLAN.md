@@ -2,6 +2,18 @@
 
 **Status:** 🔧 BUILT + candidate-quality patch (2026-06-08, DEC-060/061) — first Apify test passed **technically**; quality patch applied, **retest required**. `n8n/workflows/05_apify_search_candidate_discovery.json`, active=false. No Firecrawl, no Claude, no schedule.
 
+> **Manual end-to-end test PASSED (2026-06-08, DEC-062):** the full discovery→approval→consume chain works.
+> WF05 discovered `https://carcapital.ru/` (`candidate_type=direct_competitor`, `service_hint=pts_loan`,
+> confidence 100) → operator set `approval_status=approved` → Workflow 04 processed it → `monitor_queue`,
+> competitor, `CarCapital`, `parsed_success`. This proves WF05 as a usable URL **supplier**.
+>
+> **Next: Workflow 06 — Approved Candidates Runner (Stage 2.2c, BUILT/under test — DEC-064).** The repetitive
+> "pick approved → hand ≤5 to WF04" step is now packaged in `n8n/workflows/06_approved_candidates_runner.json`
+> (active=false). It filters `approved AND unique AND not_in_registry AND non-empty URL`, prioritizes
+> `direct_competitor` → confidence → rank, hard-caps at 5/run, and emits a WF04-shaped batch + handoff block.
+> v0.1 = manual hand-off (no subworkflow call); 0 spend in WF06. Guide:
+> `docs/N8N_WORKFLOW_06_APPROVED_CANDIDATES_RUNNER_RU.md`.
+
 > **Candidate-quality patch (DEC-061):** fixed empty `domain` (robust hostname extraction, strip `www.`),
 > added **`candidate_type`** (`url_candidates` 25 → **26 cols**), and reworked confidence so
 > `direct_competitor` ranks above `aggregator`/`directory`/`media_article`/`marketplace`/`social`. Aggregators/

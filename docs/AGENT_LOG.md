@@ -5,6 +5,28 @@ Most recent first.
 
 ---
 
+## 2026-06-07 — Workflow 06 Approved Candidates Runner BUILT + Workflow 04 contact_public Sanitation (DEC-063/064)
+
+**Agent role:** project-engineer
+**Session goal:** Build Workflow 06 (the approved-candidate bridge between discovery and the URL consumer) and patch Workflow 04 so partial/placeholder `contact_public` values are blanked. Context: the manual end-to-end chain passed (WF05 discovered `carcapital.ru/` → operator approved → WF04 → `monitor_queue`), but the run stored `contact_public = "+7 (495) ... (номер указан на сайте, требуется извлечение)"`.
+
+**Part A — Workflow 04 `contact_public` sanitation (DEC-063):**
+- Added `sanitizeContact()` in `Normalize + Route`; applied it to all 3 `contact_public` emitters (main analyzed return, technical_error pass-through, deterministic-fallback pass-through).
+- Blanks the value unless it matches a reliable pattern: phone led by `+7`/`8`/`7` with **10–11 digits**, valid email, Telegram (`@handle` / `t.me/`), or a contact/profile URL. Blanks outright on `...`/`…` or `требуется извлечение`. Never invents or keeps a partial contact.
+- **35 business + 10 registry field counts unchanged; dedup untouched.**
+
+**Part B — Workflow 06 (DEC-064):** `n8n/workflows/06_approved_candidates_runner.json` (active=false).
+- Nodes: Manual Start → Read url_candidates → Select, Prioritize & Annotate (filter `approved AND unique AND not_in_registry AND non-empty URL`; aggregators/directories/marketplaces/socials/media need `aggregator_approved` in notes; prioritize `direct_competitor` → confidence → rank; **hard cap 5/run**) → IF Selected? → disabled `Mark Candidates Processed` (update `approval_status=processed`, preserve `approved_by`/`approved_at`, append note) + Build Execution Summary & Handoff (run_id, counts, selected URLs, skip reasons, ready-to-paste `Set URL List` block).
+- **Implementation choice: v0.1 manual hand-off** — WF06 does NOT call WF04 as a subworkflow (WF04 keeps its Manual Trigger + fixed `Set URL List`; subworkflow conversion is a risky trigger/input refactor, deferred). No Apify/Firecrawl/Claude/Telegram. Created guide `docs/N8N_WORKFLOW_06_APPROVED_CANDIDATES_RUNNER_RU.md`.
+
+**Verified:** both files `python3 -m json.tool` VALID; WF06 node types = manualTrigger, 2×googleSheets (read + disabled update), 2×code, IF, 2×stickyNote — **no Apify/Firecrawl/Claude/httpRequest node**; both active=false; placeholders only (no Spreadsheet ID / credential ID / API keys); no tool_use / no KEY=VALUE; `sanitizeContact` present 4× (1 def + 3 calls).
+
+**Docs updated:** DECISIONS (DEC-063/064), new WF06 RU guide, URL_DISCOVERY_STRATEGY, WORKFLOW_05 PLAN (E2E passed + WF06 next), WORKFLOW_04 PLAN (contact sanitation + E2E result), TABLE_SCHEMA (approval_status lifecycle), COSTS_AND_LIMITS, AGENT_CAPABILITIES, ROADMAP (Stage 2.2c under test), NEXT_ACTIONS (Step I), AGENT_LOG, `core/hot/recent.md`.
+
+**Next operator action:** import Workflow 06 → rebind Google Sheets cred + Spreadsheet ID → approve one `direct_competitor` candidate → run Workflow 06 → copy ≤5 URLs into Workflow 04 → confirm `monitor_queue` → mark candidate `processed`.
+
+---
+
 ## 2026-06-08 — Workflow 04 service_type Patch After Manual E2E Test (DEC-062)
 
 **Agent role:** project-engineer

@@ -45,9 +45,17 @@ Keeping the supplier separate from the consumer is deliberate:
    Google-Search actor returns candidate URLs; the workflow normalizes, checks `url_registry`, scores and
    marks duplicates, writes `url_candidates` (`approval_status=new`/`duplicate`) and a `discovery_requests`
    row. **Apify search cost only — 0 Firecrawl / 0 Claude.** Manual URL entry is an optional fallback mode.
-2. **Stage 2.2c — Approved Candidates Runner (hand-off).** A workflow that picks `approval_status=approved`
-   candidates and feeds them to Workflow 04 in **controlled batches of 5** (Workflow 04's per-run limit).
-   Until built, the hand-off is **manual** (operator copies approved URLs into Workflow 04, ≤5 at a time).
+2. **Stage 2.2c — Approved Candidates Runner (Workflow 06, BUILT, under test — DEC-064).** The
+   **approval-to-processing bridge**: `n8n/workflows/06_approved_candidates_runner.json` (active=false) reads
+   `url_candidates`, filters `approval_status=approved AND dedup_status=unique AND registry_status=not_in_registry
+   AND non-empty URL` (aggregators/directories/marketplaces/socials/media skipped unless the row's `notes`
+   contains `aggregator_approved`), prioritizes `direct_competitor` → higher `confidence_score` → lower `rank`,
+   **hard-caps at 5/run**, and emits a Workflow-04-shaped batch + Execution Summary + a ready-to-paste
+   `Set URL List` block. **v0.1 = manual hand-off**: it does **not** call Workflow 04 as a subworkflow (WF04 keeps
+   its Manual Trigger + fixed `Set URL List`; subworkflow conversion is a deferred, risky trigger refactor). A
+   disabled `Mark Candidates Processed` node flips `approval_status` to `processed` (preserving
+   `approved_by`/`approved_at`) only after the operator confirms `monitor_queue`. No Apify/Firecrawl/Claude/Telegram.
+   Guide: `docs/N8N_WORKFLOW_06_APPROVED_CANDIDATES_RUNNER_RU.md`.
 3. **Stage 2.3 — Telegram Control Bot.** Operator-facing interface (submit request → see candidates + cost →
    approve → launch). Not discovery itself; calls the workflows above, never duplicates their logic.
 

@@ -95,10 +95,11 @@
 **Status:** 🔧 BUILT + candidate-quality patch (2026-06-08, DEC-060/061) — `n8n/workflows/05_apify_search_candidate_discovery.json` (13 nodes, active=false). First real Apify test passed **technically**; quality patch applied (`candidate_type`, fixed `domain`, competitor-first scoring); **retest required** (add `candidate_type` column, re-import, rerun query).
 **Goal:** Query → Apify Google Search actor → normalize → check `url_registry` → classify `candidate_type` → competitor-first score → write `url_candidates` (26 cols, `new`/`duplicate`) + `discovery_requests` (`status=needs_review`). **0 Firecrawl/Claude**, no auto-processing, human approval before Workflow 04.
 
-### Stage 2.2c — Approved Candidates Runner (hand-off) — 📋 NEXT BUILD
+### Stage 2.2c — Approved Candidates Runner (hand-off) — 🔧 BUILT, UNDER TEST
 
-**Status:** 📋 NEXT — the manual discovery→approval→consume chain is now proven end-to-end (DEC-062: `carcapital.ru/` discovered by WF05 → approved → processed by WF04). Workflow 06 (Approved Candidates Runner) is the next build; manual hand-off until then.
-**Goal:** Pick `approval_status=approved` candidates from `url_candidates` and feed Workflow 04 in **controlled batches of 5**, marking rows `processed`. No new analysis logic — it only orchestrates the existing consumer. Still gated; do not build until authorized.
+**Status:** 🔧 BUILT (2026-06-07, DEC-064) — `n8n/workflows/06_approved_candidates_runner.json` (active=false). The manual discovery→approval→consume chain is proven end-to-end (DEC-062: `carcapital.ru/` discovered by WF05 → approved → processed by WF04). Workflow 06 now packages that hand-off; awaiting first manual test.
+**Goal:** Pick `approval_status=approved` candidates from `url_candidates` (also `dedup_status=unique`, `registry_status=not_in_registry`, non-empty URL), prioritize `direct_competitor` → higher `confidence_score` → lower `rank`, **hard cap 5/run**, and feed Workflow 04. No new analysis logic — it only orchestrates the existing consumer.
+**v0.1 implementation:** **manual hand-off** — Workflow 06 emits a WF04-shaped ≤5-URL batch + Execution Summary + ready-to-paste `Set URL List` block; it does **not** call Workflow 04 as a subworkflow (WF04 keeps its Manual Trigger; subworkflow conversion is a risky trigger refactor, deferred). A `Mark Candidates Processed` update node (→ `approval_status=processed`, preserving `approved_by`/`approved_at`) ships **disabled**; operator enables it after confirming `monitor_queue`. No Apify/Firecrawl/Claude/Telegram. Guide: `docs/N8N_WORKFLOW_06_APPROVED_CANDIDATES_RUNNER_RU.md`.
 
 ### Stage 2.2 fallbacks (later, parked)
 

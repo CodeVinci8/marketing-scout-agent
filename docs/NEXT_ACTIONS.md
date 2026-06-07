@@ -338,7 +338,20 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 **Operator next steps:**
 1. [ ] Re-import the patched **Workflow 04** (active stays false); rebind credentials (Firecrawl, both Claude, 4 Google Sheets nodes + real Spreadsheet ID).
 2. [ ] *(Optional)* **Retest `https://carcapital.ru/`** via Workflow 04 (force_reprocess or a fresh registry) → expect `route=monitor_queue`, **`service_type=pts_loan`**, competitor.
-3. [ ] Then **build Workflow 06 — Approved Candidates Runner** (Stage 2.2c): pick `approval_status=approved` from `url_candidates`, feed Workflow 04 in batches of 5, mark rows `processed`. No new analysis logic. (Separate authorization.)
+3. [ ] *(Done — see Step I)* Build Workflow 06 — Approved Candidates Runner.
+
+#### Step I — Workflow 06 Approved Candidates Runner BUILT + Workflow 04 contact sanitation (DEC-063/064, 2026-06-07)
+
+**Done this session:**
+- **Workflow 04 `contact_public` sanitation (DEC-063):** `Normalize + Route` now blanks partial/placeholder contacts (the E2E run had stored `"+7 (495) ... (номер указан на сайте, требуется извлечение)"`). A value is kept only if it matches a reliable pattern (phone `+7`/`8`/`7` with 10–11 digits, email, Telegram, or contact/profile URL); `...`/`…`/`требуется извлечение` → empty. 35/10 field counts and dedup unchanged. JSON valid.
+- **Workflow 06 BUILT (DEC-064):** `n8n/workflows/06_approved_candidates_runner.json` (active=false). Reads `url_candidates` → filters `approved AND unique AND not_in_registry AND non-empty URL` (aggregators need `aggregator_approved` note) → prioritizes `direct_competitor` → confidence → rank → **hard cap 5/run** → emits WF04-shaped batch + Execution Summary + ready-to-paste `Set URL List` block. **v0.1 = manual hand-off** (no subworkflow call into WF04); disabled `Mark Candidates Processed` node flips `approval_status=processed`. No Apify/Firecrawl/Claude/Telegram. Guide: `docs/N8N_WORKFLOW_06_APPROVED_CANDIDATES_RUNNER_RU.md`.
+
+**Operator next steps:**
+1. [ ] Re-import the patched **Workflow 04** (active stays false); rebind credentials + real Spreadsheet ID. *(Optional)* retest `carcapital.ru/` → expect a clean (empty or exact) `contact_public`.
+2. [ ] **Import Workflow 06** (active=false). Rebind the **Google Sheets** credential on both nodes (`Read url_candidates` + the disabled `Mark Candidates Processed`); paste the real Spreadsheet ID. No Apify/Firecrawl/Claude creds needed.
+3. [ ] **Approve one candidate:** in `url_candidates` set `approval_status=approved` (+ `approved_by`/`approved_at`) on one `direct_competitor` row (`dedup_status=unique`, `registry_status=not_in_registry`).
+4. [ ] **Run Workflow 06** once. In `Build Execution Summary & Handoff`: confirm `selected_count=1`, the URL in `selected_urls`, and the `Set URL List` block.
+5. [ ] **Confirm candidate status update + monitor_queue output:** copy the ≤5 URLs into Workflow 04 → run it → expect `monitor_queue`. Then either enable the disabled `Mark Candidates Processed` node and re-run WF06, or set `approval_status=processed` manually. (Auto-call of WF04 from WF06 is deferred — v0.1 is manual hand-off.)
 
 > Still deferred: Telegram bot (Stage 2.3), automated search fallbacks (SerpAPI/Google CSE), Firecrawl `/v2/search` (parked), lead-source connectors.
 

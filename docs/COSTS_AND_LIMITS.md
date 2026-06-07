@@ -172,6 +172,17 @@ Selected: **Level 2 — Apify Search Candidate Discovery** (`n8n/workflows/05_ap
 
 ---
 
+## Approved Candidates Runner (Stage 2.2c — Workflow 06, DEC-064)
+
+`n8n/workflows/06_approved_candidates_runner.json` (active=false) — the bridge that releases approved candidates into Workflow 04.
+
+- **Workflow 06 itself adds NO search/processing cost.** It only reads `url_candidates` and (optionally, via a disabled node) updates `approval_status`. No Apify, no Firecrawl, no Claude — verified: node types are manualTrigger, Google Sheets (read + disabled update), code, IF, sticky notes.
+- **Processing cost comes from Workflow 04 only** — Workflow 06 hands ≤5 approved URLs to the existing consumer; spend is whatever those ≤5 URLs cost in Workflow 04 (≈ 1 Firecrawl credit + ~$0.01–0.023 Claude per unique, not-in-registry URL).
+- **Max 5 approved URLs per run controls spend.** The hard cap mirrors Workflow 04's ≤5/run; eligible candidates beyond 5 are deferred (`over_max_5_limit`) to a later run. 10 approved candidates → two runs of 5.
+- The only Google Sheets API calls are 1 read + (if the disabled update node is enabled) ≤5 row updates — negligible quota, no model/scrape spend.
+
+---
+
 ## Gateway Stability and Prompt Size (2026-06-05, updated v2.5 MICRO)
 
 **Observed:** Requests with large system prompts (9+ KB) returned 502 Bad Gateway on the current gateway (aiprimetech.io). Minimal curl with short prompt works correctly. This indicates a request-size or processing constraint on the gateway side.

@@ -4,6 +4,19 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-07 — Workflow 06 Approved Candidates Runner BUILT + WF04 contact_public sanitation (DEC-063/064)
+
+**What was done (0 external calls; manual chain already proven E2E):**
+- **Part A — WF04 `contact_public` sanitation (DEC-063):** the E2E run stored a partial value (`"+7 (495) ... (номер указан на сайте, требуется извлечение)"`). Added `sanitizeContact()` in `Normalize + Route`, applied to all **3** emitters. Keeps a value only if it matches a reliable pattern (phone +7/8/7 with 10–11 digits, email, Telegram `@`/`t.me/`, or contact/profile URL); blanks on `...`/`…`/`требуется извлечение`. **35/10 field counts + dedup unchanged.**
+- **Part B — WF06 BUILT (DEC-064):** `n8n/workflows/06_approved_candidates_runner.json` (active=false) — the approval→consume **bridge**. Read `url_candidates` → filter `approved AND unique AND not_in_registry AND non-empty URL` (aggregators need `aggregator_approved` note) → prioritize `direct_competitor` → confidence → rank → **hard cap 5/run** → IF Selected → disabled `Mark Candidates Processed` (→ `processed`, preserve `approved_by`/`approved_at`) + Execution Summary + ready-to-paste `Set URL List` block.
+- **Implementation choice: v0.1 manual hand-off** — WF06 does **not** call WF04 as a subworkflow (WF04 keeps Manual Trigger + fixed `Set URL List`; subworkflow conversion = risky trigger refactor, deferred). No Apify/Firecrawl/Claude/Telegram.
+- **Verified:** both JSON VALID; WF06 has no Apify/Firecrawl/Claude/httpRequest node (manualTrigger, 2×Sheets read+disabled-update, 2×code, IF, sticky); active=false; placeholders only; no tool_use/KEY=VALUE; `sanitizeContact` 4× (1 def + 3 calls).
+- Docs: DEC-063/064, new WF06 RU guide, STRATEGY, WF05/WF04 plans, TABLE_SCHEMA (approval_status lifecycle), COSTS, AGENT_CAPABILITIES, ROADMAP (2.2c under test), NEXT_ACTIONS (Step I), AGENT_LOG.
+
+**Next operator action:** import WF06 → rebind Sheets cred + Spreadsheet ID → approve one `direct_competitor` candidate → run WF06 → copy ≤5 URLs into WF04 → confirm `monitor_queue` → mark `processed`. Telegram/search fallbacks/lead-source connectors still deferred.
+
+---
+
 ## Session: 2026-06-08 — Workflow 04 service_type Patch after manual E2E test (DEC-062)
 
 **What was done (patch in place, no architecture/dedup change; 0 new spend):**

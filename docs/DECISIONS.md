@@ -5,6 +5,32 @@ Most recent first.
 
 ---
 
+## DEC-064 — Workflow 06 Is the Approved-Candidate Bridge; ≤5 Approved URLs per Run
+
+**Date:** 2026-06-07
+**Context:** The manual discovery→approval→consume chain is now proven end-to-end (DEC-062). The repetitive operator step — pick approved candidates from `url_candidates`, prioritize them, and hand ≤5 to Workflow 04 — needed a dedicated, auditable workflow without duplicating discovery or analysis logic.
+**Decision:** Build `06 - Approved Candidates Runner` (`n8n/workflows/06_approved_candidates_runner.json`, active=false) as the **bridge between discovery (Workflow 05) and the URL consumer (Workflow 04)**:
+- Reads `url_candidates`, filters `approval_status=approved AND dedup_status=unique AND registry_status=not_in_registry AND candidate_url not empty`, excludes aggregators/directories/marketplaces/socials/media unless the operator explicitly overrides (note contains `aggregator_approved`).
+- Prioritizes `direct_competitor` first, then higher `confidence_score`, then lower `rank`; **hard cap = 5 candidates per run** (eligible rows beyond 5 are skipped with reason `over_max_5_limit`).
+- Emits a WF04-shaped batch (`target_url`, `source_type=scraped_web`, `platform=website`, `source_candidate_id`, `discovery_request_id`, `candidate_type`, `run_id`, `batch_index`) plus an Execution Summary and a ready-to-paste `Set URL List` block.
+- **Does not** call Apify/Firecrawl/Claude, discover URLs, or duplicate the analyzer. **v0.1 = manual hand-off**: Workflow 04 keeps its Manual Trigger + fixed `Set URL List`; turning it into a callable subworkflow is a risky trigger/input refactor, deferred. A `Mark Candidates Processed` Google Sheets update node exists but is **disabled by default** — the operator enables it (or sets `approval_status=processed` manually) only after confirming `monitor_queue` output, preserving `approved_by`/`approved_at` and appending `Processed by Workflow 06 run_id=…` to `notes`.
+**Reason:** keep one controlled, spend-bounded place to release approved work into the consumer; 5/run mirrors Workflow 04's hard cap and bounds cost; manual hand-off avoids destabilizing the proven consumer.
+**Verification:** `python3 -m json.tool` VALID; node types = manualTrigger, 2×googleSheets (read + disabled update), 2×code, if, 2×stickyNote — **no Apify/Firecrawl/Claude/httpRequest node**; active=false; placeholders only (no Spreadsheet ID / credential ID); no tool_use / no KEY=VALUE.
+**File:** `n8n/workflows/06_approved_candidates_runner.json`.
+
+---
+
+## DEC-063 — Contact Fields Must Be Exact; Partial Contacts Are Blanked
+
+**Date:** 2026-06-07
+**Context:** During the first manual E2E test, Workflow 04 stored `contact_public = "+7 (495) ... (номер указан на сайте, требуется извлечение)"` — a partial/placeholder value, not a usable contact. Storing partial contacts is misleading and risks acting on non-data.
+**Decision (patch `Normalize + Route` only — no field-count or architecture change):** add a `sanitizeContact()` helper applied wherever `contact_public` is emitted. A value is **blanked** unless it matches at least one reliable public-contact pattern, and is blanked outright if it contains an ellipsis (`...`/`…`) or `требуется извлечение`. Reliable patterns: phone led by `+7`/`8`/`7` with **10–11 digits** after cleanup; valid email; Telegram (`@handle` or `t.me/`); or a contact/profile URL (`t.me/`, `wa.me/`, whatsapp, viber, `vk.com/`, contact/kontakt/profile). `указан на сайте` with no full contact fails the pattern gate → empty. **Never invent or keep a partial contact.**
+**Reason:** a contact field must be actionable; an empty cell is correct when extraction is incomplete.
+**Verification:** `python3 -m json.tool` VALID; exactly **35** business + **10** registry fields unchanged; dedup untouched; `sanitizeContact` referenced 4× (1 definition + 3 emitters: main analyzed return, technical_error pass-through, deterministic-fallback pass-through).
+**File:** `n8n/workflows/04_firecrawl_url_list_resilient.json`.
+
+---
+
 ## DEC-062 — Workflow 04 service_type: Root Page May Get a Specific Type When Content Is Overwhelmingly Focused
 
 **Date:** 2026-06-08
