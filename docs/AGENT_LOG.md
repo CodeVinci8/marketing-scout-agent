@@ -5,6 +5,24 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Workflow 05 BUILT: Apify Search Candidate Discovery (DEC-060)
+
+**Agent role:** project-engineer
+**Session goal:** Build Workflow 05 (URL supplier) — Apify Google Search → candidate URLs → `url_registry` dedup → `url_candidates` + `discovery_requests`. No Firecrawl/Claude, no auto-processing, no Apify call this session.
+
+**Built `n8n/workflows/05_apify_search_candidate_discovery.json` (13 nodes, active=false):**
+- Manual Start → Set Discovery Request (query/region/service_focus/requested_limit=10, `disc_<ts>`) → Build Apify Search Request (minimal actor input: 1 query, 1 page, ≤10 results, all extra search engines off) → **Apify Search API Request** (HTTP, sync endpoint `run-sync-get-dataset-items`, Header Auth `Apify API - Marketing Scout`, `onError=continueRegularOutput`) → Normalize Apify Results (robust shape handling, junk-URL filter, Workflow 04 URL normalizer, ≤10) → **Read url_registry** (read-only, `alwaysOutputData`) → Classify Candidates (dedup_status/registry_status, deterministic confidence + region/service hints, estimates) → **(Expand Candidate Rows → Append url_candidates)** + **(Build Discovery Request Summary → Append discovery_requests)**.
+- Both append branches start from the always-1-item `Classify Candidates`, so the `discovery_requests` row is written even on 0 candidates / Apify error (`status=error`).
+- Writes only `url_candidates` (25 cols) + `discovery_requests` (18 cols); reads `url_registry`; **no business-tab writes, no Firecrawl, no Claude**.
+- Unique → `approval_status=new`; registry/batch dups → `duplicate` (0 estimates). New → `estimated_firecrawl_credits=1`, `estimated_claude_cost_usd=0.02`.
+- Created RU guide `docs/N8N_WORKFLOW_05_APIFY_SEARCH_CANDIDATES_RU.md`. Decision DEC-060.
+
+**Verified:** `python3 -m json.tool` VALID; active=false; only the Apify HTTP node (no Firecrawl/Claude/anthropic nodes); no `tool_use`/`KEY=VALUE`; placeholders only (no real token / Spreadsheet ID); Node simulation of the three code nodes confirmed exact **25** and **18** field names/order, dedup + batch-dup + registry classification, error path (`status=error`, 0 candidates), and confidence discrimination (autolombard 100 / cashmotor 90 / registry-dup 45 / batch-dup 10 / avito-junk 15).
+
+**Next:** operator creates `discovery_requests` + `url_candidates` sheets, gets an Apify token, creates the `Apify API - Marketing Scout` credential, imports + rebinds, runs the first query, then approves/rejects candidates. Do not process candidates until validated.
+
+---
+
 ## 2026-06-08 — Stage 2.2 PIVOT: Workflow 05 = Apify Search Candidate Discovery (DEC-059)
 
 **Agent role:** project-architect

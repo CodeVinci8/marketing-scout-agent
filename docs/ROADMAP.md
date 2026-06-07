@@ -82,18 +82,18 @@
 
 ---
 
-## Stage 2.2 — Apify Search Candidate Discovery (Planning, DEC-055/056/057/058/059)
+## Stage 2.2 — Apify Search Candidate Discovery (Workflow 05 BUILT/under test, DEC-055/056/057/058/059/060)
 
-**Status:** 📋 PLANNED — **planning complete, build gated on operator approval + Apify credential.** No JSON built.
+**Status:** 🔧 BUILT, UNDER TEST — `05_apify_search_candidate_discovery.json` (active=false). Awaiting Apify token + credential + first manual test.
 **Selected architecture:** **Level 2 — Apify Search Candidate Discovery** (Workflow 05). Manual entry is an optional fallback mode; Telegram is a later interface; Firecrawl `/v2/search` parked (DEC-059).
 **Goal:** A URL **supplier** that turns an operator query (e.g. «займ под залог ПТС Москва») into vetted candidate URLs for Workflow 04 (the URL **consumer**, unchanged), via an Apify Google Search actor. Separate layer, **`url_candidates` (25 cols)** + **`discovery_requests` (18 cols)**, human approval before any spend, reuses `url_registry` dedup.
 **Plans:** `docs/URL_DISCOVERY_STRATEGY.md` (Level 2 Apify, risks, gates G1–G5), `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md` (node plan + schemas + Apify credential).
 **Default volumes:** collect up to **10** candidates/request; Workflow 04 processes **≤5/run** → 10 approved run as **two batches of 5**. **0 Firecrawl/Claude in Workflow 05** (Apify search cost only).
 
-### Stage 2.2 build — `05 - Apify Search Candidate Discovery` (next build)
+### Stage 2.2 build — `05 - Apify Search Candidate Discovery` 🔧 BUILT, under test
 
-**Status:** 📋 PLANNED — build after operator approves schemas (G1) and the `Apify API - Marketing Scout` credential exists (G2).
-**Goal:** Query → Apify Google Search actor → normalize → check `url_registry` → deterministic score → write `url_candidates` (`new`/`duplicate`) + `discovery_requests` (`status=needs_review`). No Firecrawl/Claude, no auto-processing.
+**Status:** 🔧 BUILT (2026-06-08, DEC-060) — `n8n/workflows/05_apify_search_candidate_discovery.json` (13 nodes, active=false). Awaiting Apify token + credential + first manual test.
+**Goal:** Query → Apify Google Search actor → normalize → check `url_registry` → deterministic score → write `url_candidates` (`new`/`duplicate`) + `discovery_requests` (`status=needs_review`). **0 Firecrawl/Claude**, no auto-processing, human approval before Workflow 04.
 
 ### Stage 2.2c — Approved Candidates Runner (hand-off, later)
 

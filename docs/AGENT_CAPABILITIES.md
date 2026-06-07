@@ -1,6 +1,6 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-08 (Workflow 04 APPROVED as URL consumer; **Stage 2.2 = Apify Search Candidate Discovery (Level 2)** planned — Workflow 05 via Apify Google Search actor, `url_candidates` 25-col + `discovery_requests` 18-col, 0 Firecrawl/Claude, human approval before spend, DEC-059)
+**Last updated:** 2026-06-08 (Workflow 04 APPROVED as URL consumer; **Workflow 05 Apify Search Candidate Discovery BUILT, under test** — `05_apify_search_candidate_discovery.json`, 0 Firecrawl/Claude, `url_candidates` 25-col + `discovery_requests` 18-col, human approval before spend, DEC-059/060)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
 **Active workflow candidate:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json`
 **Test status:** Resilient Router Tests A–E **all pass**. Production workflow built (33 columns). **First manual production smoke test FAILED** (repair API 502 → technical_errors with lost diagnostics); workflow **patched** (DEC-038): primary raw preserved, compact repair payload, dual Primary+Repair diagnostics, primary prompt reminder. **Production workflow is NOT approved for Firecrawl until the patched manual smoke test passes.**
@@ -22,8 +22,10 @@
 - **Deterministic competitor fallback** ✅ APPROVED (2026-06-08, DEC-052) — after primary+repair JSON failure, emits a structured `competitor`/`monitor_queue` row (`needs_manual_review=true`) instead of dropping to `technical_errors`.
 - **Workflow 04 as URL consumer** ✅ APPROVED (DEC-055) — Workflow 04 is the URL **consumer** (≤5 approved URLs → dedup → Firecrawl → Claude → routing). The URL **supplier** (discovery) is a separate, planned layer.
 
+**Under test (built, awaiting operator manual test):**
+- **Apify Search Candidate Discovery (Workflow 05, Stage 2.2 — Level 2)** 🔧 BUILT, UNDER TEST (DEC-059/060) — `05_apify_search_candidate_discovery.json` (13 nodes, JSON valid, active=false). Query → **Apify Google Search actor** (sync endpoint) → normalize → check `url_registry` → deterministic score → write `url_candidates` (25 cols) + `discovery_requests` (18 cols). **0 Firecrawl / 0 Claude** (Apify search cost only); no auto-processing; human approval before Workflow 04. Default collect 10 / process ≤5 (two batches). Credential (create before run): `Apify API - Marketing Scout` (Header Auth, `api.apify.com`). **Not yet run — awaiting Apify token + first test.** Guide: `docs/N8N_WORKFLOW_05_APIFY_SEARCH_CANDIDATES_RU.md`.
+
 **Planned (designed, NOT built — planning only):**
-- **Apify Search Candidate Discovery (Workflow 05, Stage 2.2 — Level 2)** 📋 PLANNED (DEC-059) — query → **Apify Google Search actor** → normalize → check `url_registry` → deterministic score → write `url_candidates` (25 cols) + `discovery_requests` (18 cols). **0 Firecrawl / 0 Claude** (Apify search cost only); no auto-processing; human approval before Workflow 04. Default collect 10 / process ≤5 (two batches). Credential (later): `Apify API - Marketing Scout` (Header Auth, `api.apify.com`). Plans: `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`, `docs/URL_DISCOVERY_STRATEGY.md`.
 - **Manual URL candidate entry** 📋 optional fallback input mode of Workflow 05 (manual URL *lists* are already handled by Workflow 04).
 - **Approved Candidates Runner (Stage 2.2c)** 📋 PLANNED — feeds `approved` candidates to Workflow 04 in batches of 5; manual hand-off until built.
 
@@ -33,7 +35,8 @@
 - Batch scraping over large URL lists (`/v2/batch/scrape`).
 - Firecrawl search endpoint (`/v2/search`).
 - Scheduled scraping (cron trigger).
-- **Apify search calls (Workflow 05)** — planned next build, but **not yet authorized**: needs schema approval, an Apify token, and the `Apify API - Marketing Scout` credential first (DEC-059). No Apify call until then.
+- **Apify search calls (Workflow 05)** — workflow **built but not yet run**: needs an Apify token + the `Apify API - Marketing Scout` credential, then a manual test (DEC-060). No Apify call until then.
+- **Lead-source connectors** (Avito / social / classified discovery) — future, not built (Workflow 05 is the Web Search connector only).
 - **Firecrawl `/v2/search`** — parked, evaluation only (DEC-056/059).
 - **Telegram Control** / NL query interface — deferred until discovery + approval flow exists (DEC-057/059).
 - **Auto-triggered processing** — no candidate may reach Firecrawl/Claude without human `approval_status=approved` (DEC-055).

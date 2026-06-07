@@ -1,9 +1,18 @@
 # WORKFLOW_05_URL_DISCOVERY_PLAN.md — 05 - Apify Search Candidate Discovery (Planning)
 
-**Status:** 📋 PLANNING ONLY — **not building yet.** No workflow JSON, no Apify call, no Firecrawl, no Claude, no schedule.
+**Status:** 🔧 BUILT, UNDER TEST (2026-06-08, DEC-060) — `n8n/workflows/05_apify_search_candidate_discovery.json`, active=false. No Apify call yet (awaiting token + credential). No Firecrawl, no Claude, no schedule.
+**Workflow file:** `n8n/workflows/05_apify_search_candidate_discovery.json` (13 nodes; JSON valid)
+**RU guide:** `docs/N8N_WORKFLOW_05_APIFY_SEARCH_CANDIDATES_RU.md`
 **Date:** 2026-06-08
-**Stage:** 2.2 (Level 2 — automated candidate URL discovery from search queries, DEC-059)
-**Related:** `docs/URL_DISCOVERY_STRATEGY.md`, `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`, `docs/TABLE_SCHEMA.md`, DEC-055/056/057/058/059
+**Stage:** 2.2 (Level 2 — automated candidate URL discovery from search queries, DEC-059/060)
+**Related:** `docs/URL_DISCOVERY_STRATEGY.md`, `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`, `docs/TABLE_SCHEMA.md`, DEC-055/056/057/058/059/060
+
+> **Build note (DEC-060):** Built as 13 nodes — Manual Start → Set Discovery Request → Build Apify Search
+> Request → Apify Search API Request (Header Auth) → Normalize Apify Results → Read url_registry →
+> Classify Candidates → (Expand Candidate Rows → Append url_candidates) + (Build Discovery Request Summary
+> → Append discovery_requests). Both append branches start from the always-1-item `Classify Candidates`,
+> so the `discovery_requests` row is written even when there are 0 candidates / Apify error. JSON validated;
+> code-node logic simulated (dedup, batch-dup, error path, 25/18 field counts, confidence discrimination).
 
 ---
 

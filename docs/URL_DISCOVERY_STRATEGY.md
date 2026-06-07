@@ -1,7 +1,7 @@
 # URL_DISCOVERY_STRATEGY.md — Stage 2.2 URL Discovery Layer (Planning)
 
 **Status:** 📋 PLANNING ONLY — nothing built. No workflow JSON, no external calls.
-**Selected architecture (DEC-059):** **Level 2 — Apify Search Candidate Discovery** is the next build (Workflow 05). Manual URL entry is only an optional input mode (manual *lists* are already covered by Workflow 04). Telegram is a deferred interface layer; Firecrawl `/v2/search` parked. See §5.
+**Selected architecture (DEC-059):** **Level 2 — Apify Search Candidate Discovery** (Workflow 05). **BUILT (DEC-060, under test)** at `n8n/workflows/05_apify_search_candidate_discovery.json` (active=false, awaiting Apify token + credential). Manual URL entry is only an optional input mode (manual *lists* are already covered by Workflow 04). Telegram is a deferred interface layer; Firecrawl `/v2/search` parked. See §5.
 **Date:** 2026-06-08
 **Related:** `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`, `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`, `docs/TABLE_SCHEMA.md`, DEC-050/051/054/055/056/057/058/059
 

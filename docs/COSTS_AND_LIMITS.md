@@ -153,11 +153,11 @@ Cost-control rules baked into the first Firecrawl test:
 
 ---
 
-## URL Discovery Layer (Stage 2.2, planning — DEC-055/056/057/058/059)
+## URL Discovery Layer (Stage 2.2 — Workflow 05 BUILT/under test — DEC-055/056/057/058/059/060)
 
-Selected: **Level 2 — Apify Search Candidate Discovery** (Workflow 05). `url_candidates` = 25 cols; `discovery_requests` = 18 cols. Manual entry is an optional fallback mode.
+Selected: **Level 2 — Apify Search Candidate Discovery** (`n8n/workflows/05_apify_search_candidate_discovery.json`, active=false). `url_candidates` = 25 cols; `discovery_requests` = 18 cols. Manual entry is an optional fallback mode.
 
-- **Workflow 05 must NOT spend Firecrawl or Claude.** It only calls the Apify search actor, normalizes, dedups, scores, and writes sheets. Its only cost is the **Apify search call** (measure on first real run; do not call Apify yet).
+- **Workflow 05 must NOT spend Firecrawl or Claude.** Verified in the built workflow: only one Apify HTTP node, no Firecrawl/Claude nodes. It normalizes, dedups, scores, and writes sheets. Its only cost is the **Apify search call** (measure on first real run; not called yet — awaiting token).
 - **Apify Search cost tracking (placeholder — fill on first run):** record per `discovery_request_id`: query, `requested_limit`, candidates returned, Apify cost (USD), unique, duplicates.
 - **Cost must be estimated before processing.** Workflow 05 writes `estimated_firecrawl_credits` (=1/unique candidate) and `estimated_claude_cost_usd` (configurable rough **$0.01–0.03/URL** until measured) per candidate and sums them onto the `discovery_requests` row, so the operator sees the total *before* approving. The approval gate is the spend gate: **no candidate is processed until `approval_status=approved`.**
 - Per unique, not-in-registry candidate the *processing* estimate ≈ **1 Firecrawl credit + ~$0.01–0.023 Claude** (same per-URL model as Workflow 04). Duplicates (registry or batch) estimate 0/0.

@@ -4,6 +4,18 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Workflow 05 BUILT: Apify Search Candidate Discovery (DEC-060)
+
+**What was done:**
+- Built `n8n/workflows/05_apify_search_candidate_discovery.json` (**13 nodes, active=false**). URL **supplier**: query → Apify Google Search (sync endpoint, Header Auth `Apify API - Marketing Scout`) → normalize (WF04 rules) → read `url_registry` → classify (dedup/registry/confidence/hints) → write **url_candidates (25 cols)** + **discovery_requests (18 cols)**.
+- **0 Firecrawl / 0 Claude**, no business-tab writes, no auto-processing, manual approval gate. Unique → `new`; dups → `duplicate`. Both append branches start from always-1-item `Classify Candidates` so `discovery_requests` is written even on 0 candidates / Apify error (`status=error`). Apify HTTP node `onError=continueRegularOutput`.
+- Created RU guide `docs/N8N_WORKFLOW_05_APIFY_SEARCH_CANDIDATES_RU.md`. DEC-060.
+- **Verified:** JSON VALID; only Apify HTTP node; no tool_use/KEY=VALUE; placeholders only (no token/Spreadsheet ID); simulated code nodes → exact 25/18 field names, dedup + batch-dup + error path, confidence discrimination.
+
+**Next operator action:** create `discovery_requests` + `url_candidates` sheets → get Apify token → create `Apify API - Marketing Scout` credential → import + rebind (3 Sheets nodes + Apify) → run query «займ под залог ПТС Москва» → approve/reject. Do not process candidates yet. **No Apify call made this session.**
+
+---
+
 ## Session: 2026-06-08 — Stage 2.2 PIVOT: Workflow 05 = Apify Search Candidate Discovery (DEC-059)
 
 **What was done (planning/docs only — no JSON, no Apify/external calls):**

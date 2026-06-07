@@ -5,6 +5,22 @@ Most recent first.
 
 ---
 
+## DEC-060 — Workflow 05 Built: Apify Google Search Sync Endpoint, 0 Firecrawl/Claude, Manual Approval
+
+**Date:** 2026-06-08
+**Context:** Implementing Stage 2.2 (DEC-059) as a concrete n8n workflow.
+**Decision:**
+1. **Workflow 05 (`05 - Apify Search Candidate Discovery`) is built** (`n8n/workflows/05_apify_search_candidate_discovery.json`, active=false, 13 nodes). It calls the **Apify Google Search Results Scraper** via the **sync endpoint** `POST /v2/acts/apify~google-search-scraper/run-sync-get-dataset-items?format=json&clean=true` (one query, one page, ≤10 results) using Header Auth credential `Apify API - Marketing Scout`.
+2. **Workflow 05 spends 0 Firecrawl and 0 Claude.** It only searches, normalizes (Workflow 04 rules → keys match `url_registry`), reads `url_registry` for dedup, scores candidates **deterministically** (no LLM), and writes `url_candidates` (25 cols) + one `discovery_requests` row (18 cols). It writes **no** business tab.
+3. **Manual approval required.** Unique → `approval_status=new`; duplicates (registry or batch) → `duplicate`. No candidate reaches Workflow 04 without a human setting `approved`. The Approved Candidates Runner (Stage 2.2c) and Telegram bot stay deferred.
+4. **Robust-write design:** both Sheets-append branches start from the always-1-item `Classify Candidates` node, so the `discovery_requests` row is written even on 0 candidates / Apify error (`status=error`). The Apify HTTP node uses `onError=continueRegularOutput` so a failure still produces a summary row.
+5. **Source-agnostic + future-compatible:** Workflow 05 is the *Web Search Connector*; lead-source connectors (Avito/social/classified) come later as separate connectors feeding the same source-agnostic analyzers. Not hardcoded to competitors only.
+**Reason:** keep discovery cheap and separate; preserve the human spend gate; reuse the dedup spine; leave room for lead discovery later.
+**Verification:** `python3 -m json.tool` VALID; active=false; only the Apify HTTP node (no Firecrawl/Claude/anthropic nodes); no `tool_use`/`KEY=VALUE`; placeholders only (no real token/Spreadsheet ID); node-logic simulation confirmed 25/18 field counts, dedup/batch-dup/registry classification, error path, and confidence discrimination.
+**File:** `n8n/workflows/05_apify_search_candidate_discovery.json`, `docs/N8N_WORKFLOW_05_APIFY_SEARCH_CANDIDATES_RU.md`.
+
+---
+
 ## DEC-059 — Stage 2.2 = Apify Search Candidate Discovery (Level 2); Manual Intake Demoted; `discovery_requests` Added
 
 **Date:** 2026-06-08

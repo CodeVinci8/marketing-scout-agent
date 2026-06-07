@@ -92,7 +92,7 @@ A separate registry tab, written/read only by Workflow 04. Its own header (10 co
 
 **Source of truth + backfill (DEC-053).** `url_registry` is the **single source of truth for dedup**. Business rows written **before** the registry existed do **not** dedup unless their `normalized_source_url` is backfilled into `url_registry`. This is why a previously-analyzed URL can be re-processed on the first run after the registry is introduced (registry was empty) — expected behaviour. Backfilling older rows into `url_registry` is **optional future maintenance**, not required. Validated 2026-06-08: Run 1 (empty registry) processed 3 URLs; Run 2 (same 3) skipped all via dedup at 0 cost.
 
-### `url_candidates` tab — 25 columns (PLANNED, Stage 2.2 — not built, DEC-055/058)
+### `url_candidates` tab — 25 columns (Workflow 05 BUILT/under test, Stage 2.2 — DEC-055/058/060)
 
 The discovery **supplier** sheet (Workflow 05 manual intake; later search/API). Holds candidate URLs and a
 human approval gate; **no candidate reaches Firecrawl/Claude until `approval_status=approved`**. Written by
@@ -127,7 +127,7 @@ normalizer so it matches `url_registry` exactly. Header (25 columns, in order):
 | 24 | `estimated_claude_cost_usd` | number | estimate if processed (0 for duplicates) |
 | 25 | `notes` | string | free text |
 
-### `discovery_requests` tab — 18 columns (PLANNED, Stage 2.2 — not built, DEC-059)
+### `discovery_requests` tab — 18 columns (Workflow 05 BUILT/under test, Stage 2.2 — DEC-059/060)
 
 One row per discovery request (Workflow 05). Groups all `url_candidates` of that request via
 `discovery_request_id`; used for summaries and the future Telegram bot. Header (18 columns, in order):
