@@ -300,23 +300,24 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 
 > Still blocked (DEC-039/040): multi-page crawl, batch scrape, search, scheduled scraping, Firecrawl MCP/CLI, automated outreach.
 
-#### Step F — Workflow 04: Firecrawl URL List Mini-Batch ✅ BUILT ← ACTIVE (manual test next, 2026-06-08)
+#### Step F — Workflow 04: Firecrawl URL List Mini-Batch 🔧 HARDENED, UNDER TEST (2026-06-08)
 
-**Workflow:** `n8n/workflows/04_firecrawl_url_list_resilient.json` (25 nodes; JSON valid; active=false; 35-field schema; dedup implemented). **Plan/guide:** `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`, `docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md`.
+**Workflow:** `n8n/workflows/04_firecrawl_url_list_resilient.json` (25 nodes; JSON valid; active=false; 35-field business schema + 10-field `url_registry`). **Plan/guide:** `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`, `docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md`.
 
-**Hard limits:** max 5 URLs · manual only · no crawl/batch/search/schedule · `text_context`≤6000 · continue-on-failure per URL. **Dedup by `source_url` runs before Firecrawl/Claude** (DEC-049): duplicate → `skipped_log`/`dedup_source_url`, zero cost.
+**Patch 2026-06-08 (DEC-051/052):** dedup moved to a dedicated **`url_registry`** tab keyed on `normalized_source_url` (full URL **with path**, not domain), checked **before** any Firecrawl/Claude spend; **deterministic competitor fallback** after primary+repair JSON failure; `text_context` cap lowered to **3500**; registry appended after every non-duplicate attempt (incl. `technical_errors`). **Not approved until the 3-URL retest below passes.**
 
-**Operator tasks (in order):**
-1. [ ] Import Workflow 04 (active stays false).
-2. [ ] **Rebind credentials** (DEC-046): `Firecrawl Scrape API`→Firecrawl; both Claude nodes→Claude; 4× `Dedup Lookup — *` + `Append to Dynamic Route Sheet`→Google Sheets; paste real Spreadsheet ID on all **5** Sheets nodes. Confirm 6 tabs have the **35-column** header.
-3. [ ] In `Set URL List`, paste **3** real competitor URLs (first run = 3).
-4. [ ] Record Firecrawl credits + Claude balance, run once manually.
-5. [ ] Verify: competitors → `monitor_queue`; broken/empty → `technical_errors`; each row has `run_id` + `batch_index`.
-6. [ ] **Re-run the same 3 URLs** → verify they now go to `skipped_log` with `parse_method=dedup_source_url` and **0** Firecrawl/Claude cost.
-7. [ ] Record results + cost in `docs/COSTS_AND_LIMITS.md`.
-8. [ ] If the first run is clean, run **max 5** URLs. Then review before any larger source.
+**Hard limits:** max 5 URLs · manual only · no crawl/batch/search/schedule · `text_context`≤3500 · continue-on-failure per URL. Duplicate → `skipped_log`/`dedup_source_url`, **0** Firecrawl/Claude cost.
 
-> If dedup lookup nodes fail on import, see the RU guide Troubleshooting → "dedup lookup failed" (fallback). Dedup is implemented best-effort (DEC-049).
+**Retest tasks (in order):**
+1. [ ] **Create the `url_registry` tab** with exactly its **10-column** header (see RU guide §5b / `TABLE_SCHEMA.md`).
+2. [ ] Reimport patched Workflow 04 (active stays false).
+3. [ ] **Rebind credentials** (DEC-046): `Firecrawl Scrape API`→Firecrawl; both Claude nodes→Claude; `Registry Lookup` + `Append url_registry` + `Append Skipped Log (Duplicate)` + `Append to Dynamic Route Sheet`→Google Sheets; paste real Spreadsheet ID on all **4** Sheets nodes. Confirm 6 business tabs (35 cols) + `url_registry` (10 cols).
+4. [ ] **First pass:** in `Set URL List` paste **3** real competitor URLs; record Firecrawl credits + Claude balance; run once. Expect competitors → `monitor_queue`, broken/empty → `technical_errors`, each row has `run_id`+`batch_index`, and 3 new rows in `url_registry`.
+5. [ ] **Second pass:** run the **same 3 URLs** again. **Expected: all 3 → `skipped_log` (`dedup_source_url`), 0 Firecrawl credits, 0 Claude tokens.**
+6. [ ] Record results + cost (incl. duplicate count) in `docs/COSTS_AND_LIMITS.md`.
+7. [ ] If both passes are clean, run **max 5** URLs. Then review before any larger source.
+
+> If `Registry Lookup` fails on import, see the RU guide Troubleshooting → "dedup lookup failed" (fallback). Dedup is best-effort (DEC-051).
 > Still blocked: >5 URLs, scheduled runs, crawler, URL-discovery agent, Telegram bot, Avito/Telegram/Instagram (DEC-050).
 
 #### Step E (legacy plan) — Workflow 03: Firecrawl Website Analysis _(superseded by the active Step E above)_

@@ -1,6 +1,6 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-08 (Workflow 04 Firecrawl URL list mini-batch BUILT with source_url dedup, 35-col schema — DEC-048/049/050; awaiting operator 3-URL test)
+**Last updated:** 2026-06-08 (Workflow 04 HARDENED — `url_registry` dedup + deterministic competitor fallback + `text_context` cap 3500, DEC-051/052; UNDER TEST, not approved until 3-URL retest passes)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
 **Active workflow candidate:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json`
 **Test status:** Resilient Router Tests A–E **all pass**. Production workflow built (33 columns). **First manual production smoke test FAILED** (repair API 502 → technical_errors with lost diagnostics); workflow **patched** (DEC-038): primary raw preserved, compact repair payload, dual Primary+Repair diagnostics, primary prompt reminder. **Production workflow is NOT approved for Firecrawl until the patched manual smoke test passes.**
@@ -18,7 +18,9 @@
 - **Competitor website → `monitor_queue` routing** ✅ APPROVED — competitor pages with offer/rates/region/contact route to `monitor_queue` with `recommended_action=monitor`.
 
 **Under-tested (built, awaiting operator manual test):**
-- **Firecrawl URL list mini-batch with `source_url` dedup** — `04_firecrawl_url_list_resilient.json` (DEC-048/049). 3–5 URLs/run, manual, per-URL loop, dedup before Firecrawl/Claude spend (duplicate → `skipped_log`/`dedup_source_url`, zero cost), 35-field schema (`run_id`+`batch_index`). 25 nodes; JSON valid; active=false. Dedup implemented best-effort (Google Sheets lookups). **Pending: operator 3-URL run + dedup-on-rerun verification.**
+- **Firecrawl URL list mini-batch** — `04_firecrawl_url_list_resilient.json` (DEC-048/049/051/052). 3–5 URLs/run, manual, per-URL loop, 35-field business schema (`run_id`+`batch_index`). 25 nodes; JSON valid; active=false. **Workflow 04 is NOT approved until the 3-URL retest (first pass + duplicate second pass) passes.**
+  - **URL `url_registry` dedup** 🔧 UNDER TEST (DEC-051) — dedup keyed on `normalized_source_url` (full URL **with path**, not domain) in a dedicated `url_registry` tab, checked before Firecrawl/Claude; duplicate → `skipped_log`/`dedup_source_url`, **zero cost**. Registry appended after every non-duplicate attempt.
+  - **Deterministic competitor fallback** 🔧 UNDER TEST (DEC-052) — after primary+repair JSON failure, emits a structured `competitor`/`monitor_queue` row (`needs_manual_review=true`) instead of dropping to `technical_errors`.
 
 **Still NOT approved:**
 - More than 5 URLs per run.

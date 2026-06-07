@@ -1,9 +1,22 @@
 # WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md — Firecrawl URL List Mini-Batch
 
-**Status:** ✅ BUILT (2026-06-08) — `n8n/workflows/04_firecrawl_url_list_resilient.json`. active=false; awaiting operator manual test (3 URLs).
+**Status:** 🔧 BUILT + PATCHED, **UNDER TEST** (2026-06-08) — `n8n/workflows/04_firecrawl_url_list_resilient.json`. active=false; **remains under test until the `url_registry` dedup + 3-URL retest pass.**
 **Guide:** `docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md`
 **Date:** 2026-06-08
-**Related:** Workflow 03 (`03_firecrawl_single_url_resilient.json`), DEC-039–050, `docs/FIRECRAWL_SETUP.md`, `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`
+**Related:** Workflow 03 (`03_firecrawl_single_url_resilient.json`), DEC-039–052, `docs/FIRECRAWL_SETUP.md`, `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`
+
+---
+
+## SELECTED ARCHITECTURE — `url_registry` dedup (DEC-051)
+
+- **Dedup uses a dedicated `url_registry` tab**, keyed by `normalized_source_url`, checked **before** Firecrawl/Claude.
+- **Six-tab lookup REJECTED as too fragile** (the first build's 4×`Dedup Lookup` chain). One registry tab is cleaner, cheaper, and future-proof for the Telegram Bot / URL Discovery agent.
+- Duplicates (and `force_reprocess=false`) → `skipped_log`/`dedup_source_url`, **0 cost**.
+- Every non-duplicate processing attempt (including `technical_errors`) appends a row to `url_registry`.
+- `force_reprocess` (default `false`) reserved for future/manual override.
+- **Deterministic competitor fallback (DEC-052):** after primary+repair both fail to yield JSON, if ≥5 competitor signals over `text_context`+raw preview → `monitor_queue` row (`deterministic_competitor_fallback`); else `technical_errors`.
+- `text_context` cap lowered to **3500** + markdown cleaning (drop images/svg, commercially-relevant lines first).
+- **Workflow 04 remains UNDER TEST** until the `url_registry` dedup and the 3-URL retest pass.
 
 ---
 

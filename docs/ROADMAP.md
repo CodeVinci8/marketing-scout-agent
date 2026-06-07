@@ -68,14 +68,15 @@
 
 ## Stage 2.1 — Firecrawl URL List Mini-Batch (Under Test)
 
-**Status:** ✅ BUILT (2026-06-08) — `n8n/workflows/04_firecrawl_url_list_resilient.json` (DEC-048/049). Awaiting operator manual 3-URL test.
-**Goal:** Process a manually provided list of **3–5 competitor URLs in one manual run**, reusing the Workflow 03 chain with a per-URL loop and `source_url` dedup.
+**Status:** 🔧 HARDENED, **UNDER TEST** (2026-06-08) — `n8n/workflows/04_firecrawl_url_list_resilient.json` (DEC-048/049/051/052). **Remains in hardening until the 3-URL retest passes.**
+**Goal:** Process a manually provided list of **3–5 competitor URLs in one manual run**, reusing the Workflow 03 chain with a per-URL loop and `url_registry` dedup.
 
-**Built:** 25 nodes — Set URL List → Loop Over Items → Normalize URL for Dedup → 4× dedup lookup → Evaluate Dedup → IF Duplicate? → (dup → skipped_log / new → Firecrawl → resilient analyzer) → dynamic Sheets → loop. 35-field schema (`run_id`, `batch_index`). Dedup before Firecrawl/Claude spend (implemented best-effort).
+**Built:** 25 nodes — Set URL List → Loop Over Items → Normalize URL for Dedup → Registry Lookup → Evaluate Dedup → IF Duplicate? → (dup → skipped_log / new → Firecrawl → resilient analyzer → Append → Build Registry Row → Append url_registry) → loop. 35-field business schema + 10-field `url_registry`.
+**Patch (DEC-051/052):** dedup uses a dedicated `url_registry` tab keyed on `normalized_source_url` (full URL **with path**, not domain) before any spend; deterministic competitor fallback after primary+repair failure; `text_context` cap lowered to 3500; registry appended after every non-duplicate attempt.
 
-**Hard limits:** max 5 URLs, manual trigger only, no crawl, no schedule, `text_context`≤6000, continue-on-failure per URL (failed URL → `technical_errors`).
+**Hard limits:** max 5 URLs, manual trigger only, no crawl, no schedule, `text_context`≤3500, continue-on-failure per URL (failed URL → `technical_errors`).
 
-**Remaining:** operator imports, rebinds credentials, runs 3 URLs, verifies routes + dedup-on-rerun + cost; then max 5.
+**Remaining:** operator creates `url_registry` tab, reimports, rebinds credentials, runs first pass (3 URLs) + second pass (same 3 → all `skipped_log`, 0 cost), verifies routes + cost; then max 5.
 
 **Later sources (in order):** Avito/Apify → Telegram → Instagram.
 
@@ -86,7 +87,7 @@
 **Status:** Future (DEC-050). Not built; depends on a stable mini-batch.
 **Goal:** Let the operator request analysis in natural language instead of pasting URLs.
 
-**Flow:** operator request (e.g. «найди конкурентов по кредитам под залог авто в Москве») → bot collects/generates candidate URLs → proposes URLs + estimated cost → asks approval → calls the URL-list workflow (Workflow 04) → sends a summary. Workflow 04's `source_url` dedup prevents repeated processing.
+**Flow:** operator request (e.g. «найди конкурентов по кредитам под залог авто в Москве») → bot collects/generates candidate URLs → proposes URLs + estimated cost → asks approval → calls the URL-list workflow (Workflow 04) → sends a summary. Workflow 04's `url_registry` dedup prevents repeated processing of URLs already seen.
 
 **Prerequisites:** Workflow 04 stable on manual lists; Telegram bot token + n8n webhook; a vetted URL-discovery/source method. URL discovery and NL parsing are a separate layer, deferred.
 

@@ -33,7 +33,7 @@ Every tab uses the same header row. The **25 core columns** are the Column Refer
 | Column | Type | Values |
 |--------|------|--------|
 | `processing_status` | string | `parsed_success` / `business_skip` / `technical_error` |
-| `parse_method` | string | `primary_json` / `repaired_json` / `firecrawl_error` / `dedup_source_url` / `technical_error` |
+| `parse_method` | string | `primary_json` / `repaired_json` / `firecrawl_error` / `dedup_source_url` / `deterministic_competitor_fallback` / `technical_error` |
 | `parse_error` | string | error text or empty (may include `invalid_route`) |
 | `raw_response_preview` | string | first **500** chars of the raw model response (debugging) |
 | `route` | string | one of the six tab names |
@@ -65,9 +65,28 @@ When a row lands in `technical_errors`, it preserves both failure stages so the 
 - `raw_response_preview` = the **primary** raw model response first (capped 500), with the repair error appended only if space remains. The primary raw response is never overwritten by the repair error alone.
 - `parse_method` = `technical_error` on a failed repair; `primary_json` / `repaired_json` on success.
 
-### Dedup (v0.1)
+### Dedup (v0.1) — `url_registry` (DEC-051, supersedes the six-tab scan)
 
-**`source_url` is the dedup key.** **Workflow 04 implements this (DEC-049):** before any Firecrawl/Claude spend it looks up the normalized `source_url` in `results`, `review_queue`, `monitor_queue`, `content_queue`; a match → `skipped_log` with `parse_method=dedup_source_url`. `technical_errors`/`skipped_log` are **not** treated as hard duplicates (so failed/skipped URLs can be retried). Workflows 02–03 do not dedup. A dedicated `dedup_key` column is still not used; if added later it needs a documented justification and a matching header change (DEC-037).
+**`source_url` (normalized) is the dedup key, tracked in a dedicated `url_registry` tab.** **Workflow 04 (patched 2026-06-08):** before any Firecrawl/Claude spend, `Registry Lookup` reads `url_registry` and matches `normalized_source_url`; a match (with `force_reprocess=false`) → `skipped_log` with `parse_method=dedup_source_url`, **0 cost**. The earlier four-tab `Dedup Lookup` scan (`results/review_queue/monitor_queue/content_queue`) is **rejected as fragile and removed**. After every non-duplicate processing attempt (including `technical_errors`), Workflow 04 appends a row to `url_registry`. `force_reprocess` (default `false`) bypasses dedup for manual/future overrides. Workflows 02–03 do not dedup.
+
+### `url_registry` tab — 10 columns (NOT the 35-column business schema)
+
+A separate registry tab, written/read only by Workflow 04. Its own header (10 columns, in order):
+
+| # | Column | Type | Description |
+|---|--------|------|-------------|
+| 1 | `normalized_source_url` | string | dedup key — normalized URL (lowercase scheme/host, no `#fragment`, no tracking params, no trailing slash) |
+| 2 | `source_url` | string | normalized URL as stored on the business row |
+| 3 | `first_seen_at` | string | ISO 8601 when first processed |
+| 4 | `last_seen_at` | string | ISO 8601 of this processing attempt |
+| 5 | `last_route` | string | last business route (`monitor_queue`, `technical_errors`, …) |
+| 6 | `last_processing_status` | string | `parsed_success` / `business_skip` / `technical_error` |
+| 7 | `last_entity_type` | string | last `entity_type` |
+| 8 | `run_id` | string | `firecrawl_YYYYMMDD_HHmmss` |
+| 9 | `batch_index` | integer | 1-based URL position |
+| 10 | `note` | string | `processed_by_workflow_04` |
+
+**Column counts:** the **6 business tabs use 35 columns**; **`url_registry` uses its own 10 columns**. **Workflows 02/03 may leave `run_id`/`batch_index` empty**; **Workflow 04 fills `run_id`/`batch_index`** on every business path and populates `url_registry`.
 
 ---
 

@@ -5,6 +5,24 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Workflow 04 Hardened: `url_registry` Dedup + Deterministic Fallback (DEC-051/052)
+
+**Agent role:** project-engineer
+**Session goal:** Harden Workflow 04 dedup — move from the fragile 4-tab business-sheet scan to a dedicated `url_registry` tab keyed on the normalized full URL (with path), add a deterministic competitor fallback after primary+repair JSON failure, and tighten cost.
+
+**What changed (patched `04_firecrawl_url_list_resilient.json` in place, still 25 nodes, active=false):**
+- **Dedup → `url_registry` (DEC-051).** `Registry Lookup` (Google Sheets read on `url_registry`) replaces the 4× business-tab `Dedup Lookup`. `Normalize URL for Dedup` produces `normalized_source_url` = full URL **with path** (lowercase scheme/host only, drop `#fragment` + `utm_*`/`gclid`/`yclid`/`fbclid`, strip trailing slash on non-root paths). Root variants collapse to one key; service pages on the same domain stay distinct. `Evaluate Dedup` → duplicate (`force_reprocess=false`) → 35-field `skipped_log` (`parse_method=dedup_source_url`, 0 cost); else → Firecrawl.
+- **Registry write-back.** `Build Registry Row` (10 fields) + `Append url_registry` after every non-duplicate attempt, including `technical_errors`.
+- **Deterministic competitor fallback (DEC-052).** `Parse Repaired JSON` emits a structured `competitor`/`monitor_queue` row (`needs_manual_review=true`, `parse_method=deterministic_competitor_fallback`) on primary+repair failure instead of dropping straight to `technical_errors`; `Normalize + Route` passes it through.
+- **Cost:** `text_context` cap lowered to **3500**. Node layout cleaned (left-to-right, no overlaps).
+- **Docs:** `TABLE_SCHEMA.md` (url_registry 10-col section, old four-tab dedup removed), `DECISIONS.md` (DEC-051/052), RU guide (registry setup, 10-col header, normalization rules + dedup examples, retest, credential rebind, Loop Over Items), PLAN (selected architecture + under-test), `NEXT_ACTIONS.md`/`COSTS_AND_LIMITS.md`/`AGENT_CAPABILITIES.md`/`ROADMAP.md`.
+
+**Verified:** `python3 -m json.tool` VALID; 25 nodes; connections — duplicate branch never reaches Firecrawl/Claude; non-duplicate + technical-error paths both append `url_registry`; no secrets / no real Spreadsheet ID / no `tool_use` / no `KEY=VALUE` / no crawl-batch-search; only `example.com` placeholders (Claude endpoint uses the project's `aiprimetech.io` gateway placeholder, unchanged).
+
+**Next:** operator creates `url_registry` tab (10 cols), reimports, rebinds credentials, runs first pass (3 URLs) + second pass (same 3 → all `skipped_log`, 0 cost). Workflow 04 not approved until that retest passes.
+
+---
+
 ## 2026-06-08 — Workflow 04 Built: Firecrawl URL List Mini-Batch with source_url Dedup (DEC-048/049/050)
 
 **Agent role:** project-engineer

@@ -133,11 +133,11 @@ Cost-control rules baked into the first Firecrawl test:
 
 ---
 
-## Firecrawl URL List Mini-Batch (Workflow 04, DEC-048/049)
+## Firecrawl URL List Mini-Batch (Workflow 04, DEC-048/049/051)
 
-**Workflow:** `n8n/workflows/04_firecrawl_url_list_resilient.json` — 3–5 URLs/run, manual, dedup before spend.
+**Workflow:** `n8n/workflows/04_firecrawl_url_list_resilient.json` — 3–5 URLs/run, manual, `url_registry` dedup before spend (DEC-051).
 
-**Cost model:** `run_cost ≈ (non_duplicate_URLs) × per_URL_cost`, where `per_URL_cost ≈ 1 Firecrawl credit + ~$0.01–0.023 Claude` (repair adds a second Claude call only on parse failure). **Duplicates cost 0** Firecrawl/Claude (skipped before spend). Pre-run Claude balance buffer ≥ $0.20 for a 5-URL run.
+**Cost model:** `run_cost ≈ (non_duplicate_URLs) × per_URL_cost`, where `per_URL_cost ≈ 1 Firecrawl credit + ~$0.01–0.023 Claude` (repair adds a second Claude call only on parse failure). **Duplicates cost 0** Firecrawl/Claude — a `url_registry` hit skips before any spend. Long pages are capped at **`text_context` ≤ 3500 chars** (DEC-051) to bound Claude input tokens. Pre-run Claude balance buffer ≥ $0.20 for a 5-URL run.
 
 **Per-run log template (fill one row per run, keyed by `run_id`):**
 

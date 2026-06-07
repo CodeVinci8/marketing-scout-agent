@@ -5,6 +5,34 @@ Most recent first.
 
 ---
 
+## DEC-051 — Workflow 04 Dedup Uses a Dedicated `url_registry` Tab (Supersedes Six-Tab Scan)
+
+**Date:** 2026-06-08
+**Context:** The first Workflow 04 test re-processed a URL that had already been analyzed earlier — the four-tab `Dedup Lookup` chain (`results/review_queue/monitor_queue/content_queue`) was fragile and did not reliably block duplicates. Scanning six business tabs per URL is brittle and does not scale to a future Telegram Bot / URL Discovery agent.
+
+**Decision:** Dedup uses a **dedicated `url_registry` tab** (10 columns), keyed by `normalized_source_url`, checked **before** Firecrawl/Claude. A match (with `force_reprocess=false`) → `skipped_log` / `parse_method=dedup_source_url`, **0 cost**. After **every** non-duplicate processing attempt — including `technical_errors` — Workflow 04 appends a row to `url_registry` (`Build Registry Row` → `Append url_registry`), so a URL is not re-processed by default. `force_reprocess` (a field on `Set URL List`, default `false`) bypasses dedup for manual/future overrides. The six-tab scan is **rejected and removed**.
+
+**Reason:** one registry tab is cleaner, cheaper (one read), and future-proof. Telegram Bot / URL Discovery can write/consume the same registry.
+
+**Verification:** node simulation — duplicate → 35-field `skipped_log`; non-duplicate → source record; `Build Registry Row` emits exactly the 10 registry fields.
+
+**File:** `n8n/workflows/04_firecrawl_url_list_resilient.json`.
+
+---
+
+## DEC-052 — Deterministic Competitor Fallback After Primary+Repair JSON Failure
+
+**Date:** 2026-06-08
+**Context:** On long real pages (`mosinvestfinans.ru/kredit/pod-zalog-avto/`, `lioncredit.ru/…/kredit-pod-zalog-nedvizhimosti`) Firecrawl returned rich markdown but both the primary and repair JSON parses failed, routing clear competitors to `technical_errors` even though `raw_response_preview` plainly showed `entity_type=competitor`, a company, and a service type. Those should be `monitor_queue`, not lost.
+
+**Decision:** After primary+repair both fail to yield JSON, `Parse Repaired JSON` runs a **deterministic** fallback: count competitor signals (кредит, займ, залог, ПТС, авто, недвиж, ставка, сумма, телефон, Москва, руб, %, …) over `text_context`+primary raw preview. If **≥5 signals** and the source is a scraped website → build a 35-field `competitor` row (`route=monitor_queue`, `parse_method=deterministic_competitor_fallback`, `recommended_action=monitor`, `repair_status=failed_fallback`, `needs_manual_review=true`), deriving `company_name` (МосИнвестФинанс / LionCredit / hostname / «Конкурент без бренда»), `service_type` (pts_loan / secured_real_estate_loan / generic_lending), short `offer_text`/`terms`, `region`, and `competitor_strength` 70 (or 80 with ≥8 signals + contact/amount). If **<5 signals** → `technical_errors` (unchanged). This is **deterministic hardening, not prompt experimentation** — the primary/repair prompts were left intact (only a small safety line added to the repair prompt). Also lowered `text_context` cap to **3500** + added markdown cleaning (drop image/svg lines, commercially-relevant lines first), and made both JSON parsers deterministic (strip fences → direct parse → first balanced object → first `{`..last `}`).
+
+**Verification:** simulation — junk repair text + 8 signals → `monitor_queue` / `deterministic_competitor_fallback` / МосИнвестФинанс / pts_loan / strength 80, 35 fields; low-signal junk → `technical_errors`, 35 fields.
+
+**File:** `n8n/workflows/04_firecrawl_url_list_resilient.json`.
+
+---
+
 ## DEC-048 — Batch Schema = 35 Columns (run_id + batch_index)
 
 **Date:** 2026-06-08

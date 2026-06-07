@@ -4,6 +4,20 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Workflow 04 HARDENED: `url_registry` Dedup + Deterministic Fallback (DEC-051/052)
+
+**What was done:**
+- Patched `04_firecrawl_url_list_resilient.json` **in place** (25 nodes, active=false). Dedup moved from the fragile 4× business-tab scan to a dedicated **`url_registry`** tab keyed on `normalized_source_url` = full URL **with path** (NOT domain). `Registry Lookup` runs before Firecrawl/Claude; duplicate → `skipped_log`/`dedup_source_url`, **0 cost**. After every non-duplicate attempt (incl. `technical_errors`) → `Build Registry Row` (10 fields) → `Append url_registry`.
+- Normalization: lowercase scheme/host only, drop `#fragment` + `utm_*`/`gclid`/`yclid`/`fbclid`, strip trailing slash on non-root paths. Root variants → one key; service pages on same domain → distinct keys.
+- **Deterministic competitor fallback (DEC-052)** in `Parse Repaired JSON` after primary+repair failure (→ `monitor_queue`, `needs_manual_review=true`). `text_context` cap → **3500**. Layout cleaned.
+- Docs: TABLE_SCHEMA (url_registry section, old four-tab removed), DECISIONS (DEC-051/052), RU guide (registry setup + 10-col header + normalization/dedup examples + retest + cred rebind + Loop), PLAN, NEXT_ACTIONS, COSTS_AND_LIMITS, AGENT_CAPABILITIES, ROADMAP, AGENT_LOG.
+
+**Verified:** JSON VALID; duplicate branch never touches Firecrawl/Claude; both non-dup + technical-error paths append `url_registry`; no secrets/Spreadsheet ID/`tool_use`/`KEY=VALUE`/crawl-batch-search; only `example.com` placeholders.
+
+**Next:** operator creates `url_registry` tab (10 cols) → reimport → rebind creds → first pass (3 URLs) + second pass (same 3 → all `skipped_log`, 0 cost). Workflow 04 NOT approved until retest passes.
+
+---
+
 ## Session: 2026-06-08 — Workflow 04 BUILT: Firecrawl URL List Mini-Batch + source_url Dedup (DEC-048/049/050)
 
 **What was done:**
