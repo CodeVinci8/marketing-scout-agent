@@ -99,6 +99,23 @@ results, so core logic stays in one place and remains usable without Telegram.
 still **processes max 5 URLs per run**, so 10 approved candidates are processed as **two controlled batches
 of 5**. **No candidate reaches Firecrawl/Claude until `approval_status=approved`.**
 
+## 5c. Candidate types & source diversity (DEC-061)
+
+Web search returns a **mix** of source types, not just competitors. Workflow 05 tags each candidate with a
+deterministic `candidate_type`: `direct_competitor`, `aggregator`, `directory`, `media_article`,
+`marketplace`, `social`, `unknown`. This matters because:
+
+- **Web search is mostly competitor + content discovery.** Direct competitor sites (autolombards, MFOs,
+  brokers) and content/FAQ/market pages dominate organic results for a query like «займ под залог ПТС Москва».
+  Direct competitors are prioritized for approval and rank highest in `confidence_score`.
+- **Aggregators/directories/media are optional intelligence, not competitors.** banki.ru, 2gis, kp.ru etc.
+  can surface *new* competitor names to chase manually, but they are not themselves targets — lower confidence,
+  flagged "review manually". Never auto-treated as a direct competitor.
+- **Hot lead discovery needs other connectors.** Real lead signals (people asking for a loan, client pain)
+  live on **Telegram / Avito / social / classified** sources, not Google web search. Those require future
+  lead-source connectors (§5b), feeding the same source-agnostic analyzers. Do not expect web search to
+  produce hot leads.
+
 ## 5b. Source connectors vs core analyzers
 
 Do **not** over-split agents by platform name (one per Avito/VK/Instagram). Instead, separate **source

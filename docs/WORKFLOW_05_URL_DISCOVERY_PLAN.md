@@ -1,6 +1,11 @@
 # WORKFLOW_05_URL_DISCOVERY_PLAN.md — 05 - Apify Search Candidate Discovery (Planning)
 
-**Status:** 🔧 BUILT, UNDER TEST (2026-06-08, DEC-060) — `n8n/workflows/05_apify_search_candidate_discovery.json`, active=false. No Apify call yet (awaiting token + credential). No Firecrawl, no Claude, no schedule.
+**Status:** 🔧 BUILT + candidate-quality patch (2026-06-08, DEC-060/061) — first Apify test passed **technically**; quality patch applied, **retest required**. `n8n/workflows/05_apify_search_candidate_discovery.json`, active=false. No Firecrawl, no Claude, no schedule.
+
+> **Candidate-quality patch (DEC-061):** fixed empty `domain` (robust hostname extraction, strip `www.`),
+> added **`candidate_type`** (`url_candidates` 25 → **26 cols**), and reworked confidence so
+> `direct_competitor` ranks above `aggregator`/`directory`/`media_article`/`marketplace`/`social`. Aggregators/
+> directories/media stay `approval_status=new` but get a "not a direct competitor" note. Retest the same query.
 **Workflow file:** `n8n/workflows/05_apify_search_candidate_discovery.json` (13 nodes; JSON valid)
 **RU guide:** `docs/N8N_WORKFLOW_05_APIFY_SEARCH_CANDIDATES_RU.md`
 **Date:** 2026-06-08

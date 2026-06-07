@@ -5,6 +5,23 @@ Most recent first.
 
 ---
 
+## DEC-061 — Workflow 05 Candidate Quality: `candidate_type`, Fixed Domain, Competitor-First Scoring
+
+**Date:** 2026-06-08
+**Context:** First real Apify run («займ под залог ПТС Москва») passed technically (10 candidates, 1 registry duplicate, `discovery_requests` row), but quality was weak: `domain` empty for all rows; `confidence_score` too high for aggregators/directories/media; no way to tell a direct competitor from a portal.
+**Decision (patch, no architecture change):**
+1. **Fixed `domain` extraction** — robust hostname parse with regex fallback, lowercased, leading `www.` stripped (e.g. `https://www.autolombard-moskva.ru/` → `autolombard-moskva.ru`). Computed authoritatively in `Classify Candidates` so it is never empty.
+2. **Added `candidate_type`** (`direct_competitor` / `aggregator` / `directory` / `media_article` / `marketplace` / `social` / `unknown`), deterministic from domain allow-lists + keyword/path heuristics. **`url_candidates` grows 25 → 26 columns** (`candidate_type` inserted after `domain`; `domain` moved before `title`/`snippet`).
+3. **Competitor-first confidence** — `+30 direct_competitor`; positives for залог/ПТС/авто/Москва/кредит-займ/ставка-сумма/lender; negatives `-50 duplicate_in_registry`, `-35 directory`, `-25 aggregator`, `-20 media_article`, `-20 marketplace` (unless the query asks for one), `-30 social`; clamp 1–100.
+4. **Approval policy:** duplicates → `duplicate`; unique direct competitors → `new`; unique aggregators/directories/media → `new` **with a "review manually; not a direct competitor" note**. No auto-reject.
+5. Also fixed `looksLender` to match `займ` (not only `заим`/`заём`) — without it, e.g. `carcapital.ru` mis-typed as `unknown`.
+**Reason:** make discovery output directly usable for approval and future Telegram summaries; push spend toward real competitors and away from low-value aggregator/portal pages.
+**Verification:** `python3 -m json.tool` VALID; only the Apify HTTP node (0 Firecrawl/0 Claude); node simulation on the 10 real-test-like candidates → domains filled, types correct (4 direct_competitor new, cashmotor direct_competitor duplicate, 2gis directory, finuslugi/vbr/banki aggregator, kp media_article), competitors 85–100 vs aggregators/directory/media 15–45, exact **26** url_candidates + **18** discovery_requests field counts.
+**Operator action required:** add `candidate_type` to the `url_candidates` sheet (after `domain`) → 26-column header, re-import, rerun the same query.
+**File:** `n8n/workflows/05_apify_search_candidate_discovery.json`.
+
+---
+
 ## DEC-060 — Workflow 05 Built: Apify Google Search Sync Endpoint, 0 Firecrawl/Claude, Manual Approval
 
 **Date:** 2026-06-08

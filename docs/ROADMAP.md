@@ -90,10 +90,10 @@
 **Plans:** `docs/URL_DISCOVERY_STRATEGY.md` (Level 2 Apify, risks, gates G1–G5), `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md` (node plan + schemas + Apify credential).
 **Default volumes:** collect up to **10** candidates/request; Workflow 04 processes **≤5/run** → 10 approved run as **two batches of 5**. **0 Firecrawl/Claude in Workflow 05** (Apify search cost only).
 
-### Stage 2.2 build — `05 - Apify Search Candidate Discovery` 🔧 BUILT, under test
+### Stage 2.2 build — `05 - Apify Search Candidate Discovery` 🔧 BUILT, candidate-quality patch, under test
 
-**Status:** 🔧 BUILT (2026-06-08, DEC-060) — `n8n/workflows/05_apify_search_candidate_discovery.json` (13 nodes, active=false). Awaiting Apify token + credential + first manual test.
-**Goal:** Query → Apify Google Search actor → normalize → check `url_registry` → deterministic score → write `url_candidates` (`new`/`duplicate`) + `discovery_requests` (`status=needs_review`). **0 Firecrawl/Claude**, no auto-processing, human approval before Workflow 04.
+**Status:** 🔧 BUILT + candidate-quality patch (2026-06-08, DEC-060/061) — `n8n/workflows/05_apify_search_candidate_discovery.json` (13 nodes, active=false). First real Apify test passed **technically**; quality patch applied (`candidate_type`, fixed `domain`, competitor-first scoring); **retest required** (add `candidate_type` column, re-import, rerun query).
+**Goal:** Query → Apify Google Search actor → normalize → check `url_registry` → classify `candidate_type` → competitor-first score → write `url_candidates` (26 cols, `new`/`duplicate`) + `discovery_requests` (`status=needs_review`). **0 Firecrawl/Claude**, no auto-processing, human approval before Workflow 04.
 
 ### Stage 2.2c — Approved Candidates Runner (hand-off, later)
 

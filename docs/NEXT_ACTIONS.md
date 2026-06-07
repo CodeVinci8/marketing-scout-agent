@@ -317,19 +317,17 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 > **Backfill note:** `url_registry` is the dedup source of truth. Rows analyzed before the registry existed re-process once until backfilled (optional maintenance) — see `TABLE_SCHEMA.md`.
 > Still blocked: >5 URLs, scheduled runs, crawler, batch/search endpoints, URL-discovery agent, Telegram bot, Avito/Telegram/Instagram (DEC-050).
 
-#### Step G — Stage 2.2: Apify Search Candidate Discovery (Workflow 05) 🔧 BUILT, operator setup + first test (2026-06-08)
+#### Step G — Stage 2.2: Apify Search Candidate Discovery (Workflow 05) 🔧 BUILT + candidate-quality patch, RETEST (2026-06-08)
 
-**Built:** `n8n/workflows/05_apify_search_candidate_discovery.json` (13 nodes, JSON valid, active=false). Guide: `docs/N8N_WORKFLOW_05_APIFY_SEARCH_CANDIDATES_RU.md`. **0 Firecrawl/Claude** (Apify search cost only); human approval before Workflow 04. Default collect 10; Workflow 04 processes ≤5/run → two batches of 5.
+**Status:** first real Apify test passed **technically** (10 candidates, 1 registry duplicate). Candidate-quality patch applied (DEC-061): fixed empty `domain`, added `candidate_type`, competitor-first confidence. **Retest required.** `n8n/workflows/05_apify_search_candidate_discovery.json` (13 nodes, active=false). Guide: `docs/N8N_WORKFLOW_05_APIFY_SEARCH_CANDIDATES_RU.md`. **0 Firecrawl/Claude.**
 
-**Operator tasks (in order):**
-1. [ ] **Create the `discovery_requests` sheet** (18-column header — see `TABLE_SCHEMA.md`).
-2. [ ] **Create the `url_candidates` sheet** (25-column header).
-3. [ ] **Get an Apify API token** (Google Search Results Scraper actor).
-4. [ ] **Create the n8n credential** `Apify API - Marketing Scout` — Header Auth, Header Name `Authorization`, Value `Bearer <APIFY_API_TOKEN>`, allowed domain `api.apify.com`. (Never put the token in a repo file.)
-5. [ ] **Import Workflow 05** (active stays false) and **rebind credentials**: `Apify Search API Request`→Apify; `Read url_registry`/`Append url_candidates`/`Append discovery_requests`→Google Sheets; paste real Spreadsheet ID on the **3** Sheets nodes.
-6. [ ] **Run one query** (default «займ под залог ПТС Москва»). Expect: 1 `discovery_requests` row (`status=needs_review`), ≤10 `url_candidates` rows (dups → `duplicate`), **0 Firecrawl/Claude**, no business-tab writes.
-7. [ ] **Manually approve/reject** in `url_candidates`; record the Apify run cost in `COSTS_AND_LIMITS.md`.
-8. [ ] **Do not process candidates yet** — hand-off to Workflow 04 (≤5) only after this is validated.
+**Retest tasks (in order):**
+1. [ ] **Add the `candidate_type` column** to the existing `url_candidates` sheet — insert it **after `domain`** so the header is the **26-column** order in `TABLE_SCHEMA.md` (`…normalized_source_url, domain, candidate_type, title, snippet, rank…`).
+2. [ ] **Re-import the patched Workflow 05** (active stays false); rebind credentials (Apify + 3 Google Sheets nodes; real Spreadsheet ID).
+3. [ ] **Rerun the same query** «займ под залог ПТС Москва».
+4. [ ] **Expected:** `domain` filled for all rows; `candidate_type` classified (autolombards/lenders → `direct_competitor`; 2gis → `directory`; banki/vbr/finuslugi → `aggregator`; kp → `media_article`); direct competitors rank higher than aggregators/directories/media; the previously-seen duplicate preserved (`approval_status=duplicate`); 1 `discovery_requests` row; **0 Firecrawl/Claude**; no business-tab writes.
+5. [ ] Manually approve **direct competitors first**; aggregators/directories/media → review manually (note already flags them). Record the Apify run cost.
+6. [ ] **Do not process candidates yet** — hand-off to Workflow 04 (≤5) only after this retest is validated.
 
 > **Do not** build the Approved Candidates Runner (Stage 2.2c), use Firecrawl `/v2/search` (parked), build SerpAPI/Google-CSE fallbacks, or build the Telegram bot (Stage 2.3) yet — each is gated (DEC-056/057/059).
 

@@ -4,6 +4,21 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Workflow 05 Candidate-Quality Patch: candidate_type + domain fix + competitor-first scoring (DEC-061)
+
+**What was done (no architecture change; 0 Firecrawl/Claude):**
+- First real Apify run passed technically (10 candidates, 1 registry dup, `discovery_requests` row). Patched 3 quality issues in `05_apify_search_candidate_discovery.json` (active=false):
+  1. **`domain` was empty** → robust extraction (hostname + regex fallback, lowercase, strip `www.`) in `Classify Candidates`.
+  2. Added **`candidate_type`** (`direct_competitor`/`aggregator`/`directory`/`media_article`/`marketplace`/`social`/`unknown`) — `url_candidates` **25 → 26 cols** (after `domain`).
+  3. **Competitor-first confidence** (+30 direct_competitor; −35 directory / −25 aggregator / −20 media/marketplace / −30 social / −50 registry-dup). Also fixed `looksLender` to match `займ`.
+- Approval: dup → `duplicate`; unique competitor → `new`; unique aggregator/directory/media → `new` + "review manually; not a direct competitor". No auto-reject.
+- **Verified by simulation:** lenders 85–100 `direct_competitor`, 2gis directory, banki/vbr/finuslugi aggregator, kp media_article, cashmotor duplicate; exact 26/18 field counts; JSON VALID; only Apify HTTP node.
+- Docs updated: RU guide, PLAN, STRATEGY, TABLE_SCHEMA (26-col + enum + sheet-change note), DECISIONS (DEC-061), COSTS, AGENT_CAPABILITIES, ROADMAP, NEXT_ACTIONS.
+
+**Next operator action:** add `candidate_type` to `url_candidates` (after `domain` → 26-col header) → re-import Workflow 05 → rebind creds → rerun «займ под залог ПТС Москва» → verify domains filled, types correct, competitors ranked first. Do not process candidates yet.
+
+---
+
 ## Session: 2026-06-08 — Workflow 05 BUILT: Apify Search Candidate Discovery (DEC-060)
 
 **What was done:**

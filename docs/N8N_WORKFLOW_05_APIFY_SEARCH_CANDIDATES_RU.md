@@ -1,8 +1,24 @@
 # Workflow 05 — Apify Search Candidate Discovery (RU гайд)
 
 **Файл:** `n8n/workflows/05_apify_search_candidate_discovery.json`
-**Статус:** 🔧 BUILT, под тестом (active=false) — 2026-06-08
-**Связано:** `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`, `docs/URL_DISCOVERY_STRATEGY.md`, `docs/TABLE_SCHEMA.md`, DEC-059/060
+**Статус:** 🔧 BUILT + патч качества кандидатов (active=false) — 2026-06-08, повторный тест требуется
+**Связано:** `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`, `docs/URL_DISCOVERY_STRATEGY.md`, `docs/TABLE_SCHEMA.md`, DEC-059/060/061
+
+## 0. Итог первого реального теста (запрос «займ под залог ПТС Москва»)
+
+Технически прошёл: 10 кандидатов записаны, 1 дубликат по `url_registry` (`https://cashmotor.ru/`),
+строка `discovery_requests` создана (`candidate_count=10`, `unique=9`, `duplicate=1`, `status=needs_review`,
+`estimated_firecrawl_credits=9`, `estimated_claude_cost_usd=0.18`).
+
+Найдены проблемы и исправлены патчем (DEC-061):
+1. **`domain` был пустым** у всех кандидатов → исправлено надёжное извлечение хоста (без `www.`).
+2. **`confidence_score` завышен** для агрегаторов/каталогов/СМИ → переработана формула.
+3. Добавлена колонка **`candidate_type`** (схема `url_candidates`: 25 → **26 колонок**).
+
+После патча на тех же данных: прямые конкуренты (autolombard-moskva.ru, carcapital.ru, zalog24h.ru,
+autolombardn1.ru) → `direct_competitor`, confidence ~100; cashmotor.ru → `direct_competitor`, но `duplicate`;
+2gis.ru → `directory`; finuslugi.ru/vbr.ru/banki.ru → `aggregator`; kp.ru → `media_article` — все с заметно
+более низким confidence.
 
 ---
 
@@ -33,8 +49,24 @@ Workflow 05 — вызов Apify-поиска.
 | Вкладка | Колонок | Роль |
 |---------|---------|------|
 | `discovery_requests` | 18 | одна строка на запрос (Workflow 05 пишет) |
-| `url_candidates` | 25 | кандидаты с гейтом одобрения (Workflow 05 пишет) |
+| `url_candidates` | **26** | кандидаты с гейтом одобрения (Workflow 05 пишет) — +`candidate_type` (DEC-061) |
 | `url_registry` | 10 | источник правды дедупа (Workflow 05 только читает) |
+
+### `candidate_type` (DEC-061)
+
+Детерминированная классификация (без LLM) типа источника:
+
+- `direct_competitor` — кредитор / автоломбард / МФО / брокер, выдаёт займы напрямую (приоритет на одобрение).
+- `aggregator` — агрегаторы/сравнения (banki.ru, vbr.ru, finuslugi.ru).
+- `directory` — карты/каталоги/отзывы (2gis).
+- `media_article` — статьи/подборки/рейтинги (kp.ru).
+- `marketplace` — маркетплейсы/доски объявлений.
+- `social` — соцсети/каналы/профили.
+- `unknown` — запасной вариант.
+
+**Прямых конкурентов одобрять в первую очередь.** Агрегаторы/каталоги/СМИ полезны как источник интеллекта
+(можно вытащить новых конкурентов вручную), но **не являются прямыми конкурентами** — у них пометка в `notes`:
+«Review manually; not a direct competitor». Авто-отклонения нет.
 
 Бизнес-вкладки (`results`, `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`,
 `technical_errors`) Workflow 05 **не трогает**. Точные заголовки — в `docs/TABLE_SCHEMA.md`.

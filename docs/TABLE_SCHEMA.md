@@ -86,18 +86,19 @@ A separate registry tab, written/read only by Workflow 04. Its own header (10 co
 | 9 | `batch_index` | integer | 1-based URL position |
 | 10 | `note` | string | `processed_by_workflow_04` |
 
-**Column counts:** the **6 business tabs use 35 columns**; **`url_registry` uses its own 10 columns**; the planned discovery tabs are **`url_candidates` = 25 columns** and **`discovery_requests` = 18 columns** (Stage 2.2, not built yet — see below). **No existing sheet is removed.** **Workflows 02/03 may leave `run_id`/`batch_index` empty**; **Workflow 04 fills `run_id`/`batch_index`** on every business path and populates `url_registry`.
+**Column counts:** the **6 business tabs use 35 columns**; **`url_registry` uses its own 10 columns**; the discovery tabs are **`url_candidates` = 26 columns** and **`discovery_requests` = 18 columns** (Stage 2.2, Workflow 05 built/under test — see below). **No existing sheet is removed.** **Workflows 02/03 may leave `run_id`/`batch_index` empty**; **Workflow 04 fills `run_id`/`batch_index`** on every business path and populates `url_registry`.
 
 **Placeholder pre-filter (DEC-054).** Before the Claude call, `Normalize Firecrawl Output` detects obvious placeholder/parking/domain-not-connected pages (e.g. Wix "domain not connected", parking page, `сайт/домен не подключен`, `заглушка сайта`, or bare "coming soon" with no business content) and emits a **35-field `skipped_log`** row with `parse_method=firecrawl_placeholder_prefilter` (`processing_status=business_skip`, scores 1, `recommended_action=ignore`) — **no Claude cost**. The row still appends to `url_registry` so the URL is not re-processed by default.
 
 **Source of truth + backfill (DEC-053).** `url_registry` is the **single source of truth for dedup**. Business rows written **before** the registry existed do **not** dedup unless their `normalized_source_url` is backfilled into `url_registry`. This is why a previously-analyzed URL can be re-processed on the first run after the registry is introduced (registry was empty) — expected behaviour. Backfilling older rows into `url_registry` is **optional future maintenance**, not required. Validated 2026-06-08: Run 1 (empty registry) processed 3 URLs; Run 2 (same 3) skipped all via dedup at 0 cost.
 
-### `url_candidates` tab — 25 columns (Workflow 05 BUILT/under test, Stage 2.2 — DEC-055/058/060)
+### `url_candidates` tab — 26 columns (Workflow 05 BUILT/under test, Stage 2.2 — DEC-055/058/060/061)
 
-The discovery **supplier** sheet (Workflow 05 manual intake; later search/API). Holds candidate URLs and a
-human approval gate; **no candidate reaches Firecrawl/Claude until `approval_status=approved`**. Written by
-the discovery layer; `url_registry` is read-only from here. `normalized_source_url` uses Workflow 04's
-normalizer so it matches `url_registry` exactly. Header (25 columns, in order):
+The discovery **supplier** sheet (Workflow 05). Holds candidate URLs and a human approval gate; **no
+candidate reaches Firecrawl/Claude until `approval_status=approved`**. Written by the discovery layer;
+`url_registry` is read-only from here. `normalized_source_url` uses Workflow 04's normalizer so it matches
+`url_registry` exactly. **DEC-061 added `candidate_type` (col 11, after `domain`) → 26 columns**, and moved
+`domain` ahead of `title`/`snippet`. Header (26 columns, in order):
 
 | # | Column | Type | Description |
 |---|--------|------|-------------|
@@ -110,22 +111,33 @@ normalizer so it matches `url_registry` exactly. Header (25 columns, in order):
 | 7 | `source` | string | `manual` / `search_api` / `apify_search` / `serp_actor` / `telegram_operator` / `unknown` |
 | 8 | `candidate_url` | string | raw URL as provided |
 | 9 | `normalized_source_url` | string | normalized key — matches `url_registry` |
-| 10 | `title` | string | optional result title |
-| 11 | `snippet` | string | optional result snippet |
-| 12 | `domain` | string | host of the normalized URL |
-| 13 | `rank` | integer | position in the source result list |
-| 14 | `region_hint` | string | e.g. `Москва` |
-| 15 | `service_hint` | string | e.g. `pts_loan` |
-| 16 | `confidence_score` | integer | 1–100 deterministic relevance |
-| 17 | `dedup_status` | string | `unique` / `duplicate_in_batch` / `duplicate_in_registry` |
-| 18 | `registry_status` | string | `not_in_registry` / `in_registry` |
-| 19 | `approval_status` | string | `new` / `approved` / `rejected` / `processed` / `duplicate` / `error` |
-| 20 | `approved_by` | string | operator id (blank until approved) |
-| 21 | `approved_at` | string | ISO 8601 (blank until approved) |
-| 22 | `rejection_reason` | string | free text |
-| 23 | `estimated_firecrawl_credits` | integer | estimate if processed (0 for duplicates) |
-| 24 | `estimated_claude_cost_usd` | number | estimate if processed (0 for duplicates) |
-| 25 | `notes` | string | free text |
+| 10 | `domain` | string | hostname, lowercased, leading `www.` stripped (e.g. `autolombard-moskva.ru`) |
+| 11 | `candidate_type` | string | `direct_competitor` / `aggregator` / `directory` / `media_article` / `marketplace` / `social` / `unknown` |
+| 12 | `title` | string | result title |
+| 13 | `snippet` | string | result snippet |
+| 14 | `rank` | integer | position in the source result list |
+| 15 | `region_hint` | string | e.g. `Москва/МО` |
+| 16 | `service_hint` | string | e.g. `pts_loan` |
+| 17 | `confidence_score` | integer | 1–100 deterministic relevance (direct competitors rank above aggregators/directories/media) |
+| 18 | `dedup_status` | string | `unique` / `duplicate_in_batch` / `duplicate_in_registry` |
+| 19 | `registry_status` | string | `not_in_registry` / `in_registry` |
+| 20 | `approval_status` | string | `new` / `approved` / `rejected` / `processed` / `duplicate` / `error` |
+| 21 | `approved_by` | string | operator id (blank until approved) |
+| 22 | `approved_at` | string | ISO 8601 (blank until approved) |
+| 23 | `rejection_reason` | string | free text |
+| 24 | `estimated_firecrawl_credits` | integer | estimate if processed (0 for duplicates) |
+| 25 | `estimated_claude_cost_usd` | number | estimate if processed (0 for duplicates) |
+| 26 | `notes` | string | free text |
+
+**`candidate_type` enum:** `direct_competitor` (lender / autolombard / MFO / broker offering loans directly),
+`aggregator` (comparison/listing portals — banki.ru, vbr.ru, finuslugi.ru), `directory` (map/review listings —
+2gis), `media_article` (articles/listicles — kp.ru), `marketplace` (classified/marketplace platforms),
+`social` (social networks/channels), `unknown` (fallback). **Direct competitors are prioritized for approval;
+aggregators/directories/media are optional intelligence, not direct competitors.**
+
+> **Google Sheet change required:** the existing `url_candidates` tab must be updated from 25 → 26 columns by
+> inserting **`candidate_type` immediately after `domain`** (col 11), with `domain` positioned before
+> `title`/`snippet`. The Workflow 05 append uses auto-mapping by header name, so the header must match exactly.
 
 ### `discovery_requests` tab — 18 columns (Workflow 05 BUILT/under test, Stage 2.2 — DEC-059/060)
 
@@ -155,7 +167,7 @@ One row per discovery request (Workflow 05). Groups all `url_candidates` of that
 
 **`status` values:** `new`, `search_done`, `needs_review`, `approved`, `processing`, `processed`, `error`, `cancelled`.
 
-**Tab column counts:** 6 business tabs = **35**; `url_registry` = **10**; `url_candidates` = **25**; `discovery_requests` = **18**. Existing sheets (`results`, `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`, `technical_errors`, `url_registry`) are **kept — nothing is removed**.
+**Tab column counts:** 6 business tabs = **35**; `url_registry` = **10**; `url_candidates` = **26**; `discovery_requests` = **18**. Existing sheets (`results`, `review_queue`, `monitor_queue`, `content_queue`, `skipped_log`, `technical_errors`, `url_registry`) are **kept — nothing is removed**.
 
 ---
 

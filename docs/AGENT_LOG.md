@@ -5,6 +5,27 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Workflow 05 Candidate-Quality Patch: candidate_type, Domain Fix, Competitor-First Scoring (DEC-061)
+
+**Agent role:** project-engineer
+**Session goal:** Patch Workflow 05 candidate quality after the first real Apify run (passed technically: 10 candidates, 1 registry duplicate, `discovery_requests` row). No architecture change, no Firecrawl/Claude.
+
+**Problems fixed:**
+1. **`domain` empty for all rows** → authoritative extraction in `Classify Candidates` (`new URL().hostname` + regex fallback, lowercased, leading `www.` stripped). Also hardened `Normalize Apify Results` domain.
+2. **`confidence_score` too high for aggregators/directories/media** → reworked scoring, competitor-first.
+3. **No source-type signal** → added **`candidate_type`** (`direct_competitor`/`aggregator`/`directory`/`media_article`/`marketplace`/`social`/`unknown`), deterministic from domain allow-lists + keyword/path heuristics. `url_candidates` **25 → 26 columns** (`candidate_type` after `domain`; `domain` moved before `title`/`snippet`).
+4. Fixed `looksLender` to match `займ` (not only `заим`/`заём`) — otherwise e.g. `carcapital.ru` mis-typed `unknown`.
+
+**Scoring (clamp 1–100):** +30 direct_competitor; +20 залог; +20 ПТС/pts; +15 авто; +15 Москва; +10 кредит/займ; +10 ставка/сумма/одобрение; +10 lender-looking; −50 duplicate_in_registry; −35 directory; −25 aggregator; −20 media_article; −20 marketplace (unless query asks); −30 social. Approval: dup → `duplicate`; unique direct competitor → `new`; unique aggregator/directory/media → `new` + "review manually; not a direct competitor" note (no auto-reject).
+
+**Verified:** `python3 -m json.tool` VALID; active=false; only the Apify HTTP node (0 Firecrawl/0 Claude); no `tool_use`/`KEY=VALUE`; placeholders only. Node simulation on the 10 real-test-like candidates: domains filled; 4 lenders + cashmotor → `direct_competitor` (cashmotor `duplicate`); 2gis → `directory`; finuslugi/vbr/banki → `aggregator`; kp → `media_article`; competitors 85–100 vs aggregators/directory/media 15–45; exact **26** url_candidates + **18** discovery_requests field counts.
+
+**Docs updated:** `N8N_WORKFLOW_05_APIFY_SEARCH_CANDIDATES_RU.md` (test results + candidate_type), `WORKFLOW_05_URL_DISCOVERY_PLAN.md`, `URL_DISCOVERY_STRATEGY.md` (candidate types + source diversity), `TABLE_SCHEMA.md` (26-col), `DECISIONS.md` (DEC-061), `COSTS_AND_LIMITS.md`, `AGENT_CAPABILITIES.md`, `ROADMAP.md`, `NEXT_ACTIONS.md`.
+
+**Next:** operator adds `candidate_type` to the `url_candidates` sheet (after `domain` → 26-col header), re-imports, reruns the same query, verifies domains + types + competitor-first ranking.
+
+---
+
 ## 2026-06-08 — Workflow 05 BUILT: Apify Search Candidate Discovery (DEC-060)
 
 **Agent role:** project-engineer
