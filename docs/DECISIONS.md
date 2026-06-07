@@ -5,6 +5,51 @@ Most recent first.
 
 ---
 
+## DEC-058 — URL Discovery = Hybrid A+B+D; `url_candidates` Grows to 25 Columns; Collect 10 / Process 5
+
+**Date:** 2026-06-08
+**Context:** Refining Stage 2.2 before building Workflow 05. The discovery layer must support a future Telegram bot and per-request summaries without re-architecting, while keeping discovery, approval, and processing as separate, independently testable stages.
+**Decision:**
+1. **Selected architecture = Hybrid A + B + D** (C parked): Option A (manual intake) **first**, then Option B (search/API or Apify actor) once a source is evaluated, then Option D (Telegram) **as an interface only**. Firecrawl `/v2/search` (C) is **parked** — do not combine search+scrape+analysis in one step; if evaluated later, use C for candidate discovery only.
+2. **`url_candidates` schema grows from 22 → 25 columns**, adding request-level grouping fields `discovery_request_id`, `requested_by`, `requested_limit` (plus `query`, `created_at` already present) so candidates from one operator request can be grouped, summarized, and reported by a future bot.
+3. **Default volumes:** a discovery request **collects up to 10 candidates** (`requested_limit=10`); **Workflow 04 still processes max 5 URLs per run**, so 10 approved candidates run as **two controlled batches of 5**. **No candidate reaches Firecrawl/Claude until `approval_status=approved`.**
+4. **Stage 2.2c Approved Candidates Runner** is the named hand-off layer (approved candidates → Workflow 04 in batches of 5); manual for now, not built.
+**Reason:** the grouping fields are cheap to add now and expensive to retrofit; the hybrid order de-risks cost and quality; Telegram-as-interface keeps core logic in one place.
+**Supersedes:** the 22-column proposal in DEC-055.
+**File:** planning — `docs/URL_DISCOVERY_STRATEGY.md`, `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`, `docs/TABLE_SCHEMA.md`.
+
+---
+
+## DEC-057 — Telegram Control Bot Deferred Until Candidate + Approval Flow Exists
+
+**Date:** 2026-06-08
+**Context:** A natural-language Telegram interface is attractive but it is an *interface*, not a discovery source. Building it before a candidate sheet + human approval flow exist would couple NL parsing, discovery, approval, and processing into one fragile step.
+**Decision:** Telegram Control Bot (Stage 2.3) is **deferred** until Stage 2.2a (manual candidate intake) and the approval flow are built and validated (gates G1–G3 in `URL_DISCOVERY_STRATEGY.md`). The bot will then only orchestrate: submit query → show estimated cost → operator approves → write approved URLs → trigger Workflow 04 (or a future Workflow 06).
+**Reason:** keep each layer independently testable; never auto-process without a human gate.
+**File:** planning — `docs/URL_DISCOVERY_STRATEGY.md`.
+
+---
+
+## DEC-056 — Manual Candidate Intake Before Automated Search (Option A first)
+
+**Date:** 2026-06-08
+**Context:** Discovery can be manual (operator pastes candidate URLs) or automated (search API / SERP actor / Firecrawl `/v2/search`). Automated sources carry cost, rate-limit, quality, and ToS risk that must be evaluated.
+**Decision:** Stage 2.2 starts with **Option A — Manual URL Candidates** (Workflow 05: normalize → `url_registry` lookup → write `url_candidates`, 0 cost). **Option B** (search API / Apify actor) is a later, measured test after source evaluation (gate G4). **Option C** (Firecrawl `/v2/search`) stays **blocked** until explicitly evaluated — not assumed best.
+**Reason:** cheapest, safest, no new external dependency; proves the candidate + approval + dedup flow before any paid discovery.
+**File:** planning — `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`.
+
+---
+
+## DEC-055 — URL Discovery Is a Separate Layer; Workflow 04 Remains the URL Consumer
+
+**Date:** 2026-06-08
+**Context:** Workflow 04 is validated as the URL **consumer** (≤5 URLs → dedup → Firecrawl → Claude → routing). Stage 2.2 needs a URL **supplier** that turns an operator topic/query into vetted candidate URLs.
+**Decision:** Build the supplier as a **separate layer**, not inside Workflow 04. A new **`url_candidates`** sheet (22 columns; **expanded to 25 in DEC-058**) holds candidates with `approval_status` (`new`/`approved`/`rejected`/`processed`/`duplicate`/`error`); discovery checks `url_registry` early so already-processed URLs never reach approval or spend; **human approval is required** before any Firecrawl/Claude processing. Workflow 04 is unchanged and keeps its ≤5-URL limit. The candidate normalizer reuses Workflow 04's rules so `url_candidates.normalized_source_url` matches `url_registry` exactly.
+**Reason:** separates cost profiles and failure modes (discovery vs analysis), inserts a human gate, and reuses dedup. Keeps each workflow simple and independently testable.
+**File:** planning — `docs/URL_DISCOVERY_STRATEGY.md`, `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`.
+
+---
+
 ## DEC-054 — Workflow 04 Approved for Manual ≤5-URL Mini-Batch; Placeholder Pre-Filter + Stronger PTS Override
 
 **Date:** 2026-06-08

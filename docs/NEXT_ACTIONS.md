@@ -317,6 +317,21 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 > **Backfill note:** `url_registry` is the dedup source of truth. Rows analyzed before the registry existed re-process once until backfilled (optional maintenance) — see `TABLE_SCHEMA.md`.
 > Still blocked: >5 URLs, scheduled runs, crawler, batch/search endpoints, URL-discovery agent, Telegram bot, Avito/Telegram/Instagram (DEC-050).
 
+#### Step G — Stage 2.2: URL Discovery Layer 📋 PLANNING DONE, build gated on approval (2026-06-08)
+
+**Plans:** `docs/URL_DISCOVERY_STRATEGY.md` (selected **Hybrid A+B+D**, risks, gates G1–G5), `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md` (`url_candidates` **25-col** schema + manual intake). Workflow 04 stays the URL **consumer**; this designs the URL **supplier**. **No JSON built; no external calls.**
+
+**Selected architecture (DEC-058):** Hybrid — Option A (manual intake) first → Option B (search API/actor, measured) → Stage 2.2c Approved Candidates Runner → Telegram bot (interface). Option C (Firecrawl `/v2/search`) parked. **Default: collect 10 candidates; Workflow 04 processes ≤5/run → two batches of 5.**
+
+**Operator tasks (in order):**
+1. [ ] **Review + approve the `url_candidates` 25-column schema** (incl. `discovery_request_id`/`requested_by`/`requested_limit` + `approval_status`/`source`/`dedup_status` value sets) — gate G1.
+2. [ ] **Create the `url_candidates` sheet** with the 25-column header (see `WORKFLOW_05_URL_DISCOVERY_PLAN.md` §2 / `TABLE_SCHEMA.md`).
+3. [ ] **Confirm Option A first** (manual intake before any automated search).
+4. [ ] **Approve building `05 - URL Candidates Manual Intake`** (Manual Start → Set Candidate URLs + Query → Normalize → Check `url_registry` → Build Candidate Rows → Append `url_candidates`; no Firecrawl/Claude; default 10, cap 20/intake; `approval_status=new`, dups → `duplicate`).
+5. [ ] Validate per `WORKFLOW_05_URL_DISCOVERY_PLAN.md` §9, then manually approve rows and feed ≤5 into Workflow 04.
+
+> **Do not** build automated search (Option B), Firecrawl `/v2/search` (Option C), the Approved Candidates Runner (Stage 2.2c), or the Telegram bot (Stage 2.3) yet — each is gated (DEC-056/057/058).
+
 #### Step E (legacy plan) — Workflow 03: Firecrawl Website Analysis _(superseded by the active Step E above)_
 
 **Goal:** Take a real competitor URL, extract clean text via Firecrawl, pass to Claude v2, verify full chain.

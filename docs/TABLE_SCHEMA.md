@@ -86,11 +86,48 @@ A separate registry tab, written/read only by Workflow 04. Its own header (10 co
 | 9 | `batch_index` | integer | 1-based URL position |
 | 10 | `note` | string | `processed_by_workflow_04` |
 
-**Column counts:** the **6 business tabs use 35 columns**; **`url_registry` uses its own 10 columns**. **Workflows 02/03 may leave `run_id`/`batch_index` empty**; **Workflow 04 fills `run_id`/`batch_index`** on every business path and populates `url_registry`.
+**Column counts:** the **6 business tabs use 35 columns**; **`url_registry` uses its own 10 columns**; the planned **`url_candidates` discovery tab uses 25 columns** (Stage 2.2, not built yet — see below). **Workflows 02/03 may leave `run_id`/`batch_index` empty**; **Workflow 04 fills `run_id`/`batch_index`** on every business path and populates `url_registry`.
 
 **Placeholder pre-filter (DEC-054).** Before the Claude call, `Normalize Firecrawl Output` detects obvious placeholder/parking/domain-not-connected pages (e.g. Wix "domain not connected", parking page, `сайт/домен не подключен`, `заглушка сайта`, or bare "coming soon" with no business content) and emits a **35-field `skipped_log`** row with `parse_method=firecrawl_placeholder_prefilter` (`processing_status=business_skip`, scores 1, `recommended_action=ignore`) — **no Claude cost**. The row still appends to `url_registry` so the URL is not re-processed by default.
 
 **Source of truth + backfill (DEC-053).** `url_registry` is the **single source of truth for dedup**. Business rows written **before** the registry existed do **not** dedup unless their `normalized_source_url` is backfilled into `url_registry`. This is why a previously-analyzed URL can be re-processed on the first run after the registry is introduced (registry was empty) — expected behaviour. Backfilling older rows into `url_registry` is **optional future maintenance**, not required. Validated 2026-06-08: Run 1 (empty registry) processed 3 URLs; Run 2 (same 3) skipped all via dedup at 0 cost.
+
+### `url_candidates` tab — 25 columns (PLANNED, Stage 2.2 — not built, DEC-055/058)
+
+The discovery **supplier** sheet (Workflow 05 manual intake; later search/API). Holds candidate URLs and a
+human approval gate; **no candidate reaches Firecrawl/Claude until `approval_status=approved`**. Written by
+the discovery layer; `url_registry` is read-only from here. `normalized_source_url` uses Workflow 04's
+normalizer so it matches `url_registry` exactly. Header (25 columns, in order):
+
+| # | Column | Type | Description |
+|---|--------|------|-------------|
+| 1 | `candidate_id` | string | `cand_YYYYMMDD_HHmmss_<index>` |
+| 2 | `discovery_request_id` | string | groups one request, `disc_YYYYMMDD_HHmmss` |
+| 3 | `created_at` | string | ISO 8601 intake time |
+| 4 | `requested_by` | string | `manual` / `operator` / `telegram_operator` / `system` |
+| 5 | `requested_limit` | integer | default candidate count (usually 10) |
+| 6 | `query` | string | original topic/query |
+| 7 | `source` | string | `manual` / `search_api` / `apify_search` / `serp_actor` / `telegram_operator` / `unknown` |
+| 8 | `candidate_url` | string | raw URL as provided |
+| 9 | `normalized_source_url` | string | normalized key — matches `url_registry` |
+| 10 | `title` | string | optional result title |
+| 11 | `snippet` | string | optional result snippet |
+| 12 | `domain` | string | host of the normalized URL |
+| 13 | `rank` | integer | position in the source result list |
+| 14 | `region_hint` | string | e.g. `Москва` |
+| 15 | `service_hint` | string | e.g. `pts_loan` |
+| 16 | `confidence_score` | integer | 1–100 deterministic relevance |
+| 17 | `dedup_status` | string | `unique` / `duplicate_in_batch` / `duplicate_in_registry` |
+| 18 | `registry_status` | string | `not_in_registry` / `in_registry` |
+| 19 | `approval_status` | string | `new` / `approved` / `rejected` / `processed` / `duplicate` / `error` |
+| 20 | `approved_by` | string | operator id (blank until approved) |
+| 21 | `approved_at` | string | ISO 8601 (blank until approved) |
+| 22 | `rejection_reason` | string | free text |
+| 23 | `estimated_firecrawl_credits` | integer | estimate if processed (0 for duplicates) |
+| 24 | `estimated_claude_cost_usd` | number | estimate if processed (0 for duplicates) |
+| 25 | `notes` | string | free text |
+
+**Tab column counts:** 6 business tabs = **35**; `url_registry` = **10**; `url_candidates` = **25**.
 
 ---
 

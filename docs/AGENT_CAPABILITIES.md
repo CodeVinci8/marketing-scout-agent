@@ -1,6 +1,6 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-08 (Workflow 04 VALIDATED on 3-URL + 5-URL runs & APPROVED for manual ≤5-URL mini-batch — `url_registry` dedup, placeholder pre-filter, stronger PTS service-type override, DEC-051/052/053/054)
+**Last updated:** 2026-06-08 (Workflow 04 APPROVED as URL consumer; **Stage 2.2 URL Discovery refined** — selected Hybrid A+B+D, `url_candidates` 25-col schema, collect 10 / process ≤5, human approval before spend, DEC-055/056/057/058)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
 **Active workflow candidate:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json`
 **Test status:** Resilient Router Tests A–E **all pass**. Production workflow built (33 columns). **First manual production smoke test FAILED** (repair API 502 → technical_errors with lost diagnostics); workflow **patched** (DEC-038): primary raw preserved, compact repair payload, dual Primary+Repair diagnostics, primary prompt reminder. **Production workflow is NOT approved for Firecrawl until the patched manual smoke test passes.**
@@ -20,6 +20,11 @@
 - **Placeholder / parking-page skip** ✅ APPROVED (2026-06-08, DEC-054) — `Normalize Firecrawl Output` detects obvious placeholder/domain-not-connected pages (Wix not-connected, parking page, `сайт/домен не подключен`, bare "coming soon" with no business content) and routes them to `skipped_log` (`parse_method=firecrawl_placeholder_prefilter`) **before** any Claude call; still appended to `url_registry`.
 - **URL `url_registry` dedup** ✅ APPROVED (2026-06-08, DEC-051/053) — dedup keyed on `normalized_source_url` (full URL **with path**, not domain) in a dedicated `url_registry` tab, checked before Firecrawl/Claude; duplicate → `skipped_log`/`dedup_source_url`, **zero cost**. Registry appended after every non-duplicate attempt and is the **source of truth** (old rows dedup only if backfilled — optional).
 - **Deterministic competitor fallback** ✅ APPROVED (2026-06-08, DEC-052) — after primary+repair JSON failure, emits a structured `competitor`/`monitor_queue` row (`needs_manual_review=true`) instead of dropping to `technical_errors`.
+- **Workflow 04 as URL consumer** ✅ APPROVED (DEC-055) — Workflow 04 is the URL **consumer** (≤5 approved URLs → dedup → Firecrawl → Claude → routing). The URL **supplier** (discovery) is a separate, planned layer.
+
+**Planned (designed, NOT built — planning only):**
+- **URL Discovery Layer (Stage 2.2)** 📋 PLANNED (DEC-055/056/057/058) — separate URL supplier; selected **Hybrid A+B+D** (manual → search/API → Telegram interface), C parked; `url_candidates` sheet (**25 cols**, request-level grouping) with `approval_status`; human approval before any spend; reuses `url_registry`. Default collect 10 / process ≤5. Plans: `docs/URL_DISCOVERY_STRATEGY.md`, `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`.
+- **URL Candidates Manual Intake (Workflow 05, Stage 2.2a)** 📋 PLANNED — manual paste → normalize → check `url_registry` → build rows → append `url_candidates` (`new`, dups → `duplicate`), **0 Firecrawl/Claude**, default 10 / cap 20 candidates/intake. Build gated on operator schema approval (G1).
 
 **Still NOT approved:**
 - More than 5 URLs per run.
@@ -27,6 +32,9 @@
 - Batch scraping over large URL lists (`/v2/batch/scrape`).
 - Firecrawl search endpoint (`/v2/search`).
 - Scheduled scraping (cron trigger).
+- **Automatic search discovery** (search API / Apify actor / Firecrawl `/v2/search`) — Option B/C, blocked until source evaluated (DEC-056).
+- **Telegram Control** / NL query interface — deferred until candidate + approval flow exists (DEC-057).
+- **Auto-triggered processing** — no candidate may reach Firecrawl/Claude without human `approval_status=approved` (DEC-055).
 - URL-discovery agent / Telegram Control Bot (DEC-050).
 - Avito / Telegram / Instagram real ingestion.
 - Automated lead outreach.

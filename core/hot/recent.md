@@ -4,6 +4,32 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Stage 2.2 URL Discovery REFINED: Hybrid A+B+D + 25-col `url_candidates` (DEC-058)
+
+**What was done (planning/docs only — no JSON, no external calls):**
+- **Selected architecture = Hybrid A+B+D** (DEC-058): manual intake (A) first → search/API (B) later → Approved Candidates Runner (Stage 2.2c) → Telegram (D) **interface only**. Firecrawl `/v2/search` (C) **parked** (don't combine search+scrape+analysis).
+- **`url_candidates` 22 → 25 columns:** added `discovery_request_id`, `requested_by`, `requested_limit` (request-level grouping for future bot/summaries).
+- **Default volumes:** collect **10** candidates/request; Workflow 04 processes **≤5/run** → 10 approved = two batches of 5. No spend until `approval_status=approved`.
+- Telegram must **call** workflows, never duplicate discovery/processing logic.
+- Updated: `URL_DISCOVERY_STRATEGY.md`, `WORKFLOW_05_URL_DISCOVERY_PLAN.md` (25-col + Build Candidate Rows structure), `TABLE_SCHEMA.md` (counts 35/10/25), `DECISIONS.md` (DEC-058), `ROADMAP.md` (2.2a/b/c + 2.3), `NEXT_ACTIONS.md` (Step G), `COSTS_AND_LIMITS.md`, `AGENT_CAPABILITIES.md`.
+
+**Next operator decision:** approve the `url_candidates` **25-column** schema (G1) + confirm Option A first → create sheet → authorize building Workflow 05. Search/Telegram deferred.
+
+---
+
+## Session: 2026-06-08 — Stage 2.2 URL Discovery Layer PLANNED (DEC-055/056/057)
+
+**What was done (planning only — no JSON, no external calls):**
+- Created **`docs/URL_DISCOVERY_STRATEGY.md`** (consumer vs supplier; options A/B/C/D; risks; gates G1–G5) and **`docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md`** (`05 - URL Candidates Manual Intake`: `url_candidates` 22-col schema, approval/source/dedup value sets, manual intake structure, ≤20/intake, **no Firecrawl/Claude**, test plan).
+- **Architecture:** URL discovery is a **separate layer** (the *supplier*); Workflow 04 stays the *consumer* (unchanged). New `url_candidates` sheet holds candidates with `approval_status` (`new`/`approved`/`rejected`/`processed`/`duplicate`/`error`); discovery checks `url_registry` early; **human approval required before any Firecrawl/Claude spend**. Normalizer reused from Workflow 04 so `normalized_source_url` matches `url_registry`.
+- **Recommended path:** Option A (manual intake) → Option B (search API/actor, measured, gate G4) → Telegram bot (Stage 2.3, deferred). Option C (Firecrawl `/v2/search`) parked.
+- **Decisions:** DEC-055 (separate layer / Workflow 04 = consumer), DEC-056 (manual before automated search), DEC-057 (Telegram deferred until candidate+approval flow exists).
+- Updated ROADMAP (2.2/2.2a/2.2b/2.3), AGENT_CAPABILITIES, COSTS, NEXT_ACTIONS (Step G).
+
+**Next operator decision:** approve the `url_candidates` 22-column schema (G1) + confirm Option A first → create the sheet → authorize building Workflow 05. **Do not build Telegram/search yet.**
+
+---
+
 ## Session: 2026-06-08 — Workflow 04: 5-URL Test Passed + Placeholder Pre-Filter + Stronger PTS Override (DEC-054)
 
 **What was done:**
