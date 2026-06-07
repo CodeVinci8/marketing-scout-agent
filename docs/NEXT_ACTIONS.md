@@ -4,6 +4,43 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
+## CURRENT PRIORITY (2026-06-07) — Final Stage 2 retest → commit → Stage 3.0 Lead Source Evaluation
+
+The web competitor pipeline **05 → 06 → 04** passed a full manual E2E test. A **final Stage 2 hardening pass**
+landed (DEC-070/071/072): **WF06 runner modes** (`first_pass_domain_diversity` default / `deep_domain_analysis`
+explicit), **WF04 stronger PTS override + deterministic contact extraction**, and a technical review doc
+`docs/STAGE_2_WEB_PIPELINE_REVIEW.md` (test matrix T1–T11).
+
+**Next, in order:**
+1. [ ] **Run the Stage 2 final retest matrix** (`docs/STAGE_2_WEB_PIPELINE_REVIEW.md` §8, T1–T11). Re-import
+   WF04/05/06 (all active=false); rebind Google Sheets + Apify credentials + real Spreadsheet ID.
+   - **WF06 first_pass (default):** approve the 4 E2E URLs incl. **both** `autolombard-moskva.ru` URLs → expect
+     **3 selected** (1/domain), 2nd `autolombard-moskva.ru` → `skipped` `duplicate_domain_in_run`.
+   - **WF06 deep_domain_analysis:** set `runner_mode=deep_domain_analysis` in **Set Runner Config** → expect
+     **4 selected** (both autolombard-moskva URLs; domain count 2 ≤ 3) with the deep-mode `warning`; >3/domain →
+     `domain_deep_limit`.
+   - **WF06 registry recheck:** an approved URL already in `url_registry` → `registry_recheck_duplicate`.
+   - **WF04 PTS:** `autolombardn1.ru/` and `autolombard-moskva.ru/services/.../dmitrovskoe-shosse/` →
+     `service_type=pts_loan`; `mosinvestfinans.ru/`→`generic_lending`; lioncredit RE page →
+     `secured_real_estate_loan`.
+   - **WF04 contacts:** valid full contacts kept (`+7 495 740-01-01, https://t.me/…, https://wa.me/…`);
+     partials (`+7 (495) ...`, `номер указан на сайте`, `требуется извлечение`) blanked.
+   - **Field-count guard:** WF04 = 35 business + 10 `url_registry`; WF05 = 26 `url_candidates` + 18
+     `discovery_requests`.
+2. [ ] **Commit the Stage 2 web pipeline** (workflows + docs) once T1–T11 pass; mark Stage 2 approved/closed.
+3. [ ] **Stage 3.0 — Lead Source Evaluation** (design/eval doc; **no build**): compare **Avito vs Telegram vs
+   VK** on data availability, cost, risk, lead quality, implementation complexity. See
+   `docs/LEAD_DISCOVERY_ARCHITECTURE.md` + `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`.
+4. [ ] **Do NOT build any lead connector** until the Stage 3.0 evaluation is written **and approved**.
+   Preliminary (non-binding) choice: Avito/Classifieds first, Telegram second; wire Manual Records Intake
+   first to validate the lead schema + analyzer with zero source risk.
+
+> Still NOT approved / not built: Avito scraping, Telegram parser, VK/Instagram/Yandex connectors, Telegram
+> Control Bot. Lead sheets (`lead_discovery_requests`, `raw_market_records`, `market_record_registry`) are
+> **proposed only** (see `TABLE_SCHEMA.md`).
+
+---
+
 ## Current Priority: v0.1 Pipeline Setup
 
 ### Step 1 — Review project structure ✓

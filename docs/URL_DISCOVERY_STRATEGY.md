@@ -192,3 +192,15 @@ The bot orchestrates and reports only — it **must not** duplicate scraping or 
 ## See also
 - `docs/WORKFLOW_05_URL_DISCOVERY_PLAN.md` — the Apify Search Candidate Discovery plan + schemas.
 - `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md` — the URL consumer (approved).
+
+---
+
+## Stage 2 final hardening note (2026-06-07, DEC-070/071/072)
+
+The discovery → approval → consume chain (05 → 06 → 04) is **modular and stays modular** (not a monolith,
+DEC-071). Workflow 06 now exposes two **runner modes** (Set Runner Config → `runner_mode`):
+`first_pass_domain_diversity` (DEFAULT — one URL per domain per run, for breadth) and `deep_domain_analysis`
+(EXPLICIT — up to 3 URLs/domain/run, for depth). `url_registry` dedup stays **URL-level** (full normalized
+URL) in both modes; domain diversity is a per-run *selection* rule only. Workflow 04 hardened: stronger PTS
+`service_type` override + deterministic `contact_public` extraction. Full pre-approval review +
+test matrix: `docs/STAGE_2_WEB_PIPELINE_REVIEW.md`.

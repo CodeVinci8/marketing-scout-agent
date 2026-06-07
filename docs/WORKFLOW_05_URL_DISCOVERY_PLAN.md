@@ -243,3 +243,14 @@ The schema is built so a future Telegram Control Bot is a thin interface over `d
 Planning only. Build is gated on: operator approval of `discovery_requests` (18) + `url_candidates` (25)
 schemas, obtaining an Apify API token, and creating the n8n Header Auth credential. SerpAPI / Google CSE
 fallbacks and Firecrawl `/v2/search` (parked) and the Telegram bot remain deferred.
+
+---
+
+## 14. Stage 2 quick review result (2026-06-07)
+
+Reviewed (not patched) during the Stage 2 final hardening pass — **no bug found, no change needed**:
+- No Firecrawl node, no Claude node (only the Apify Google Search `httpRequest`).
+- Writes **`url_candidates` = 26 fields** and **`discovery_requests` = 18 fields**; no business-tab writes.
+- `candidate_type` classification present; domain extraction present; `duplicate_in_registry` dedup works
+  (reads `url_registry`).
+- `active=false`. Confirmed in the Stage 2 review: `docs/STAGE_2_WEB_PIPELINE_REVIEW.md` §2/§8 (test T1/T11).

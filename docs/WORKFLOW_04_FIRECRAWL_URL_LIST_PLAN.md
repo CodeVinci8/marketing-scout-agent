@@ -159,3 +159,19 @@ needed repair.
 Built `n8n/workflows/04_firecrawl_url_list_resilient.json` + guide `docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md`,
 reusing Workflow 03's analyzer nodes verbatim and adding the list input, Split-In-Batches loop, dedup guard,
 and `run_id`/`batch_index`. **Next gate:** operator runs the 3-URL manual test before any 5-URL run.
+
+---
+
+## 10. Stage 2 final hardening (2026-06-07, DEC-070)
+
+Two `Normalize + Route` improvements before Stage 2 approval (no field-count/architecture/dedup change —
+still 35 business + 10 `url_registry`):
+- **Stronger PTS `service_type` override:** competitor + ≥3 of an expanded strong-token set (ПТС, ЭПТС,
+  под ПТС, залог ПТС, займ под залог ПТС, автоломбард, залог авто, залог автомобиля, автомобиль остаётся,
+  машина остаётся, без проверки КИ, любая кредитная история) ⇒ `pts_loan`, unless multi-product root or
+  clearly real-estate-only. Fixes autolombardn1.ru and autolombard-moskva.ru/services/… ; keeps
+  mosinvestfinans root = generic_lending and lioncredit RE = secured_real_estate_loan.
+- **Deterministic contact extraction (`extractContacts`/`bestContact`):** keep valid full public contacts
+  (RU phone 10–11 digits, email, `@handle`/`t.me`, `wa.me`, contact/profile/application URL ≠ source_url),
+  blank partial/hallucinated values; prefer extracted over model partials. See
+  `docs/STAGE_2_WEB_PIPELINE_REVIEW.md` for the T1–T11 approval matrix.

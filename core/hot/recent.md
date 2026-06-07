@@ -4,6 +4,35 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-07 — Stage 2 Final Hardening: WF06 Runner Modes + WF04 PTS/Contact + Review Doc (DEC-070/071/072)
+
+**What was done (0 external calls; final Stage 2 hardening pass before approval):**
+- **WF06 runner modes (DEC-072):** new **Set Runner Config** node sets `runner_mode`. Default `first_pass_domain_diversity` = max **1 URL/domain/run** (extras → `duplicate_domain_in_run`). Explicit `deep_domain_analysis` = up to **3 URLs/domain/run** (extras → `domain_deep_limit`; selected items carry deep-mode warning). Both keep max_per_run=5, registry recheck, exact URL dedup, direct→conf→rank→root priority, manual handoff, no auto-call/auto-processed. `url_registry` semantics unchanged (full URL, not domain). Summary adds `runner_mode`/`domain_diversity`/`domain_selected_counts`. Simulated: first_pass→3 sel +1 dup_domain; deep→4 sel. ✓
+- **WF04 (DEC-070):** stronger PTS override (added ЭПТС, займ под залог ПТС, автомобиль/машина остаётся, любая кредитная история; ≥3 tokens ⇒ pts_loan unless multi-product root / RE-only). Deterministic `extractContacts`/`bestContact(model,text,source_url)`: keep valid full contacts (phone/email/@handle/t.me/wa.me/contact-URL≠source_url), blank partials; prefer extracted over model partial; fixed wa.me digits being misread as phone (scan on URL-stripped copy). **35 business + 10 registry fields unchanged.** Unit-tested. ✓
+- **WF05 quick review (no patch):** only Apify httpRequest (no Firecrawl/Claude); 26-col url_candidates + 18-col discovery_requests; candidate_type + domain + duplicate_in_registry; no business-tab writes; active=false. No bug.
+- **Review doc:** created `docs/STAGE_2_WEB_PIPELINE_REVIEW.md` (architecture, roles, approved vs manual, why-not-monolith, runner modes, limitations, **T1–T11 test matrix**, recommendation).
+- **Verified:** 3× `python3 -m json.tool` VALID; active=false; placeholders only; no schedule/tool_use/KEY=VALUE; WF04 35+10, WF05 26+18, WF06 runner_mode+registry recheck+default 1/domain+deep multi/domain; manual handoff preserved.
+- **Decisions:** DEC-070 (keep valid/blank partial contacts + stronger PTS), DEC-071 (pipeline stays modular, no monolith), DEC-072 (default domain-diverse first pass; deep_domain_analysis explicit). Updated WF04/06 RU guides, strategy + WF04/05 plans, TABLE_SCHEMA, NEXT_ACTIONS, COSTS, AGENT_CAPABILITIES, ROADMAP, AGENT_LOG.
+
+**Next operator action:** re-import WF04/05/06 (active=false) → rebind creds + Spreadsheet ID → run **T1–T11** (`docs/STAGE_2_WEB_PIPELINE_REVIEW.md`) → commit Stage 2 → write/approve **Stage 3.0 Lead Source Evaluation**. Telegram Bot / lead connectors / auto-call WF04 still NOT built.
+
+---
+
+## Session: 2026-06-07 — Web Pipeline E2E Passed; WF06 Domain Diversity + WF04 PTS/Contact Hardening; Lead Discovery Layer Designed (DEC-066/067/068/069)
+
+**What was done (0 external calls; 2 workflow patches + lead-layer design):**
+- **Web pipeline 05→06→04 PASSED full manual E2E.** «автоломбард Москва займ под ПТС без проверки КИ» → WF05 found 4 direct competitors → WF06 read 18, selected 4, skipped 14 (max 5, registry_recheck on, manual handoff) → WF04 → all 4 `monitor_queue`/competitor/`parsed_success`. Surfaced 2 issues.
+- **WF06 domain diversity (DEC-066):** re-derive domain from `candidate_url`; **max 1 URL/domain/run** (second+ → `duplicate_domain_in_run`); root-page-first tiebreaker; `mode=deep_domain_analysis` reserved/not enabled. `url_registry` semantics, registry recheck, max 5, manual handoff all unchanged.
+- **WF04 stronger PTS override (B3):** competitor + ≥3 strong PTS tokens (птс/залог птс/под птс/автоломбард/залог авто/залог автомобиля/авто остаётся/любая ки/без проверки КИ) → `pts_loan`, unless multi-product root or RE-only. Simulated: autolombardn1→pts_loan, autolombard-moskva/services→pts_loan, mosinvestfinans→generic_lending, lioncredit RE→secured_real_estate_loan.
+- **WF04 contacts:** `bestContact(model,text)` keeps valid full contacts, blanks partials (`...`/требуется извлечение), and falls back to deterministic `extractContactFromText()` (RU phone, t.me/, wa.me/, email) from `text_context`. 35/10 fields + dedup unchanged.
+- **Verified:** both JSON VALID; WF06 reads+rechecks `url_registry`, 1 URL/domain/run, MAX 5, manual handoff; WF04 B3 + bestContact (×3 emitters); both active=false; placeholders only; no Apify/Firecrawl/Claude node; no tool_use/KEY=VALUE. Logic unit-tested against E2E strings.
+- **Lead Discovery Layer DESIGNED (no build):** new `docs/LEAD_DISCOVERY_ARCHITECTURE.md` + `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`; controller (Telegram Bot) ≠ parser (Telegram client); source-agnostic analyzer (lead_signal/competitor/content_idea/market_signal/irrelevant); separate `raw_market_records` schema + non-URL `market_record_registry` (why URL-only dedup is insufficient). Proposed sheets added to `TABLE_SCHEMA.md` (not created).
+- **Decisions:** DEC-066 (E2E+patches), DEC-067 (bot=controller, keep 05/06/04 modular), DEC-068 (separate lead schema + non-URL dedup), DEC-069 (Avito likely first, pending Stage 3.0). Updated NEXT_ACTIONS, COSTS, AGENT_CAPABILITIES, ROADMAP (Stage 2 closing; 3.0/3.1/3.2; Stage 4 bot), both RU guides, AGENT_LOG.
+
+**Next operator action:** re-import WF04 + WF06 (active=false) → rebind Sheets creds + Spreadsheet ID → **WF06 retest:** approve both `autolombard-moskva.ru` URLs → expect 3 selected (1/domain) + the 2nd autolombard-moskva → `duplicate_domain_in_run`. **WF04 retest:** `autolombardn1.ru/` & `autolombard-moskva.ru/services/.../dmitrovskoe-shosse/` → `pts_loan`; valid contacts kept, partials blanked. Then commit → write/approve **Stage 3.0 Lead Source Evaluation** (Avito vs Telegram vs VK). Avito scraping / Telegram parser / VK·IG·Yandex connectors / Telegram Control Bot still NOT built.
+
+---
+
 ## Session: 2026-06-07 — Workflow 06 Runtime Registry Recheck Patch (DEC-065)
 
 **What was done (0 external calls; WF06 patch only):**

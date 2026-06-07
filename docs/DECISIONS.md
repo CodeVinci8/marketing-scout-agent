@@ -5,6 +5,84 @@ Most recent first.
 
 ---
 
+## DEC-072 — Workflow 06 Default Is Domain-Diverse First Pass; deep_domain_analysis Is Explicit, Not Default
+
+**Date:** 2026-06-07
+**Context:** The E2E run selected two URLs from the same domain `autolombard-moskva.ru` in one run. Surveying many pages of one competitor is sometimes useful (deep analysis) but should not happen by default — a first pass should cover **diverse** competitors.
+**Decision:** Workflow 06 gains a `runner_mode` (Set Runner Config node), default **`first_pass_domain_diversity`**: at most **1** selected URL per normalized domain per run; extra approved same-domain URLs are skipped with `reason_category=duplicate_domain_in_run` (reason: "Same domain already selected in this run; use deep_domain_analysis mode for multi-page domain analysis."). The explicit **`deep_domain_analysis`** mode allows multiple URLs per domain, **capped at 3/domain/run** (extras → `domain_deep_limit`), and tags each selected item with `warning="deep_domain_analysis mode: multiple URLs from same domain allowed intentionally."` Both modes always keep `max_per_run=5`, `url_registry` runtime recheck, exact normalized-URL dedup, `direct_competitor`→confidence→rank→root priority, manual handoff, no auto-call, no auto-mark-processed. **`url_registry` semantics are unchanged (full normalized URL, never domain-based).** Summary adds `runner_mode`, `domain_diversity`, `domain_selected_counts`.
+**Reason:** make breadth the safe default and depth an explicit, bounded opt-in; keep dedup semantics intact.
+**Verification:** WF06 JSON VALID; Set Runner Config node present (default first_pass); both modes simulated on the 4 E2E URLs (first_pass → 3 selected + 1 `duplicate_domain_in_run`; deep → 4 selected with deep warning); registry recheck + max 5 + manual handoff preserved; active=false; no tool_use / no KEY=VALUE.
+**File:** `n8n/workflows/06_approved_candidates_runner.json`.
+
+---
+
+## DEC-071 — Stage 2 Web Pipeline Stays Modular (05 / 06 / 04); Not Merged Into a Monolith
+
+**Date:** 2026-06-07
+**Context:** As Stage 2 nears final approval and the Lead Discovery Layer is designed, there is recurring temptation to collapse discovery + approval + analysis into one workflow.
+**Decision:** Keep the three workflows separate — **05 (discovery / URL supplier) → human approval → 06 (approval runner / selection) → manual handoff → 04 (resilient analyzer / URL consumer)**. Do **not** merge them into a monolith. The human-approval spend gate sits between 05 and 06; the manual handoff sits between 06 and 04. Future lead sources add **peer** workflows of the same shape, not a bigger monolith. Recorded in `docs/STAGE_2_WEB_PIPELINE_REVIEW.md` §5.
+**Reason:** separation of concerns, auditability, spend safety (the approval gate cannot be accidentally bypassed), independent failure/reuse, and incremental change. A monolith would be unauditable, unsafe to modify, and would not generalize to lead connectors.
+**File:** `docs/STAGE_2_WEB_PIPELINE_REVIEW.md`.
+
+---
+
+## DEC-070 — Workflow 04 Keeps Valid Full Contacts and Blanks Partial/Hallucinated Ones; Stronger PTS Override
+
+**Date:** 2026-06-07
+**Context:** Final Stage 2 hardening. The E2E run left `service_type=generic_lending` on clear PTS/autolombard pages (`autolombardn1.ru`, `autolombard-moskva.ru/services/…`), and `contact_public` must keep real contacts while never storing a hallucinated partial.
+**Decision (patch `Normalize + Route` only — no field-count/architecture/dedup change):**
+- **Stronger PTS `service_type` override (B3):** if `entity_type=competitor` and the combined `text_context + offer_text + terms + reason` (+ URL) contains **≥3** distinct strong tokens (`ПТС`, `ЭПТС`, `под ПТС`, `залог ПТС`, `займ под залог ПТС`, `автоломбард`, `залог авто`, `залог автомобиля`, `автомобиль остаётся`, `машина остаётся`, `без проверки КИ`, `любая кредитная история`) ⇒ `service_type=pts_loan`, **unless** a genuine multi-product root (kept `generic_lending`) or clearly real-estate-only (kept `secured_real_estate_loan`). Clear auto-without-PTS can still be `secured_auto_loan`.
+- **Contact extraction/sanitation (`bestContact`/`extractContacts`):** deterministically extract reliable public contacts — RU phone (10–11 digits after cleanup; `+7`/`7`/`8`/`8-800`), email, Telegram (`@handle` ≥4 chars or `t.me/`), WhatsApp (`wa.me/`), and contact/profile/application URLs that are **not** just the page `source_url`. Extract from the **model value first** (keeps a valid full contact, drops partials), else from page text; **prefer a deterministic extracted contact over a model partial**. Blank values like `"+7 (495) ..."`, `"номер указан на сайте"`, `"телефон есть на сайте"`, `"требуется извлечение"`, or any ellipsis value with no full reliable contact. Phones inside `wa.me/<digits>`/`t.me/<handle>` URLs are not misread (phone/email/handle scan runs on a URL-stripped copy).
+**Reason:** PTS mislabeling undercounts the core product; a contact field must be actionable — keep real contacts, never store a partial/invented one.
+**Verification:** WF04 JSON VALID; **exactly 35 business fields** on all 3 emitters + **10** `url_registry` fields unchanged; B3 token set expanded; `extractContacts`/`bestContact(3-arg)` at all 3 emitters; unit-tested — full model contacts kept (no stray phone), `8 800…`/`@handle`/email kept, partials blanked, text fallback works; dedup architecture unchanged; active=false; no tool_use / no KEY=VALUE.
+**File:** `n8n/workflows/04_firecrawl_url_list_resilient.json`.
+
+---
+
+## DEC-069 — Lead Discovery Layer: Avito/Classifieds Likely First Source, Pending Stage 3.0 Evaluation
+
+**Date:** 2026-06-07
+**Context:** The system's primary business goal is **lead search**, not only competitor monitoring. We need a direction for the next major layer without committing to a connector prematurely.
+**Decision:** Design the Lead Discovery Layer now (`docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`), but **build nothing** until **Stage 3.0 — Lead Source Evaluation** compares Avito vs Telegram vs VK on data availability, cost, risk, lead quality, and implementation complexity. **Preliminary** (non-binding) recommendation: **Avito/Classifieds first** (public, high-intent, most tractable access — pending actor/API + compliance evaluation), **Telegram second** (needs a separate parser/client design, not just a bot). Manual Records Intake is wired first to validate the lead schema + analyzer with zero source risk.
+**Reason:** avoid sinking effort into a connector before its data/cost/risk are known; keep the highest-intent, most-accessible source as the default candidate.
+**Files:** `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`.
+
+---
+
+## DEC-068 — Lead Records Use a Separate Schema (`raw_market_records`), Not `url_candidates`; Lead Dedup Is Non-URL
+
+**Date:** 2026-06-07
+**Context:** `url_candidates`/`url_registry` model **web URLs**. Leads from classifieds/social/chats have authors, posts, profiles, and sometimes **no stable URL**, and the same intent can be reposted in many places.
+**Decision:** Introduce a **separate** record concept for the Lead Discovery Layer: `raw_market_records` (chosen over `lead_candidates` because it also holds competitor posts, content ideas, and market signals), a `lead_discovery_requests` ledger, and a `market_record_registry` that dedups by a **composite `dedup_key`** (`platform + (post_url|message_id)` else `platform + profile + hash(normalized_text)`). The existing **`url_registry` stays URL-only and unchanged**; the two ledgers coexist. All three new sheets are **proposed, not created** (see `TABLE_SCHEMA.md`).
+**Reason:** URL equality is insufficient for social/classified dedup (post IDs vs URLs, no-URL records, cross-posting, identity via profile/text). Forcing leads into `url_candidates` would corrupt both models.
+**Files:** `docs/TABLE_SCHEMA.md` (Proposed — Lead Discovery Layer), `docs/LEAD_DISCOVERY_ARCHITECTURE.md`.
+
+---
+
+## DEC-067 — Telegram Control Bot Is a Controller, Not a Parser; Pipeline Stays Modular (05 / 06 / 04)
+
+**Date:** 2026-06-07
+**Context:** "Telegram" means two different things that must not be conflated, and there is pressure to merge workflows as the system grows.
+**Decision:** (1) The **Telegram Bot API** is only ever the **control interface** (commands + summaries; Stage 4) — it is **not** a lead harvester. Historical/public channel/chat collection is a **separate** connector (client/MTProto-style) with its own session/compliance design. (2) The web pipeline **remains modular**: Workflow 05 = discovery, Workflow 06 = approval runner, Workflow 04 = analyzer/consumer. **Do not merge them into one monolith;** the Lead Discovery Layer adds peer workflows rather than collapsing existing ones. Connectors never call Claude; the analyzer never scrapes; human approval is always the spend gate.
+**Reason:** conflating bot-vs-parser leads to ToS/compliance and architecture mistakes; a monolith would be unauditable and unsafe to change.
+**Files:** `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`.
+
+---
+
+## DEC-066 — Web Pipeline E2E Passed; WF06 Domain Diversity + WF04 Stronger PTS Override & Contact Extraction
+
+**Date:** 2026-06-07
+**Context:** A full manual end-to-end test of the web competitor path passed: WF05 (query «автоломбард Москва займ под ПТС без проверки кредитной истории») → 4 approved direct competitors → WF06 selected 4 (read 18, skipped 14, max 5, registry_recheck=enabled) → WF04 processed all 4 → `monitor_queue`, competitors, `parsed_success`. Two issues surfaced: (a) WF06 selected **two URLs from the same domain** `autolombard-moskva.ru` in one run; (b) WF04 left `service_type=generic_lending` on two clearly-PTS pages (`autolombardn1.ru`, `autolombard-moskva.ru/services/…`).
+**Decision (patch WF06 + WF04 only — no architecture/dedup change):**
+- **WF06 domain diversity (default):** re-derive `domain` from `candidate_url` (same rules as WF05: hostname, lowercase, strip `www.`) and select **at most one URL per domain per run**. A second+ URL from an already-selected domain is skipped with `reason_category=duplicate_domain_in_run`. Priority unchanged + a **root-homepage-first** tiebreaker (root page is preferred for first-pass competitor analysis). A `mode=deep_domain_analysis` is reserved to allow multiple pages/domain but is **not enabled** in v0.1. **`url_registry` semantics unchanged** (still full-normalized-URL dedup); diversity is a per-run selection rule only. `max_per_run=5`, registry recheck, and `manual_handoff_to_workflow_04` all preserved; no auto-call of WF04, no auto-`processed`.
+- **WF04 stronger PTS override (B3):** after the existing B2 chain, if `entity_type=competitor` and the URL+evidence contains **≥3** distinct strong tokens (`птс`, `залог птс`, `под птс`, `автоломбард`, `залог авто`, `залог автомобил(я)`, `авто остаётся`, `любая ки`, `без проверки кредитной истории`/`ки`), force `service_type=pts_loan` — **unless** the page is a genuine **multi-product root** (kept `generic_lending`) or **clearly real-estate-only** (kept `secured_real_estate_loan`). Verified by simulation: `autolombardn1.ru`→`pts_loan`, `autolombard-moskva.ru/services/…`→`pts_loan`, `mosinvestfinans.ru/` root→`generic_lending`, lioncredit RE page→`secured_real_estate_loan`.
+- **WF04 contact extraction/sanitation:** keep valid full contacts (e.g. `"+7 495 740-01-01, https://t.me/autolombardvip, https://wa.me/79857375386"`, `"8 800 777-95-67; https://lk.cashmotor.ru/"`); blank partial/invented ones (`"+7 (495) … требуется извлечение"`). New `bestContact(model, text)` = sanitized model value if valid, **else** a deterministic `extractContactFromText()` (RU phone 10–11 digits, `t.me/`, `wa.me/`, email) from `text_context` — **prefers a real extracted contact over a model-invented partial**. Applied at all 3 contact emitters. **35 business + 10 registry field counts unchanged; dedup architecture unchanged.**
+**Reason:** one run should survey diverse competitors, not many pages of one; PTS mislabeling undercounts the core product; partial contacts are non-actionable but real contacts are valuable.
+**Verification:** both `python3 -m json.tool` VALID; WF06 reads `url_registry`, rechecks registry, enforces 1 URL/domain/run (`usedDomains` + `duplicate_domain_in_run`), `MAX=5`, manual handoff; WF04 has `ptsStrongHits`/B3 + `bestContact`/`extractContactFromText` (×3 emitters); both active=false; placeholders only; no Apify/Firecrawl/Claude node added; no tool_use / no KEY=VALUE.
+**Files:** `n8n/workflows/06_approved_candidates_runner.json`, `n8n/workflows/04_firecrawl_url_list_resilient.json`.
+
+---
+
 ## DEC-065 — Workflow 06 Must Re-Check `url_registry` at Runtime; `url_candidates` Dedup Fields Are Advisory
 
 **Date:** 2026-06-07

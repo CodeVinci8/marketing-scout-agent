@@ -150,6 +150,7 @@ error      — set on runner/processing failure
 - `duplicate` / `rejected` → terminal; Workflow 06 never selects them. Workflow 06 requires `approval_status=approved` + non-empty `candidate_url` + the **re-normalized** URL **absent from `url_registry`** (runtime recheck, DEC-065). `dedup_status`/`registry_status` are advisory hints, **not** the gate: even if the operator manually sets them to `unique`/`not_in_registry`, a URL already in `url_registry` is skipped as `registry_recheck_duplicate`.
 - `error` → reserved for a runner/processing failure on an approved candidate.
 - `candidate_type` in {`aggregator`,`directory`,`marketplace`,`social`,`media_article`} **can** be selected if `approval_status=approved` (DEC-065 relaxed the old `aggregator_approved` hard block), but the selected item carries a warning (`candidate_type is not direct_competitor; review before Workflow 04`).
+- **Workflow 06 `runner_mode` is workflow config, NOT a `url_candidates` column** (DEC-072). Set in the WF06 `Set Runner Config` node: `first_pass_domain_diversity` (DEFAULT — max 1 selected URL per normalized **domain** per run; extras → `duplicate_domain_in_run`) or `deep_domain_analysis` (EXPLICIT — up to 3 URLs/domain/run; extras → `domain_deep_limit`). Domain is re-derived from `candidate_url` at runtime. This is a **per-run selection rule only** and does **not** change `url_registry` (still full-normalized-URL dedup, never domain). No sheet column changes.
 
 > **Google Sheet change required:** the existing `url_candidates` tab must be updated from 25 → 26 columns by
 > inserting **`candidate_type` immediately after `domain`** (col 11), with `domain` positioned before
@@ -287,3 +288,102 @@ These fields were requested by the operator (confirmed 2026-06-05). Full mapping
 | Comment / source link | `profile_url` | Partial — Telegram/Instagram comment links may need dedicated field |
 | Scores | `quality_score`, `lead_signal_score`, `content_idea_score`, `competitor_strength` | None |
 | Verification fields | Not in schema | Planned post-v0.1 |
+
+---
+
+## Proposed — Lead Discovery Layer (PROPOSED, NOT CREATED)
+
+> **Status:** 📐 PROPOSED only. These three sheets are **not created** in Google Sheets and **no workflow
+> writes them yet.** They support the future Lead Discovery Layer (see `docs/LEAD_DISCOVERY_ARCHITECTURE.md`
+> and `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`). Build is gated behind Stage 3.0 (Lead Source Evaluation) approval.
+> The existing web-pipeline sheets (6 business tabs, `url_registry`, `url_candidates`, `discovery_requests`)
+> are **unchanged**; `url_registry` semantics are **not** altered.
+
+### A. `lead_discovery_requests` (proposed) — lead-search request ledger
+
+One row per lead-search request (the lead analogue of `discovery_requests`).
+
+| # | Column | Type | Notes |
+|---|--------|------|-------|
+| 1 | `lead_request_id` | string | unique id, e.g. `lead_req_YYYYMMDD_hhmmss` |
+| 2 | `created_at` | string | ISO 8601 |
+| 3 | `requested_by` | string | operator id (later: from the control bot) |
+| 4 | `request_text` | string | raw operator command, e.g. "собери лидов по Avito по теме займ под ПТС Москва" |
+| 5 | `source_scope` | string | e.g. `classified` / `social` / `search` / `mixed` |
+| 6 | `platforms` | string | comma list, e.g. `avito` / `telegram,vk` |
+| 7 | `query` | string | normalized search query |
+| 8 | `region` | string | e.g. `Москва/МО` |
+| 9 | `service_focus` | string | e.g. `pts_loan` |
+| 10 | `requested_limit` | integer | max records to discover this run |
+| 11 | `status` | string | see status set below |
+| 12 | `candidate_count` | integer | records discovered |
+| 13 | `unique_count` | integer | non-duplicate records |
+| 14 | `duplicate_count` | integer | duplicates per `market_record_registry` |
+| 15 | `approved_count` | integer | records approved by operator |
+| 16 | `estimated_cost_usd` | number | estimated downstream analysis cost (source cost tracked separately) |
+| 17 | `notes` | string | free text |
+
+**`status` values:** `new`, `source_search_done`, `needs_review`, `approved`, `processing`, `processed`,
+`error`, `cancelled`.
+
+### B. `raw_market_records` (proposed) — raw candidate records
+
+Chosen over `lead_candidates` because it holds leads **and** competitor posts, content ideas, and market
+signals (see `LEAD_DISCOVERY_ARCHITECTURE.md` §6). One row per discovered record.
+
+| # | Column | Type | Notes |
+|---|--------|------|-------|
+| 1 | `record_id` | string | unique id, e.g. `rec_YYYYMMDD_hhmmss_N` |
+| 2 | `lead_request_id` | string | FK → `lead_discovery_requests` |
+| 3 | `created_at` | string | ISO 8601 |
+| 4 | `source_type` | string | `classified` / `social` / `scraped_web` / `manual` |
+| 5 | `platform` | string | `avito` / `telegram` / `vk` / `instagram` / `website` / `manual` |
+| 6 | `source_url` | string | canonical source URL if any (may be empty) |
+| 7 | `post_url` | string | listing/message/post URL if any |
+| 8 | `profile_url` | string | author/seller profile URL if any |
+| 9 | `profile_name` | string | display name |
+| 10 | `author_handle` | string | @handle / seller id |
+| 11 | `published_at` | string | original post time if known |
+| 12 | `region_hint` | string | e.g. `Москва/МО` |
+| 13 | `service_hint` | string | e.g. `pts_loan` |
+| 14 | `query` | string | query that surfaced the record |
+| 15 | `text_context` | string | normalized record text (cap ~3500, same as web analyzer input) |
+| 16 | `contact_public` | string | deterministic public contact only (same sanitation rules as Workflow 04) |
+| 17 | `dedup_key` | string | composite key (see `market_record_registry`) |
+| 18 | `record_type_hint` | string | `lead_signal` / `competitor_post` / `content_idea` / `market_signal` / `unknown` |
+| 19 | `lead_intent_hint` | string | deterministic intent guess (no LLM) |
+| 20 | `urgency_hint` | string | deterministic urgency guess (no LLM) |
+| 21 | `candidate_type` | string | reserved (parallels `url_candidates.candidate_type`) |
+| 22 | `confidence_score` | integer | 1–100 deterministic relevance |
+| 23 | `dedup_status` | string | `unique` / `duplicate_in_batch` / `duplicate_in_registry` (advisory — analyzer/runner re-checks) |
+| 24 | `approval_status` | string | `new` / `approved` / `rejected` / `processed` / `duplicate` / `error` |
+| 25 | `approved_by` | string | operator id |
+| 26 | `approved_at` | string | ISO 8601 |
+| 27 | `estimated_analysis_cost_usd` | number | per-record Claude estimate |
+| 28 | `notes` | string | free text |
+
+**`record_type_hint` values:** `lead_signal`, `competitor_post`, `content_idea`, `market_signal`, `unknown`.
+**`approval_status` values:** `new`, `approved`, `rejected`, `processed`, `duplicate`, `error`.
+
+### C. `market_record_registry` (proposed) — non-URL dedup ledger
+
+Chosen over `lead_registry` (parallels `raw_market_records`). Dedups by a **composite** `dedup_key`, because a
+URL-only key is insufficient for social/classified leads (same intent reposted across places; post IDs vs
+URLs; records with no stable URL; identity may need profile + text hash — see `LEAD_DISCOVERY_ARCHITECTURE.md`
+§7). **Separate from `url_registry`, which stays URL-only for the web pipeline.**
+
+| # | Column | Type | Notes |
+|---|--------|------|-------|
+| 1 | `dedup_key` | string | composite: `platform + (post_url|message_id)` else `platform + profile + hash(normalized_text)` |
+| 2 | `source_type` | string | `classified` / `social` / `scraped_web` / `manual` |
+| 3 | `platform` | string | `avito` / `telegram` / `vk` / … |
+| 4 | `source_url` | string | if any |
+| 5 | `post_url` | string | if any |
+| 6 | `profile_url` | string | if any |
+| 7 | `first_seen_at` | string | ISO 8601 |
+| 8 | `last_seen_at` | string | ISO 8601 |
+| 9 | `last_route` | string | last analyzer route |
+| 10 | `last_processing_status` | string | last processing status |
+| 11 | `last_entity_type` | string | last classified entity |
+| 12 | `lead_request_id` | string | last request that touched it |
+| 13 | `note` | string | free text |

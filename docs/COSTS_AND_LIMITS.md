@@ -276,3 +276,37 @@ The first manual production smoke test consumed a **primary call + a repair atte
 | Monthly AI cost > $20 | Review record volume and pre-filter effectiveness |
 | Cost per record > $0.05 | Investigate — pages may be too long or retries too frequent |
 | VPS disk > 90% used | Upgrade VPS before next high-volume run (see DEC-013) |
+
+---
+
+## Lead Discovery Layer — Cost Model (PROPOSED, design only — DEC-069)
+
+> Nothing here is spent yet. These rules apply when Stage 3.0 (Lead Source Evaluation) and any connector are
+> built. See `docs/LEAD_DISCOVERY_ARCHITECTURE.md` and `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`.
+
+- **Source cost is tracked SEPARATELY from Claude analysis cost.** A lead run has two distinct cost lines:
+  (1) **source acquisition** (Apify actor run, search API quota, Telegram/VK API usage, browser-automation
+  minutes) and (2) **Claude analysis** (per approved record, same per-record model as the web pipeline).
+  Never fold source cost into the Claude line — they scale and fail independently.
+- **Stage 3.0 must estimate source cost per source** (cost per N records) before any connector is chosen,
+  alongside data availability, risk, lead quality, and implementation complexity.
+- **Telegram / Avito / VK / Instagram connectors require their own cost + rate-limit tracking** (per-actor or
+  per-API quotas, session/account limits). Add a per-source cost row here when each is evaluated.
+- **Human approval stays the spend gate:** no record reaches Claude until `approval_status=approved`, so
+  discovery volume can be large while analysis spend stays bounded by what the operator approves.
+- **Estimated-before-approval:** like `discovery_requests`, `lead_discovery_requests` carries
+  `estimated_cost_usd` (downstream analysis estimate) so the operator sees cost before approving.
+
+---
+
+## Stage 2 final hardening — cost impact (DEC-070/072, 2026-06-07)
+
+- **Zero added API cost.** The WF06 runner modes (`first_pass_domain_diversity` / `deep_domain_analysis`) and
+  the WF04 stronger PTS override + deterministic contact extraction are **pure n8n Code-node logic** — no extra
+  Apify/Firecrawl/Claude calls.
+- **Domain diversity bounds spend further.** `first_pass_domain_diversity` (default) selects at most 1 URL per
+  domain per run, so a single competitor's many pages cannot consume a 5-URL run; `deep_domain_analysis` caps a
+  domain at 3 URLs/run. The hard `max_per_run=5` still bounds Workflow 04 spend per handoff.
+- **Contact extraction is free** and reduces wasted manual review (no partial/hallucinated contacts stored).
+- Per-URL Workflow 04 cost is unchanged (~1 Firecrawl credit + ~$0.01–0.023 Claude per non-duplicate URL;
+  duplicates 0). See the Workflow 04 mini-batch cost model above.

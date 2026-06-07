@@ -2,7 +2,21 @@
 
 **Файл:** `n8n/workflows/06_approved_candidates_runner.json`
 **Имя в n8n:** `06 - Approved Candidates Runner`
-**Статус:** 🔧 BUILT + ПАТЧ registry recheck, `active=false` — мост одобрение → обработка (Stage 2.2c, DEC-064/065). **Под тестом** (до подтверждения runtime-перепроверки реестра). НЕ активировать.
+**Статус:** 🔧 BUILT + ПАТЧИ registry recheck (DEC-065) + доменное разнообразие (DEC-066) + **режимы прогона `runner_mode` (DEC-072)**, `active=false` — мост одобрение → обработка (Stage 2.2c). **Под финальным ретестом Stage 2.** НЕ активировать.
+
+---
+
+## 0a. Результат сквозного теста (E2E, 2026-06-07) — выявил необходимость доменного разнообразия
+
+Сквозной тест веб-пайплайна прошёл (WF05 → WF06 → WF04). По запросу «автоломбард Москва займ под ПТС без
+проверки кредитной истории» WF06 прочитал **18** строк `url_candidates`, выбрал **4** одобренных
+`direct_competitor`, пропустил **14**, `max_per_run=5`, `registry_recheck=enabled`,
+`processing_mode=manual_handoff_to_workflow_04`. WF04 обработал все 4 → `monitor_queue`.
+
+**Проблема:** среди 4 выбранных были **два URL одного домена** `autolombard-moskva.ru` (корень и страница
+`/services/.../dmitrovskoe-shosse/`). За один прогон лучше охватить **разные** домены. Отсюда патч
+**доменного разнообразия** (DEC-066): по умолчанию максимум 1 URL на домен за прогон; root-страница имеет
+приоритет. Семантика `url_registry` **не изменена**.
 
 ---
 
@@ -76,6 +90,7 @@ Workflow 04 (Firecrawl URL List → Resilient Analyzer)   ← ручная вс�
 | Узел | Тип | Что делает |
 |------|-----|------------|
 | Manual Start | manualTrigger | Ручной запуск |
+| Set Runner Config | code | **НОВЫЙ (DEC-072).** Задаёт `runner_mode` (`first_pass_domain_diversity` по умолчанию / `deep_domain_analysis`). Чтобы переключить режим — отредактируйте строку `const runner_mode = '…'` в этой ноде. Креденшл не нужен. |
 | Read url_candidates | googleSheets (read) | Читает всю вкладку `url_candidates` |
 | Read url_registry | googleSheets (read) | **НОВЫЙ (DEC-065).** Читает `url_registry` в момент прогона — источник правды дедупа |
 | Select, Prioritize & Annotate | code | Единый источник правды: повторная нормализация `candidate_url` + сверка с `url_registry` + фильтр + приоритет + отсечка ≤5 + аннотация каждой строки (`_selected`, `_skip_category`, `_skip_reason`) |
@@ -100,10 +115,24 @@ Workflow 04 (Firecrawl URL List → Resilient Analyzer)   ← ручная вс�
 > обнаружения (advisory)**, а НЕ финальный фильтр. Workflow 06 их **не** использует для решения и
 > перепроверяет `url_registry` сам. Ручное редактирование этих полей не может протолкнуть дубликат.
 
-**Приоритет (сортировка выбранных):** сначала `direct_competitor`, затем выше `confidence_score`, затем ниже `rank`.
+**Приоритет (сортировка выбранных):** сначала `direct_competitor`, затем выше `confidence_score`, затем ниже
+`rank`, затем **root-страница вперёд** (главная страница домена предпочтительнее для первого прохода анализа
+конкурента).
 
-**Жёсткая отсечка:** максимум **5** кандидатов за прогон. Подходящие строки сверх 5 помечаются как пропущенные
-с причиной `over_limit` (их можно одобрить в следующем прогоне).
+**Режимы прогона `runner_mode` (нода `Set Runner Config`, DEC-072).** Значение по умолчанию —
+`first_pass_domain_diversity`. Оба режима ВСЕГДА сохраняют: `max_per_run=5`, runtime-перепроверку
+`url_registry`, точный дедуп по нормализованному URL, приоритет (`direct_competitor` → `confidence_score` ↓ →
+`rank` ↑ → root вперёд), ручную передачу, без авто-вызова WF04, без авто-`processed`. Домен заново выводится
+из `candidate_url` (как в Workflow 05: hostname, нижний регистр, срезается `www.`). **Семантика `url_registry`
+не меняется** (дедуп по полному нормализованному URL, НЕ по домену) в обоих режимах.
+
+| `runner_mode` | Правило по домену | Лишние URL того же домена | Предупреждение на выбранном |
+|---------------|-------------------|---------------------------|------------------------------|
+| `first_pass_domain_diversity` (ПО УМОЛЧАНИЮ) | максимум **1** URL на домен за прогон | пропуск, `reason_category=duplicate_domain_in_run`, reason «Same domain already selected in this run; use deep_domain_analysis mode for multi-page domain analysis.» | — |
+| `deep_domain_analysis` (ЯВНО) | максимум **3** URL на домен за прогон | сверх 3 — пропуск, `reason_category=domain_deep_limit` | `warning="deep_domain_analysis mode: multiple URLs from same domain allowed intentionally."` |
+
+**Жёсткая отсечка:** максимум **5** кандидатов за прогон (оба режима). Подходящие строки сверх 5 помечаются
+как пропущенные с причиной `over_limit` (их можно одобрить в следующем прогоне).
 
 **Категории причин пропуска (`reason_category` в `skipped[]`):**
 
@@ -113,9 +142,14 @@ Workflow 04 (Firecrawl URL List → Resilient Analyzer)   ← ручная вс�
 | `already_processed` | `approval_status = processed` (уже передан ранее) |
 | `duplicate_status` | `approval_status` = `duplicate` / `rejected` / `error` |
 | `registry_recheck_duplicate` | нормализованный URL **уже в `url_registry`** (даже если оператор вручную поставил `unique`/`not_in_registry`) |
+| `duplicate_domain_in_run` | (режим `first_pass_domain_diversity`) другой URL этого же домена уже выбран в этом прогоне |
+| `domain_deep_limit` | (режим `deep_domain_analysis`) более 3 URL одного домена за прогон — лишние отсекаются |
 | `missing_candidate_url` | `candidate_url` пуст |
 | `not_direct_competitor_optional_warning` | предупреждение на выбранном элементе: тип не `direct_competitor` (не блокирует, см. §4) |
 | `over_limit` | подходит, но сверх лимита 5/прогон |
+
+**Выходные поля сводки:** добавлены `runner_mode`, `domain_diversity` (описание режима),
+`domain_selected_counts` (сколько URL выбрано на каждый домен).
 
 ---
 

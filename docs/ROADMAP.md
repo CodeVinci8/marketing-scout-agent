@@ -95,9 +95,9 @@
 **Status:** 🔧 BUILT + candidate-quality patch (2026-06-08, DEC-060/061) — `n8n/workflows/05_apify_search_candidate_discovery.json` (13 nodes, active=false). First real Apify test passed **technically**; quality patch applied (`candidate_type`, fixed `domain`, competitor-first scoring); **retest required** (add `candidate_type` column, re-import, rerun query).
 **Goal:** Query → Apify Google Search actor → normalize → check `url_registry` → classify `candidate_type` → competitor-first score → write `url_candidates` (26 cols, `new`/`duplicate`) + `discovery_requests` (`status=needs_review`). **0 Firecrawl/Claude**, no auto-processing, human approval before Workflow 04.
 
-### Stage 2.2c — Approved Candidates Runner (hand-off) — 🔧 BUILT + registry-recheck patch, STILL UNDER TEST
+### Stage 2.2c — Approved Candidates Runner (hand-off) — 🔧 registry-recheck + runner modes, E2E PASSED, FINAL RETEST pending
 
-**Status:** 🔧 BUILT (2026-06-07, DEC-064) + **runtime registry-recheck patch (2026-06-07, DEC-065)** — `n8n/workflows/06_approved_candidates_runner.json` (active=false). The first manual test exposed a trust bug: an operator-edited old duplicate (`autolombard-moskva.ru/pledge-pts/`, already in `url_registry`) was selected because WF06 trusted the editable `url_candidates` dedup fields. WF06 now **re-reads `url_registry` at runtime** and re-normalizes `candidate_url` before selecting. **Stage 2.2c still under test** until the registry recheck is validated (retest: old approved duplicate → `registry_recheck_duplicate` skip; new approved `direct_competitor` → selected).
+**Status:** 🔧 BUILT (DEC-064) + registry-recheck (DEC-065) + domain-diversity (DEC-066) + **runner modes (2026-06-07, DEC-072)** — `n8n/workflows/06_approved_candidates_runner.json` (active=false). **Full web-pipeline E2E passed** (WF05→WF06→WF04). A **Set Runner Config** node now sets `runner_mode`: **`first_pass_domain_diversity`** (DEFAULT) = max 1 URL/domain/run (second+ → `duplicate_domain_in_run`); **`deep_domain_analysis`** (EXPLICIT) = up to 3 URLs/domain/run (extras → `domain_deep_limit`, selected items carry a deep-mode warning). `max_per_run=5`, registry recheck, root-first priority, manual handoff preserved; `url_registry` semantics unchanged (full normalized URL, never domain). **Final Stage 2 retest pending** (`docs/STAGE_2_WEB_PIPELINE_REVIEW.md` T2/T3/T4).
 **Goal:** Pick `approval_status=approved` candidates from `url_candidates` (non-empty URL, and **re-normalized URL not in `url_registry`** — the registry, not the editable `dedup_status`/`registry_status`, is the dedup gate), prioritize `direct_competitor` → higher `confidence_score` → lower `rank`, **hard cap 5/run**, and feed Workflow 04. No new analysis logic — it only orchestrates the existing consumer.
 **v0.1 implementation:** **manual hand-off** — Workflow 06 emits a WF04-shaped ≤5-URL batch + Execution Summary + ready-to-paste `Set URL List` block; it does **not** call Workflow 04 as a subworkflow (WF04 keeps its Manual Trigger; subworkflow conversion is a risky trigger refactor, deferred). A `Mark Candidates Processed` update node (→ `approval_status=processed`, preserving `approved_by`/`approved_at`) ships **disabled**; operator enables it after confirming `monitor_queue`. No Apify/Firecrawl/Claude/Telegram. Guide: `docs/N8N_WORKFLOW_06_APPROVED_CANDIDATES_RUNNER_RU.md`.
 
@@ -108,21 +108,53 @@ insufficient. Firecrawl `/v2/search` parked. All reuse the same `url_candidates`
 
 ---
 
-## Stage 2.3 — Telegram Control Bot Planning (Later, DEC-057/059)
+## Stage 2 — Web competitor pipeline — ✅ COMPLETING / CLOSING (2026-06-07)
 
-**Status:** 📋 LATER — deferred until discovery (Stage 2.2) + approval flow exist (gates G1–G4).
-**Goal:** Operator requests analysis in natural language; bot proposes candidates + cost, asks approval, triggers processing, returns a summary. The bot is a **control interface**, not a data-processing engine.
-**Flow:** request text → bot creates `discovery_requests` row → Workflow 05 collects candidates → bot shows candidates + estimated cost → operator approves → Approved Candidates Runner / Workflow 04 processes → bot returns summary. The bot **calls** the existing workflows and **duplicates no discovery/processing logic**. `url_registry` dedup prevents repeat processing.
-**Prerequisites:** Stage 2.2 discovery + approval flow (and ideally 2.2c runner); Telegram bot token + n8n webhook.
+The web competitor discovery pipeline **05 (discovery) → 06 (approval runner) → 04 (analyzer)** has passed a
+full manual E2E test and is the proven, human-approval-gated competitor path. It stays **modular — not merged
+into a monolith** (DEC-071). A final hardening pass landed (DEC-070/072: WF06 runner modes, WF04 PTS/contact
+hardening); see the technical review **`docs/STAGE_2_WEB_PIPELINE_REVIEW.md`** with the **T1–T11** approval
+matrix. Remaining Stage 2 item: run T1–T11, then commit. After that, **Stage 2 is closed** and the focus
+shifts to **lead** discovery (Stage 3).
 
 ---
 
-## Future — Source Connectors (social / classified, later)
+## Stage 3.0 — Lead Source Evaluation (NEXT, design/eval only — DEC-069)
 
-Add **source connectors** (not per-platform agents): *Classifieds Connector* and *Social Connector* (Apify
-actors) feed the **same** core analyzers as websites. Analyzers (Market Record / Lead Signal / Content
-Insight / Report) classify records **independent of source**; social/classified are stronger for lead
-signals and client pain but also show competitor activity. Not approved yet.
+**Status:** 📐 NEXT — **evaluation, no build.** Goal: choose the first lead source by comparing
+**Avito vs Telegram vs VK** on **data availability, cost, risk, lead quality, implementation complexity**.
+**Output:** an approved evaluation that selects the first connector. **Preliminary** (non-binding):
+Avito/Classifieds first (public, high-intent, tractable — pending actor/API + compliance check); Telegram
+second (separate parser/client design, not just a bot). Wire **Manual Records Intake** first to validate the
+lead schema + analyzer at zero source risk.
+**Docs:** `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`.
+**Gate:** no connector is built until this evaluation is approved.
+
+## Stage 3.1 — First Lead Connector (after 3.0 approval)
+
+**Status:** 📋 PLANNED — build the chosen connector (likely Avito/Classifieds). It normalizes source records
+into the new `raw_market_records` sheet, computes a composite `dedup_key`, checks `market_record_registry`,
+and sets `approval_status=new`. **Connectors never call Claude.** Human approval is the spend gate.
+
+## Stage 3.2 — Lead Analyzer Integration (after 3.1)
+
+**Status:** 📋 PLANNED — feed approved `raw_market_records` into the **source-agnostic** Market/Lead Analyzer
+(reusing the resilient analyzer), classifying into `lead_signal` / `competitor` / `content_idea` /
+`market_signal` / `irrelevant` and routing to the existing six business tabs. Dedup via
+`market_record_registry` (URL-only `url_registry` stays for the web pipeline).
+
+---
+
+## Stage 4 — Telegram Control Bot (Later, DEC-067)
+
+**Status:** 📋 LATER — **not built.** The bot is a **control interface / controller**, NOT a parser/connector
+(do not conflate the Telegram **Bot API** controller with a Telegram **client/MTProto parser** — that parser
+is a Stage 3.x source connector).
+**Goal:** Operator issues NL commands ("собери лидов по Avito по теме займ под ПТС Москва", "дай summary по
+сильным конкурентам за неделю"); bot creates a `lead_discovery_requests`/`discovery_requests` row, proposes
+candidates + estimated cost, asks approval, triggers the existing workflows, returns a summary. The bot
+**calls** existing workflows and **duplicates no discovery/processing logic**; registry dedup prevents repeats.
+**Prerequisites:** Stage 3.x lead discovery + approval flow; Telegram bot token + n8n webhook.
 
 ---
 
