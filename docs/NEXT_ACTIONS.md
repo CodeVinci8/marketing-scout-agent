@@ -300,24 +300,20 @@ First manual smoke test failed: primary parse failed → **Repair API 502 Bad Ga
 
 > Still blocked (DEC-039/040): multi-page crawl, batch scrape, search, scheduled scraping, Firecrawl MCP/CLI, automated outreach.
 
-#### Step F — Workflow 04: Firecrawl URL List Mini-Batch 🔧 HARDENED, UNDER TEST (2026-06-08)
+#### Step F — Workflow 04: Firecrawl URL List Mini-Batch ✅ VALIDATED & APPROVED (manual ≤5 URLs, 2026-06-08)
 
 **Workflow:** `n8n/workflows/04_firecrawl_url_list_resilient.json` (25 nodes; JSON valid; active=false; 35-field business schema + 10-field `url_registry`). **Plan/guide:** `docs/WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md`, `docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md`.
 
-**Patch 2026-06-08 (DEC-051/052):** dedup moved to a dedicated **`url_registry`** tab keyed on `normalized_source_url` (full URL **with path**, not domain), checked **before** any Firecrawl/Claude spend; **deterministic competitor fallback** after primary+repair JSON failure; `text_context` cap lowered to **3500**; registry appended after every non-duplicate attempt (incl. `technical_errors`). **Not approved until the 3-URL retest below passes.**
+**Validation (DEC-053):** Run 1 (empty registry, 3 URLs) → all `monitor_queue` + 3 `url_registry` rows. Run 2 (same 3 URLs) → all `skipped_log`/`dedup_source_url`, **0 Firecrawl/Claude**. `url_registry` dedup confirmed. Output hardened: URL/path service-type override (`pod-zalog-avto` → `pts_loan`/`secured_auto_loan`; `pod-zalog-nedvizhimosti` → `secured_real_estate_loan`; root homepage stays `generic_lending`) + Russian output-language guard on `reason`/`offer_text`. **Mini-batch (≤5 URLs, manual) APPROVED.**
 
 **Hard limits:** max 5 URLs · manual only · no crawl/batch/search/schedule · `text_context`≤3500 · continue-on-failure per URL. Duplicate → `skipped_log`/`dedup_source_url`, **0** Firecrawl/Claude cost.
 
-**Retest tasks (in order):**
-1. [ ] **Create the `url_registry` tab** with exactly its **10-column** header (see RU guide §5b / `TABLE_SCHEMA.md`).
-2. [ ] Reimport patched Workflow 04 (active stays false).
-3. [ ] **Rebind credentials** (DEC-046): `Firecrawl Scrape API`→Firecrawl; both Claude nodes→Claude; `Registry Lookup` + `Append url_registry` + `Append Skipped Log (Duplicate)` + `Append to Dynamic Route Sheet`→Google Sheets; paste real Spreadsheet ID on all **4** Sheets nodes. Confirm 6 business tabs (35 cols) + `url_registry` (10 cols).
-4. [ ] **First pass:** in `Set URL List` paste **3** real competitor URLs; record Firecrawl credits + Claude balance; run once. Expect competitors → `monitor_queue`, broken/empty → `technical_errors`, each row has `run_id`+`batch_index`, and 3 new rows in `url_registry`.
-5. [ ] **Second pass:** run the **same 3 URLs** again. **Expected: all 3 → `skipped_log` (`dedup_source_url`), 0 Firecrawl credits, 0 Claude tokens.**
-6. [ ] Record results + cost (incl. duplicate count) in `docs/COSTS_AND_LIMITS.md`.
-7. [ ] If both passes are clean, run **max 5** URLs. Then review before any larger source.
+**Next steps (in order):**
+1. [ ] **Optional:** one more controlled run with **5 URLs** (record before/after Firecrawl credits + Claude balance this time — they were not captured on the 3-URL run).
+2. [ ] Then **plan** the URL Discovery layer (Stage 2.2) — do **not** build it yet; it needs its own plan + approval.
+3. [ ] Later: **plan** the Telegram Control Bot layer (Stage 2.3).
 
-> If `Registry Lookup` fails on import, see the RU guide Troubleshooting → "dedup lookup failed" (fallback). Dedup is best-effort (DEC-051).
+> **Backfill note:** `url_registry` is the dedup source of truth. Rows analyzed before the registry existed re-process once until backfilled (optional maintenance) — see `TABLE_SCHEMA.md`.
 > Still blocked: >5 URLs, scheduled runs, crawler, URL-discovery agent, Telegram bot, Avito/Telegram/Instagram (DEC-050).
 
 #### Step E (legacy plan) — Workflow 03: Firecrawl Website Analysis _(superseded by the active Step E above)_

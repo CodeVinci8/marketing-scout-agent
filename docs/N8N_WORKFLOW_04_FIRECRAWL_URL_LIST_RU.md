@@ -213,6 +213,33 @@ https://example.com/kredit/refinansirovanie/ → https://example.com/kredit/refi
 
 ---
 
+## 11b. Результаты валидации (Run 1 / Run 2) — Workflow 04 ОДОБРЕН
+
+Протестировано на 3 URL: `example.com/` (корень), `example.com/kredit/pod-zalog-avto/`,
+`example.com/uslugi/kredit-pod-zalog-nedvizhimosti` (реальные конкуренты — локально).
+
+- **Run 1** (`firecrawl_20260607_094000`, реестр пуст) — все 3 → `monitor_queue`, `entity_type=competitor`,
+  `processing_status=parsed_success`. После запуска в `url_registry` появились 3 строки.
+- **Run 2** (`firecrawl_20260607_094303`, те же 3 URL) — все 3 → `skipped_log`,
+  `processing_status=business_skip`, `parse_method=dedup_source_url`, `recommended_action=ignore`,
+  **0 кредитов Firecrawl, 0 токенов Claude**. Дедуп по `url_registry` подтверждён.
+
+**Качество (исправлено патчем DEC-053):**
+- сервисная страница `…/kredit/pod-zalog-avto/` теперь получает `pts_loan`/`secured_auto_loan`
+  (а не `generic_lending`); страница недвижимости → `secured_real_estate_loan`; корень домена → `generic_lending`;
+- если источник на русском, а `reason`/`offer_text` вернулись на английском — `Normalize + Route` заменяет их
+  на детерминированный русский фоллбэк.
+
+**Статус:** ✅ Workflow 04 mini-batch **одобрен для ручных запусков на 3–5 URL**.
+**Лимиты:** без расписания, без crawl/batch/search, не более 5 URL за запуск.
+
+> **Старые строки и backfill.** `url_registry` — единственный источник правды для дедупа.
+> Бизнес-строки, созданные ДО появления реестра, **не** дедуплицируются, пока их `normalized_source_url`
+> не внесён в `url_registry`. Поэтому в Run 1 ранее обработанный корневой URL был обработан снова — это
+> ожидаемо (реестр был пуст). Backfill старых строк в `url_registry` — **необязательное** будущее обслуживание.
+
+---
+
 ## 12. Troubleshooting
 
 | Симптом | Действие |

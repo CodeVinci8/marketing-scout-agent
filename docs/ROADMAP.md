@@ -66,30 +66,36 @@
 
 ---
 
-## Stage 2.1 — Firecrawl URL List Mini-Batch (Under Test)
+## Stage 2.1 — Firecrawl URL List Mini-Batch ✅ COMPLETED / APPROVED (manual ≤5 URLs, 2026-06-08)
 
-**Status:** 🔧 HARDENED, **UNDER TEST** (2026-06-08) — `n8n/workflows/04_firecrawl_url_list_resilient.json` (DEC-048/049/051/052). **Remains in hardening until the 3-URL retest passes.**
+**Status:** ✅ BUILD COMPLETED, `url_registry` dedup VALIDATED, **APPROVED for manual 3–5 URL runs** (DEC-048/049/051/052/053) — `n8n/workflows/04_firecrawl_url_list_resilient.json`, active=false.
 **Goal:** Process a manually provided list of **3–5 competitor URLs in one manual run**, reusing the Workflow 03 chain with a per-URL loop and `url_registry` dedup.
 
 **Built:** 25 nodes — Set URL List → Loop Over Items → Normalize URL for Dedup → Registry Lookup → Evaluate Dedup → IF Duplicate? → (dup → skipped_log / new → Firecrawl → resilient analyzer → Append → Build Registry Row → Append url_registry) → loop. 35-field business schema + 10-field `url_registry`.
-**Patch (DEC-051/052):** dedup uses a dedicated `url_registry` tab keyed on `normalized_source_url` (full URL **with path**, not domain) before any spend; deterministic competitor fallback after primary+repair failure; `text_context` cap lowered to 3500; registry appended after every non-duplicate attempt.
+**Validated (DEC-053):** Run 1 (empty registry, 3 URLs) → all `monitor_queue` + 3 registry rows; Run 2 (same 3) → all `skipped_log`/`dedup_source_url`, 0 cost. Output hardened: URL/path service-type override + Russian output-language guard. `url_registry` is the dedup source of truth (old rows re-process once until backfilled — optional).
 
 **Hard limits:** max 5 URLs, manual trigger only, no crawl, no schedule, `text_context`≤3500, continue-on-failure per URL (failed URL → `technical_errors`).
 
-**Remaining:** operator creates `url_registry` tab, reimports, rebinds credentials, runs first pass (3 URLs) + second pass (same 3 → all `skipped_log`, 0 cost), verifies routes + cost; then max 5.
+**Next (optional):** one controlled 5-URL run with before/after balances recorded.
 
 **Later sources (in order):** Avito/Apify → Telegram → Instagram.
 
 ---
 
-## Stage 2.5 — Telegram Control Bot / URL Discovery Agent (Future)
+## Stage 2.2 — URL Discovery Planning (Next, planning only)
 
-**Status:** Future (DEC-050). Not built; depends on a stable mini-batch.
-**Goal:** Let the operator request analysis in natural language instead of pasting URLs.
+**Status:** 📋 NEXT — **planning only, do not build yet** (needs its own plan + approval).
+**Goal:** Define how candidate competitor URLs are discovered/generated to feed Workflow 04, instead of the operator pasting them by hand. Must reuse `url_registry` so discovered-then-processed URLs are not re-processed.
+**Prerequisites:** Workflow 04 stable on manual lists (✅). Separate design doc covering source method, cost estimation, and an approval gate before any automated discovery runs.
 
-**Flow:** operator request (e.g. «найди конкурентов по кредитам под залог авто в Москве») → bot collects/generates candidate URLs → proposes URLs + estimated cost → asks approval → calls the URL-list workflow (Workflow 04) → sends a summary. Workflow 04's `url_registry` dedup prevents repeated processing of URLs already seen.
+---
 
-**Prerequisites:** Workflow 04 stable on manual lists; Telegram bot token + n8n webhook; a vetted URL-discovery/source method. URL discovery and NL parsing are a separate layer, deferred.
+## Stage 2.3 — Telegram Control Bot Planning (Later)
+
+**Status:** 📋 LATER — planning only (DEC-050), after Stage 2.2.
+**Goal:** Operator requests analysis in natural language; bot proposes URLs + cost, asks approval, calls Workflow 04, returns a summary.
+**Flow:** operator request → bot collects/generates candidate URLs → proposes URLs + estimated cost → asks approval → calls Workflow 04 → sends a summary. Workflow 04's `url_registry` dedup prevents repeated processing of URLs already seen.
+**Prerequisites:** Stage 2.2 URL discovery; Telegram bot token + n8n webhook. URL discovery and NL parsing remain a separate layer, deferred.
 
 ---
 

@@ -5,6 +5,30 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Workflow 04 VALIDATED & APPROVED: Language Guard + Service-Type Override (DEC-053)
+
+**Agent role:** project-engineer
+**Session goal:** Finalize Workflow 04 validation after the `url_registry` patch and apply small quality hardening — no architecture/dedup change, no heavy prompt tuning.
+
+**Validation (operator, 2 runs of the same 3 URLs):**
+- **Run 1** (`firecrawl_20260607_094000`, empty registry) → all 3 → `monitor_queue` competitors (МосИнвестФинанс 78/80; 78/82; LionCredit 75/75). 3 `url_registry` rows written.
+- **Run 2** (`firecrawl_20260607_094303`, same 3 URLs) → all 3 → `skipped_log`/`business_skip`/`dedup_source_url`, **0 Firecrawl / 0 Claude**. Dedup confirmed.
+- Two quality issues found: `…/kredit/pod-zalog-avto/` labelled `generic_lending` (should be PTS/auto); repaired LionCredit `reason` came back in English.
+
+**What changed (patched `04_firecrawl_url_list_resilient.json` in place, `Normalize + Route` only; still 25 nodes, active=false):**
+- **Output language guard (A):** Cyrillic source but mostly-English / CJK / foreign `reason` → deterministic Russian fallback by `entity_type` (competitor uses the exact DEC-053 text). Same guard added for `offer_text` (short Russian offer from company/service/terms).
+- **URL/path service-type override (B):** specific service page beats multi-product `generic_lending` — `pod-zalog-avto`/`залог ПТС`/`ПТС` → `pts_loan` (or `secured_auto_loan` without PTS); `pod-zalog-nedvizhimosti`/`залог недвижимости`/`квартир`/`коммерческ` → `secured_real_estate_loan`; root homepage stays `generic_lending`.
+- Dedup architecture untouched; 35 business fields + 10 registry fields preserved; `text_context` cap 3500 unchanged. Genericized one real domain in the retest sticky note to `example.com`.
+- **Docs:** DEC-053 added; RU guide §11b (validation results + backfill note); PLAN (approved); TABLE_SCHEMA (source-of-truth + backfill); COSTS (Run 1/2 validated); AGENT_CAPABILITIES (moved mini-batch + dedup + fallback to APPROVED); NEXT_ACTIONS (next: optional 5-URL run, then plan discovery/Telegram); ROADMAP (Stage 2.1 completed, added 2.2 discovery + 2.3 Telegram planning).
+
+**Decisions:** Workflow 04 **approved for manual ≤5-URL mini-batch**; larger automation still blocked. `url_registry` is the dedup **source of truth** — old rows re-process once unless backfilled (optional maintenance).
+
+**Verified:** `python3 -m json.tool` VALID; 25 nodes; active=false; 35/10 field counts intact; no secrets / no real Spreadsheet ID / no `tool_use` / no `KEY=VALUE` / no crawl-batch-search; `Set URL List` uses only `example.com`. (Pre-existing brand-keyword heuristics `mosinvest`/`lioncredit` in `Parse Repaired JSON` are company-name detection strings, not URLs — left unchanged.)
+
+**Next:** optional 5-URL run (record before/after balances); then **plan** URL discovery (Stage 2.2) — do not build yet.
+
+---
+
 ## 2026-06-08 — Workflow 04 Hardened: `url_registry` Dedup + Deterministic Fallback (DEC-051/052)
 
 **Agent role:** project-engineer

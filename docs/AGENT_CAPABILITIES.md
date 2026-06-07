@@ -1,6 +1,6 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-08 (Workflow 04 HARDENED — `url_registry` dedup + deterministic competitor fallback + `text_context` cap 3500, DEC-051/052; UNDER TEST, not approved until 3-URL retest passes)
+**Last updated:** 2026-06-08 (Workflow 04 VALIDATED & APPROVED for manual ≤5-URL mini-batch — `url_registry` dedup confirmed (Run 1 + Run 2), URL/path service-type override + Russian output-language guard added, DEC-051/052/053)
 **Active agent version:** Marketing Scout Agent v2 (`MARKETING_AGENT_PROMPT_V2.md`, baseline d350069)
 **Active workflow candidate:** `n8n/workflows/02_claude_api_single_record_v2_resilient_router_production.json`
 **Test status:** Resilient Router Tests A–E **all pass**. Production workflow built (33 columns). **First manual production smoke test FAILED** (repair API 502 → technical_errors with lost diagnostics); workflow **patched** (DEC-038): primary raw preserved, compact repair payload, dual Primary+Repair diagnostics, primary prompt reminder. **Production workflow is NOT approved for Firecrawl until the patched manual smoke test passes.**
@@ -16,11 +16,9 @@
 - **Production workflow** `02_claude_api_single_record_v2_resilient_router_production.json` — no test/mock fields, 33 output columns, `raw_response_preview` capped at 500, `recommended_action` normalized to route.
 - **Firecrawl single-URL competitor website ingestion** ✅ APPROVED (manual, controlled — DEC-045). `03_firecrawl_single_url_resilient.json` scrapes one public URL via `POST /v2/scrape` (markdown only), normalizes (`text_context`≤6000), feeds the copied resilient analyzer with post-repair consistency hardening (DEC-043/044); Firecrawl failures → `technical_errors` without a Claude call. Two passing real tests (2026-06-08): `mosinvestfinans.ru/` and `lioncredit.ru/…/kredit-pod-zalog-nedvizhimosti`.
 - **Competitor website → `monitor_queue` routing** ✅ APPROVED — competitor pages with offer/rates/region/contact route to `monitor_queue` with `recommended_action=monitor`.
-
-**Under-tested (built, awaiting operator manual test):**
-- **Firecrawl URL list mini-batch** — `04_firecrawl_url_list_resilient.json` (DEC-048/049/051/052). 3–5 URLs/run, manual, per-URL loop, 35-field business schema (`run_id`+`batch_index`). 25 nodes; JSON valid; active=false. **Workflow 04 is NOT approved until the 3-URL retest (first pass + duplicate second pass) passes.**
-  - **URL `url_registry` dedup** 🔧 UNDER TEST (DEC-051) — dedup keyed on `normalized_source_url` (full URL **with path**, not domain) in a dedicated `url_registry` tab, checked before Firecrawl/Claude; duplicate → `skipped_log`/`dedup_source_url`, **zero cost**. Registry appended after every non-duplicate attempt.
-  - **Deterministic competitor fallback** 🔧 UNDER TEST (DEC-052) — after primary+repair JSON failure, emits a structured `competitor`/`monitor_queue` row (`needs_manual_review=true`) instead of dropping to `technical_errors`.
+- **Firecrawl URL list mini-batch (≤5 URLs, manual)** ✅ APPROVED (2026-06-08, DEC-053) — `04_firecrawl_url_list_resilient.json`. 3–5 URLs/run, manual trigger only, per-URL loop, 35-field business schema (`run_id`+`batch_index`). Validated: Run 1 processed 3 URLs → `monitor_queue`; Run 2 (same 3) → `skipped_log`, 0 cost. Output hardened with URL/path service-type override + Russian output-language guard (DEC-053). 25 nodes; JSON valid; active=false.
+- **URL `url_registry` dedup** ✅ APPROVED (2026-06-08, DEC-051/053) — dedup keyed on `normalized_source_url` (full URL **with path**, not domain) in a dedicated `url_registry` tab, checked before Firecrawl/Claude; duplicate → `skipped_log`/`dedup_source_url`, **zero cost**. Registry appended after every non-duplicate attempt and is the **source of truth** (old rows dedup only if backfilled — optional).
+- **Deterministic competitor fallback** ✅ APPROVED (2026-06-08, DEC-052) — after primary+repair JSON failure, emits a structured `competitor`/`monitor_queue` row (`needs_manual_review=true`) instead of dropping to `technical_errors`.
 
 **Still NOT approved:**
 - More than 5 URLs per run.
@@ -31,7 +29,7 @@
 - Avito / Telegram / Instagram real ingestion.
 - Automated lead outreach.
 - Firecrawl MCP/CLI (deferred — DEC-040).
-- Deduplication at scale (Workflow 04 dedups a small manual list by `source_url`; large-scale dedup is not approved).
+- Deduplication at scale (Workflow 04 dedups a small manual list via `url_registry` by `normalized_source_url`; large-scale/automated dedup is not approved).
 - Fully autonomous multi-source agent.
 - `content_idea` production handling (content_queue exists; review process deferred to Stage 4).
 

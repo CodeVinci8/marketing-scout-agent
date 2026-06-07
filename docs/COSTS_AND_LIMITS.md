@@ -147,6 +147,8 @@ Cost-control rules baked into the first Firecrawl test:
 
 > Verify dedup: a **re-run of the same list** should show `duplicates = URL count`, `Firecrawl credits delta = 0`, `Claude delta = 0`, and all rows in `skipped_log` with `parse_method=dedup_source_url`.
 
+**Validated 2026-06-08 (DEC-053):** Run 1 (`firecrawl_20260607_094000`, empty registry) processed 3 URLs → 3 `monitor_queue` rows + 3 `url_registry` rows. Run 2 (`firecrawl_20260607_094303`, same 3 URLs) → all 3 `skipped_log`/`dedup_source_url`, **0 Firecrawl credits, 0 Claude tokens**. The `url_registry` prevents repeated spend on URLs already seen. **Future tests must still record before/after Firecrawl credits + Claude balance** (the operator did not capture exact balances this run — capture them next time).
+
 ---
 
 ## Gateway Stability and Prompt Size (2026-06-05, updated v2.5 MICRO)

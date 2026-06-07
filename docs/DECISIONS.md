@@ -5,6 +5,29 @@ Most recent first.
 
 ---
 
+## DEC-053 — Workflow 04 Approved for Manual Mini-Batch; Output Language Guard + URL/Path Service-Type Override
+
+**Date:** 2026-06-08
+**Context:** Two-run validation of Workflow 04 (after the `url_registry` patch) passed:
+- **Run 1** (`firecrawl_20260607_094000`, 3 URLs) — all reached `monitor_queue` as competitors (`МосИнвестФинанс` 78/80; `МОСИНВЕСТФИНАНС` 78/82; `LionCredit` 75/75). `url_registry` was empty, so all three were processed (expected).
+- **Run 2** (`firecrawl_20260607_094303`, same 3 URLs) — all three → `skipped_log` / `business_skip` / `parse_method=dedup_source_url`, **0 Firecrawl / 0 Claude**. Dedup confirmed working.
+
+Two output-quality issues surfaced: (a) the auto/PTS service page `…/kredit/pod-zalog-avto/` was labelled `generic_lending` instead of `pts_loan`/`secured_auto_loan`; (b) the repaired `LionCredit` row came back with an **English** `reason` on a Russian source page.
+
+**Decision:**
+1. **Workflow 04 is APPROVED for manual mini-batch (3–5 URLs, manual trigger only).** Larger automation stays blocked (no schedule, no crawl/batch/search, no >5 URLs, no discovery/Telegram).
+2. **`url_registry` is the single source of truth for dedup.** Old business rows written before the registry existed do **not** dedup unless backfilled into `url_registry`. Backfilling older rows is **optional future maintenance**, not required.
+3. **Output language guard (`Normalize + Route`):** when the source is Cyrillic but the final `reason` is mostly English / CJK / foreign-script, replace it with a deterministic Russian fallback by `entity_type` (competitor → "Страница содержит признаки конкурента … Запись отправлена в мониторинг конкурентов."). Same guard applied to `offer_text` (build a short Russian offer from company/service/terms).
+4. **URL/path service-type override (`Normalize + Route`):** a **specific** service URL beats the multi-product `generic_lending` default — `pod-zalog-avto`/`залог ПТС`/`ПТС` → `pts_loan` (or `secured_auto_loan` without PTS), `pod-zalog-nedvizhimosti`/`залог недвижимости`/`квартир`/`коммерческ` → `secured_real_estate_loan`. A **root homepage** (no service path segment) stays `generic_lending`.
+
+**Reason:** keep deterministic, no heavy prompt tuning, no architecture/dedup change. Language consistency and service-type precision are post-model normalization, where they are cheap and reliable.
+
+**Verification:** `python3 -m json.tool` VALID; 35 business fields + 10 registry fields preserved; dedup path unchanged; root → `generic_lending`, `/kredit/pod-zalog-avto` → `pts_loan`/`secured_auto_loan`, `/uslugi/kredit-pod-zalog-nedvizhimosti` → `secured_real_estate_loan`.
+
+**File:** `n8n/workflows/04_firecrawl_url_list_resilient.json`.
+
+---
+
 ## DEC-051 — Workflow 04 Dedup Uses a Dedicated `url_registry` Tab (Supersedes Six-Tab Scan)
 
 **Date:** 2026-06-08

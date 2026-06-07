@@ -4,6 +4,20 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Workflow 04 VALIDATED & APPROVED: Language Guard + Service-Type Override (DEC-053)
+
+**What was done:**
+- Operator ran the 2-run validation. **Run 1** (empty `url_registry`, 3 URLs) → all `monitor_queue` competitors + 3 registry rows. **Run 2** (same 3 URLs) → all `skipped_log`/`dedup_source_url`, **0 Firecrawl/Claude**. Dedup confirmed → **Workflow 04 APPROVED for manual ≤5-URL mini-batch.**
+- Patched `04_firecrawl_url_list_resilient.json` **in place** (`Normalize + Route` only; 25 nodes, active=false): **(A)** output language guard — Cyrillic source but English/CJK `reason`/`offer_text` → deterministic Russian fallback; **(B)** URL/path service-type override — `pod-zalog-avto`/ПТС → `pts_loan`/`secured_auto_loan`, `pod-zalog-nedvizhimosti`/недвижимость → `secured_real_estate_loan`, root homepage stays `generic_lending`.
+- No architecture/dedup change; 35 business + 10 registry fields intact; cap 3500 unchanged. Genericized one real domain in the retest sticky note → `example.com`.
+- Docs: DEC-053; RU §11b (validation + backfill); PLAN/ROADMAP (approved, Stage 2.1 done + 2.2 discovery / 2.3 Telegram planning); TABLE_SCHEMA (source-of-truth + backfill); COSTS (validated); AGENT_CAPABILITIES (moved to APPROVED); NEXT_ACTIONS (next steps).
+
+**Key facts:** `url_registry` is the dedup **source of truth** — old rows re-process once unless backfilled (optional). JSON VALID; no secrets/tool_use/KEY=VALUE/crawl-batch-search; `Set URL List` uses only example.com.
+
+**Next:** optional 5-URL run (record before/after balances) → then **plan** URL discovery (Stage 2.2, do not build yet).
+
+---
+
 ## Session: 2026-06-08 — Workflow 04 HARDENED: `url_registry` Dedup + Deterministic Fallback (DEC-051/052)
 
 **What was done:**

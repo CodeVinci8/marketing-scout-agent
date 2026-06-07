@@ -1,6 +1,6 @@
 # WORKFLOW_04_FIRECRAWL_URL_LIST_PLAN.md — Firecrawl URL List Mini-Batch
 
-**Status:** 🔧 BUILT + PATCHED, **UNDER TEST** (2026-06-08) — `n8n/workflows/04_firecrawl_url_list_resilient.json`. active=false; **remains under test until the `url_registry` dedup + 3-URL retest pass.**
+**Status:** ✅ BUILD COMPLETED, `url_registry` dedup VALIDATED, **APPROVED for manual 3–5 URL mini-batch** (2026-06-08, DEC-053) — `n8n/workflows/04_firecrawl_url_list_resilient.json`. active=false. Larger automation (schedule / crawl / batch / >5 URLs / discovery / Telegram) **still blocked.**
 **Guide:** `docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md`
 **Date:** 2026-06-08
 **Related:** Workflow 03 (`03_firecrawl_single_url_resilient.json`), DEC-039–052, `docs/FIRECRAWL_SETUP.md`, `docs/WORKFLOW_02_RESILIENT_OUTPUT_LAYER.md`
@@ -16,7 +16,8 @@
 - `force_reprocess` (default `false`) reserved for future/manual override.
 - **Deterministic competitor fallback (DEC-052):** after primary+repair both fail to yield JSON, if ≥5 competitor signals over `text_context`+raw preview → `monitor_queue` row (`deterministic_competitor_fallback`); else `technical_errors`.
 - `text_context` cap lowered to **3500** + markdown cleaning (drop images/svg, commercially-relevant lines first).
-- **Workflow 04 remains UNDER TEST** until the `url_registry` dedup and the 3-URL retest pass.
+- **VALIDATED (2026-06-08, DEC-053):** Run 1 (empty registry) processed 3 URLs → all `monitor_queue`; Run 2 (same 3 URLs) → all `skipped_log`/`dedup_source_url`, 0 Firecrawl/Claude. `url_registry` dedup confirmed. Output quality hardened: URL/path service-type override + Russian output-language guard. **Mini-batch manual mode APPROVED**; larger automation still blocked.
+- **Dedup source of truth = `url_registry`.** Business rows created before the registry existed are not deduped unless backfilled; backfill is optional future maintenance.
 
 ---
 

@@ -88,6 +88,8 @@ A separate registry tab, written/read only by Workflow 04. Its own header (10 co
 
 **Column counts:** the **6 business tabs use 35 columns**; **`url_registry` uses its own 10 columns**. **Workflows 02/03 may leave `run_id`/`batch_index` empty**; **Workflow 04 fills `run_id`/`batch_index`** on every business path and populates `url_registry`.
 
+**Source of truth + backfill (DEC-053).** `url_registry` is the **single source of truth for dedup**. Business rows written **before** the registry existed do **not** dedup unless their `normalized_source_url` is backfilled into `url_registry`. This is why a previously-analyzed URL can be re-processed on the first run after the registry is introduced (registry was empty) — expected behaviour. Backfilling older rows into `url_registry` is **optional future maintenance**, not required. Validated 2026-06-08: Run 1 (empty registry) processed 3 URLs; Run 2 (same 3) skipped all via dedup at 0 cost.
+
 ---
 
 ## Column Reference
