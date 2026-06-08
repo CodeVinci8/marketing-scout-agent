@@ -109,6 +109,16 @@ Three cost axes with different drivers and spend gates — tracked **separately*
   + `llm_test_batch_indexes=[1,7,11,12]` (≈$0.04–0.06 plus any ≤2 repairs); record the exact delta. Full
   `llm_enriched` mode stays opt-in and is not approved until TEST 4 passes.
 
+### LLM enrichment Test C (measured) + v4 compact enrichment (DEC-085) — cost impact
+- **Test C (v3 full-row enrichment, 4 records) measured cost delta = $0.0967** (Today $0.3393→$0.4360,
+  Total $1.3054→$1.4021) — for near-zero usable LLM output (too many `deterministic_fallback_after_llm_fail`).
+  **LLM enrichment NOT approved.**
+- **v4 makes enrichment compact (DEC-085):** Claude returns a small 15-key enrichment object only (not the full
+  row), `max_tokens` 700/600, `temperature=0`, `thinking` disabled. This should sharply cut output tokens and
+  the fallback rate. **Test C2 target cost delta ≤ $0.04 for 4 records** (vs $0.0967) — record the exact delta.
+- **Default mode cost is still $0** (deterministic_first, all LLM flags `false`). The v4 patch and MSK timestamps
+  add no API calls.
+
 ---
 
 ## Estimate Table

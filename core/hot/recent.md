@@ -4,6 +4,21 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Workflow 08 LLM enrichment v4: compact enrichment-only merge (DEC-085)
+
+**What was done (stabilize optional LLM enrichment; baseline untouched):**
+- **Root cause (Test C, v3):** prompt asked Claude to author the **full 25/35-field row** → gateway returned prose/thinking → records 1/7/12 fell to `deterministic_fallback_after_llm_fail`; **$0.0967 for 4 records**. PARTIAL PASS / LLM NOT APPROVED. (Consulted `claude-api` skill: `claude-sonnet-4-6` supports `thinking:{type:"disabled"}`; kept the operator's gateway model.)
+- **Patch v4 (`08_touchpoint_analyzer.json`, JSON valid, active=false):** Claude now returns a **compact 15-key enrichment JSON** (`Build Primary Claude Request`: ORIGINAL_RECORD + DETERMINISTIC_ROW + OUTPUT_SCHEMA; `temperature=0`, `max_tokens=700`, **`thinking={type:'disabled'}`** sent in HTTP body). `Build Repair Request` enrichment-only (`max_tokens=600`). Parsers: text-only, ignore thinking/signature, fence-strip, balanced/`{`…`}`, preview cap 500, thinking-only→`non_json_non_text_or_thinking_response`, both-fail→fallback marker.
+- **`Normalize + Route` → renamed `Merge LLM Enrichment With Deterministic Row`:** starts from deterministic 35-field row, overlays **only safe enrichment** (descriptive + scores 1–10→×10 floored at det). **Route/recommended_action/entity_type/contact stay deterministic** — Claude can't change routing, downgrade competitor→irrelevant, or set a contact absent from intake. `market_signal`→`content_idea`. parse_method∈{primary_json,repaired_json,deterministic_fallback_after_llm_fail,technical_error}. Connections + Final Summary updated.
+- **Part F:** `Build Deterministic Row` returns `[]` in `llm_enrichment_test_mode` → test writes exactly the 4 fixtures (1,7,11,12).
+- **Preserved:** defaults `deterministic_first`/`llm_enrichment=false`/`llm_enrichment_test_mode=false`; Test-3 baseline; MSK `+03:00`; dynamic route sheet; 35 fields; technical_errors fallback; no source APIs.
+- **Verified:** JSON VALID; all 10 code nodes compile; merge simulation on 4 fixtures → routes unchanged, hallucinated contact rejected, 35 fields on primary/repaired/fallback paths; no real keys/Spreadsheet ID; only aiprimetech URL; no tool_use/KEY=VALUE; WF04/05/06/07 untouched.
+- **Decision:** DEC-085 (enrichment-only compact JSON merged into deterministic row; Claude no longer generates full row). Docs: STAGE_3_2_TEST_RESULTS (Test C $0.0967 + v4 + Test C2 acceptance), WF08 RU, DECISIONS, NEXT_ACTIONS, COSTS, AGENT_CAPABILITIES, ROADMAP, AGENT_LOG.
+
+**Next operator action:** run **Test C2** — re-import WF08 → bind creds + Spreadsheet ID → `llm_enrichment_test_mode=true` → record Claude balance → Execute once → fill Test C2 (expect exactly 4 rows, `primary_json≥3/4`, fallback≤1/4, routes unchanged, cost ≤$0.04) → **restore `llm_enrichment_test_mode=false`**. Then Stage 3.3 (decision only, Avito). No connector built.
+
+---
+
 ## Session: 2026-06-08 — Stage 3.2 FINALIZED: MSK timestamps + LLM enrichment hardening + test matrix + Stage 3.3 source decision (DEC-083/084)
 
 **What was done:**

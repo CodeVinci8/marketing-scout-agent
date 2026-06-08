@@ -4,33 +4,31 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-08) — Stage 3.2 FINALIZED (MSK time + deterministic baseline approved + LLM enrichment test-gated, DEC-083) → Stage 3.3 source decision
+## CURRENT PRIORITY (2026-06-08) — Workflow 08 LLM enrichment v4 (enrichment-only merge, DEC-085) → run Test C2 (NOT Stage 3.3 yet)
 
-Stage 3.2 is **finalized**: deterministic_first **baseline APPROVED** (Test 3 PASS: `technical_errors=0`,
-Claude calls=0, `repair_used=false`, routes 6/3/1/2). LLM enrichment is **optional / under test** (Test 4).
-All workflow-generated timestamps + `run_id` now use **Moscow time +03:00** (`moscowIsoNow()`/`moscowStamp()`);
-`published_at` untouched, historical UTC-`Z` rows unchanged (DEC-083). Stage 3.3 first source recommended:
-**Avito/Classifieds** (DEC-084) — **no connector built**.
+The deterministic_first baseline stays **APPROVED** (Test 3). The first LLM-enrichment run (Test C, v3 full-row) was
+**PARTIAL PASS / NOT APPROVED** — too many fallbacks, **$0.0967 for 4 records**. **Patched v4 (DEC-085):** Claude now
+returns a **compact enrichment-only JSON** merged into the deterministic row (`thinking` disabled, `max_tokens` 700/600,
+`temperature` 0); route/action/entity/contact stay deterministic. **Next action is the small LLM Test C2 — not Stage
+3.3.** Defaults remain `deterministic_first` / `llm_enrichment=false` / `llm_enrichment_test_mode=false`.
 
-**A. Timestamp smoke test (any one workflow, e.g. WF07):**
-1. [ ] Re-import the workflow (do NOT activate); re-bind creds + Spreadsheet ID.
-2. [ ] Execute once; confirm new rows show `created_at`/`parsed_at`/`first_seen_at` like
-   `2026-06-08T21:55:43.425+03:00` (Moscow), and `run_id` stamp is Moscow-based. `published_at` unchanged.
+**Run Test C2 (WF08, optional but it gates LLM approval):**
+1. [ ] Re-import WF08 (do NOT activate); re-bind Claude + Sheets creds + Spreadsheet ID.
+2. [ ] Set **`llm_enrichment_test_mode=true`** (keeps `llm_test_batch_indexes=[1,7,11,12]`).
+3. [ ] Record Claude balance **BEFORE** → **Execute once** → balance **AFTER**.
+4. [ ] Fill `docs/STAGE_3_2_TEST_RESULTS.md` **Test C2**: expect **exactly 4 rows** (1,7,11,12; other 8 not written),
+   `technical_errors=0`, **`primary_json ≥3/4`**, `repaired_json ≤1/4`, `deterministic_fallback ≤1/4`, routes
+   unchanged (1→monitor, 7→content, 11→review (never results/contact), 12→monitor), reason improved, **cost delta
+   ≤ $0.04**.
+5. [ ] **Restore `llm_enrichment_test_mode=false` after the test.**
+6. [ ] If C2 passes → enrichment may be enabled per-run (`analysis_mode='llm_enriched'` + `llm_enrichment=true`);
+   if it fails → keep deterministic_first as the production default and iterate the prompt.
 
-**B. Deterministic baseline sanity check (WF08, defaults):**
-3. [ ] Keep `analysis_mode='deterministic_first'`, `llm_enrichment=false`, `llm_enrichment_test_mode=false`.
-4. [ ] Execute once; confirm **Claude calls=0 / cost $0**, `repair_used=false` ×12,
-   `deterministic_pre_route=10`, `deterministic_irrelevant_skip=2`, routes 6/3/1/2, `technical_errors=0`.
+**Optional baseline re-confirm (defaults):** Execute once with all flags `false` → Claude calls=0 / $0,
+`deterministic_pre_route=10`, `deterministic_irrelevant_skip=2`, routes 6/3/1/2, `technical_errors=0`.
 
-**C. LLM enrichment 4-record test (WF08, optional):**
-5. [ ] Set `llm_enrichment_test_mode=true` (keeps `llm_test_batch_indexes=[1,7,11,12]`); record Claude balance
-   BEFORE → Execute once → balance AFTER.
-6. [ ] Fill `docs/STAGE_3_2_TEST_RESULTS.md` Test 4: expect `technical_errors=0`, `primary_json ≥2/4`,
-   `repaired_json ≤2/4`, `deterministic_fallback ≤2/4`, routes unchanged (11 stays `review_queue`, no
-   `results`/`contact` without `contact_public`), reason/next_action improved; record cost delta.
-
-**D. Then Stage 3.3 (decision only):** review `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md` (Avito first). **Do NOT
-build any source connector yet** — build only after explicit approval + feasibility.
+**Only AFTER Test C2** — Stage 3.3 source decision is documented (`docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`,
+Avito/Classifieds first, DEC-084). **Do NOT build any source connector yet.**
 
 > Still NOT built/approved: Avito/Dzen/VK/Telegram/Instagram parsers, competitor-audience scraping, Telegram
 > Control Bot, outreach/autocall, scheduled scraping.

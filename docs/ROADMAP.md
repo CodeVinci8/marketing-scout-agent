@@ -154,14 +154,15 @@ the approved path until Stage 2.4 is built and live-validated.
   VK/Telegram/competitor/forum/reviews + irrelevant + hot-lead control) → `raw_market_records` (40) +
   `market_record_registry` (15) + `agent_requests` (21). Zero source cost/risk, no LLM, no scraping; `agent_memory`
   not written. Next: import/bind/run/verify, then build the Touchpoint Analyzer.
-- **3.2 — Touchpoint Analyzer** ✅ **DETERMINISTIC-FIRST BASELINE APPROVED (2026-06-08, DEC-080/081/082/083)**:
+- **3.2 — Touchpoint Analyzer** ✅ **DETERMINISTIC-FIRST BASELINE APPROVED (2026-06-08, DEC-080/081/082/083/085)**:
   `Workflow 08 — Touchpoint Analyzer` (`active=false`) reads approved/unique `raw_market_records`, classifies
   **deterministically from intake hints**, and routes to the 6 business tabs (existing **35-column** schema) via
   dynamic sheet. TEST 1 partially failed; v2 added a deterministic fallback (DEC-081); v3 made it deterministic-first
   (DEC-082). **TEST 3 PASS** (Claude calls=0 / $0, `repair_used=false`, routes 6/3/1/2, `technical_errors=0`) →
-  **baseline approved**. **LLM enrichment is optional / under test** (Test 4, 4 fixtures via
-  `llm_enrichment_test_mode`) and hardened (no browse/fetch, strict JSON, deterministic safety floor). **Timestamps
-  now Moscow `+03:00`** (DEC-083). Test log: `docs/STAGE_3_2_TEST_RESULTS.md`.
+  **baseline approved**. **LLM enrichment**: first run (Test C, full-row) was PARTIAL PASS/NOT APPROVED ($0.0967/4);
+  **v4 (DEC-085) switched to compact enrichment-only JSON merged into the deterministic row** (`thinking` disabled;
+  route/action/entity/contact stay deterministic) → re-test **Test C2** (target `primary_json≥3/4`, cost ≤$0.04)
+  before enabling. **Timestamps Moscow `+03:00`** (DEC-083). Test log: `docs/STAGE_3_2_TEST_RESULTS.md`.
 - **3.3 — First real source connector (DECISION)** 📐 **DECIDED 2026-06-08 (DEC-084), NOT BUILT**: recommended first
   connector = **Avito/Classifieds Listing Connector** (lowest complexity, matches the web/URL data model; caveat —
   competitor/offer/semantic source, not audience/comment mining). Telegram public parsing (≠ Control Bot) and
