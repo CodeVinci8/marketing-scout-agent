@@ -5,6 +5,28 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Workflow 08 LLM enrichment v4: compact enrichment-only JSON merged into the deterministic row (DEC-085)
+
+**Agent role:** project-engineer
+**Session goal:** stabilize Workflow 08 LLM enrichment so the 4-record test produces mostly `primary_json`, rare repair, almost no fallback — without weakening the approved deterministic baseline. Consulted the `claude-api` skill before changing the Claude request.
+
+**Root cause (Test C, v3):** the v3 prompt asked Claude to author the **full 25/35-field business row from scratch** (long output), so the gateway returned prose/extended-thinking/signature instead of one JSON object → records 1/7/12 fell to `deterministic_fallback_after_llm_fail`; cost delta **$0.0967 for 4 records** for near-zero usable LLM output. PARTIAL PASS / LLM NOT APPROVED.
+
+**Patch (v4, `08_touchpoint_analyzer.json`, JSON valid, `active=false`):**
+- **`Build Primary Claude Request`** → compact **enrichment-only** task: `ORIGINAL_RECORD` + `DETERMINISTIC_ROW` + a 15-key `OUTPUT_SCHEMA`. `model=claude-sonnet-4-6`, `temperature=0`, `max_tokens=700`, **`thinking={type:'disabled'}`** (valid Sonnet-4.6 field per the claude-api skill; suppresses the gateway's thinking/signature blocks). HTTP body now sends `thinking`.
+- **`Build Repair Request`** → enrichment-only (`max_tokens=600`, thinking disabled): repair to `OUTPUT_SCHEMA` or build from `ORIGINAL_RECORD`+`DETERMINISTIC_ROW`.
+- **Parsers** (`Parse Primary/Repaired JSON`) → concatenate only `text` items (ignore thinking/signature/tool), fence-strip, direct→balanced→first`{`…`}`, preview cap 500, thinking/prose-only → `non_json_non_text_or_thinking_response`; both-fail → deterministic fallback marker.
+- **`Normalize + Route` → renamed `Merge LLM Enrichment With Deterministic Row`**: builds the deterministic 35-field row from `det`, overlays **only safe enrichment** (descriptive fields + scores 1–10→×10 floored at det). **Route, recommended_action, entity_type, contact stay deterministic**; `market_signal`→`content_idea`; `parse_method`∈{primary_json,repaired_json,deterministic_fallback_after_llm_fail,technical_error}. Connections + Final Summary updated to the new name.
+- **Part F:** `Build Deterministic Row` returns `[]` when `llm_enrichment_test_mode=true` → the test writes exactly the 4 fixtures (1,7,11,12).
+- **Preserved:** defaults `deterministic_first`/`llm_enrichment=false`/`llm_enrichment_test_mode=false`; Test-3 baseline routing; MSK `+03:00` timestamps; dynamic route sheet; 35-field output; technical_errors fallback; no source APIs.
+- **Verified:** `python3 -m json.tool` VALID (`/tmp/08_validated.json`); all 10 code nodes compile; node simulation of the merge on the 4 fixtures → routes stay 1→monitor_queue/7→content_queue/11→review_queue/12→monitor_queue, **hallucinated model contact `+7 999…` rejected** (contact stays deterministic), 35 fields on every path (primary/repaired/fallback), fallback safe. `active=false`; no real keys/Spreadsheet ID; apify/firecrawl only in disclaimer; only `aiprimetech.io` URL; no tool_use/KEY=VALUE. Workflows 04/05/06/07 untouched.
+
+**Docs updated:** `STAGE_3_2_TEST_RESULTS.md` (Test C result $0.0967 PARTIAL PASS + v4 patch + Test C2 acceptance), `N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md` (via test-log refs), `DECISIONS.md` (**DEC-085**), `NEXT_ACTIONS.md` (Test C2 is next, not Stage 3.3), `COSTS_AND_LIMITS.md` ($0.0967 recorded; C2 target ≤$0.04), `AGENT_CAPABILITIES.md`, `ROADMAP.md`, `core/hot/recent.md`.
+
+**Next operator action:** run **Test C2** — re-import WF08 → bind creds + Spreadsheet ID → set `llm_enrichment_test_mode=true` → record Claude balance → Execute once → fill `STAGE_3_2_TEST_RESULTS.md` Test C2 (expect exactly 4 rows, `primary_json≥3/4`, fallback≤1/4, routes unchanged, cost ≤$0.04) → **restore `llm_enrichment_test_mode=false`**. Then (decision only) Stage 3.3 Avito. No connector built.
+
+---
+
 ## 2026-06-08 — Stage 3.2 FINALIZED: MSK timestamps + LLM enrichment hardening + test matrix + Stage 3.3 source decision (DEC-083/084)
 
 **Agent role:** project-engineer

@@ -180,37 +180,80 @@ on the 12 Workflow-07 records.
 
 ---
 
-## TEST 4 — LLM ENRICHMENT SMALL RETEST (template) — ⏳ AWAITING OPERATOR RUN
+## TEST 4 (Test C) — 2026-06-08 — ⚠️ PARTIAL PASS / LLM ENRICHMENT NOT APPROVED (v3 full-row enrichment)
 
-Optional. Validates the `llm_enriched` path on **4 fixture records only** before approving enrichment.
+First live LLM-enrichment run, 4 fixtures (`llm_enrichment_test_mode=true`, batch_indexes [1,7,11,12]) against the
+**v3 full-row** enrichment prompt (Claude asked to produce the full 25/35-field business object).
 
-### How to run (config-driven — Part C)
-1. In `Set Analyzer Config` set **`llm_enrichment_test_mode = true`** (keep `analysis_mode='deterministic_first'`,
-   `llm_enrichment=false`, `max_records=12`). `llm_test_batch_indexes` defaults to **`[1,7,11,12]`**.
-   This sends **only** those four non-irrelevant fixtures through Claude; all other records still route
-   deterministically ($0).
+### Result summary
+- Claude balance: **Before Today $0.3393 / Total $1.3054 → After Today $0.4360 / Total $1.4021** → **cost delta $0.0967** for 4 records.
+- `technical_errors = 0`; routes did **not** degrade (safety floor held).
+- **But too many records fell back:** several enrichment records returned non-JSON and routed via
+  `deterministic_fallback_after_llm_fail` rather than `primary_json`:
+  - Record 1 Avito competitor → `monitor_queue`, `deterministic_fallback_after_llm_fail`.
+  - Record 7 Telegram @creditbrokers → `content_queue`, `deterministic_fallback_after_llm_fail`.
+  - Record 12 Zoon reviews → `monitor_queue`, `deterministic_fallback_after_llm_fail`.
+- LLM still often failed strict JSON on both primary and repair.
+
+### Cause
+The v3 prompt asked Claude to generate the **full business row from scratch** (25 fields + 3-sentence reason +
+full scoring), so responses were long and the gateway frequently emitted prose / extended-thinking / signature
+instead of one clean JSON object. The deterministic floor saved routing, but the LLM contributed little for
+$0.0967.
+
+### Verdict
+- [x] **PARTIAL PASS** — routing safe, `technical_errors=0`; **LLM enrichment NOT APPROVED** (too many fallbacks,
+  poor JSON stability, weak cost/value). **Decision (DEC-085): switch enrichment to compact enrichment-only JSON
+  merged into the deterministic row.** Re-test as Test C2 below.
+
+---
+
+## PATCH v4 (2026-06-08, DEC-085) — enrichment-only JSON merged into the deterministic row
+
+Claude no longer generates the full 35-field row. New design:
+- **`Build Primary Claude Request`** sends a **compact enrichment-only** task: `ORIGINAL_RECORD` + `DETERMINISTIC_ROW`
+  + a 15-key `OUTPUT_SCHEMA` (company_name, profile_name, region, service_type, offer_text, terms, contact_public,
+  detected_need, reason, recommended_action, entity_type, 4 scores). `model=claude-sonnet-4-6`, `temperature=0`,
+  `max_tokens=700`, **`thinking={type:'disabled'}`**.
+- **`Build Repair Request`** is also enrichment-only (`max_tokens=600`, thinking disabled): repair to `OUTPUT_SCHEMA`
+  or build it from `ORIGINAL_RECORD` + `DETERMINISTIC_ROW`.
+- **Parsers** concatenate only `text` items (ignore thinking/signature/tool), strip fences, try direct parse →
+  first balanced object → first `{`…`}`; cap preview at 500; thinking/prose-only →
+  `non_json_non_text_or_thinking_response`.
+- **`Merge LLM Enrichment With Deterministic Row`** (renamed from `Normalize + Route`) starts from the deterministic
+  35-field row and overlays **only safe enrichment**: descriptive fields + scores (1–10 → ×10, floored at the
+  deterministic value). **Route, recommended_action, entity_type, and contact stay deterministic** — Claude cannot
+  change routing, downgrade a competitor to irrelevant, or set a contact that wasn't in the intake. `market_signal`
+  → `content_idea`. parse_method = `primary_json` | `repaired_json` | `deterministic_fallback_after_llm_fail`.
+- HTTP request bodies now send `thinking` (disabled). `Build Deterministic Row` writes nothing during
+  `llm_enrichment_test_mode` so the test produces exactly the 4 fixture rows.
+
+---
+
+## TEST C2 — COMPACT ENRICHMENT RETEST — ⏳ AWAITING OPERATOR RUN
+
+Re-run the 4-fixture enrichment test against the v4 compact enrichment-only design.
+
+### How to run
+1. `Set Analyzer Config`: set **`llm_enrichment_test_mode = true`** (keep `analysis_mode='deterministic_first'`,
+   `llm_enrichment=false`, `max_records=12`). `llm_test_batch_indexes` = **`[1,7,11,12]`**. Only those four
+   non-irrelevant fixtures call Claude; **the other 8 records are not written** during this test.
 2. Re-bind Claude + Sheets credentials and the Spreadsheet ID. Record Claude balance **BEFORE**,
    **Execute Workflow once**, record balance **AFTER**.
-3. (Alternative if not using the flag) set `max_records` and the source rows so only records 1,7,11,12 are
-   eligible — but the **flag is preferred**.
+3. **Restore `llm_enrichment_test_mode = false` after the test.**
 
-### Fixture records
-1. Avito competitor listing → expect `competitor` / `monitor_queue`.
-7. Telegram `@creditbrokers` source candidate → expect `content_idea` / `content_queue`.
-11. Banki forum hot pattern **without contact** → expect `lead_signal` / `review_queue` / `investigate`
-    (NOT `results`/`contact`).
-12. Zoon reviews / market signal → expect `competitor` / `monitor_queue` (review_source + competitor_related).
-
-### Pass criteria
+### Acceptance (target)
+- **Selected LLM records = exactly 4** (batch_index 1, 7, 11, 12); the other 8 records not written.
 - `technical_errors = 0`.
-- `primary_json` **target ≥ 2 of 4**.
-- `repaired_json` allowed **≤ 2 of 4**.
-- `deterministic_fallback_after_llm_fail` allowed but **should not exceed 2 of 4**.
-- **Routes unchanged from the deterministic baseline** (1→monitor_queue, 7→content_queue, 11→review_queue,
-  12→monitor_queue).
-- `reason` / `next_action` quality **improved** vs deterministic text.
-- **No `results`/`contact` without a usable `contact_public`** (record 11 must stay `review_queue`).
-- **Record cost delta** (4 Claude primary calls + any repairs) in the table below.
+- `primary_json` **≥ 3 of 4** (target).
+- `repaired_json` **≤ 1 of 4** acceptable.
+- `deterministic_fallback_after_llm_fail` **≤ 1 of 4** acceptable (ideally 0).
+- Routes unchanged from the deterministic baseline: **1 → monitor_queue, 7 → content_queue (or review_queue,
+  never technical_errors), 11 → review_queue (never results/contact without contact_public), 12 → monitor_queue
+  (or content_queue, never technical_errors)**.
+- No `results`/`contact` without usable `contact_public`.
+- `reason` / `detected_need` quality **improved** over the deterministic text.
+- **Cost delta materially lower than $0.0967**, target **≤ $0.04** for 4 records (provider/model dependent).
 
 | # | platform | entity_type | route | parse_method | repair_used | reason improved? | cost note | PASS? |
 |---|----------|-------------|-------|------|:----:|:----:|------|:----:|
@@ -221,14 +264,16 @@ Optional. Validates the `llm_enriched` path on **4 fixture records only** before
 
 | metric | target | observed |
 |--------|--------|----------|
+| selected LLM records | exactly 4 |  |
 | technical_errors | 0 |  |
-| primary_json | ≥2/4 |  |
-| repaired_json | ≤2/4 |  |
-| deterministic_fallback_after_llm_fail | ≤2/4 |  |
-| Claude cost delta | record it |  |
+| primary_json | ≥3/4 |  |
+| repaired_json | ≤1/4 |  |
+| deterministic_fallback_after_llm_fail | ≤1/4 |  |
+| Claude cost delta | ≤ $0.04 |  |
 
-> If TEST 4 passes, enrichment can be enabled per-run with `analysis_mode='llm_enriched'` + `llm_enrichment=true`
-> (full batch). Until then the **deterministic_first baseline (TEST 3) is the approved default**.
+> If Test C2 passes, enrichment can be enabled per-run with `analysis_mode='llm_enriched'` + `llm_enrichment=true`
+> (full batch). Until then the **deterministic_first baseline (TEST 3) is the approved default** and all LLM flags
+> must be left `false`.
 
 ---
 

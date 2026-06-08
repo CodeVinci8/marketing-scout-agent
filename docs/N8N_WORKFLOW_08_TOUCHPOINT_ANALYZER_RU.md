@@ -2,13 +2,29 @@
 
 **Workflow:** `n8n/workflows/08_touchpoint_analyzer.json`
 **Имя:** `08 - Touchpoint Analyzer`
-**Статус:** ✅ DETERMINISTIC-FIRST BASELINE ОДОБРЕН (Test 3 PASS); LLM enrichment — ОПЦИОНАЛЬНО / ПОД ТЕСТОМ (Test 4). `active=false`. Stage 3.2 (Business Scout Agent).
-**Дата:** 2026-06-08 (v3 + финализация Stage 3.2 — DEC-082/083)
+**Статус:** ✅ DETERMINISTIC-FIRST BASELINE ОДОБРЕН (Test 3 PASS); LLM enrichment — ОПЦИОНАЛЬНО / ПОД ТЕСТОМ (Test C2). `active=false`. Stage 3.2 (Business Scout Agent).
+**Дата:** 2026-06-08 (v4 — enrichment-only merge — DEC-085; ранее DEC-082/083)
 
-> **Финализация Stage 3.2 (DEC-083):** детерминированный baseline **ОДОБРЕН** (Test 3: `technical_errors=0`,
-> Claude calls=0, `repair_used=false`, маршруты 6/3/1/2). **LLM enrichment** ужесточён и остаётся **опциональным,
-> требует малого теста (Test 4) до одобрения.** Дефолт неизменен: `analysis_mode='deterministic_first'`,
-> `llm_enrichment=false`.
+> **ПАТЧ v4 (DEC-085) — обогащение через компактный JSON, мерж в детерминированную строку.** Первый LLM-тест (Test C,
+> v3) был PARTIAL PASS / LLM НЕ ОДОБРЕН: маршруты безопасны, но слишком много fallback и **стоимость $0.0967 за 4
+> записи** — причина: v3 просил Claude сгенерировать **всю строку из 25/35 полей с нуля** (длинный ответ → шлюз
+> возвращал прозу/thinking). Теперь Claude возвращает **только компактный enrichment-JSON** (15 ключей:
+> company_name/profile_name/region/service_type/offer_text/terms/contact_public/detected_need/reason/
+> recommended_action/entity_type/4 балла), `temperature=0`, `max_tokens=700`, **`thinking={type:'disabled'}`**.
+> Узел **`Merge LLM Enrichment With Deterministic Row`** берёт детерминированную 35-полей строку и накладывает
+> **только безопасное обогащение** (описательные поля + баллы с полом det). **Маршрут, recommended_action,
+> entity_type и contact остаются детерминированными** — Claude не меняет маршрутизацию, не понижает competitor до
+> irrelevant, не ставит contact/results без реального контакта из приёма.
+
+> **Как включить/выключить LLM (важно):**
+> - **Дефолт (одобрено): всё ВЫКЛ** — `analysis_mode='deterministic_first'`, `llm_enrichment=false`,
+>   `llm_enrichment_test_mode=false`. Claude не вызывается, стоимость $0.
+> - **Малый тест 4 записей (Test C2):** `llm_enrichment_test_mode=true` (через Claude идут только
+>   `llm_test_batch_indexes=[1,7,11,12]`; остальные 8 записей **не пишутся**). **После теста вернуть
+>   `llm_enrichment_test_mode=false`.**
+> - **Полное обогащение (после успешного Test C2):** `analysis_mode='llm_enriched'` + `llm_enrichment=true`
+>   (Claude по всем не-irrelevant записям; детерминированный fallback сохраняется). **Включать только после
+>   прохождения Test C2; иначе оставить флаги `false`.**
 
 > **Время (DEC-083):** `created_at`/`parsed_at`/`generated_at` и stamp в `run_id` (`touchpoint_YYYYMMDD_HHmmss`)
 > теперь в московском времени **+03:00** через `moscowIsoNow()`/`moscowStamp()`, напр.
@@ -17,7 +33,9 @@
 > **LLM-тест (Part C):** в `Set Analyzer Config` есть `llm_enrichment_test_mode` (по умолч. `false`) и
 > `llm_test_batch_indexes=[1,7,11,12]`. При `llm_enrichment_test_mode=true` через Claude идут **только** эти 4
 > не-irrelevant фикстуры (Avito-конкурент, Telegram source candidate, Banki форум hot без контакта, Zoon отзывы),
-> остальные маршрутизируются детерминированно ($0). Шаги — `docs/STAGE_3_2_TEST_RESULTS.md` Test 4.
+> остальные 8 записей **не пишутся** (`Build Deterministic Row` возвращает `[]` в тест-режиме). Ожидаемо: ровно 4
+> строки, `primary_json≥3/4`, `repaired_json≤1/4`, fallback≤1/4, маршруты как в baseline, стоимость ≤ $0.04. Шаги —
+> `docs/STAGE_3_2_TEST_RESULTS.md` Test C2.
 
 > **ПАТЧ v3 (DEC-082):** второй live-тест (v2) дал ROUTING PASS, но `primary_json=0`, `repaired_json=2`,
 > `deterministic_fallback_after_llm_fail=8`, и **стоимость Claude ≈ $0.159 за 12 записей** при том, что
@@ -76,15 +94,19 @@ fallback; поля `parse_method`, `repair_used`, `repair_status`, `processing_s
 8. **IF Call Claude?** — `call_claude=true` → Claude; `false` → детерминированная строка (БЕЗ Claude, $0).
 9. **Build Deterministic Row** (code) → 35-полей строка: irrelevant → `deterministic_irrelevant_skip`/`skipped_log`;
    иначе → `deterministic_pre_route` с маршрутом из `det`.
-10. **Build Primary Claude Request** (code) → компактный промпт, `max_tokens=1200`, `temperature=0.2`.
+10. **Build Primary Claude Request** (code) → **компактный enrichment-only** промпт (ORIGINAL_RECORD +
+    DETERMINISTIC_ROW + OUTPUT_SCHEMA из 15 ключей), `max_tokens=700`, `temperature=0`, `thinking={type:'disabled'}`.
 11. **Claude Primary API Request** (httpRequest) → `https://aiprimetech.io/v1/messages`, креденшл
-    `Claude API - Marketing Scout`.
-12. **Parse Primary JSON** (code) — извлечение/парсинг строгого JSON (balanced-extract, fence-strip).
-13. **IF Primary Parse OK?** — true → Normalize + Route; false → repair.
-14. **Build Repair Request** (code) → repair-форматтер, `max_tokens=700`, `temperature=0`.
+    `Claude API - Marketing Scout` (тело передаёт `thinking`).
+12. **Parse Primary JSON** (code) — парсит компактный enrichment-объект (только `text`-блоки, fence-strip,
+    balanced/`{`…`}`); прозу/thinking → `non_json_non_text_or_thinking_response`.
+13. **IF Primary Parse OK?** — true → Merge; false → repair.
+14. **Build Repair Request** (code) → enrichment-only repair, `max_tokens=600`, `temperature=0`, thinking disabled.
 15. **Claude Repair API Request** (httpRequest).
-16. **Parse Repaired JSON** (code) — успех → нормальный путь; провал → `technical_errors` fallback.
-17. **Normalize + Route** (code) — нормализация полей + маршрутизация; 35 полей.
+16. **Parse Repaired JSON** (code) — успех → enrichment; провал обоих → маркер детерминированного fallback.
+17. **Merge LLM Enrichment With Deterministic Row** (code, ранее Normalize + Route) — берёт детерминированную
+    35-полей строку и накладывает только безопасное обогащение (описательные поля + баллы с полом det); маршрут/
+    действие/entity/контакт остаются детерминированными; `market_signal`→`content_idea`; 35 полей.
 18. **Append to Dynamic Route Sheet** (Google Sheets append) — `Sheet Name = {{ $json.route }}` → возврат в Loop.
 19. **Final Summary Output** (code) — сводка: `route_counts`, `entity_counts`, `repair_used_count`,
     `technical_errors_count`.
