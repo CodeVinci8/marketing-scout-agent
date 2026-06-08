@@ -145,11 +145,15 @@ the approved path until Stage 2.4 is built and live-validated.
 - **3.0 — Stakeholder product reframe + source evaluation** ✅ **DONE 2026-06-08 (eval/design only)**: reframed
   to Business Scout Agent + touchpoint discovery; source matrix re-scored under the touchpoint/agent lens
   (Avito, Yandex Dzen, VK, Telegram parser, Instagram, competitor pages/commenters, Yandex/Search, Manual).
-- **3.1 — Agent/touchpoint data model** 📋 PLANNED: the proposed sheets (`agent_requests`, `raw_market_records`,
-  `market_record_registry`, `agent_memory`; PROPOSED in `TABLE_SCHEMA.md`). `agent_requests` generalizes
-  `lead_discovery_requests`.
-- **3.2 — Manual records/touchpoint intake** 📋 PLANNED: operator pastes manually collected examples (Avito/
-  Dzen/VK/Telegram/comments) → `raw_market_records`. Zero source cost/risk; validates schema + classes + analyzer.
+- **3.1 — Agent/touchpoint data model** ✅ **DONE 2026-06-08**: operator created all 4 tabs (`agent_requests` 21,
+  `raw_market_records` 40, `market_record_registry` 15, `agent_memory` 13; see `TABLE_SCHEMA.md`). `agent_requests`
+  generalizes `lead_discovery_requests`. Implemented together with 3.2 below (Workflow 07 — Manual Touchpoint
+  Intake), which the task labels **Stage 3.1**.
+- **3.2 — Manual records/touchpoint intake** 🔧 **BUILT, UNDER TEST (2026-06-08, DEC-079)**: `Workflow 07 —
+  Manual Touchpoint Intake` (`active=false`) normalizes 12 manually collected mixed-source examples (Avito/Dzen/
+  VK/Telegram/competitor/forum/reviews + irrelevant + hot-lead control) → `raw_market_records` (40) +
+  `market_record_registry` (15) + `agent_requests` (21). Zero source cost/risk, no LLM, no scraping; `agent_memory`
+  not written. Next: import/bind/run/verify, then build the Touchpoint Analyzer.
 - **3.3 — First source connector** 📋 PLANNED: build the chosen connector (Avito/Classifieds likely first,
   pending feasibility). Connectors never call Claude; human approval is the spend gate.
 - **3.4 — Analyzer hardening for touchpoints/leads** 📋 PLANNED: source-agnostic analyzer over the 12 classes;

@@ -101,6 +101,15 @@ the web pipeline; the two ledgers coexist.
 
 ---
 
+## 4a. Stage 3.1 implementation candidate (BUILT, UNDER TEST)
+
+`Workflow 07 — Manual Touchpoint Intake` (`n8n/workflows/07_manual_touchpoint_intake.json`, `active=false`) is
+the **first implementation** of this data model. The operator has created the four tabs (`agent_requests`,
+`raw_market_records`, `market_record_registry`, `agent_memory`); Workflow 07 writes the first three and proves
+the 40-column record shape, the composite `dedup_key`, and registry dedup with hand-picked examples. **No LLM,
+no scraping, no external API.** See `docs/STAGE_3_1_MANUAL_TOUCHPOINT_INTAKE_PLAN.md` and
+`docs/N8N_WORKFLOW_07_MANUAL_TOUCHPOINT_INTAKE_RU.md`. `agent_memory` is **not** written yet.
+
 ## 5. Invariants
 
 - `raw_market_records` is **separate** from `url_candidates`; `market_record_registry` is **separate** from

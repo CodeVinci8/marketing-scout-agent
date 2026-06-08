@@ -292,14 +292,16 @@ These fields were requested by the operator (confirmed 2026-06-05). Full mapping
 
 ---
 
-## Proposed — Business Scout Agent Layer (PROPOSED, NOT CREATED)
+## Business Scout Agent Layer — 4 tabs CREATED by operator (Stage 3.1)
 
-> **Status:** 📐 PROPOSED only. These four sheets are **not created** in Google Sheets and **no workflow writes
-> them yet.** They support the **Business Scout Agent** (see `docs/BUSINESS_SCOUT_AGENT_VISION.md`,
-> `docs/AGENT_TOOL_ARCHITECTURE.md`, `docs/AGENT_MEMORY_PLAN.md`, `docs/LEAD_DISCOVERY_ARCHITECTURE.md`). Build is
-> gated behind stakeholder approval of the Stage 3.1 data model. The existing web-pipeline sheets (6 business
-> tabs, `url_registry`, `url_candidates`, `discovery_requests`) are **unchanged**; `url_registry` semantics are
-> **not** altered.
+> **Status (2026-06-08):** the operator has **created all four tabs** in Google Sheets with the exact headers
+> below. **`Workflow 07 — Manual Touchpoint Intake`** (`active=false`, Stage 3.1) writes three of them —
+> `agent_requests` (21), `raw_market_records` (40), `market_record_registry` (15) — deterministically (no LLM, no
+> scraping). **`agent_memory` (13) is created but NOT written yet** (reserved for the memory layer). They support
+> the **Business Scout Agent** (see `docs/BUSINESS_SCOUT_AGENT_VISION.md`, `docs/AGENT_TOOL_ARCHITECTURE.md`,
+> `docs/AGENT_MEMORY_PLAN.md`, `docs/STAGE_3_1_MANUAL_TOUCHPOINT_INTAKE_PLAN.md`). The existing web-pipeline
+> sheets (6 business tabs, `url_registry`, `url_candidates`, `discovery_requests`) are **unchanged**;
+> `url_registry` semantics are **not** altered.
 >
 > **Supersession (DEC-078):** the earlier Stage-3 `lead_discovery_requests` is **generalized into `agent_requests`**
 > (a `request_type` field covers lead search *and* every other tool). We do **not** keep both — one request

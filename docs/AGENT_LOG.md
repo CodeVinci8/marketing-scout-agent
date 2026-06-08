@@ -5,6 +5,24 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Stage 3.1 BUILT: Workflow 07 Manual Touchpoint Intake (DEC-079)
+
+**Agent role:** project-engineer
+**Session goal:** Build the first safe Stage 3 intake workflow — normalize manually-provided mixed-source examples into the operator-created agent sheets. **No LLM, no scraping, no external API.**
+
+**Built:** `n8n/workflows/07_manual_touchpoint_intake.json` — `07 - Manual Touchpoint Intake`, `active=false`, **14 nodes**, JSON valid (`python3 -m json.tool` PASS).
+- Flow: Manual Start → Set Manual Intake Request → Read market_record_registry → Set Manual Records (12 fixed examples) → Normalize Manual Records → Dedup Against Registry → Append raw_market_records (all 12, audit) → {Build Registry Rows → Append market_record_registry (unique only)} + {Build agent_requests Row → Append agent_requests → Final Summary Output}.
+- **Deterministic normalization (no LLM):** `record_id`, composite non-URL `dedup_key` (post→source→profile+text_hash→text; never domain), `text_hash`, `region_hint`, `urgency_hint`, `lead_intent_hint`, `confidence_score` (80 competitor+url / 70 question/market / 40 source_candidate / 1 irrelevant), `lead_temperature`, `next_action`, `approval_status=new`, `estimated_analysis_cost_usd` (0.02 / 0). Record 11 (forum «отказали/просрочки/нужен кредит») = hot-lead positive control.
+- **Writes exactly:** `raw_market_records` 40 fields (all 12 incl. duplicates+irrelevant = audit trail), `market_record_registry` 15 fields (unique only), `agent_requests` 21 fields (`status=needs_review`). **Does NOT write `agent_memory`.**
+- **Verified:** JSON VALID; `active=false`; node types only manualTrigger/code/googleSheets/stickyNote (no Apify/Firecrawl/Claude/httpRequest nodes — the only apify/claude mentions are sticky-note docs); 0 real key patterns; 5× `PASTE_SPREADSHEET_ID_HERE`; field lists exact (raw=40, registry=15, agent_requests=21); no tool_use; no KEY=VALUE.
+
+**Docs created:** `docs/N8N_WORKFLOW_07_MANUAL_TOUCHPOINT_INTAKE_RU.md` (setup/headers/import/test), `docs/STAGE_3_1_MANUAL_TOUCHPOINT_INTAKE_PLAN.md` (why manual intake before parsers).
+**Docs updated:** `LEAD_DATA_MODEL_PLAN.md`, `LEAD_DISCOVERY_ARCHITECTURE.md` (Manual Intake = first source), `TABLE_SCHEMA.md` (4 tabs CREATED), `DECISIONS.md` (**DEC-079**), `NEXT_ACTIONS.md`, `COSTS_AND_LIMITS.md` (intake cost=0), `AGENT_CAPABILITIES.md` (under test), `ROADMAP.md`, `core/hot/recent.md`.
+
+**Next operator action:** confirm headers → import Workflow 07 → bind credential + Spreadsheet ID → run once → verify (raw +12, registry +12 unique, agent_requests +1, irrelevant_count=2, record-11 hot) → optional re-run for dedup idempotency → then build the Stage 3.2 Touchpoint Analyzer. No source parser yet.
+
+---
+
 ## 2026-06-08 — Product Reframe: Business Scout Agent (AI employee) + Stage 3 = Touchpoint Discovery (DEC-078)
 
 **Agent role:** project-engineer / product-architect

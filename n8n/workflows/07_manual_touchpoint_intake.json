@@ -1,0 +1,404 @@
+{
+  "name": "07 - Manual Touchpoint Intake",
+  "nodes": [
+    {
+      "id": "a7000000-0000-0000-0000-0000000000n1",
+      "name": "Overview Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        -260
+      ],
+      "parameters": {
+        "content": "## 07 — Ручной приём точек касания (Manual Touchpoint Intake) — Stage 3.1\n\nНЕ парсер и НЕ анализатор. Это первый безопасный приём вручную собранных примеров.\n\nЧто делает:\n1. Ручной старт.\n2. Создаёт один запрос в agent_requests (request_type=manual_intake).\n3. Берёт фиксированный массив из 12 вручную предоставленных записей (Avito, Dzen, VK, Telegram, конкурентные страницы/отзывы, форум, нерелевантные и контрольные примеры).\n4. Детерминированно нормализует: record_id, dedup_key, text_hash, region_hint, urgency_hint, lead_intent_hint, confidence_score, lead_temperature, next_action. БЕЗ LLM.\n5. Читает market_record_registry и проверяет дедуп по dedup_key (в реестре / в батче / уникально).\n6. Пишет ВСЕ 12 строк в raw_market_records (40 колонок) — это аудит-след приёма, включая дубликаты и нерелевантные.\n7. Пишет ТОЛЬКО уникальные строки в market_record_registry (15 колонок).\n8. Пишет один запрос в agent_requests (21 колонка), status=needs_review.\n9. Возвращает сводку прогона.\n\nЧЕГО НЕ ДЕЛАЕТ:\n- НЕ скрейпит, НЕ вызывает Apify/Firecrawl/Claude, НЕ внешние API.\n- НЕ пишет agent_memory.\n- НЕ анализирует через LLM (это Stage 3.2 — Touchpoint Analyzer).\n- НЕ Telegram-бот, НЕ парсер, НЕ расписание, active=false.",
+        "height": 640,
+        "width": 600,
+        "color": 4
+      }
+    },
+    {
+      "id": "a7000000-0000-0000-0000-0000000000n2",
+      "name": "Setup and Test Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        180,
+        -260
+      ],
+      "parameters": {
+        "content": "## Настройка и тест (вручную)\n\n1. НЕ активировать workflow (active=false).\n2. Вкладки уже созданы оператором:\n   - agent_requests (21 колонка)\n   - raw_market_records (40 колонок)\n   - market_record_registry (15 колонок)\n   - agent_memory (13 колонок — здесь НЕ используется)\n   Stage 2 вкладки не трогаются.\n3. ПОСЛЕ ИМПОРТА перепривязать креденшл (ID локальны) на трёх Google Sheets нодах:\n   Read market_record_registry, Append raw_market_records, Append market_record_registry, Append agent_requests\n   → Google Sheets - Marketing Scout Service Account.\n4. Заменить PASTE_SPREADSHEET_ID_HERE на реальный Spreadsheet ID на всех Google Sheets нодах.\n5. Внешних API-ключей здесь нет (нет Apify/Firecrawl/Claude).\n\nПервый тест (пустой реестр):\n1. Execute Workflow один раз.\n2. Ожидаемо: 12 строк в raw_market_records; уникальных ~12 в market_record_registry; 1 строка в agent_requests (status=needs_review).\n3. Final Summary Output: total_records=12, unique_count, duplicate_count, irrelevant_count=2, platform_counts, record_type_counts.\n\nПовторный прогон (реестр уже заполнен):\n- Те же 12 → все dedup_status=duplicate_in_registry, approval_status=duplicate; raw_market_records снова +12 (аудит), реестр +0.\n\nСтоимость: 0 (нет внешних вызовов, нет LLM). estimated_analysis_cost_usd — только план.",
+        "height": 640,
+        "width": 600,
+        "color": 4
+      }
+    },
+    {
+      "id": "a7000000-0000-0000-0000-000000000002",
+      "name": "Manual Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        120,
+        420
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "a7000000-0000-0000-0000-0000000000rq",
+      "name": "Set Manual Intake Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        420
+      ],
+      "parameters": {
+        "jsCode": "// One manual-intake request. Deterministic id; no external calls.\nfunction pad(n){return String(n).padStart(2,'0');}\nconst d=new Date();const now=d.toISOString();\nconst stamp=d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'_'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds());\nreturn [{ json: {\n  agent_request_id:'agentreq_'+stamp,\n  created_at:now,\n  requested_by:'operator',\n  request_text:'ручной тест точек касания: кредитные брокеры, быстрые деньги, Москва',\n  request_type:'manual_intake',\n  source_scope:'manual_mixed_sources',\n  platforms:'avito,dzen,vk,telegram,forum,reviews,web',\n  query:'кредитный брокер Москва; быстрые деньги; займ под ПТС; брокеры',\n  region:'Москва',\n  service_focus:'secured_lending',\n  requested_limit:12\n}}];"
+      }
+    },
+    {
+      "id": "a7000000-0000-0000-0000-0000000000rg",
+      "name": "Read market_record_registry",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        540,
+        420
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "market_record_registry",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "a7000000-0000-0000-0000-0000000000mr",
+      "name": "Set Manual Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        420
+      ],
+      "parameters": {
+        "jsCode": "// Fixed array of 12 manually-provided example records (operator notes). No external calls.\nconst records = [\n  { platform:'avito', source_type:'classified', source_url:'https://www.avito.ru/moskva/predlozheniya_uslug/pomosch_v_poluchenii_kredita_kreditnyy_broker_4379480780', text_context:'Объявление Avito: «Помощь в получении кредита / Кредитный брокер». Цена от 30 000 ₽. Работа по договору, помощь физлицам и бизнесу.', record_type_hint:'competitor_activity', touchpoint_type:'competitor_listing', competitor_related:true, interest_topic:'кредитный брокер Москва', service_hint:'credit_broker' },\n  { platform:'avito', source_type:'classified', source_url:'https://www.avito.ru/moskva/predlozheniya_uslug/kreditnyy_broker._realnaya_pomosch_s_kreditami_7961833832', text_context:'Объявление Avito: «Кредитный брокер. Реальная помощь с кредитами». Цена от 500 ₽. Профессиональная помощь при отказах банков.', record_type_hint:'competitor_activity', touchpoint_type:'competitor_listing', competitor_related:true, interest_topic:'кредитный брокер Москва', service_hint:'credit_broker' },\n  { platform:'dzen', source_type:'social_content', source_url:'https://dzen.ru/id/62f60855a481471c44a877a4', text_context:'Канал «Ваш Кредитный Брокер» на Дзен: всё о кредитах и ипотеке, разбор кейсов, рабочие ситуации. Активный конкурентный канал.', record_type_hint:'competitor_activity', touchpoint_type:'competitor_content_channel', competitor_related:true, interest_topic:'кредиты ипотека брокер', service_hint:'credit_broker' },\n  { platform:'dzen', source_type:'social_content', source_url:'https://dzen.ru/a/agwcFsrUsS23bWfb', text_context:'Статья «Мчим на сделку в Самару» от «Кредит и Порядок»: кейс выезда на сделку. Есть раздел комментариев.', record_type_hint:'competitor_activity', touchpoint_type:'competitor_content_post', competitor_related:true, interest_topic:'кредитный брокер кейс сделка', service_hint:'credit_broker' },\n  { platform:'vk', source_type:'social_search', source_url:'https://vk.com/search?c[q]=кредитный+брокер+Москва&c[section]=auto', text_context:'Публичная выдача VK по теме «кредитный брокер Москва». Требует авторизации для просмотра части контента/комментариев.', record_type_hint:'market_signal', touchpoint_type:'source_candidate', competitor_related:false, interest_topic:'кредитный брокер Москва', service_hint:'credit_broker' },\n  { platform:'yandex_maps', source_type:'review_platform', source_url:'https://yandex.ru/maps/org/vash_kreditny_broker/58664902214/reviews/', text_context:'Отзывы на «Ваш Кредитный Брокер» в Яндекс.Картах. Рейтинг 5.0, 66 отзывов. Москва, ул. Золоторожский Вал, 11. Активная аудитория с отзывами.', record_type_hint:'market_signal', touchpoint_type:'review_source', competitor_related:true, competitor_name:'Ваш Кредитный Брокер', interest_topic:'отзывы кредитный брокер', service_hint:'credit_broker' },\n  { platform:'telegram', source_type:'social_channel', source_url:'https://t.me/creditbrokers', profile_url:'https://t.me/creditbrokers', profile_name:'Кредитный Брокер рф', author_handle:'@creditbrokers', text_context:'Публичный Telegram-чат/канал «Кредитный Брокер рф»: банки, инвесторы, брокеры/партнёры, риелторы. Активное сообщество.', record_type_hint:'market_signal', touchpoint_type:'source_candidate', competitor_related:false, interest_topic:'кредитные брокеры банки инвесторы', service_hint:'credit_broker' },\n  { platform:'telegram', source_type:'social_channel', source_url:'https://t.me/fintrack_cbr', profile_url:'https://t.me/fintrack_cbr', profile_name:'Финтрек ЦБ РФ', author_handle:'@fintrack_cbr', text_context:'Telegram-канал Банка России о личных финансах. Аудитория задаёт вопросы о кредитах; потенциальное место мониторинга запросов.', record_type_hint:'market_signal', touchpoint_type:'source_candidate', competitor_related:false, interest_topic:'личные финансы кредиты', service_hint:'consumer_credit' },\n  { platform:'web', source_type:'website', source_url:'https://www.zen.com', text_context:'ZEN.COM — европейское финтех-приложение, не Яндекс.Дзен и не относится к кредитному брокерству в России.', record_type_hint:'irrelevant', touchpoint_type:'irrelevant_source', competitor_related:false, interest_topic:'irrelevant', service_hint:'unknown' },\n  { platform:'dzen', source_type:'social_content', source_url:'https://dzen.ru/b/agcCqW1Xn1cVb1Nh', text_context:'Статья «Микробизнес: до 15% компаний могут не пережить 2026 год». Упоминает кредитование вскользь, но не является запросом на услугу брокера.', record_type_hint:'irrelevant', touchpoint_type:'weak_market_noise', competitor_related:false, interest_topic:'микробизнес прогнозы', service_hint:'unknown' },\n  { platform:'banki_forum', source_type:'forum', source_url:'https://www.banki.ru/forum/?PAGE_NAME=read&FID=36&TID=252009', text_context:'Форум Banki.ru, ветка «Кредитный брокер — враг или друг?». Пользователи спрашивают, как найти честного брокера, анализируют кредитную историю, просят помочь с выбором банка. Типичный горячий лид-паттерн: «Отказали в 3 банках, есть просрочки, нужен кредит 700 тыс. — куда обратиться?»', record_type_hint:'question_objection', touchpoint_type:'forum_discussion', competitor_related:false, interest_topic:'кредитный брокер отказ банка просрочки', probable_need:'нужен кредит после отказов банков', service_hint:'credit_broker' },\n  { platform:'zoon', source_type:'review_platform', source_url:'https://zoon.ru/msk/p-other-kreditnye_brokery/', text_context:'Zoon.ru, отзывы по кредитным брокерам Москвы. Типичные отзывы: «Одобрили кредит быстро, без поручителей и кучи справок. Комиссию заплатил после получения денег». Горячий рыночный паттерн: клиент ищет брокера, готов платить за результат.', record_type_hint:'market_signal', touchpoint_type:'review_source', competitor_related:true, interest_topic:'отзывы кредитные брокеры Москва', probable_need:'потребность в брокере с оплатой за результат', service_hint:'credit_broker' }\n];\nreturn records.map((r,i)=>({ json: Object.assign({ _index: i+1 }, r) }));"
+      }
+    },
+    {
+      "id": "a7000000-0000-0000-0000-0000000000nm",
+      "name": "Normalize Manual Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        420
+      ],
+      "parameters": {
+        "jsCode": "// Deterministic normalization only. No LLM, no external calls.\nfunction pad(n){return String(n).padStart(2,'0');}\nconst d=new Date();const now=d.toISOString();\nconst stamp=d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'_'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds());\nconst req=$('Set Manual Intake Request').first().json;\nconst reqId=req.agent_request_id;\nconst reqQuery=req.query||'';\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction any(b,arr){for(const w of arr){if(b.indexOf(w)>=0)return true;}return false;}\nfunction normUrl(u){u=str(u);if(!u)return '';try{const x=new URL(u.split('#')[0]);x.hostname=(x.hostname||'').toLowerCase();let p=x.pathname||'/';if(p.length>1&&p.endsWith('/'))p=p.slice(0,-1);x.pathname=p;return x.toString();}catch(e){return u.toLowerCase();}}\nfunction hashText(s){s=str(s);let h=5381;for(let i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))>>>0;}return ('00000000'+h.toString(16)).slice(-8);}\nconst recs=$('Set Manual Records').all().map(i=>i.json);\nconst out=[];let idx=0;\nfor(const r of recs){\n  idx++;\n  const platform=low(r.platform);\n  const source_type=low(r.source_type);\n  const source_url=normUrl(r.source_url);\n  const post_url=normUrl(r.post_url);\n  const profile_url=normUrl(r.profile_url);\n  const text_context=str(r.text_context);\n  const comment_text=str(r.comment_text);\n  const rth=low(r.record_type_hint)||'unknown';\n  const tpt=low(r.touchpoint_type)||'';\n  const blob=(text_context+' '+comment_text+' '+str(r.interest_topic)+' '+str(r.probable_need)).toLowerCase();\n  const text_hash=hashText(text_context+'||'+comment_text);\n  let dedup_key;\n  if(post_url){dedup_key=platform+'::post::'+post_url;}\n  else if(source_url){dedup_key=platform+'::source::'+source_url;}\n  else if(profile_url&&text_hash){dedup_key=platform+'::profile_text::'+profile_url+'::'+text_hash;}\n  else{dedup_key=platform+'::text::'+text_hash;}\n  let region_hint='';\n  if(any(blob,['москва','мск','moscow','подмосковье']))region_hint='Москва/МО';\n  let urgency_hint='low';\n  if(any(blob,['срочно','сегодня','отказал','просрочк','нужны деньги']))urgency_hint='high';\n  else if(any(blob,['интересуется','ищет','вопрос','куда обратиться']))urgency_hint='medium';\n  let lead_intent_hint;\n  if(rth==='competitor_activity'||rth==='irrelevant'||tpt==='source_candidate'||tpt==='irrelevant_source'||tpt==='weak_market_noise')lead_intent_hint='low';\n  else if(rth==='question_objection'||tpt==='forum_discussion'||tpt==='review_source'||rth==='market_signal')lead_intent_hint='medium';\n  else lead_intent_hint='low';\n  if(urgency_hint==='high'&&any(blob,['нужен кредит','нужны деньги','отказал','просрочк'])&&rth!=='competitor_activity'&&rth!=='irrelevant')lead_intent_hint='high';\n  let confidence_score=1;\n  if(rth==='competitor_activity'&&source_url)confidence_score=80;\n  else if(rth==='question_objection'||rth==='market_signal')confidence_score=70;\n  if(tpt==='source_candidate')confidence_score=40;\n  if(rth==='irrelevant')confidence_score=1;\n  let lead_temperature='none';\n  if(rth==='competitor_activity'||rth==='irrelevant')lead_temperature='none';\n  else if(tpt==='source_candidate')lead_temperature='cold';\n  else if(rth==='question_objection'||tpt==='forum_discussion'||(tpt==='review_source'&&str(r.probable_need)))lead_temperature='warm';\n  else if(rth==='market_signal')lead_temperature='warm';\n  if(lead_intent_hint==='high'&&urgency_hint==='high')lead_temperature='hot';\n  let next_action='investigate';\n  if(rth==='irrelevant')next_action='ignore';\n  else if(rth==='competitor_activity')next_action='monitor';\n  else if(rth==='client_pain')next_action='create_content';\n  else if(rth==='question_objection')next_action='investigate';\n  else if(rth==='market_signal')next_action='investigate';\n  const estimated_analysis_cost_usd=(rth==='irrelevant')?0:0.02;\n  out.push({ json: {\n    record_id:'rec_'+stamp+'_'+idx,\n    agent_request_id:reqId,\n    created_at:now,\n    source_type:source_type,\n    platform:platform,\n    source_url:source_url,\n    post_url:post_url,\n    profile_url:profile_url,\n    profile_name:str(r.profile_name),\n    author_handle:str(r.author_handle),\n    published_at:'',\n    region_hint:region_hint,\n    service_hint:low(r.service_hint),\n    query:reqQuery,\n    text_context:text_context,\n    comment_text:comment_text,\n    contact_public:'',\n    contact_channel:'none',\n    dedup_key:dedup_key,\n    record_type_hint:rth,\n    touchpoint_type:tpt,\n    lead_intent_hint:lead_intent_hint,\n    urgency_hint:urgency_hint,\n    interest_topic:str(r.interest_topic),\n    probable_need:str(r.probable_need),\n    competitor_related:(r.competitor_related===true||low(r.competitor_related)==='true'),\n    competitor_name:str(r.competitor_name),\n    semantic_keywords:'',\n    ad_channel_hint:'',\n    confidence_score:confidence_score,\n    lead_temperature:lead_temperature,\n    next_action:next_action,\n    responsible:'',\n    dedup_status:'pending',\n    approval_status:'new',\n    approved_by:'',\n    approved_at:'',\n    estimated_analysis_cost_usd:estimated_analysis_cost_usd,\n    manager_note:'',\n    notes:'stage_3_1_manual_intake'\n  }});\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "a7000000-0000-0000-0000-0000000000dd",
+      "name": "Dedup Against Registry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        420
+      ],
+      "parameters": {
+        "jsCode": "// Dedup against market_record_registry (by dedup_key) and within this batch. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst recs=$('Normalize Manual Records').all().map(i=>i.json);\nlet reg=[];\ntry{reg=$('Read market_record_registry').all().map(i=>i.json).filter(Boolean);}catch(e){reg=[];}\nconst regSet=new Set(reg.map(r=>str(r&&r.dedup_key)).filter(Boolean));\nconst seen=new Set();\nconst out=[];\nfor(const r of recs){\n  const key=str(r.dedup_key);\n  let dedup_status='unique';\n  let approval_status=r.approval_status||'new';\n  if(key&&regSet.has(key)){dedup_status='duplicate_in_registry';approval_status='duplicate';}\n  else if(key&&seen.has(key)){dedup_status='duplicate_in_batch';approval_status='duplicate';}\n  else{dedup_status='unique';if(key)seen.add(key);}\n  out.push({ json: Object.assign({}, r, { dedup_status:dedup_status, approval_status:approval_status }) });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "a7000000-0000-0000-0000-0000000000ar",
+      "name": "Append raw_market_records",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1420,
+        420
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "raw_market_records",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "a7000000-0000-0000-0000-0000000000br",
+      "name": "Build Registry Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1640,
+        280
+      ],
+      "parameters": {
+        "jsCode": "// Build market_record_registry rows for UNIQUE records only (15 columns). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction hashText(s){s=str(s);let h=5381;for(let i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))>>>0;}return ('00000000'+h.toString(16)).slice(-8);}\nconst now=new Date().toISOString();\nconst recs=$('Dedup Against Registry').all().map(i=>i.json);\nconst out=[];\nfor(const r of recs){\n  if(str(r.dedup_status)!=='unique')continue;\n  const text_hash=hashText(str(r.text_context)+'||'+str(r.comment_text));\n  out.push({ json: {\n    dedup_key:str(r.dedup_key),\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    author_handle:str(r.author_handle),\n    text_hash:text_hash,\n    first_seen_at:now,\n    last_seen_at:now,\n    last_route:'raw_market_records',\n    last_processing_status:'intake_recorded',\n    last_entity_type:str(r.record_type_hint),\n    agent_request_id:str(r.agent_request_id),\n    note:'manual_intake_stage_3_1'\n  }});\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "a7000000-0000-0000-0000-0000000000rr",
+      "name": "Append market_record_registry",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1860,
+        280
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "market_record_registry",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "a7000000-0000-0000-0000-0000000000bq",
+      "name": "Build agent_requests Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1640,
+        560
+      ],
+      "parameters": {
+        "jsCode": "// One agent_requests row (21 columns). status=needs_review. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst req=$('Set Manual Intake Request').first().json;\nconst recs=$('Dedup Against Registry').all().map(i=>i.json);\nconst total=recs.length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst irrelevant=recs.filter(r=>str(r.record_type_hint)==='irrelevant').length;\nlet cost=0;for(const r of recs){cost+=Number(r.estimated_analysis_cost_usd)||0;}\ncost=Math.round(cost*1000)/1000;\nreturn [{ json: {\n  agent_request_id:req.agent_request_id,\n  created_at:req.created_at,\n  requested_by:'operator',\n  request_text:req.request_text,\n  request_type:'manual_intake',\n  source_scope:'manual_mixed_sources',\n  platforms:'avito,dzen,vk,telegram,forum,reviews,web',\n  query:req.query,\n  region:'Москва',\n  service_focus:'secured_lending',\n  requested_limit:12,\n  status:'needs_review',\n  plan_summary:'Manual mixed-source touchpoint intake for Stage 3.1.',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:cost,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:total+' records normalized; '+unique+' unique; '+duplicate+' duplicates; '+irrelevant+' irrelevant.',\n  next_action:'Review raw_market_records, then build Touchpoint Analyzer.',\n  notes:'No scraping, no LLM, no external API.'\n}}];"
+      }
+    },
+    {
+      "id": "a7000000-0000-0000-0000-0000000000aq",
+      "name": "Append agent_requests",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1860,
+        560
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "agent_requests",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "a7000000-0000-0000-0000-0000000000fs",
+      "name": "Final Summary Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        560
+      ],
+      "parameters": {
+        "jsCode": "// Final run summary. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst req=$('Set Manual Intake Request').first().json;\nconst recs=$('Dedup Against Registry').all().map(i=>i.json);\nconst total=recs.length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst irrelevant=recs.filter(r=>str(r.record_type_hint)==='irrelevant').length;\nconst platform_counts={};const record_type_counts={};\nfor(const r of recs){\n  const p=str(r.platform)||'unknown';platform_counts[p]=(platform_counts[p]||0)+1;\n  const t=str(r.record_type_hint)||'unknown';record_type_counts[t]=(record_type_counts[t]||0)+1;\n}\nreturn [{ json: {\n  workflow:'07 - Manual Touchpoint Intake',\n  agent_request_id:req.agent_request_id,\n  total_records:total,\n  unique_count:unique,\n  duplicate_count:duplicate,\n  irrelevant_count:irrelevant,\n  platform_counts:platform_counts,\n  record_type_counts:record_type_counts,\n  raw_market_records_written:total,\n  registry_rows_written:unique,\n  next_action:'Review raw_market_records and market_record_registry; then design/build the Touchpoint Analyzer (Stage 3.2). No scraping, no LLM here.'\n}}];"
+      }
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Set Manual Intake Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Manual Intake Request": {
+      "main": [
+        [
+          {
+            "node": "Read market_record_registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read market_record_registry": {
+      "main": [
+        [
+          {
+            "node": "Set Manual Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Manual Records": {
+      "main": [
+        [
+          {
+            "node": "Normalize Manual Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Manual Records": {
+      "main": [
+        [
+          {
+            "node": "Dedup Against Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Against Registry": {
+      "main": [
+        [
+          {
+            "node": "Append raw_market_records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append raw_market_records": {
+      "main": [
+        [
+          {
+            "node": "Build Registry Rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build agent_requests Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Registry Rows": {
+      "main": [
+        [
+          {
+            "node": "Append market_record_registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build agent_requests Row": {
+      "main": [
+        [
+          {
+            "node": "Append agent_requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append agent_requests": {
+      "main": [
+        [
+          {
+            "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a7000000-manual-touchpoint-intake-v001-stage-3-1-20260608",
+  "meta": {
+    "instanceId": "marketing-scout-v7-manual-touchpoint-intake"
+  }
+}

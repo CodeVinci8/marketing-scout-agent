@@ -4,6 +4,19 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Stage 3.1 BUILT: Workflow 07 Manual Touchpoint Intake (DEC-079)
+
+**What was done (first Stage 3 build — NO LLM, NO scraping, NO external API, 0 spend):**
+- **Built `n8n/workflows/07_manual_touchpoint_intake.json`** — `07 - Manual Touchpoint Intake`, `active=false`, **14 nodes**, JSON VALID.
+- Flow: Manual Start → Set Request → Read market_record_registry → Set Manual Records (12 fixed mixed examples: Avito/Dzen/VK/Telegram/competitor/forum/reviews + 2 irrelevant + forum hot-lead control) → Normalize (deterministic: dedup_key/text_hash/region/urgency/intent/confidence/lead_temperature/next_action) → Dedup vs registry+batch → Append raw_market_records (all 12 = audit) → Build/Append registry (unique only) + Build/Append agent_requests (status=needs_review) → Final Summary.
+- **Writes exactly:** raw_market_records **40**, market_record_registry **15**, agent_requests **21**. **Does NOT write agent_memory.** Operator already created all 4 tabs.
+- **Verified:** JSON VALID (`json.tool`); active=false; only manualTrigger/code/googleSheets/stickyNote nodes (no Apify/Firecrawl/Claude/httpRequest — apify/claude only in sticky-note docs); 0 real keys; 5× PASTE_SPREADSHEET_ID_HERE; field lists exact; no tool_use/KEY=VALUE.
+- **Docs:** new `N8N_WORKFLOW_07_MANUAL_TOUCHPOINT_INTAKE_RU.md` + `STAGE_3_1_MANUAL_TOUCHPOINT_INTAKE_PLAN.md`; updated LEAD_DATA_MODEL_PLAN, LEAD_DISCOVERY_ARCHITECTURE, TABLE_SCHEMA (4 tabs CREATED), DECISIONS (DEC-079), NEXT_ACTIONS, COSTS (intake=0), AGENT_CAPABILITIES, ROADMAP, AGENT_LOG.
+
+**Next operator action:** confirm headers → import WF07 (don't activate) → bind Google Sheets credential + real Spreadsheet ID on 4 nodes → run once → verify (raw +12, registry +12 unique, agent_requests +1, irrelevant_count=2, record-11 hot) → optional re-run for dedup idempotency → then build **Stage 3.2 Touchpoint Analyzer**. No source parser yet.
+
+---
+
 ## Session: 2026-06-08 — Product Reframe → Business Scout Agent (AI employee); Stage 3 = Touchpoint Discovery (DEC-078)
 
 **What was done (docs only — NO build, NO workflow JSON, 0 external calls, no credentials, no Sheets created):**

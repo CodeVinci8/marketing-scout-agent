@@ -111,6 +111,14 @@ and the six business tabs. The Lead Discovery Layer **feeds** that analyzer; it 
 
 ## 4. Three responsibilities
 
+### 4.0 Manual Records Intake — the first, lowest-risk "source" (BUILT, Stage 3.1)
+The first source wired is **Manual Records Intake** (`Workflow 07 — Manual Touchpoint Intake`, `active=false`):
+the operator pastes mixed, hand-collected examples (Avito/Dzen/VK/Telegram/competitor/forum/reviews + irrelevant
++ a hot-lead control) and the workflow deterministically normalizes them into `raw_market_records`, dedups via
+`market_record_registry`, and logs an `agent_requests` row. **Zero source cost/risk, no LLM, no scraping.** It
+proves the shared data model + dedup before any real connector. See
+`docs/STAGE_3_1_MANUAL_TOUCHPOINT_INTAKE_PLAN.md`.
+
 ### 4.1 Source-specific connectors (one per platform)
 Each connector's only job: **pull candidate records from one source and normalize them to the common shape**.
 Connectors differ in auth, rate limits, and data availability, but all emit the **same** `raw_market_records`

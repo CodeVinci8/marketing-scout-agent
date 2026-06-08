@@ -4,7 +4,32 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-08) — PRODUCT REFRAMED to Business Scout Agent → choose Stage 3.1 path
+## CURRENT PRIORITY (2026-06-08) — Stage 3.1 Manual Touchpoint Intake BUILT → import, bind, run, verify
+
+`Workflow 07 — Manual Touchpoint Intake` is **built** (`n8n/workflows/07_manual_touchpoint_intake.json`,
+`active=false`, JSON valid; DEC-079). It normalizes 12 manually-provided mixed-source examples into
+`raw_market_records` (40), dedups via `market_record_registry` (15), and logs one `agent_requests` (21) row.
+**No LLM, no scraping, no external API; `agent_memory` not written.**
+
+**Next, in order:**
+1. [ ] **Confirm headers** in the 4 created tabs match exactly: `agent_requests` (21), `raw_market_records` (40),
+   `market_record_registry` (15), `agent_memory` (13). See `docs/N8N_WORKFLOW_07_MANUAL_TOUCHPOINT_INTAKE_RU.md`.
+2. [ ] **Import Workflow 07** into n8n (do NOT activate).
+3. [ ] **Bind the Google Sheets credential** (`Google Sheets - Marketing Scout Service Account`) on the 4 sheet
+   nodes and **replace `PASTE_SPREADSHEET_ID_HERE`** with the real Spreadsheet ID.
+4. [ ] **Run manual intake once** (Execute Workflow).
+5. [ ] **Verify** `raw_market_records` (+12), `market_record_registry` (+12 unique on first run), `agent_requests`
+   (+1, `status=needs_review`); check `Final Summary Output` (`irrelevant_count=2`, record-11 = hot control).
+6. [ ] **(Optional) re-run** to confirm idempotent dedup (all `duplicate_in_registry`, registry +0, raw +12 audit).
+7. [ ] **Then design/build the Touchpoint Analyzer (Stage 3.2)** over these records — source-agnostic, reusing
+   the Stage 2 resilient analyzer. **Do NOT build any source parser yet.**
+
+> Still NOT built/approved: Avito/Dzen/VK/Telegram/Instagram parsers, competitor-audience scraping, Telegram
+> Control Bot, outreach/autocall, scheduled scraping. `agent_memory` not written by Workflow 07.
+
+---
+
+## PRIOR PRIORITY (2026-06-08) — PRODUCT REFRAMED to Business Scout Agent → choose Stage 3.1 path
 
 Stakeholder interview (`STAKEHOLDER_INTERVIEW_2026_06_08.md`) reframed the product (DEC-078): it is the
 **Business Scout Agent** (an AI "employee" with internal tools + memory + analysis), with marketing/lead/

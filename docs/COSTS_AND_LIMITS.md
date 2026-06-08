@@ -59,6 +59,14 @@ Three cost axes with different drivers and spend gates — tracked **separately*
 - **Outreach / autocall / mass-messaging cost and risk are tracked separately and DEFERRED** until a dedicated
   compliance/platform review — no budget committed near-term.
 
+### Stage 3.1 — Manual Touchpoint Intake (Workflow 07) actual cost
+- **Source-acquisition cost = 0** — no scraping, no Apify/Firecrawl/Claude, no external API. Records are pasted
+  manually.
+- **Analysis cost = 0 so far** — Workflow 07 does **no** Claude/LLM analysis (that is Stage 3.2). The
+  `estimated_analysis_cost_usd` it writes (0.02/record non-irrelevant, 0 for irrelevant; ~0.20 for the 12-record
+  batch) is **planning-only** — a forward estimate for the future Touchpoint Analyzer, **not** money spent.
+- Net spend of a Workflow 07 run: **0**.
+
 ---
 
 ## Estimate Table

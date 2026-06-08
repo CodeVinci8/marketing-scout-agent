@@ -5,6 +5,16 @@ Most recent first.
 
 ---
 
+## DEC-079 — Stage 3.1 Starts With Manual Touchpoint Intake, Not the Avito Parser
+
+**Date:** 2026-06-08
+**Context:** With the data model defined (DEC-078) and the operator having created the four tabs (`agent_requests`, `raw_market_records`, `market_record_registry`, `agent_memory`), the first build step could be a real source connector (Avito) or a manual intake.
+**Decision:** Stage 3.1 builds **`Workflow 07 — Manual Touchpoint Intake`** (`active=false`) **first**, not the Avito (or any) source parser. Workflow 07 deterministically normalizes 12 manually-provided mixed-source examples into `raw_market_records` (40), dedups via `market_record_registry` (15), and logs one `agent_requests` (21) row. **No LLM, no scraping, no external API; `agent_memory` not written.**
+**Reason:** validate the **shared data model and analyzer input** (40-column record shape, composite non-URL `dedup_key`, 12 record classes, registry dedup incl. re-run idempotency) at **zero source cost/risk** before any source-specific parsing. The hand-labeled records also become the golden fixtures for the Stage 3.2 Touchpoint Analyzer. Connectors never analyze; the analyzer never scrapes — manual intake is the cleanest first "connector" to lock that contract.
+**Files:** `n8n/workflows/07_manual_touchpoint_intake.json`, `docs/N8N_WORKFLOW_07_MANUAL_TOUCHPOINT_INTAKE_RU.md`, `docs/STAGE_3_1_MANUAL_TOUCHPOINT_INTAKE_PLAN.md`, `docs/TABLE_SCHEMA.md`, `docs/LEAD_DATA_MODEL_PLAN.md`, `docs/LEAD_DISCOVERY_ARCHITECTURE.md`.
+
+---
+
 ## DEC-078 — Product Reframed as Business Scout Agent (AI Employee), Not a Telegram Bot; Stage 3 = Touchpoint Discovery
 
 **Date:** 2026-06-08
