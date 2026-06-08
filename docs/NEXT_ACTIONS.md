@@ -4,19 +4,22 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-08) — Workflow 08 LLM enrichment v4 (enrichment-only merge, DEC-085) → run Test C2 (NOT Stage 3.3 yet)
+## CURRENT PRIORITY (2026-06-08) — Workflow 08 C2 filter bug fixed (v5, DEC-086) → re-run Test C2 attempt #2 (NOT Stage 3.3 yet)
 
-The deterministic_first baseline stays **APPROVED** (Test 3). The first LLM-enrichment run (Test C, v3 full-row) was
-**PARTIAL PASS / NOT APPROVED** — too many fallbacks, **$0.0967 for 4 records**. **Patched v4 (DEC-085):** Claude now
-returns a **compact enrichment-only JSON** merged into the deterministic row (`thinking` disabled, `max_tokens` 700/600,
-`temperature` 0); route/action/entity/contact stay deterministic. **Next action is the small LLM Test C2 — not Stage
-3.3.** Defaults remain `deterministic_first` / `llm_enrichment=false` / `llm_enrichment_test_mode=false`.
+The deterministic_first baseline stays **APPROVED** (Test 3). **C2 attempt #1 was INCOMPLETE (not failed):** the v4
+compact enrichment worked on batch_index=1 (Avito → `monitor_queue`, `primary_json`, no repair, good enrichment) but
+the run **stalled after record 1** — the test filter used `return []` inside `Build Deterministic Row`, which stops
+Split-in-Batches loop continuation. **Patched v5 (DEC-086):** C2 filtering moved **pre-loop** into
+`Filter & Select Records` (loop now receives exactly the 4 fixtures); `Build Deterministic Row` no longer returns
+`[]`; `Final Summary` reports `selected_count` + test flags. Defaults remain
+`deterministic_first` / `llm_enrichment=false` / `llm_enrichment_test_mode=false`.
 
-**Run Test C2 (WF08, optional but it gates LLM approval):**
+**Re-run Test C2 attempt #2 (WF08; gates LLM approval):**
 1. [ ] Re-import WF08 (do NOT activate); re-bind Claude + Sheets creds + Spreadsheet ID.
 2. [ ] Set **`llm_enrichment_test_mode=true`** (keeps `llm_test_batch_indexes=[1,7,11,12]`).
 3. [ ] Record Claude balance **BEFORE** → **Execute once** → balance **AFTER**.
-4. [ ] Fill `docs/STAGE_3_2_TEST_RESULTS.md` **Test C2**: expect **exactly 4 rows** (1,7,11,12; other 8 not written),
+4. [ ] Fill `docs/STAGE_3_2_TEST_RESULTS.md` **Test C2 (attempt #2)**: expect **all 4 processed** —
+   `Final Summary` `selected_count=4` / `total_processed=4`, **exactly 4 rows** (1,7,11,12; other 8 not written),
    `technical_errors=0`, **`primary_json ≥3/4`**, `repaired_json ≤1/4`, `deterministic_fallback ≤1/4`, routes
    unchanged (1→monitor, 7→content, 11→review (never results/contact), 12→monitor), reason improved, **cost delta
    ≤ $0.04**.

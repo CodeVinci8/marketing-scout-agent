@@ -30,12 +30,15 @@
 > теперь в московском времени **+03:00** через `moscowIsoNow()`/`moscowStamp()`, напр.
 > `2026-06-08T21:55:43.425+03:00`. Источниковый `published_at` не меняется; старые UTC-`Z` строки не переписываются.
 
-> **LLM-тест (Part C):** в `Set Analyzer Config` есть `llm_enrichment_test_mode` (по умолч. `false`) и
-> `llm_test_batch_indexes=[1,7,11,12]`. При `llm_enrichment_test_mode=true` через Claude идут **только** эти 4
-> не-irrelevant фикстуры (Avito-конкурент, Telegram source candidate, Banki форум hot без контакта, Zoon отзывы),
-> остальные 8 записей **не пишутся** (`Build Deterministic Row` возвращает `[]` в тест-режиме). Ожидаемо: ровно 4
-> строки, `primary_json≥3/4`, `repaired_json≤1/4`, fallback≤1/4, маршруты как в baseline, стоимость ≤ $0.04. Шаги —
-> `docs/STAGE_3_2_TEST_RESULTS.md` Test C2.
+> **LLM-тест (Part C, исправлено в v5 — DEC-086):** в `Set Analyzer Config` есть `llm_enrichment_test_mode`
+> (по умолч. `false`) и `llm_test_batch_indexes=[1,7,11,12]`. При `llm_enrichment_test_mode=true` отбор фильтруется
+> **ДО цикла** в узле **`Filter & Select Records`**: `batch_index` назначается по полному отбору (1..12 стабильны),
+> затем остаются только записи с `batch_index ∈ llm_test_batch_indexes`. В цикл попадают **ровно 4** записи (все —
+> цели Claude): Avito-конкурент, Telegram source candidate, Banki форум hot без контакта, Zoon отзывы; остальные 8
+> **вообще не входят в цикл** и не пишутся. **`Build Deterministic Row` больше НЕ возвращает `[]`** — иначе пустой
+> возврат внутри Split-in-Batches останавливает продолжение цикла (баг попытки C2 #1: записалась только запись 1).
+> Ожидаемо: ровно 4 строки, `selected_count=4`, `primary_json≥3/4`, `repaired_json≤1/4`, fallback≤1/4, маршруты как
+> в baseline, стоимость ≤ $0.04. Шаги — `docs/STAGE_3_2_TEST_RESULTS.md` Test C2 (attempt #2).
 
 > **ПАТЧ v3 (DEC-082):** второй live-тест (v2) дал ROUTING PASS, но `primary_json=0`, `repaired_json=2`,
 > `deterministic_fallback_after_llm_fail=8`, и **стоимость Claude ≈ $0.159 за 12 записей** при том, что
@@ -86,14 +89,17 @@ fallback; поля `parse_method`, `repair_used`, `repair_status`, `processing_s
    Малый LLM-тест: `llm_enrichment_test_mode=true` (Claude только по `llm_test_batch_indexes`).
 4. **Read raw_market_records** (Google Sheets read).
 5. **Filter & Select Records** (code) — `dedup_status=unique` + `approval_status` ∈ allowed; в test_mode
-   irrelevant тоже берём (уйдут в `skipped_log`); cap `max_records`; присваивает `batch_index`.
+   irrelevant тоже берём (уйдут в `skipped_log`); cap `max_records`; присваивает `batch_index`. **C2 (DEC-086):**
+   при `llm_enrichment_test_mode=true` здесь же, **до цикла**, отбор фильтруется до `llm_test_batch_indexes` — в
+   цикл уходит ровно 4 записи; добавляет `selected_count_before/after_test_filter`.
 6. **Loop Over Items** (splitInBatches, по 1) — out0 (done) → Final Summary; out1 (loop) → обработка.
 7. **Prepare Record** (code) — на итерацию: `parsed_at`, склейка `analyzer_text`, детерминированная
    классификация `det`, флаг `deterministic_needs_llm`, LLM-шлюз `call_claude = (НЕ irrelevant) И
    (llm_enrichment=true ИЛИ deterministic_needs_llm=true)`.
 8. **IF Call Claude?** — `call_claude=true` → Claude; `false` → детерминированная строка (БЕЗ Claude, $0).
 9. **Build Deterministic Row** (code) → 35-полей строка: irrelevant → `deterministic_irrelevant_skip`/`skipped_log`;
-   иначе → `deterministic_pre_route` с маршрутом из `det`.
+   иначе → `deterministic_pre_route` с маршрутом из `det`. **Никогда не возвращает `[]`** (DEC-086) — пустой возврат
+   внутри цикла останавливает Split-in-Batches; C2-фильтрация перенесена в `Filter & Select Records`.
 10. **Build Primary Claude Request** (code) → **компактный enrichment-only** промпт (ORIGINAL_RECORD +
     DETERMINISTIC_ROW + OUTPUT_SCHEMA из 15 ключей), `max_tokens=700`, `temperature=0`, `thinking={type:'disabled'}`.
 11. **Claude Primary API Request** (httpRequest) → `https://aiprimetech.io/v1/messages`, креденшл

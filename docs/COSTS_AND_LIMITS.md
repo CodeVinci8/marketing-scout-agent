@@ -119,6 +119,13 @@ Three cost axes with different drivers and spend gates — tracked **separately*
 - **Default mode cost is still $0** (deterministic_first, all LLM flags `false`). The v4 patch and MSK timestamps
   add no API calls.
 
+### C2 attempt #1 (v4) + v5 filter fix (DEC-086) — cost impact
+- **C2 attempt #1 stalled after record 1** (loop-continuation bug), so only **~1 Claude call** was billed and the
+  run was INCOMPLETE — the single record (`primary_json`, no repair) was cheap and clean but not a valid test.
+- **v5 (DEC-086) is pure n8n logic** (moved the test filter into `Filter & Select Records`; removed the empty
+  return) — **no extra API calls, no cost change.** The corrected C2 attempt #2 will make **4 primary calls**
+  (+ ≤1 repair); **target cost delta ≤ $0.04** — record the exact delta. Default mode remains **$0**.
+
 ---
 
 ## Estimate Table
