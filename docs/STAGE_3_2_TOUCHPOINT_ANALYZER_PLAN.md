@@ -1,15 +1,21 @@
 # STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md — Stage 3.2 Plan
 
-**Status:** 🔧 BUILT, PATCHED v2 (DEC-081), UNDER RETEST (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
+**Status:** 🔧 BUILT, PATCHED v3 — DETERMINISTIC-FIRST (DEC-082), UNDER RETEST (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
 **Stage:** 3.2 (Touchpoint Analyzer) of the Business Scout Agent.
-**Date:** 2026-06-08 · **Decisions:** DEC-080, DEC-081 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
+**Date:** 2026-06-08 · **Decisions:** DEC-080, DEC-081, DEC-082 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
 **Test log:** `docs/STAGE_3_2_TEST_RESULTS.md`.
+
+> **Patch v3 (DEC-082):** the second live test (v2) was ROUTING PASS but **LLM-stability FAIL + cost-efficiency
+> FAIL** — `primary_json=0`, `repaired_json=2`, `deterministic_fallback_after_llm_fail=8`, Claude cost ≈ **$0.159
+> for 12 records** while the deterministic floor did all the classification. The analyzer is now
+> **deterministic-first**: `analysis_mode='deterministic_first'`, `llm_enrichment=false` (default). Obvious
+> records route **without Claude** (`deterministic_pre_route` / `deterministic_irrelevant_skip`, $0); Claude is
+> called only when `deterministic_needs_llm=true` or enrichment is switched on. See §6a/§7.
 
 > **Patch v2 (DEC-081):** the first live test failed partially — the gateway returns prose/thinking/signature
 > instead of JSON, so primary+repair failed and classifiable records (incl. the forum lead, record 11) fell to
-> `technical_errors`. The analyzer no longer depends fully on Claude JSON: it computes a **deterministic
-> classification from `raw_market_records` hints for every record** and uses it as a **fallback after LLM+repair
-> failure**. See §6a below.
+> `technical_errors`. Introduced the **deterministic classification (`det`) + fallback after LLM+repair failure**
+> that v3 promotes to the primary path. See §6a below.
 
 ---
 
@@ -73,7 +79,21 @@ investigate→review_queue, monitor→monitor_queue, create_content/add_to_seman
 - Irrelevant → `skipped_log` **deterministically before Claude** (no spend).
 - Invalid route → `technical_errors`.
 
-## 6a. Deterministic pre-classification + fallback (v2, DEC-081)
+## 6a. Deterministic-first routing + optional LLM enrichment (v3, DEC-082)
+
+**Default mode is `deterministic_first` with `llm_enrichment=false`.** The deterministic classification is the
+**primary** classifier; Claude is **optional enrichment, OFF by default**. `Prepare Record` computes `det` + a
+`deterministic_needs_llm` flag and an LLM gate `call_claude = (NOT irrelevant) AND (llm_enrichment=true OR
+deterministic_needs_llm=true)`. The **`IF Call Claude?`** node sends `false` rows to **`Build Deterministic Row`**
+(no Claude, $0): irrelevant → `deterministic_irrelevant_skip`, obvious records → **`deterministic_pre_route`**.
+`true` rows go to the Claude primary → repair → deterministic-fallback chain. For the 12-record fixture in the
+default mode: **Claude calls = 0, `deterministic_pre_route = 10`, `deterministic_irrelevant_skip = 2`,
+`technical_errors = 0`, cost delta $0.** Deterministic route scores follow the exact table in DEC-082 (Avito/clear
+competitor strength 78, review-source competitor 70, source candidate content 55, hot+contact lead 85/results,
+hot-no-contact lead 75/review_queue, etc.). **Future `llm_enriched` mode** (`analysis_mode='llm_enriched'`,
+`llm_enrichment=true`) calls Claude on non-irrelevant records; the deterministic fallback still applies.
+
+## 6b. Deterministic pre-classification + fallback (v2, DEC-081)
 
 The analyzer must **not depend fully on Claude JSON**. `Prepare Record` computes a deterministic `det`
 classification from the intake hints (`record_type_hint`, `touchpoint_type`, `competitor_related`,
@@ -102,11 +122,14 @@ Deterministic routing rules (also the floor when the gateway misbehaves):
 `original_record` when the raw response has no usable JSON; the parser concatenates **all** `text` content
 items and ignores thinking/signature blocks; raw preview + original record are preserved on failure.
 
-## 7. Cost posture
+## 7. Cost posture (v3 deterministic-first)
 
-- Irrelevant records are skipped **deterministically with no Claude call** ($0).
-- Only non-irrelevant records (≈10 of the 12 fixtures) incur a primary Claude call; repair is a second call only
-  on parse failure. Bounded by `max_records=12`. See `docs/COSTS_AND_LIMITS.md`.
+- **Default (`deterministic_first`, `llm_enrichment=false`): $0 Claude** — all classifiable records route
+  deterministically; only `deterministic_needs_llm=true` records would call Claude (none in the 12-fixture).
+- The prior v2 design spent ≈ **$0.159 for 12 records** for near-zero usable LLM output (TEST 2) — the reason for
+  the deterministic-first switch.
+- **Future `llm_enriched` mode:** primary call per non-irrelevant record (≈10), repair only on parse failure,
+  bounded by `max_records=12`. Enable only after Claude JSON stability is proven. See `docs/COSTS_AND_LIMITS.md`.
 
 ## 8. Out of scope (not built here)
 - No source parser/connector (Avito/Dzen/VK/Telegram/Instagram).

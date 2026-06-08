@@ -2,17 +2,23 @@
 
 **Workflow:** `n8n/workflows/08_touchpoint_analyzer.json`
 **Имя:** `08 - Touchpoint Analyzer`
-**Статус:** 🔧 BUILT, PATCHED (v2), UNDER RETEST. `active=false`. Stage 3.2 (Business Scout Agent).
-**Дата:** 2026-06-08 (v2-патч после неудачного первого live-теста — DEC-081)
+**Статус:** 🔧 BUILT, PATCHED (v3, DETERMINISTIC-FIRST), UNDER RETEST. `active=false`. Stage 3.2 (Business Scout Agent).
+**Дата:** 2026-06-08 (v3-патч после второго live-теста — DEC-082)
+
+> **ПАТЧ v3 (DEC-082):** второй live-тест (v2) дал ROUTING PASS, но `primary_json=0`, `repaired_json=2`,
+> `deterministic_fallback_after_llm_fail=8`, и **стоимость Claude ≈ $0.159 за 12 записей** при том, что
+> детерминированный слой делал всю реальную классификацию (шлюз почти всегда возвращал прозу/thinking).
+> Поэтому Workflow 08 теперь **ДЕТЕРМИНИРОВАННО-ПЕРВЫЙ**: `Set Analyzer Config` задаёт
+> `analysis_mode='deterministic_first'`, `llm_enrichment=false` (дефолт). Очевидные записи маршрутизируются
+> **БЕЗ Claude** (`deterministic_pre_route` / `deterministic_irrelevant_skip`, $0). Claude вызывается только если
+> `deterministic_needs_llm=true` или включено обогащение (`llm_enrichment=true`). Для 12-записного фикстура в
+> дефолте: **Claude calls=0, repair_used=0, technical_errors=0**.
 
 > **ПАТЧ v2 (DEC-081):** первый live-тест показал, что шлюз часто возвращает **прозу/thinking/signature вместо
 > JSON** (иногда вообще без `text`-блока), из-за чего primary+repair падали и классифицируемые записи (включая
-> контрольный лид — запись 11) уходили в `technical_errors`. Теперь для **каждой** записи в `Prepare Record`
-> считается **детерминированная классификация (`det`)** по подсказкам приёма, и если Claude+repair не дали
-> валидный JSON — используется **детерминированный fallback** (`parse_method=deterministic_fallback_after_llm_fail`),
-> а НЕ `technical_errors`. `technical_errors` — только если запись нельзя классифицировать даже по подсказкам или
-> сбой Sheets/API. Промпты ужесточены (строго JSON, «первый символ `{`, последний `}`»); парсер склеивает все
-> `text`-блоки и игнорирует thinking/signature.
+> контрольный лид — запись 11) уходили в `technical_errors`. Введён **детерминированный fallback** после провала
+> Claude+repair (`parse_method=deterministic_fallback_after_llm_fail`). v3 строит на этом, делая детерминированный
+> путь основным, а не запасным.
 
 > **Source-agnostic анализатор точек касания.** Читает approved/unique записи из `raw_market_records`,
 > анализирует через Claude (resilient JSON + repair, как Stage 2) и маршрутизирует в 6 существующих
@@ -41,16 +47,20 @@ fallback; поля `parse_method`, `repair_used`, `repair_status`, `processing_s
 
 1. **Overview Note RU / Test Instructions RU** — sticky.
 2. **Manual Start**.
-3. **Set Analyzer Config** (code) — `test_mode=true`, `max_records=12`, `analyze_statuses=[approved,new]`;
-   `production_statuses=[approved]` задокументировано (не дефолт); `run_id=touchpoint_YYYYMMDD_HHmmss`.
+3. **Set Analyzer Config** (code) — `analysis_mode='deterministic_first'`, `llm_enrichment=false`,
+   `test_mode=true`, `max_records=12`, `analyze_statuses=[approved,new]`; `production_statuses=[approved]`
+   задокументировано (не дефолт); `run_id=touchpoint_YYYYMMDD_HHmmss`. Будущий режим: `analysis_mode='llm_enriched'`
+   + `llm_enrichment=true`.
 4. **Read raw_market_records** (Google Sheets read).
 5. **Filter & Select Records** (code) — `dedup_status=unique` + `approval_status` ∈ allowed; в test_mode
    irrelevant тоже берём (уйдут в `skipped_log`); cap `max_records`; присваивает `batch_index`.
 6. **Loop Over Items** (splitInBatches, по 1) — out0 (done) → Final Summary; out1 (loop) → обработка.
-7. **Prepare Record** (code) — на итерацию: `parsed_at`, склейка `analyzer_text` (text_context + комментарий +
-   тема + вероятная потребность).
-8. **IF Irrelevant?** — `is_irrelevant=true` → детерминированный skip (БЕЗ Claude, $0); иначе → Claude.
-9. **Build Skip Row (Irrelevant)** (code) → 35-полей `skipped_log`.
+7. **Prepare Record** (code) — на итерацию: `parsed_at`, склейка `analyzer_text`, детерминированная
+   классификация `det`, флаг `deterministic_needs_llm`, LLM-шлюз `call_claude = (НЕ irrelevant) И
+   (llm_enrichment=true ИЛИ deterministic_needs_llm=true)`.
+8. **IF Call Claude?** — `call_claude=true` → Claude; `false` → детерминированная строка (БЕЗ Claude, $0).
+9. **Build Deterministic Row** (code) → 35-полей строка: irrelevant → `deterministic_irrelevant_skip`/`skipped_log`;
+   иначе → `deterministic_pre_route` с маршрутом из `det`.
 10. **Build Primary Claude Request** (code) → компактный промпт, `max_tokens=1200`, `temperature=0.2`.
 11. **Claude Primary API Request** (httpRequest) → `https://aiprimetech.io/v1/messages`, креденшл
     `Claude API - Marketing Scout`.
@@ -117,15 +127,17 @@ fallback; поля `parse_method`, `repair_used`, `repair_status`, `processing_s
 2. **Execute Workflow** один раз (test_mode берёт `approved`+`new`, включая 2 irrelevant).
 3. Записать баланс **ПОСЛЕ** и результаты → `docs/STAGE_3_2_TEST_RESULTS.md`.
 
-**Ожидаемая маршрутизация ключевых записей:**
-- Запись **1** (Avito competitor_listing) → `entity_type=competitor` → **monitor_queue**.
-- Записи **9–10** (irrelevant) → **skipped_log** (детерминированно, БЕЗ Claude, **$0**).
-- Запись **11** (форум: «отказали в 3 банках, просрочки, нужен кредит 700 тыс.») → паттерн lead_signal, но
-  без прямого контакта → **review_queue** (`recommended_action=investigate`, НЕ авто-`contact`).
-- Источники (Dzen/VK/Telegram каналы, VK-поиск) → `investigate`/`add_to_semantics` → **review_queue/content_queue**.
-- Отзывы (Yandex Maps, Zoon) → `content_idea` → **content_queue**.
+**Ожидаемо (deterministic_first, llm_enrichment=false):**
+- **Claude calls = 0** (Primary и Repair НЕ выполняются), cost delta **$0**, `repair_used=false` ×12.
+- `deterministic_pre_route = 10`, `deterministic_irrelevant_skip = 2`, `technical_errors = 0`.
+- Записи **1–4, 6, 12** (Avito/Dzen competitor, Yandex Maps/Zoon отзывы competitor_related) → **monitor_queue**.
+- Записи **5, 7, 8** (VK-поиск, Telegram source_candidate) → **content_queue**.
+- Записи **9–10** (irrelevant) → **skipped_log**.
+- Запись **11** (форум hot, без контакта) → **review_queue**, `lead_signal`, `investigate`, `lead_signal_score=75`,
+  `needs_manual_review=true`.
 
-**Стоимость:** только Claude по ~10 не-irrelevant записям (irrelevant = $0). См. `docs/COSTS_AND_LIMITS.md`.
+**Стоимость:** в дефолте Claude не вызывается → $0. В будущем режиме `llm_enriched` — Claude по ~10 не-irrelevant
+записям. См. `docs/COSTS_AND_LIMITS.md`.
 
 ## 7. Чего НЕ делает
 - НЕ скрейпит, НЕ вызывает Apify/Firecrawl, НЕ парсит источники.

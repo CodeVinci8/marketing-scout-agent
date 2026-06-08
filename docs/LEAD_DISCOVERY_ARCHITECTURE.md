@@ -148,6 +148,15 @@ is computed for every record and used as a **fallback after LLM+repair failure**
 unclassifiable even by hints, or Sheets/API failures — a Claude parse failure alone never sends a classifiable
 record there.
 
+**Deterministic-first (DEC-082):** the second live test showed the LLM contributed almost nothing usable
+(`primary_json=0`) while costing ≈$0.159/12 records, so the **deterministic classification is now the primary
+classifier and Claude is optional enrichment, disabled by default** (`analysis_mode='deterministic_first'`,
+`llm_enrichment=false`). An LLM gate (`call_claude = NOT irrelevant AND (llm_enrichment OR
+deterministic_needs_llm)`) routes obvious records **without any Claude call** (`deterministic_pre_route` /
+`deterministic_irrelevant_skip`, $0). Claude (with the resilient primary→repair→fallback chain) is invoked only
+for uncertain records or when enrichment is switched on. This keeps the source-agnostic analyzer cheap and stable
+by default; enrichment can be enabled per-run once Claude's JSON contract is reliable.
+
 The **same** Market/Lead Analyzer classifies any normalized record into one of **12 touchpoint classes**:
 `hot_lead`, `warm_touchpoint`, `cold_audience_candidate`, `client_pain`, `question_objection`,
 `competitor_audience`, `competitor_activity`, `semantic_signal`, `ad_channel_signal`, `content_idea`,

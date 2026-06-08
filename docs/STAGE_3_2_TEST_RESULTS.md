@@ -74,47 +74,105 @@ instead; the table above is the guaranteed floor if the gateway misbehaves.)
 
 ---
 
-## TEST 2 — RETEST PLAN (after patch) — ⏳ AWAITING OPERATOR RUN
+## TEST 2 — 2026-06-08 — ✅ ROUTING PASS / ❌ LLM STABILITY FAIL / ❌ COST EFFICIENCY FAIL (patch v2)
 
-1. Re-import the patched `08_touchpoint_analyzer.json` (do NOT activate); re-bind Claude + Sheets credentials
-   and the Spreadsheet ID.
-2. Record Claude balance **BEFORE**, **Execute Workflow once**, record balance **AFTER**.
-3. Fill the per-record table below from the 6 business tabs + `Final Summary Output`.
-4. **PASS criteria:** `technical_errors` = 0 for the 12 records; records 1–4 & 6 & 12 → `monitor_queue`;
-   5, 7, 8 → `content_queue`; 9–10 → `skipped_log` ($0); **11 → `review_queue`, `entity_type=lead_signal`,
-   `recommended_action=investigate`, `lead_signal_score>=70`, `needs_manual_review=true`** (parse_method
-   `primary_json`/`repaired_json` if Claude worked, else `deterministic_fallback_after_llm_fail`).
+Second live run of Workflow 08 v2 (deterministic-fallback patch) on the 12 Workflow-07 records.
 
-| # | platform | entity_type | route | recommended_action | lead_signal_score | parse_method | repair_status | PASS? |
-|---|----------|-------------|-------|--------------------|:----:|------|------|:----:|
-| 1 | avito |  |  |  |  |  |  |  |
-| 2 | avito |  |  |  |  |  |  |  |
-| 3 | dzen |  |  |  |  |  |  |  |
-| 4 | dzen |  |  |  |  |  |  |  |
-| 5 | vk |  |  |  |  |  |  |  |
-| 6 | yandex_maps |  |  |  |  |  |  |  |
-| 7 | telegram |  |  |  |  |  |  |  |
-| 8 | telegram |  |  |  |  |  |  |  |
-| 9 | web | irrelevant | skipped_log | ignore | 1 | deterministic_irrelevant_skip |  |  |
-| 10 | dzen | irrelevant | skipped_log | ignore | 1 | deterministic_irrelevant_skip |  |  |
-| 11 | banki_forum |  |  |  |  |  |  |  |
-| 12 | zoon |  |  |  |  |  |  |  |
+### Result summary
+- ✅ **ROUTING PASS** — `technical_errors = 0`; deterministic fallback prevented data loss; routing mostly correct:
+  Avito competitor → `monitor_queue`; Dzen competitors → `monitor_queue`; VK search → `content_queue`;
+  Telegram source candidates → `content_queue`; Banki forum hot pattern without contact → `review_queue`;
+  irrelevant records → `skipped_log`.
+- ❌ **LLM STABILITY FAIL** — `primary_json = 0`. `repaired_json = 2`.
+  `deterministic_fallback_after_llm_fail = 8`. `deterministic_irrelevant_skip = 2`. The gateway returned
+  prose/thinking/signature for almost every primary call, e.g.:
+  *"Fetching the Dzen channel content…"*, *"I'll analyze this Telegram channel…"*,
+  *"Проверяю Avito-объявление…"*, or content arrays with only thinking/signature blocks.
+- ❌ **COST EFFICIENCY FAIL** — Claude **cost delta ≈ $0.159 for 12 records** while the LLM contributed
+  almost nothing usable (0 primary JSON, 2 repaired). The deterministic floor did all the real classification.
 
-### Route distribution (Final Summary Output)
-| route | count |
-|-------|:----:|
-| results |  |
-| review_queue |  |
-| monitor_queue |  |
-| content_queue |  |
-| skipped_log |  |
-| technical_errors | (expect 0) |
-
-### parse_method distribution
+### parse_method distribution (TEST 2 actual)
 | parse_method | count |
 |--------------|:----:|
-| primary_json |  |
-| repaired_json |  |
-| deterministic_fallback_after_llm_fail |  |
-| deterministic_irrelevant_skip |  |
-| technical_error | (expect 0) |
+| primary_json | 0 |
+| repaired_json | 2 |
+| deterministic_fallback_after_llm_fail | 8 |
+| deterministic_irrelevant_skip | 2 |
+| technical_error | 0 |
+
+### Verdict
+- [x] **ROUTING PASS** · **LLM STABILITY FAIL** · **COST EFFICIENCY FAIL**.
+  The analyzer paid for Claude on every non-irrelevant record but the deterministic layer produced the routing.
+  **Decision (DEC-082): make Workflow 08 deterministic-first; Claude becomes optional enrichment, OFF by default.**
+
+---
+
+## PATCH v3 (2026-06-08, DEC-082) — deterministic-first + optional LLM enrichment
+
+`Set Analyzer Config` now sets `analysis_mode='deterministic_first'`, `llm_enrichment=false` (default),
+`max_records=12`, `test_mode=true`. New flow:
+- `Prepare Record` computes the deterministic classification (`det`) + `deterministic_needs_llm` for every record
+  and a gate `call_claude = (NOT irrelevant) AND (llm_enrichment=true OR deterministic_needs_llm=true)`.
+- **`IF Call Claude?`** routes: `false` → **`Build Deterministic Row`** (no Claude, $0) →
+  `deterministic_irrelevant_skip` (irrelevant) or `deterministic_pre_route` (obvious records); `true` →
+  Claude primary → repair → deterministic fallback (unchanged).
+- Prompts hardened for the future `llm_enriched` mode (no browse/fetch, no "fetching/checking/analyzing",
+  one JSON object, first char `{` last `}`); repair builds JSON from `original_record` + `deterministic_classification`.
+- `Normalize + Route`: `market_signal`→`content_idea`; scores scaled to 1–100 (1–10 outputs ×10) with a
+  deterministic floor; `raw_response_preview` capped at 500, thinking/signature-only →
+  `non_json_non_text_or_thinking_response`.
+
+---
+
+## TEST 3 — RETEST PLAN (deterministic_first) — ⏳ AWAITING OPERATOR RUN
+
+1. Re-import the patched `08_touchpoint_analyzer.json` (do NOT activate); re-bind Claude + Sheets credentials
+   and the Spreadsheet ID. Keep defaults: `analysis_mode='deterministic_first'`, `llm_enrichment=false`.
+2. Record Claude balance **BEFORE**, **Execute Workflow once**, record balance **AFTER**.
+3. Fill the per-record table below from the 6 business tabs + `Final Summary Output`.
+
+### Retest target (deterministic_first, enrichment OFF)
+- `technical_errors = 0`
+- **Claude calls = 0** (`Claude Primary API Request` and `Claude Repair API Request` do NOT run) → **cost delta $0**
+- `repair_used = false` for all 12
+- `deterministic_pre_route = 10`
+- `deterministic_irrelevant_skip = 2`
+
+| # | platform | entity_type | route | recommended_action | lead_signal_score | parse_method | repair_used | PASS? |
+|---|----------|-------------|-------|--------------------|:----:|------|:----:|:----:|
+| 1 | avito | competitor | monitor_queue | monitor |  | deterministic_pre_route | false |  |
+| 2 | avito | competitor | monitor_queue | monitor |  | deterministic_pre_route | false |  |
+| 3 | dzen | competitor | monitor_queue | monitor |  | deterministic_pre_route | false |  |
+| 4 | dzen | competitor | monitor_queue | monitor |  | deterministic_pre_route | false |  |
+| 5 | vk | content_idea | content_queue | create_content |  | deterministic_pre_route | false |  |
+| 6 | yandex_maps | competitor | monitor_queue | monitor |  | deterministic_pre_route | false |  |
+| 7 | telegram | content_idea | content_queue | create_content |  | deterministic_pre_route | false |  |
+| 8 | telegram | content_idea | content_queue | create_content |  | deterministic_pre_route | false |  |
+| 9 | web | irrelevant | skipped_log | ignore | 1 | deterministic_irrelevant_skip | false |  |
+| 10 | dzen | irrelevant | skipped_log | ignore | 1 | deterministic_irrelevant_skip | false |  |
+| 11 | banki_forum | lead_signal | review_queue | investigate | 75 | deterministic_pre_route | false |  |
+| 12 | zoon | competitor | monitor_queue | monitor |  | deterministic_pre_route | false |  |
+
+### Route distribution (Final Summary Output) — expected
+| route | count |
+|-------|:----:|
+| results | 0 |
+| review_queue | 1 |
+| monitor_queue | 6 |
+| content_queue | 3 |
+| skipped_log | 2 |
+| technical_errors | 0 |
+
+### parse_method distribution — expected
+| parse_method | count |
+|--------------|:----:|
+| deterministic_pre_route | 10 |
+| deterministic_irrelevant_skip | 2 |
+| primary_json | 0 |
+| repaired_json | 0 |
+| deterministic_fallback_after_llm_fail | 0 |
+| technical_error | 0 |
+
+> **Optional enrichment check (later):** set `analysis_mode='llm_enriched'` + `llm_enrichment=true` and re-run —
+> Claude is then called for the 10 non-irrelevant records; routing/scores may be enriched but the deterministic
+> floor and fallback still apply, and `technical_errors` must stay 0.

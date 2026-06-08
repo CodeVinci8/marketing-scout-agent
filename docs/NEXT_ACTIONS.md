@@ -4,26 +4,32 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-08) — Stage 3.2 Touchpoint Analyzer PATCHED (v2, DEC-081) → RETEST
+## CURRENT PRIORITY (2026-06-08) — Stage 3.2 Touchpoint Analyzer PATCHED (v3 DETERMINISTIC-FIRST, DEC-082) → RETEST
 
-`Workflow 08 — Touchpoint Analyzer` first live test **partially failed** (gateway returned prose/thinking, not
-JSON → classifiable records, incl. record 11, fell to `technical_errors`). **Patched (v2, DEC-081):** every
-record now gets a **deterministic classification from intake hints**, used as a **fallback after LLM+repair
-failure**; `technical_errors` only for truly unclassifiable records or Sheets/API errors. Prompts/parser
-hardened. JSON valid. Logic dry-run on the 12 fixtures: **0 technical_errors**.
+`Workflow 08 — Touchpoint Analyzer` second live test was **ROUTING PASS but LLM-STABILITY FAIL + COST-EFFICIENCY
+FAIL**: `primary_json=0`, `repaired_json=2`, `deterministic_fallback_after_llm_fail=8`, Claude cost ≈ **$0.159 for
+12 records** while the deterministic floor did all the classification. **Patched (v3, DEC-082):** Workflow 08 is
+now **deterministic-first** — `analysis_mode='deterministic_first'`, `llm_enrichment=false` (default). Obvious
+records route **without Claude** (`deterministic_pre_route` / `deterministic_irrelevant_skip`, $0); Claude is
+called only when `deterministic_needs_llm=true` or enrichment is switched on. JSON valid; Claude HTTP nodes remain
+but are gated.
 
-**Next, in order (RETEST):**
-1. [ ] **Re-import the patched Workflow 08** (do NOT activate).
+**Next, in order (RETEST — deterministic_first):**
+1. [ ] **Re-import the patched Workflow 08** (do NOT activate). Keep `analysis_mode='deterministic_first'`,
+   `llm_enrichment=false`.
 2. [ ] **Bind credentials:** Claude Primary + Claude Repair → `Claude API - Marketing Scout`; Read
    raw_market_records + Append to Dynamic Route Sheet → `Google Sheets - Marketing Scout Service Account`.
 3. [ ] **Replace `PASTE_SPREADSHEET_ID_HERE`** with the real Spreadsheet ID on the 2 Google Sheets nodes.
 4. [ ] **Record Claude balance BEFORE**, then **Execute Workflow once**.
-5. [ ] **Verify + fill `docs/STAGE_3_2_TEST_RESULTS.md` (TEST 2):** expect `technical_errors`=0; 1–4,6,12→
-   `monitor_queue`; 5,7,8→`content_queue`; 9–10→`skipped_log` ($0); **11→`review_queue`, `lead_signal`,
-   `investigate`, `lead_signal_score>=70`, `needs_manual_review=true`** (parse_method `primary_json`/`repaired_json`
-   if Claude worked, else `deterministic_fallback_after_llm_fail`).
-6. [ ] **Record Claude balance AFTER.**
-7. [ ] **Then Stage 3.3 — analyzer/scoring hardening** and **Stage 3.4 — E2E**. **Do NOT build any source parser yet.**
+5. [ ] **Verify + fill `docs/STAGE_3_2_TEST_RESULTS.md` (TEST 3):** expect **Claude calls=0** (cost delta $0),
+   `repair_used=false` ×12, `deterministic_pre_route=10`, `deterministic_irrelevant_skip=2`, `technical_errors=0`;
+   1–4,6,12→`monitor_queue`; 5,7,8→`content_queue`; 9–10→`skipped_log`; 11→`review_queue`/`lead_signal`/
+   `investigate`/`lead_signal_score=75`/`needs_manual_review=true`.
+6. [ ] **Record Claude balance AFTER** (should be unchanged).
+7. [ ] **(Optional, later) enable enrichment:** set `analysis_mode='llm_enriched'` + `llm_enrichment=true`, re-run,
+   confirm Claude is called for the 10 non-irrelevant records and `technical_errors` stays 0 — only once Claude
+   JSON stability is acceptable.
+8. [ ] **Then Stage 3.3 — analyzer/scoring hardening** and **Stage 3.4 — E2E**. **Do NOT build any source parser yet.**
 
 > Still NOT built/approved: Avito/Dzen/VK/Telegram/Instagram parsers, competitor-audience scraping, Telegram
 > Control Bot, outreach/autocall, scheduled scraping.

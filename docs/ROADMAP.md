@@ -156,13 +156,15 @@ the approved path until Stage 2.4 is built and live-validated.
   not written. Next: import/bind/run/verify, then build the Touchpoint Analyzer.
 - **3.3 — First source connector** 📋 PLANNED: build the chosen connector (Avito/Classifieds likely first,
   pending feasibility). Connectors never call Claude; human approval is the spend gate.
-- **3.3 — Touchpoint Analyzer** 🔧 **BUILT, PATCHED v2, UNDER RETEST (2026-06-08, DEC-080/081)**: `Workflow 08 —
-  Touchpoint Analyzer` (`active=false`) reads approved/unique `raw_market_records`, analyzes via Claude (Stage 2
-  resilient JSON/repair), maps 12 touchpoint classes onto the existing **35-column** schema, routes to the 6
-  business tabs via dynamic sheet. **First live test partially failed** (gateway returned prose, not JSON);
-  **patched (DEC-081)** with a **deterministic fallback from intake hints** so classifiable records no longer hit
-  `technical_errors`. Irrelevant skipped before Claude ($0). The task labels this **Stage 3.2**. Next:
-  re-import/bind/run/verify → `docs/STAGE_3_2_TEST_RESULTS.md` (TEST 2).
+- **3.3 — Touchpoint Analyzer** 🔧 **BUILT, PATCHED v3 DETERMINISTIC-FIRST, UNDER RETEST (2026-06-08, DEC-080/081/082)**:
+  `Workflow 08 — Touchpoint Analyzer` (`active=false`) reads approved/unique `raw_market_records`, classifies
+  **deterministically from intake hints**, and routes to the 6 business tabs (existing **35-column** schema) via
+  dynamic sheet. TEST 1 partially failed (prose, not JSON); v2 added a deterministic fallback (DEC-081). **TEST 2
+  was ROUTING PASS but LLM-stability + cost-efficiency FAIL** (`primary_json=0`, ≈$0.159 Claude for 12 records).
+  **Patched v3 (DEC-082):** `analysis_mode='deterministic_first'`, `llm_enrichment=false` (default) — obvious
+  records route **without Claude** (`deterministic_pre_route` / `deterministic_irrelevant_skip`, $0); Claude is
+  optional enrichment, off by default. The task labels this **Stage 3.2**. Next: re-import/bind/run/verify →
+  `docs/STAGE_3_2_TEST_RESULTS.md` (TEST 3, expect Claude calls=0 / $0 / technical_errors=0).
 - **3.4 — Analyzer/scoring hardening for touchpoints/leads** 📋 PLANNED (after 3.3 test): calibrate scoring
   (`lead_signal_score`/`urgency_score`/`contactability_score`/`region_score`/`collateral_fit_score`) +
   `lead_temperature` + `next_action` on real touchpoint outcomes.

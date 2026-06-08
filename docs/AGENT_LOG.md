@@ -5,6 +5,28 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Stage 3.2 PATCHED v3: Workflow 08 deterministic-first + optional LLM enrichment (DEC-082)
+
+**Agent role:** project-engineer
+**Session goal:** Patch Workflow 08 for cost efficiency + primary stability after the second live test showed routing PASS but `primary_json=0` and ≈$0.159 Claude spend for 12 records. Make the analyzer deterministic-first; Claude becomes optional enrichment, OFF by default.
+
+**Root cause:** the gateway returns prose/extended-thinking/signature for essentially every primary call (e.g. "Fetching the Dzen channel…", "Проверяю Avito-объявление…"), so `primary_json=0`, `repaired_json=2`, `deterministic_fallback_after_llm_fail=8`, `deterministic_irrelevant_skip=2`. v2 still **paid Claude on every non-irrelevant record** while the deterministic floor produced the routing → cost-efficiency + LLM-stability FAIL.
+
+**Patch (v3, `08_touchpoint_analyzer.json`, JSON valid, `active=false`):**
+- **`Set Analyzer Config`**: `analysis_mode='deterministic_first'`, `llm_enrichment=false`, `max_records=12`, `test_mode=true` (future: `analysis_mode='llm_enriched'` + `llm_enrichment=true`).
+- **`Prepare Record`**: deterministic `det` with the exact DEC-082 scores/routes + `deterministic_needs_llm` flag + LLM gate `call_claude = (NOT irrelevant) AND (llm_enrichment=true OR deterministic_needs_llm=true)`.
+- **`IF Irrelevant?` → `IF Call Claude?`**; false branch → **`Build Deterministic Row`** (renamed from Build Skip Row): irrelevant → `deterministic_irrelevant_skip`/`skipped_log`, obvious records → `deterministic_pre_route` with the `det` route (no Claude, $0). true branch → Claude primary → repair → deterministic fallback (unchanged). `technical_errors` still only for no-valid-route/Sheets-API failure.
+- **Prompt hardening (future llm_enriched):** primary states it cannot browse/fetch URLs and must not narrate ("fetching/checking/analyzing"), one JSON object first `{` last `}`; repair builds JSON from `original_record` + `deterministic_classification`.
+- **`Normalize + Route`:** `market_signal`→`content_idea`; scores scaled to 1–100 (1–10 → ×10) with a deterministic floor; `raw_response_preview` cap 500, thinking/signature-only → `non_json_non_text_or_thinking_response`. `Final Summary Output` now reports `analysis_mode`/`llm_enrichment` + `deterministic_pre_route`/`deterministic_irrelevant_skip` counts.
+- **Verified (Task H):** `python3 -m json.tool` VALID → `/tmp/08_touchpoint_analyzer_validated.json`; `active=false`; no real keys; no real Spreadsheet ID; no Apify/Firecrawl/external source APIs (disclaimer text only; gated aiprimetech Claude HTTP ×2); no tool_use/KEY=VALUE; dynamic route sheet preserved; 35 business fields on every output path; `deterministic_pre_route` + `deterministic_irrelevant_skip` + LLM gate + `technical_errors` fallback all present. Workflows 04/05/06/07 untouched.
+- **Expected deterministic_first retest:** `technical_errors=0`, Claude calls=0 (cost delta $0), `repair_used=false` ×12, `deterministic_pre_route=10`, `deterministic_irrelevant_skip=2`; 6 monitor_queue / 3 content_queue / 2 skipped_log / 1 review_queue.
+
+**Docs updated:** `STAGE_3_2_TEST_RESULTS.md` (TEST 2 actual ROUTING PASS/LLM FAIL/COST FAIL + $0.159 + v3 patch + TEST 3 plan), `N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, `LEAD_DISCOVERY_ARCHITECTURE.md`, `LEAD_DATA_MODEL_PLAN.md`, `DECISIONS.md` (**DEC-082**), `NEXT_ACTIONS.md`, `COSTS_AND_LIMITS.md`, `AGENT_CAPABILITIES.md`, `ROADMAP.md`, `core/hot/recent.md`.
+
+**Next operator action:** re-import patched WF08 (deterministic_first default) → bind creds + Spreadsheet ID → record Claude balance → run once → fill `STAGE_3_2_TEST_RESULTS.md` TEST 3 (expect Claude calls=0, $0, technical_errors=0) → optionally enable llm_enriched later → then Stage 3.3. No source parser yet.
+
+---
+
 ## 2026-06-08 — Stage 3.2 PATCHED v2: Workflow 08 deterministic fallback after failed live test (DEC-081)
 
 **Agent role:** project-engineer

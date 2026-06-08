@@ -5,6 +5,22 @@ Most recent first.
 
 ---
 
+## DEC-082 — Workflow 08 Is Deterministic-First; Claude Is Optional Enrichment, Disabled by Default Until JSON Stability Is Proven
+
+**Date:** 2026-06-08
+**Context:** Workflow 08's second live test (`docs/STAGE_3_2_TEST_RESULTS.md`, TEST 2) under the v2 deterministic-**fallback** design: routing PASS and `technical_errors=0`, but **`primary_json=0`**, `repaired_json=2`, `deterministic_fallback_after_llm_fail=8`, `deterministic_irrelevant_skip=2` — i.e. the gateway returned prose/thinking/signature (e.g. "Fetching the Dzen channel…", "Проверяю Avito-объявление…") for essentially every primary call, and **Claude cost ≈ $0.159 for 12 records** while the deterministic floor did all the real classification. Paying for an LLM that contributes ~nothing usable is **LLM-stability FAIL + cost-efficiency FAIL**.
+**Decision:** Workflow 08's **default mode is `deterministic_first`; Claude enrichment is optional and disabled by default** (`llm_enrichment=false`) until JSON stability is proven. v3 patch:
+- **`Set Analyzer Config`** adds `analysis_mode='deterministic_first'`, `llm_enrichment=false`, keeps `max_records=12`, `test_mode=true`.
+- **`Prepare Record`** computes the deterministic classification (`det`, exact scores/routes) + a `deterministic_needs_llm` flag (true only for the uncertain default class) for every record, and an LLM gate `call_claude = (NOT irrelevant) AND (llm_enrichment=true OR deterministic_needs_llm=true)`.
+- **`IF Call Claude?`**: `false` → **`Build Deterministic Row`** (renamed from Build Skip Row; **no Claude, $0**) emitting `deterministic_irrelevant_skip` for irrelevant and **`deterministic_pre_route`** for obvious classifiable records; `true` → Claude primary → repair → deterministic fallback (`deterministic_fallback_after_llm_fail`). `technical_errors` remains reserved for records with no valid `det` route or Sheets/API failure.
+- **Future `llm_enriched` mode** (`analysis_mode='llm_enriched'`, `llm_enrichment=true`) is preserved: Claude may enrich non-irrelevant records, but the deterministic fallback still applies.
+- **Prompt/normalizer hardening:** primary prompt states it cannot browse/fetch URLs and must not narrate ("fetching/checking/analyzing"), return exactly one JSON object (first `{`, last `}`); repair builds JSON from `original_record` + `deterministic_classification`; `Normalize + Route` collapses `market_signal`→`content_idea`, scales 1–10 scores to 1–100 with a deterministic floor, caps `raw_response_preview` at 500 and emits `non_json_non_text_or_thinking_response` for thinking/signature-only responses.
+- **Expected `deterministic_first` retest (12 fixtures):** `technical_errors=0`, **Claude calls=0**, `repair_used=false` for all 12, `deterministic_pre_route=10`, `deterministic_irrelevant_skip=2`, cost delta $0.
+**Reason:** the gateway's non-JSON output is the dominant failure mode and the intake hints already classify/route deterministically, so paying per-record for Claude buys nothing today. Deterministic-first makes the cheap, stable path the default and keeps Claude as a switch-on enrichment once its JSON contract is reliable.
+**Files:** `n8n/workflows/08_touchpoint_analyzer.json`, `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, `docs/STAGE_3_2_TEST_RESULTS.md`, `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_DATA_MODEL_PLAN.md`, `docs/COSTS_AND_LIMITS.md`, `docs/AGENT_CAPABILITIES.md`, `docs/ROADMAP.md`, `docs/NEXT_ACTIONS.md`, `docs/AGENT_LOG.md`, `core/hot/recent.md`.
+
+---
+
 ## DEC-081 — Workflow 08 Uses a Deterministic Fallback After LLM/Repair Failure; Claude JSON Failure Alone Must Not Send Classifiable Records to technical_errors
 
 **Date:** 2026-06-08

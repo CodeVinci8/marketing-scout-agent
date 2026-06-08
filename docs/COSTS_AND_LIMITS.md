@@ -87,6 +87,20 @@ Three cost axes with different drivers and spend gates — tracked **separately*
 - Irrelevant records remain $0 (skipped before Claude). Cost ceiling unchanged: ≤12 records/run, ≈10 incurring
   a primary call for the fixtures.
 
+### Stage 3.2 TEST 2 measured + patch v3 deterministic-first (DEC-082) — cost impact
+- **TEST 2 (v2) measured Claude cost delta ≈ $0.159 for 12 records** — but `primary_json=0` and only
+  `repaired_json=2`; the deterministic floor did all the real classification. Paying per-record for an LLM that
+  returns prose/thinking is **cost-efficiency FAIL**.
+- **Patch v3 makes the analyzer deterministic-first** (`analysis_mode='deterministic_first'`,
+  `llm_enrichment=false` by default). Obvious records route **without any Claude call** (`deterministic_pre_route`
+  / `deterministic_irrelevant_skip`). Claude is called only when `deterministic_needs_llm=true` (uncertain
+  default class) or enrichment is switched on.
+- **Default-mode cost for the 12-record fixture: $0** — `Claude Primary API Request` and `Claude Repair API
+  Request` do not run; `repair_used=false` for all 12. Verify with balance before/after in
+  `docs/STAGE_3_2_TEST_RESULTS.md` (TEST 3).
+- **Future `llm_enriched` mode** (opt-in): primary call per non-irrelevant record (≈10), repair only on parse
+  failure — same ceiling as the v2 estimate; enable **only after** Claude JSON stability is proven.
+
 ---
 
 ## Estimate Table

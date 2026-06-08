@@ -125,6 +125,15 @@ manually-provided records. See `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`.
 classify and route every record** when Claude fails to return valid JSON. This makes the analyzer resilient to
 gateway prose/thinking output and confirms the intake hints carry enough signal to route without an LLM.
 
+**Hints are now the PRIMARY classifier (DEC-082).** Because the second live test proved the intake hints route
+the records correctly without any LLM (and Claude cost ≈$0.159/12 for `primary_json=0`), Workflow 08 is
+**deterministic-first**: it classifies and routes from the hint columns by default (`analysis_mode=
+'deterministic_first'`, `llm_enrichment=false`) and calls Claude only for records the hints cannot resolve
+(`deterministic_needs_llm=true`) or when enrichment is explicitly enabled. The quality of these hint columns —
+set by the connector / manual intake — now directly determines routing quality, so connectors should populate
+`record_type_hint`, `touchpoint_type`, `competitor_related`, `lead_temperature`/`lead_intent_hint`/`urgency_hint`,
+`service_hint`, and `contact_public` as accurately as possible.
+
 ## 5. Invariants
 
 - `raw_market_records` is **separate** from `url_candidates`; `market_record_registry` is **separate** from

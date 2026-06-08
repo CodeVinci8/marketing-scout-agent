@@ -4,6 +4,21 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Stage 3.2 PATCHED v3: Workflow 08 deterministic-first + optional LLM enrichment (DEC-082)
+
+**What was done (cost/stability patch after second live test):**
+- **Root cause:** v2 second live test was ROUTING PASS but **LLM-stability FAIL + cost-efficiency FAIL** — `primary_json=0`, `repaired_json=2`, `deterministic_fallback_after_llm_fail=8`, `deterministic_irrelevant_skip=2`; Claude cost ≈ **$0.159 for 12 records** while the deterministic floor did all the classification (gateway returned prose/thinking/"fetching…"/"проверяю…").
+- **Patched `08_touchpoint_analyzer.json` (v3, JSON VALID, active=false):** `Set Analyzer Config` adds `analysis_mode='deterministic_first'`, `llm_enrichment=false`, max_records=12, test_mode=true. `Prepare Record` computes `det` + `deterministic_needs_llm` + gate `call_claude=(NOT irrelevant) AND (llm_enrichment OR deterministic_needs_llm)`. **`IF Irrelevant?` → `IF Call Claude?`**; false → **`Build Deterministic Row`** (renamed from Build Skip Row): irrelevant → `deterministic_irrelevant_skip`, else `deterministic_pre_route` ($0, no Claude); true → Claude primary→repair→det fallback.
+- **Exact det scores (DEC-082):** Avito/clear competitor strength 78 (else 70), review-source competitor strength 70/content 35/qual 68, source candidate content 55/qual 52, review-source non-competitor content 60/qual 60, hot+contact lead 85→results, hot-no-contact lead 75→review_queue, default→review_queue qual 40 (deterministic_needs_llm=true).
+- **Prompts hardened (future llm_enriched):** primary says cannot browse/fetch URLs, no "fetching/checking/analyzing", one JSON object first `{` last `}`; repair builds JSON from original_record + deterministic_classification. **Normalize + Route:** market_signal→content_idea; scores scaled 1–10→1–100 with deterministic floor; raw_response_preview cap 500, thinking/signature-only → `non_json_non_text_or_thinking_response`.
+- **Verified (Task H):** `python3 -m json.tool` VALID; active=false; no real keys; no real Spreadsheet ID (PASTE placeholders); no Apify/Firecrawl/external source APIs (only disclaimer text + gated aiprimetech Claude HTTP ×2); no tool_use/KEY=VALUE; dynamic route sheet preserved; 35 fields on every output path; deterministic_pre_route + deterministic_irrelevant_skip + LLM gate + technical_errors fallback all present. WF04/05/06/07 untouched.
+- **Expected retest (deterministic_first):** technical_errors=0, Claude calls=0 ($0), repair_used=false ×12, deterministic_pre_route=10, deterministic_irrelevant_skip=2; routes 6 monitor_queue / 3 content_queue / 2 skipped_log / 1 review_queue.
+- **Docs:** STAGE_3_2_TEST_RESULTS (TEST 2 actual results + v3 patch + TEST 3 plan), WF08 guide, plan, DECISIONS (DEC-082), NEXT_ACTIONS, COSTS, AGENT_CAPABILITIES, ROADMAP, LEAD_DISCOVERY_ARCHITECTURE, LEAD_DATA_MODEL_PLAN, AGENT_LOG.
+
+**Next operator action:** re-import patched WF08 (deterministic_first default) → bind creds + Spreadsheet ID → record Claude balance → run once → fill `STAGE_3_2_TEST_RESULTS.md` TEST 3 (expect Claude calls=0, $0, technical_errors=0) → optionally enable llm_enriched later → then Stage 3.3. No source parser yet.
+
+---
+
 ## Session: 2026-06-08 — Stage 3.2 PATCHED v2: Workflow 08 deterministic fallback (DEC-081)
 
 **What was done (patch after failed first live test):**
