@@ -230,19 +230,62 @@ Claude no longer generates the full 35-field row. New design:
 
 ---
 
-## TEST C2 — COMPACT ENRICHMENT RETEST — ⏳ AWAITING OPERATOR RUN
+## TEST C2 — ATTEMPT #1 — 2026-06-08 — ⏳ INCOMPLETE (filter-placement bug; not failed, not valid for acceptance)
 
-Re-run the 4-fixture enrichment test against the v4 compact enrichment-only design.
+First run of the v4 compact enrichment design with `llm_enrichment_test_mode=true`.
+
+### What happened
+- ✅ **batch_index=1 (Avito competitor) succeeded** → `monitor_queue`, **`parse_method=primary_json`**,
+  `repair_used=false`, `repair_status` empty, `technical_errors=0`, with **useful enriched `offer_text` / `terms` /
+  `reason`**. The compact enrichment-only design + disabled thinking produced clean primary JSON on the first record.
+- ❌ **Only batch_index=1 was written.** The run **stopped around `Build Deterministic Row` on the next
+  non-target item** (record 2) and never reached the other target fixtures 7/11/12.
+
+### Root cause (confirmed)
+The C2 filtering was implemented **inside `Build Deterministic Row`** as `return []` for non-target `batch_index`.
+In the Split-in-Batches loop, an item routed to `Build Deterministic Row` that returns **`[]`** produces no output,
+so `Append to Dynamic Route Sheet` → `Loop Over Items` never fires for that iteration and **loop continuation
+stalls** — the loop never advances to records 7/11/12.
+
+### Verdict
+- [ ] **INCOMPLETE** — the single enriched record is **promising** (primary_json, no repair, good enrichment),
+  but the run is **invalid for C2 acceptance** because it did not process all 4 fixtures. **Fix the filter
+  placement and re-run (Test C2 attempt #2 below).**
+
+---
+
+## PATCH v5 (2026-06-08, DEC-086) — C2 batch filtering moved BEFORE the processing loop
+
+- **`Filter & Select Records`** now applies the C2 filter **pre-loop**: it assigns `batch_index` over the full
+  selection (so 1,7,11,12 stay stable), then — when `llm_enrichment_test_mode=true` — returns **only** the records
+  whose `batch_index` ∈ `llm_test_batch_indexes`. The processing loop therefore receives **exactly 4 items**, and
+  every one of them is a Claude target. It also stamps `selected_count_before_test_filter`,
+  `selected_count_after_test_filter`, `llm_enrichment_test_mode`, `llm_test_batch_indexes` on each selected record.
+- **`Build Deterministic Row` no longer returns `[]`** for any record — non-target test records never enter that
+  node now, so loop continuation can never be broken by an empty return.
+- **`Final Summary Output`** now reports `selected_count` (= count from `Filter & Select Records`),
+  `llm_enrichment_test_mode`, and `llm_test_batch_indexes` alongside `route_counts` / `parse_method_counts` /
+  `repair_used_count` / `technical_error(s)_count`.
+- **Default (`llm_enrichment_test_mode=false`) is unchanged** — all selected unique/approved/new records still flow
+  (simulation: `test_mode=false → [1..12]`; `test_mode=true → [1,7,11,12]`).
+
+---
+
+## TEST C2 — ATTEMPT #2 (after the v5 fix) — ⏳ AWAITING OPERATOR RUN
+
+Re-run the 4-fixture enrichment test against the v4 compact design **with the v5 pre-loop filter**.
 
 ### How to run
 1. `Set Analyzer Config`: set **`llm_enrichment_test_mode = true`** (keep `analysis_mode='deterministic_first'`,
-   `llm_enrichment=false`, `max_records=12`). `llm_test_batch_indexes` = **`[1,7,11,12]`**. Only those four
-   non-irrelevant fixtures call Claude; **the other 8 records are not written** during this test.
+   `llm_enrichment=false`, `max_records=12`). `llm_test_batch_indexes` = **`[1,7,11,12]`**. `Filter & Select Records`
+   now pre-filters to those four **before** the loop; **the other 8 records never enter the loop** and are not written.
 2. Re-bind Claude + Sheets credentials and the Spreadsheet ID. Record Claude balance **BEFORE**,
    **Execute Workflow once**, record balance **AFTER**.
 3. **Restore `llm_enrichment_test_mode = false` after the test.**
 
 ### Acceptance (target)
+- **All 4 fixtures processed** (the attempt-#1 bug is fixed): `Final Summary Output` shows `selected_count=4`,
+  `llm_enrichment_test_mode=true`, `llm_test_batch_indexes=[1,7,11,12]`, `total_processed=4`.
 - **Selected LLM records = exactly 4** (batch_index 1, 7, 11, 12); the other 8 records not written.
 - `technical_errors = 0`.
 - `primary_json` **≥ 3 of 4** (target).

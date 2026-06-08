@@ -5,6 +5,21 @@ Most recent first.
 
 ---
 
+## DEC-086 — Workflow 08 C2 Test Filtering Happens Pre-Loop in Filter & Select Records; Code Nodes Inside the Split-in-Batches Loop Must Never Return [] for a Routed Item
+
+**Date:** 2026-06-08
+**Context:** The first C2 enrichment run (`docs/STAGE_3_2_TEST_RESULTS.md`, Test C2 attempt #1) showed the v4 compact enrichment design works — batch_index=1 (Avito competitor) wrote to `monitor_queue` with `parse_method=primary_json`, `repair_used=false`, `technical_errors=0`, and useful enriched `offer_text`/`terms`/`reason`. **But only record 1 was written**: the run stalled around `Build Deterministic Row` on the next non-target item and never reached fixtures 7/11/12. Root cause: C2 filtering was implemented **inside `Build Deterministic Row`** as `if(llm_enrichment_test_mode) return [];` for non-target records. In the Split-in-Batches loop, a routed item whose Code node returns **`[]`** yields no output, so `Append to Dynamic Route Sheet → Loop Over Items` never fires for that iteration and **loop continuation stalls**.
+**Decision (patch v5):** Move C2 batch filtering **before the processing loop** and forbid empty returns inside the loop.
+- **`Filter & Select Records`** assigns `batch_index` over the full selection (so 1,7,11,12 stay stable), then — when `llm_enrichment_test_mode=true` — returns **only** records whose `batch_index` ∈ `llm_test_batch_indexes`. The loop receives **exactly the test fixtures** (4 items), all of which are Claude targets. It also stamps `selected_count_before_test_filter` / `selected_count_after_test_filter` / `llm_enrichment_test_mode` / `llm_test_batch_indexes` on each selected record.
+- **`Build Deterministic Row` no longer returns `[]`** for any record (the test-mode guard is removed). Non-target test records never reach it, so loop continuation can never be broken by an empty return.
+- **`Final Summary Output`** surfaces `selected_count`, `llm_enrichment_test_mode`, `llm_test_batch_indexes` next to `route_counts` / `parse_method_counts` / `repair_used_count` / `technical_error(s)_count`.
+- **Default (`llm_enrichment_test_mode=false`) is unchanged**: all selected unique + approved/new records flow; deterministic baseline route distribution (monitor 6 / content 3 / review 1 / skipped 2; `deterministic_pre_route=10`, `deterministic_irrelevant_skip=2`; Claude calls=0) is preserved. Verified by simulation: `false → [1..12]`, `true → [1,7,11,12]`.
+- **General rule recorded:** any Code node on a per-item path inside a Split-in-Batches loop must emit at least one item (or be bypassed by routing) — never `return []` mid-loop, or downstream loop-back never fires.
+**Reason:** pre-loop filtering is the correct place to scope a test run; it makes C2 produce exactly 4 auditable rows and removes the loop-stall failure mode without touching the approved deterministic baseline.
+**Files:** `n8n/workflows/08_touchpoint_analyzer.json`, `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `docs/STAGE_3_2_TEST_RESULTS.md`, `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, `docs/NEXT_ACTIONS.md`, `docs/COSTS_AND_LIMITS.md`, `docs/AGENT_CAPABILITIES.md`, `docs/ROADMAP.md`, `docs/AGENT_LOG.md`, `core/hot/recent.md`.
+
+---
+
 ## DEC-085 — Workflow 08 LLM Enrichment Is Compact Enrichment-Only JSON Merged Into the Deterministic Row; Claude No Longer Generates the Full Business Row
 
 **Date:** 2026-06-08

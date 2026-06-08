@@ -5,6 +5,26 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Workflow 08 C2 filter-placement bug fixed: pre-loop filtering in Filter & Select Records (DEC-086)
+
+**Agent role:** project-engineer
+**Session goal:** fix the C2 enrichment test so all 4 fixtures (batch_index 1,7,11,12) are processed, without changing the approved deterministic baseline.
+
+**Root cause (confirmed):** C2 filtering was implemented **inside `Build Deterministic Row`** as `if(llm_enrichment_test_mode) return [];` for non-target records. C2 attempt #1 enriched record 1 cleanly (Avito → `monitor_queue`, `parse_method=primary_json`, `repair_used=false`, `technical_errors=0`, useful enriched `offer_text`/`terms`/`reason`) but then **stalled on the next non-target item** — a Code node returning `[]` inside the Split-in-Batches loop yields no output, so `Append → Loop Over Items` never fires and the loop never reaches records 7/11/12.
+
+**Patch (v5, `08_touchpoint_analyzer.json`, JSON valid, `active=false`):**
+- **`Filter & Select Records`** now filters **pre-loop**: assigns `batch_index` over the full selection (1..12 stable), then — when `llm_enrichment_test_mode=true` — returns only records with `batch_index ∈ llm_test_batch_indexes`, so the loop receives **exactly the 4 fixtures** (all Claude targets). Stamps `selected_count_before/after_test_filter`, `llm_enrichment_test_mode`, `llm_test_batch_indexes` on each selected record.
+- **`Build Deterministic Row`** test-mode `return []` guard **removed** — non-target test records never reach it now, so loop continuation can't be broken.
+- **`Final Summary Output`** now reports `selected_count` (from `Filter & Select Records`), `llm_enrichment_test_mode`, `llm_test_batch_indexes`, plus existing `route_counts`/`parse_method_counts`/`repair_used_count`/`technical_error(s)_count`.
+- **Default unchanged:** `llm_enrichment_test_mode=false` processes all selected unique/approved/new records; deterministic baseline route distribution preserved.
+- **Verified:** `python3 -m json.tool` VALID; all 10 code nodes compile; `Filter & Select Records` simulation → `test_mode=false → [1..12]`, `test_mode=true → [1,7,11,12]`; `Build Deterministic Row` contains no `return []`; `active=false`; no real keys/Spreadsheet ID; apify/firecrawl only in disclaimer; only `aiprimetech.io` URL; no tool_use/KEY=VALUE; 35 fields on all output emitters; MSK timestamps + compact OUTPUT_SCHEMA + merge node + deterministic fallback preserved. WF04/05/06/07 untouched.
+
+**Docs updated:** `STAGE_3_2_TEST_RESULTS.md` (C2 attempt #1 INCOMPLETE + v5 patch + C2 attempt #2 retest), `N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, `DECISIONS.md` (**DEC-086**), `NEXT_ACTIONS.md`, `COSTS_AND_LIMITS.md`, `AGENT_CAPABILITIES.md`, `ROADMAP.md`, `core/hot/recent.md`.
+
+**Next operator action:** re-run **Test C2 attempt #2** — re-import WF08 → bind creds + Spreadsheet ID → `llm_enrichment_test_mode=true` → record Claude balance → Execute once → confirm `selected_count=4` / exactly 4 rows / `primary_json≥3/4` / fallback≤1/4 / routes unchanged / cost ≤$0.04 → **restore `llm_enrichment_test_mode=false`**. Then Stage 3.3 (decision only). No connector built.
+
+---
+
 ## 2026-06-08 — Workflow 08 LLM enrichment v4: compact enrichment-only JSON merged into the deterministic row (DEC-085)
 
 **Agent role:** project-engineer

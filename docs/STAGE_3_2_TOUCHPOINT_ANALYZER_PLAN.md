@@ -1,9 +1,14 @@
 # STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md — Stage 3.2 Plan
 
-**Status:** ✅ DETERMINISTIC-FIRST BASELINE APPROVED (Test 3 PASS) · LLM enrichment OPTIONAL / UNDER TEST (Test 4) · MSK timestamps (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
+**Status:** ✅ DETERMINISTIC-FIRST BASELINE APPROVED (Test 3 PASS) · LLM enrichment OPTIONAL / UNDER TEST (Test C2 attempt #2 after the v5 fix) · MSK timestamps (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
 **Stage:** 3.2 (Touchpoint Analyzer) of the Business Scout Agent.
-**Date:** 2026-06-08 · **Decisions:** DEC-080, DEC-081, DEC-082, DEC-083 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
+**Date:** 2026-06-08 · **Decisions:** DEC-080, DEC-081, DEC-082, DEC-083, DEC-085, DEC-086 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
 **Test log:** `docs/STAGE_3_2_TEST_RESULTS.md`. **Next stage:** `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
+
+> **C2 filter fix (DEC-086):** LLM enrichment is compact enrichment-only merged into the deterministic row (DEC-085);
+> C2 attempt #1 only wrote record 1 because the test filter used `return []` inside `Build Deterministic Row` (stalls
+> the Split-in-Batches loop). v5 moves C2 filtering **pre-loop** into `Filter & Select Records` (loop gets exactly the
+> 4 fixtures) and removes the empty return. Default deterministic baseline unchanged. Re-test = Test C2 attempt #2.
 
 > **Stage 3.2 finalized (DEC-083):** Test 3 (deterministic_first) PASS → **baseline APPROVED**
 > (`technical_errors=0`, Claude calls=0, `repair_used=false`, routes 6/3/1/2). **LLM enrichment is optional and

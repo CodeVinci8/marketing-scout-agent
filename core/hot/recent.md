@@ -4,6 +4,22 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Workflow 08 C2 filter-placement bug fixed (pre-loop filtering, DEC-086)
+
+**What was done (loop-stall fix; baseline untouched):**
+- **Root cause (confirmed):** C2 filter used `if(llm_enrichment_test_mode) return [];` inside `Build Deterministic Row`. C2 attempt #1 enriched record 1 cleanly (Avito → monitor_queue, `primary_json`, no repair, good offer_text/terms/reason) but **stalled after record 1** — an empty `return []` inside the Split-in-Batches loop produces no item, so `Append → Loop Over Items` never fires and records 7/11/12 are never reached. Result: INCOMPLETE (promising but invalid for acceptance).
+- **Patch v5 (`08_touchpoint_analyzer.json`, JSON valid, active=false):**
+  - **`Filter & Select Records`** filters **pre-loop**: assigns batch_index over the full 12-record selection, then (test mode) keeps only `batch_index ∈ llm_test_batch_indexes` → loop gets exactly 4 fixtures (all Claude targets). Adds `selected_count_before/after_test_filter` + test flags.
+  - **`Build Deterministic Row`**: removed the `return []` test guard (non-target records no longer reach it).
+  - **`Final Summary Output`**: now reports `selected_count`, `llm_enrichment_test_mode`, `llm_test_batch_indexes` + route/parse_method counts.
+  - Default (`llm_enrichment_test_mode=false`) unchanged — all selected records flow; baseline 6/3/1/2 preserved.
+- **Verified:** JSON VALID; all 10 code nodes compile; `Filter & Select` sim → false→[1..12], true→[1,7,11,12]; no `return []` in Build Deterministic Row; no real keys/Spreadsheet ID; only aiprimetech URL; no tool_use/KEY=VALUE; 35 fields on all emitters; MSK timestamps + compact enrichment schema + merge node + deterministic fallback intact. WF04/05/06/07 untouched.
+- **Decision:** DEC-086 (C2 filtering pre-loop; never `return []` mid-loop). Docs: STAGE_3_2_TEST_RESULTS (C2 attempt #1 INCOMPLETE + v5 + attempt #2), WF08 RU, plan, DECISIONS, NEXT_ACTIONS, COSTS, CAPABILITIES, ROADMAP, AGENT_LOG.
+
+**Next operator action:** re-run **Test C2 attempt #2** — re-import WF08 → bind creds + Spreadsheet ID → `llm_enrichment_test_mode=true` → record Claude balance → Execute once → confirm `selected_count=4`, exactly 4 rows, `primary_json≥3/4`, fallback≤1/4, routes unchanged, cost ≤$0.04 → **restore `llm_enrichment_test_mode=false`**. Then Stage 3.3 (decision only). No connector built.
+
+---
+
 ## Session: 2026-06-08 — Workflow 08 LLM enrichment v4: compact enrichment-only merge (DEC-085)
 
 **What was done (stabilize optional LLM enrichment; baseline untouched):**
