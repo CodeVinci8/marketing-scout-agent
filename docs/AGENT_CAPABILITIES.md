@@ -1,6 +1,6 @@
 # AGENT_CAPABILITIES.md — Marketing Scout Agent Capabilities Reference
 
-**Last updated:** 2026-06-07 (**Stage 2 FINALIZED — APPROVED with minor limitations** — DEC-074. Real results: `docs/STAGE_2_FINAL_TEST_RESULTS.md`. Auto-handoff 06→04 evaluated and **deferred** to Stage 2.4 — DEC-075, `docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md`. Stage 3 starts with Lead Source Evaluation, not the bot — DEC-076. No workflow logic changed this pass.)
+**Last updated:** 2026-06-08 (**Stage 3.0 Lead Source Evaluation WRITTEN** — evaluation only, nothing built — DEC-077. See `docs/STAGE_3_LEAD_SOURCE_EVALUATION.md`.) — (prior: **Stage 2 FINALIZED — APPROVED with minor limitations** — DEC-074. Real results: `docs/STAGE_2_FINAL_TEST_RESULTS.md`. Auto-handoff 06→04 evaluated and **deferred** to Stage 2.4 — DEC-075, `docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md`. Stage 3 starts with Lead Source Evaluation, not the bot — DEC-076. No workflow logic changed this pass.)
 
 ## Web Pipeline Status (2026-06-07) — ✅ APPROVED WITH MINOR LIMITATIONS
 
@@ -40,7 +40,9 @@
 
 **Planned (designed, NOT built — planning only):**
 - **Manual URL candidate entry** 📋 optional fallback input mode of Workflow 05 (manual URL *lists* are already handled by Workflow 04).
-- **Lead Discovery Layer** 📐 designed (DEC-067/068/069): source-specific connectors (Avito/Classifieds, Telegram public channels/chats parser, VK/Social, Instagram, Yandex/Search, Manual Records Intake), a **source-agnostic** Market/Lead Analyzer (classes: `lead_signal`/`competitor`/`content_idea`/`market_signal`/`irrelevant`), and a **separate** record schema (`raw_market_records` + `lead_discovery_requests` + `market_record_registry`, non-URL composite dedup). **Build gate: Stage 3.0 Lead Source Evaluation must be approved first.** Telegram **Control Bot** is a controller, not a parser (Stage 4). Docs: `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`.
+- **Lead Discovery Layer** 📐 designed (DEC-067/068/069/077): source-specific connectors (Avito/Classifieds, Telegram public channels/chats parser, VK/Social, Instagram, Yandex/Search, Manual Records Intake), a **source-agnostic** Market/Lead Analyzer (classes: `lead_signal`/`competitor`/`content_idea`/`market_signal`/`irrelevant`), and a **separate** record schema (`raw_market_records` + `lead_discovery_requests` + `market_record_registry`, non-URL composite dedup). **Build gate: Stage 3.0 Lead Source Evaluation must be approved first.** Telegram **Control Bot** is a controller, not a parser (Stage 4). Docs: `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`.
+- **Stage 3.0 Lead Source Evaluation** ✅ **WRITTEN 2026-06-08 (evaluation only, nothing built — DEC-077):** `docs/STAGE_3_LEAD_SOURCE_EVALUATION.md` (weighted scoring: Manual 27 > Avito 20 > Yandex 18 > VK 17 > Telegram 16 > Instagram 13), `docs/LEAD_DATA_MODEL_PLAN.md` (3 proposed sheets), `docs/SOCIAL_CLASSIFIED_SOURCE_MATRIX.md` (per-source matrix + go/no-go). Approved next: Manual Records Intake first; Avito/Classifieds preliminary first real connector. **Sheets remain PROPOSED, not created.**
+- **Business Scout Agent reframe** 📐 **DESIGN 2026-06-08 (DEC-078):** product = agentic business automation system ("AI employee") with internal tools + memory + analysis; Marketing Scout is its first domain; Stage 3 = Social/Classified Touchpoint Discovery (leads are a subset). Docs: `BUSINESS_SCOUT_AGENT_VISION.md`, `MARKETING_AGENT_PRODUCT_VISION.md`, `AGENT_TOOL_ARCHITECTURE.md` (9 tools), `AGENT_MEMORY_PLAN.md`. **Planned (design only):** `agent_requests` (generalizes `lead_discovery_requests`), `agent_memory`, Social/Classified Touchpoint Discovery, Manual Records Intake, Avito/Dzen/VK/Telegram feasibility, Semantic/Ads Analysis, USP/Positioning Assistant, Outreach Draft Assistant (drafts only). **Not approved:** mass outreach, autocall, automated messaging, Telegram parser, Avito parser, VK/Instagram/Dzen parser, scheduled scraping, CRM integration.
 
 **Still NOT approved:**
 - More than 5 URLs per run.
@@ -60,6 +62,8 @@
 - Deduplication at scale (Workflow 04 dedups a small manual list via `url_registry` by `normalized_source_url`; large-scale/automated dedup is not approved).
 - Fully autonomous multi-source agent.
 - `content_idea` production handling (content_queue exists; review process deferred to Stage 4).
+- **Stage 3 explicit not-approved (DEC-077):** Avito scraping, Telegram parsing, VK/Instagram parsing, Telegram Control Bot, automated outreach, scheduled scraping.
+- **Business Scout Agent not-approved (DEC-078):** mass outreach, autocall, automated messaging, Telegram/Avito/VK/Instagram/Dzen parsers, scheduled scraping, CRM integration. Competitor audience/commenter mining is **public data only** and not yet built.
 
 See `docs/PROJECT_REVIEW_03_RESILIENT_ROUTER.md` and DEC-037.
 **Business requirements:** `docs/BUSINESS_REQUIREMENTS.md`

@@ -15,6 +15,20 @@
 > design) is **distinct** from the Telegram **Control Bot** (a Stage 4 controller); VK/Instagram/Yandex later.
 > Manual Records Intake is wired first to validate the lead schema + analyzer at zero source risk.
 
+> **Stage 3.0 written (2026-06-08):** full evaluation + scoring in `docs/STAGE_3_LEAD_SOURCE_EVALUATION.md`;
+> data model in `docs/LEAD_DATA_MODEL_PLAN.md`; practical source matrix in
+> `docs/SOCIAL_CLASSIFIED_SOURCE_MATRIX.md`. Recommended order: **Manual Intake → Avito → Telegram (parser) →
+> VK → Yandex (discovery aid); Instagram deferred.**
+
+> **REFRAME (2026-06-08, DEC-078 — stakeholder interview):** this layer is **Social/Classified Touchpoint
+> Discovery**, the first capability domain of the broader **Business Scout Agent** (`docs/BUSINESS_SCOUT_AGENT_VISION.md`).
+> **Lead discovery is a subset of touchpoint discovery.** Records span 12 classes (`hot_lead`,
+> `warm_touchpoint`, `cold_audience_candidate`, `client_pain`, `question_objection`, `competitor_audience`,
+> `competitor_activity`, `semantic_signal`, `ad_channel_signal`, `content_idea`, `market_signal`, `irrelevant`).
+> The request ledger is generalized: **`lead_discovery_requests` → `agent_requests`** (a `request_type` field
+> selects the tool; see `TABLE_SCHEMA.md` and `AGENT_TOOL_ARCHITECTURE.md`). `raw_market_records` /
+> `market_record_registry` remain central (the registry FK is now `agent_request_id`).
+
 ---
 
 ## 1. Why this layer exists
@@ -111,17 +125,36 @@ Planned connectors (all design-only here; see `LEAD_SOURCE_CONNECTORS_PLAN.md`):
 - **Manual Records Intake** (operator pastes records — the zero-risk bootstrap path)
 
 ### 4.2 Source-agnostic analyzer
-The **same** Market/Lead Analyzer classifies any normalized record into:
-- `lead_signal` — a person/entity expressing borrowing intent or pain (the priority output)
-- `competitor` — a competing lender/broker post or page
-- `content_idea` — a question/pain worth turning into content
-- `market_signal` — a trend/aggregate observation (rates, demand, regulation chatter)
-- `irrelevant` — drop
+The **same** Market/Lead Analyzer classifies any normalized record into one of **12 touchpoint classes**:
+`hot_lead`, `warm_touchpoint`, `cold_audience_candidate`, `client_pain`, `question_objection`,
+`competitor_audience`, `competitor_activity`, `semantic_signal`, `ad_channel_signal`, `content_idea`,
+`market_signal`, `irrelevant`. (Lead classes are a **subset**; the analyzer also assigns `lead_temperature`
+hot/warm/cold and a `next_action`.)
 
-It must be **source-agnostic**: it reads `text_context` + light hints (`region_hint`, `service_hint`,
-`platform`, `record_type_hint`) and never assumes the source was a website.
+It must be **source-agnostic**: it reads `text_context`/`comment_text` + light hints (`region_hint`,
+`service_hint`, `platform`, `record_type_hint`, `touchpoint_type`) and never assumes the source was a website.
 
-### 4.3 Separate record schema
+### 4.3 Routing — which output tab each record lands in
+The source-agnostic analyzer routes every record to exactly one tab (same tabs as Stage 2, plus
+`content_queue`):
+
+| Record meaning | Route |
+|----------------|-------|
+| hot `lead_signal` with contact + strong intent | `results` |
+| weak / incomplete `lead_signal` (no contact / unclear intent) | `review_queue` |
+| client pain / question / objection | `content_queue` |
+| competitor activity (competing lender/broker post or page) | `monitor_queue` |
+| irrelevant / duplicate | `skipped_log` |
+| API / parser / schema failure | `technical_errors` |
+
+### 4.4 Lead scoring (reuse Stage 2 analyzer; harden later)
+The Stage 2 resilient analyzer (Claude → repair → deterministic fallback → normalize → route) is **reused**, but
+lead **scoring** must be **hardened in Stage 3.3**. Planned lead scores (design names; not yet implemented):
+`lead_signal_score`, `urgency_score`, `contactability_score`, `region_score`, `collateral_fit_score`. Until
+hardened, the connector's deterministic hints (`lead_intent_hint`, `urgency_hint`, `confidence_score`) only aid
+pre-approval triage; the analyzer makes the authoritative routing call after approval.
+
+### 4.5 Separate record schema
 Lead/social/classified records **must not** be forced into `url_candidates`. URL candidates are a *web-URL*
 abstraction; lead records have authors, posts, profiles, and sometimes **no stable URL**. The Lead Discovery
 Layer introduces its own raw-record concept (`raw_market_records`) and its own dedup ledger

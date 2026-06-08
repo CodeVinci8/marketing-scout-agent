@@ -4,7 +4,34 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-07) — Stage 2 APPROVED (minor limitations) → commit → Stage 3.0
+## CURRENT PRIORITY (2026-06-08) — PRODUCT REFRAMED to Business Scout Agent → choose Stage 3.1 path
+
+Stakeholder interview (`STAKEHOLDER_INTERVIEW_2026_06_08.md`) reframed the product (DEC-078): it is the
+**Business Scout Agent** (an AI "employee" with internal tools + memory + analysis), with marketing/lead/
+competitor intelligence as its **first domain**. Stage 3 is now **Social/Classified Touchpoint Discovery** (leads
+are a subset). New design docs: `BUSINESS_SCOUT_AGENT_VISION.md`, `MARKETING_AGENT_PRODUCT_VISION.md`,
+`AGENT_TOOL_ARCHITECTURE.md`, `AGENT_MEMORY_PLAN.md`. Schema generalized: **`agent_requests`** (supersedes
+`lead_discovery_requests`), expanded `raw_market_records`, plus proposed **`agent_memory`** (all PROPOSED, not created).
+
+**Next operator decision — choose the Stage 3.1 path:**
+- **Option A** — approve the proposed agent/touchpoint sheets and **build Manual Records Intake**.
+- **Option B** — perform deeper **feasibility evaluation** of Avito/Dzen/VK/Telegram source connectors.
+- **Option C** — **wait for the uncle's full list of desired agents** and map them to internal tools.
+
+**Recommended: A + C** —
+1. [ ] Document the **agent/tool map** now (done: `AGENT_TOOL_ARCHITECTURE.md`) and review it.
+2. [ ] **Wait for the uncle's full desired-agent list**; map each to an internal tool/`request_type`.
+3. [ ] **Build Manual Records Intake first**, using manually collected examples from Avito/Dzen/VK/Telegram/comments.
+4. [ ] **Do NOT build any source parser yet.** No Telegram bot, no Avito/VK/Instagram/Dzen parser, no outreach/autocall.
+
+> Touchpoint classes: hot_lead, warm_touchpoint, cold_audience_candidate, client_pain, question_objection,
+> competitor_audience, competitor_activity, semantic_signal, ad_channel_signal, content_idea, market_signal,
+> irrelevant. Source lens (touchpoints): Avito = direct intent + competitor ads; Dzen/VK/comments = pains/
+> audience/warm; Instagram = competitor content; competitor audiences = public data only.
+
+---
+
+## PRIOR PRIORITY (2026-06-07) — Stage 2 APPROVED (minor limitations) → commit → Stage 3.0
 
 Stage 2 web pipeline **05 → 06 → 04** is **APPROVED with minor limitations** (DEC-074). Real results:
 `docs/STAGE_2_FINAL_TEST_RESULTS.md`. Auto-handoff (06→04) was evaluated and **deferred** to Stage 2.4

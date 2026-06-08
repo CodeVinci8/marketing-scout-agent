@@ -4,6 +4,32 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Product Reframe → Business Scout Agent (AI employee); Stage 3 = Touchpoint Discovery (DEC-078)
+
+**What was done (docs only — NO build, NO workflow JSON, 0 external calls, no credentials, no Sheets created):**
+- **Stakeholder interview captured** (`STAKEHOLDER_INTERVIEW_2026_06_08.md`): product is broader than lead parsing — an AI "employee" with internal automations, memory, next actions (Avito/Dzen/comments/brokers/Moscow/subscribers/competitors/semantics/ads/USP/outreach/calls).
+- **Reframe (DEC-078):** product = **Business Scout Agent** (tools + memory + analysis); Marketing Scout = first domain; Stage 3 = **Social/Classified Touchpoint Discovery** (leads = subset; 12 record classes incl. warm_touchpoint, cold_audience_candidate, competitor_audience, semantic_signal, ad_channel_signal).
+- **5 new docs:** `BUSINESS_SCOUT_AGENT_VISION.md` (5 layers), `MARKETING_AGENT_PRODUCT_VISION.md`, `AGENT_TOOL_ARCHITECTURE.md` (9 internal tools), `AGENT_MEMORY_PLAN.md` (project-owned memory + proposed `agent_memory`).
+- **Schema (TABLE_SCHEMA.md, all PROPOSED):** `agent_requests` (21 cols, `request_type`) **supersedes `lead_discovery_requests`** (one request table); `raw_market_records` **expanded to 40 cols** (comment_text, touchpoint_type, lead_temperature, next_action, competitor/semantic/ad fields, 12 classes); `market_record_registry` FK → `agent_request_id`; added `agent_memory` (13 cols).
+- **Updated:** STAGE_3 eval (touchpoint lens + Dzen + competitor commenters), LEAD_DISCOVERY_ARCHITECTURE (12 classes), LEAD_SOURCE_CONNECTORS_PLAN (+Dzen +Competitor Audience public-only), SOCIAL_CLASSIFIED_SOURCE_MATRIX (+Dzen +commenters), LEAD_DATA_MODEL_PLAN (reframe pointer), DECISIONS (DEC-078), NEXT_ACTIONS (Stage 3.1 A/B/C), COSTS (3 axes incl. outreach deferred), AGENT_CAPABILITIES, ROADMAP (Stage 3 3.0–3.5; Stage 4 Control Agent; Stage 5 Reporting; Stage 6 Advanced), AGENT_LOG.
+- **Not approved:** mass outreach, autocall, automated messaging, Telegram/Avito/VK/Instagram/Dzen parsers, scheduled scraping, CRM. Competitor audience mining = public data only.
+
+**Next operator action:** choose Stage 3.1 path — recommended **A+C**: document tool map (done), **await uncle's full desired-agent list**, build **Manual Records Intake first** with manually collected Avito/Dzen/VK/Telegram/comment examples. **No source parser yet.**
+
+---
+
+## Session: 2026-06-08 — Stage 3.0 Lead Source Evaluation WRITTEN (evaluation only, nothing built — DEC-077)
+
+**What was done (docs only — NO build, NO workflow JSON, 0 external calls, no credentials, no Sheets created):**
+- **3 new docs:** `STAGE_3_LEAD_SOURCE_EVALUATION.md` (purpose; leads-not-sites; records-vs-URL-candidates; criteria; source-by-source A–F; **weighted scoring** Manual 27 > Avito 20 > Yandex 18 > VK 17 > Telegram 16 > Instagram 13; recommended path; no-build gate); `LEAD_DATA_MODEL_PLAN.md` (3 proposed sheets; `raw_market_records` over `lead_candidates`; full `dedup_key` strategy, never domain-only; why URL-registry insufficient); `SOCIAL_CLASSIFIED_SOURCE_MATRIX.md` (per-source matrix + go/no-go; no source approved).
+- **Updated:** `LEAD_DISCOVERY_ARCHITECTURE.md` (routing table incl. `content_queue` + 5 lead scores for Stage 3.3); `LEAD_SOURCE_CONNECTORS_PLAN.md` (3.0–3.4 sequencing table); `TABLE_SCHEMA.md` (lead_discovery_requests → 2 cost cols = 18; market_record_registry + author_handle/text_hash = 15; dedup_key spelled out; still **PROPOSED**); `DECISIONS.md` (**DEC-077**); `NEXT_ACTIONS.md`; `COSTS_AND_LIMITS.md` (source vs analysis cost); `AGENT_CAPABILITIES.md`; `ROADMAP.md` (3.0 written / 3.1 data-model+manual / 3.2 connector / 3.3 analyzer hardening / 3.4 E2E; Stage 4 bot / 5 reporting / 6 advanced); `AGENT_LOG.md`.
+- **Recommendation:** Manual Records Intake first (zero source risk) → Avito/Classifieds first real connector (pending feasibility) → Telegram parser second (≠ Control Bot) → VK later → Yandex discovery aid → Instagram deferred. Telegram Control Bot = Stage 4, not built.
+- **Verified:** no workflow JSON changed; lead sheets remain PROPOSED/not created; no Telegram bot/parser/connectors built.
+
+**Next operator action:** review `STAGE_3_LEAD_SOURCE_EVALUATION.md`; decide whether to create the proposed lead sheets; choose first safe test (Option A Manual Intake recommended / Option B Avito evaluation). Build nothing until approved.
+
+---
+
 ## Session: 2026-06-08 — Stage 2 FINALIZED (approved w/ limitations); auto-handoff evaluated & DEFERRED (DEC-073/074/075/076)
 
 **What was done (docs/finalization only — NO workflow logic changed; 0 external calls):**

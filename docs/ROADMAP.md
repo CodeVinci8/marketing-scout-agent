@@ -134,42 +134,58 @@ the approved path until Stage 2.4 is built and live-validated.
 
 ---
 
-## Stage 3.0 — Lead Source Evaluation (NEXT, design/eval only — DEC-069/076)
+## Stage 3 — Social/Classified Touchpoint Discovery (reframed, DEC-078)
 
-**Status:** 📐 NEXT — **evaluation, no build.** Goal: choose the first lead source by comparing
-**Avito vs Telegram vs VK** on **data availability, cost, risk, lead quality, implementation complexity**.
-**Output:** an approved evaluation that selects the first connector. **Preliminary** (non-binding):
-Avito/Classifieds first (public, high-intent, tractable — pending actor/API + compliance check); Telegram
-second (separate parser/client design, not just a bot). Wire **Manual Records Intake** first to validate the
-lead schema + analyzer at zero source risk.
-**Docs:** `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`.
-**Gate:** no connector is built until this evaluation is approved.
+> First capability domain of the **Business Scout Agent**. **Lead discovery is a subset of touchpoint
+> discovery.** Records span 12 classes; requests tracked in `agent_requests`. Nothing below is built; all gated
+> behind stakeholder approval. Docs: `BUSINESS_SCOUT_AGENT_VISION.md`, `AGENT_TOOL_ARCHITECTURE.md`,
+> `AGENT_MEMORY_PLAN.md`, `STAGE_3_LEAD_SOURCE_EVALUATION.md`, `LEAD_DISCOVERY_ARCHITECTURE.md`,
+> `SOCIAL_CLASSIFIED_SOURCE_MATRIX.md`.
 
-## Stage 3.1 — First Lead Connector (after 3.0 approval)
-
-**Status:** 📋 PLANNED — build the chosen connector (likely Avito/Classifieds). It normalizes source records
-into the new `raw_market_records` sheet, computes a composite `dedup_key`, checks `market_record_registry`,
-and sets `approval_status=new`. **Connectors never call Claude.** Human approval is the spend gate.
-
-## Stage 3.2 — Lead Analyzer Integration (after 3.1)
-
-**Status:** 📋 PLANNED — feed approved `raw_market_records` into the **source-agnostic** Market/Lead Analyzer
-(reusing the resilient analyzer), classifying into `lead_signal` / `competitor` / `content_idea` /
-`market_signal` / `irrelevant` and routing to the existing six business tabs. Dedup via
-`market_record_registry` (URL-only `url_registry` stays for the web pipeline).
+- **3.0 — Stakeholder product reframe + source evaluation** ✅ **DONE 2026-06-08 (eval/design only)**: reframed
+  to Business Scout Agent + touchpoint discovery; source matrix re-scored under the touchpoint/agent lens
+  (Avito, Yandex Dzen, VK, Telegram parser, Instagram, competitor pages/commenters, Yandex/Search, Manual).
+- **3.1 — Agent/touchpoint data model** 📋 PLANNED: the proposed sheets (`agent_requests`, `raw_market_records`,
+  `market_record_registry`, `agent_memory`; PROPOSED in `TABLE_SCHEMA.md`). `agent_requests` generalizes
+  `lead_discovery_requests`.
+- **3.2 — Manual records/touchpoint intake** 📋 PLANNED: operator pastes manually collected examples (Avito/
+  Dzen/VK/Telegram/comments) → `raw_market_records`. Zero source cost/risk; validates schema + classes + analyzer.
+- **3.3 — First source connector** 📋 PLANNED: build the chosen connector (Avito/Classifieds likely first,
+  pending feasibility). Connectors never call Claude; human approval is the spend gate.
+- **3.4 — Analyzer hardening for touchpoints/leads** 📋 PLANNED: source-agnostic analyzer over the 12 classes;
+  harden scoring (`lead_signal_score`/`urgency_score`/`contactability_score`/`region_score`/`collateral_fit_score`)
+  + `lead_temperature` + `next_action`. Routes to the 6 business tabs.
+- **3.5 — E2E touchpoint pipeline** 📋 PLANNED: `agent_request` → connector → `raw_market_records` → dedup →
+  approval → analyzer → routed output; source vs analysis cost measured separately.
 
 ---
 
-## Stage 4 — Telegram Control Bot (Later, DEC-067)
+## Stage 4 — Control Agent Interface (Later, DEC-067/078)
 
-**Status:** 📋 LATER — **not built.** The bot is a **control interface / controller**, NOT a parser/connector
-(do not conflate the Telegram **Bot API** controller with a Telegram **client/MTProto parser** — that parser
-is a Stage 3.x source connector).
-**Goal:** Operator issues NL commands ("собери лидов по Avito по теме займ под ПТС Москва", "дай summary по
-сильным конкурентам за неделю"); bot creates a `lead_discovery_requests`/`discovery_requests` row, proposes
-candidates + estimated cost, asks approval, triggers the existing workflows, returns a summary. The bot
-**calls** existing workflows and **duplicates no discovery/processing logic**; registry dedup prevents repeats.
-**Prerequisites:** Stage 3.x lead discovery + approval flow; Telegram bot token + n8n webhook.
+**Status:** 📋 LATER — **not built.** A **conversational control agent** (future Telegram/chat), **not just slash
+commands**: it provides **conversational control over the tools** — receive task → clarify → show plan + cost →
+ask approval → run tool(s) → return summary + next actions. It **chooses** tools and **calls** existing
+workflows; it contains **no parser/scraping logic** (Control Agent ≠ source parser). Requests recorded in
+`agent_requests`. **Prerequisites:** Stage 3.x touchpoint discovery + approval flow; Telegram bot token + webhook.
+
+---
+
+## Stage 5 — Reporting / Export / Summary (Later)
+
+**Status:** 📋 LATER — **not built.** Operator-facing reporting via `report_summary_tool`: **Google Sheet links,
+XLSX snapshots, weekly summaries, competitor/lead reports, next-action digests.** Read-only over existing sheets;
+no new collection.
+
+## Stage 6 — Advanced Business Automations (Future)
+
+**Status:** 📋 FUTURE — **not built.** Includes: **auto-handoff WF06→WF04** (Stage 2.4 plan); **scheduled
+monitoring**; reusable **`market_profile`** for other niches; **CRM**; **outreach/autocall only after a
+compliance/platform review**; deeper **memory/agent orchestration**. Requires Stage 3.x + Stage 4 stable and
+approved first.
+
+> **Numbering note:** Stages 4–6 above are the canonical forward sequence (Control Agent → Reporting → Advanced).
+> The historical blocks below (Competitor Monitor Agent, Content Agent, Inbound Lead Bot, CRM, Analytics) use
+> older stage labels and are retained for continuity.
 
 ---
 

@@ -40,6 +40,27 @@ Updated after each session that incurs or measures real costs.
 
 ---
 
+## Stage 3 — Business Scout Agent: Three Separate Cost Axes (PLANNED, DEC-078)
+
+Three cost axes with different drivers and spend gates — tracked **separately** (mirrored in `agent_requests`:
+`estimated_source_cost_usd` vs `estimated_analysis_cost_usd`; outreach tracked separately and deferred).
+
+| Cost axis | Driver | When spent | Tracked in |
+|-----------|--------|------------|------------|
+| **Source-acquisition cost** | Apify actor / VK·Telegram·Dzen API / Instagram actor / search actor — per N records | at collection (before approval) | `agent_requests.estimated_source_cost_usd` |
+| **Analysis cost** | per-record Claude analysis (≈ Stage 2 per-record cost) | only **after** operator approval | `agent_requests.estimated_analysis_cost_usd` |
+| **Outreach cost** | messaging / calling / auto-calling fees + compliance risk | **DEFERRED** — not until compliance/platform review | (separate, future) |
+
+- **Manual Records Intake = 0 source-acquisition cost** (recommended first) — only analysis cost after approval.
+- **Avito / Dzen / VK / Telegram / Instagram** each carry **their own** source cost and **separate rate limits**
+  — measured per source when (if) approved.
+- **Analysis cost** must be **measured with small bounded batches first** (≤10 records) before any larger run;
+  no scheduled/automated collection in Stage 3.
+- **Outreach / autocall / mass-messaging cost and risk are tracked separately and DEFERRED** until a dedicated
+  compliance/platform review — no budget committed near-term.
+
+---
+
 ## Estimate Table
 
 | Volume | USD cost | RUB cost (at 73.41) |

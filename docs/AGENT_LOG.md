@@ -5,6 +5,63 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Product Reframe: Business Scout Agent (AI employee) + Stage 3 = Touchpoint Discovery (DEC-078)
+
+**Agent role:** project-engineer / product-architect
+**Session goal:** Capture the stakeholder interview and reframe the architecture from "Marketing Scout Bot" to the broader **Business Scout Agent** (tools + memory + analysis), with Marketing Scout as the first domain and Stage 3 reframed as Social/Classified Touchpoint Discovery. **Docs only — no build, no workflow JSON, no external calls, no credentials, no Sheets created.**
+
+**Created (5 new docs):**
+- `STAKEHOLDER_INTERVIEW_2026_06_08.md` — raw structured notes (Avito, Dzen, comments, brokers, Moscow, subscribers, competitors, semantics, ads, USP, outreach, calls, "agent as employee") + interpreted needs, product implications, risks/constraints, open questions.
+- `BUSINESS_SCOUT_AGENT_VISION.md` — product vision; 5 layers (Control/Conversation, Tool/Automation, Data, Memory, Analysis).
+- `MARKETING_AGENT_PRODUCT_VISION.md` — Marketing Scout as the first domain of the broader agent.
+- `AGENT_TOOL_ARCHITECTURE.md` — 9 internal tools (web_competitor_discovery [built] + touchpoint discovery, competitor_audience_mining, comment_mining, semantic_ads_analysis, usp_positioning, outreach_draft [no send], report_summary, next_action_recommender); n8n workflows+prompts+schemas, not separate LLM agents at first.
+- `AGENT_MEMORY_PLAN.md` — project-owned structured memory (9 memory types) + proposed `agent_memory` sheet + privacy/compliance rules.
+
+**Updated:**
+- `TABLE_SCHEMA.md` — section renamed "Proposed — Business Scout Agent Layer"; **`agent_requests`** (21 cols, `request_type`) generalizes/supersedes `lead_discovery_requests` (one request table, no duplicates); **`raw_market_records` expanded** (40 cols: `comment_text`, `contact_channel`, `touchpoint_type`, `interest_topic`, `probable_need`, `competitor_related/name`, `semantic_keywords`, `ad_channel_hint`, `lead_temperature`, `next_action`, `responsible`, `manager_note`, 12 record classes); `market_record_registry` FK → `agent_request_id`; added **`agent_memory`** (13 cols). All **PROPOSED, not created**.
+- `STAGE_3_LEAD_SOURCE_EVALUATION.md` — touchpoint reframe (12 classes + examples) + §5a source matrix through touchpoint/agent lens (adds Yandex Dzen + competitor pages/commenters); weighted table relabeled hot-lead lens.
+- `LEAD_DISCOVERY_ARCHITECTURE.md` — touchpoint reframe banner; analyzer = 12 classes + `lead_temperature`/`next_action`; `agent_requests`.
+- `LEAD_SOURCE_CONNECTORS_PLAN.md` — reframe banner + new Yandex Dzen (5b) and Competitor Audience Mining (5c, public-only) connector sections.
+- `SOCIAL_CLASSIFIED_SOURCE_MATRIX.md` — reframe banner + Dzen (5b) + competitor pages/commenters (5c) entries.
+- `LEAD_DATA_MODEL_PLAN.md` — reframe pointer (agent_requests supersession; TABLE_SCHEMA authoritative).
+- `DECISIONS.md` — **DEC-078** (reframe + touchpoint discovery + agent_requests + agent_memory + outreach deferred + control≠parser).
+- `NEXT_ACTIONS.md` — current priority = choose Stage 3.1 path (A/B/C); recommended A+C.
+- `COSTS_AND_LIMITS.md` — three cost axes (source-acquisition / analysis / outreach-deferred).
+- `AGENT_CAPABILITIES.md` — Business Scout Agent planned/not-approved.
+- `ROADMAP.md` — Stage 3 (3.0–3.5 touchpoint), Stage 4 Control Agent Interface (not slash commands), Stage 5 Reporting/Export, Stage 6 Advanced Business Automations (incl. auto-handoff, scheduling, market_profile, CRM, outreach after compliance).
+- `core/hot/recent.md` — session entry.
+
+**Verified:** no workflow JSON touched; no external calls; all new sheets PROPOSED; outreach/autocall/parsers explicitly not approved.
+**Next operator action:** choose Stage 3.1 path (recommended A+C: document tool map [done], await uncle's full agent list, build Manual Records Intake first). Build no parser yet.
+
+---
+
+## 2026-06-08 — Stage 3.0 Lead Source Evaluation WRITTEN (evaluation only, nothing built — DEC-077)
+
+**Agent role:** project-engineer
+**Session goal:** Produce Stage 3.0 — Lead Source Evaluation and the Social/Classified Lead Discovery architecture/data-model design. **Docs only — no build, no workflow JSON, no external API call, no credentials, no Sheets created.**
+
+**Created (3 new docs):**
+- `docs/STAGE_3_LEAD_SOURCE_EVALUATION.md` — main evaluation: purpose; why Stage 3 is leads not competitor sites; why social/classified records differ from URL candidates; evaluation criteria; source-by-source (Avito, Telegram, VK, Instagram, Yandex/Search, Manual Intake); **weighted scoring table** (lead_intent/contactability/access/cost/risk[5=low]/implementation[5=easy]/total): Manual 27 > Avito 20 > Yandex 18 > VK 17 > Telegram 16 > Instagram 13; recommended path; no-build gate.
+- `docs/LEAD_DATA_MODEL_PLAN.md` — data model for the 3 proposed sheets; justifies `raw_market_records` over `lead_candidates`; full `dedup_key` strategy (post_url → source_url+profile_url+published_at hash → platform+author/profile+text_hash; never domain); why URL-only registry is insufficient.
+- `docs/SOCIAL_CLASSIFIED_SOURCE_MATRIX.md` — per-source matrix (use case, data, fields, connector approach, candidate APIs/actors to evaluate later, credentials, risks, MVP test, go/no-go). No source approved.
+
+**Updated:**
+- `LEAD_DISCOVERY_ARCHITECTURE.md` — added routing table (incl. `content_queue`) + the 5 lead scores to harden in 3.3 + Stage 3.0 pointer.
+- `LEAD_SOURCE_CONNECTORS_PLAN.md` — Stage 3.0–3.4 sequencing table + source-specific notes.
+- `TABLE_SCHEMA.md` — `lead_discovery_requests` now has `estimated_source_cost_usd` + `estimated_analysis_cost_usd` (18 cols); `market_record_registry` added `author_handle` + `text_hash` (15 cols); `dedup_key` strategy spelled out. Still **PROPOSED, not created**.
+- `DECISIONS.md` — **DEC-077** (Stage 3.0 outcome: Manual Intake first, Avito first real connector, source-agnostic layer, parser≠control-bot, `raw_market_records` name) consolidating DEC-067/068/069/076.
+- `NEXT_ACTIONS.md` — current priority = Stage 3.0 review + first-source decision (Option A Manual Intake / Option B Avito eval).
+- `COSTS_AND_LIMITS.md` — source-collection cost vs Claude analysis cost tracked separately; Manual = 0 source cost; measure with small batches.
+- `AGENT_CAPABILITIES.md` — Stage 3.0 written; Stage 3 explicit not-approved list.
+- `ROADMAP.md` — Stage 3.0 (written) / 3.1 Data Model + Manual Intake / 3.2 First Connector / 3.3 Analyzer Hardening / 3.4 E2E; Stage 4 Bot / 5 Reporting / 6 Advanced.
+- `core/hot/recent.md` — session entry.
+
+**Verified:** no workflow JSON touched; no external calls; placeholders only; lead sheets remain PROPOSED.
+**Next operator action:** review `STAGE_3_LEAD_SOURCE_EVALUATION.md`; decide whether to create the proposed sheets; choose first safe test (Manual Intake recommended, or Avito evaluation). Build nothing until approved.
+
+---
+
 ## 2026-06-08 — Stage 2 FINALIZED (approved w/ limitations) + Auto-Handoff Evaluated & Deferred (DEC-073/074/075/076)
 
 **Agent role:** project-engineer

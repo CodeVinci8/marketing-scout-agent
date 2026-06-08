@@ -5,6 +5,41 @@ Most recent first.
 
 ---
 
+## DEC-078 — Product Reframed as Business Scout Agent (AI Employee), Not a Telegram Bot; Stage 3 = Touchpoint Discovery
+
+**Date:** 2026-06-08
+**Context:** Stakeholder interview (`docs/STAKEHOLDER_INTERVIEW_2026_06_08.md`) clarified the product is far broader than lead parsing or a slash-command bot: an AI "employee" with internal automations, memory, and next-action recommendations covering leads, touchpoints, competitor intelligence, comment/audience mining, semantic/ad analysis, USP/positioning, and outreach drafting.
+**Decision:**
+- **Product reframed as the `Business Scout Agent`** — an agentic business automation system with tools + memory + analysis. **Marketing/lead/competitor intelligence is its first capability domain** ("Marketing Scout"). Telegram/chat is a future **control interface**, not the product. (`BUSINESS_SCOUT_AGENT_VISION.md`, `MARKETING_AGENT_PRODUCT_VISION.md`.)
+- **Stage 3 is `Social/Classified Touchpoint Discovery`, not only lead parsing** — lead discovery is a subset. Records span **12 classes** (`hot_lead`, `warm_touchpoint`, `cold_audience_candidate`, `client_pain`, `question_objection`, `competitor_audience`, `competitor_activity`, `semantic_signal`, `ad_channel_signal`, `content_idea`, `market_signal`, `irrelevant`).
+- **`agent_requests` generalizes `lead_discovery_requests`** (a `request_type` field selects the tool). **One request table, not two** — no duplicate request ledgers without justification.
+- **`raw_market_records` remains central** (comments, posts, profiles, listings, pains, competitor activity, leads) and is **expanded** (`comment_text`, `touchpoint_type`, `lead_temperature`, `next_action`, semantic/ad fields). `market_record_registry` FK renamed `lead_request_id` → `agent_request_id`.
+- **`agent_memory` is project-owned structured memory** (business profile, competitors, source quality, follow-ups, campaign insights, decisions index, run history) — **not** uncontrolled chatbot memory; sensitive data minimized.
+- **Internal tools defined** (`AGENT_TOOL_ARCHITECTURE.md`): web competitor discovery (built), touchpoint discovery, competitor audience mining, comment mining, semantic/ads analysis, USP/positioning, outreach draft, report/summary, next-action recommender — initially n8n workflows + prompts + schemas, not separate LLM agents.
+- **Outreach / autocall / mass messaging DEFERRED** until a dedicated compliance/platform review. Competitor audience/commenter mining is **public data only**, minimized, never for unauthorized outreach.
+- **Control agent and source parsers remain separate** (Control Agent ≠ parser; reaffirms DEC-067).
+**Reason:** align architecture with the stakeholder's actual product (an AI employee), avoid duplicate request tables, and lock compliance boundaries before any outreach.
+**Files:** `STAKEHOLDER_INTERVIEW_2026_06_08.md`, `BUSINESS_SCOUT_AGENT_VISION.md`, `MARKETING_AGENT_PRODUCT_VISION.md`, `AGENT_TOOL_ARCHITECTURE.md`, `AGENT_MEMORY_PLAN.md`, `STAGE_3_LEAD_SOURCE_EVALUATION.md`, `LEAD_DISCOVERY_ARCHITECTURE.md`, `LEAD_SOURCE_CONNECTORS_PLAN.md`, `LEAD_DATA_MODEL_PLAN.md`, `SOCIAL_CLASSIFIED_SOURCE_MATRIX.md`, `TABLE_SCHEMA.md`, `ROADMAP.md`.
+
+---
+
+## DEC-077 — Stage 3.0 Lead Source Evaluation Completed: Manual Intake First, Avito First Real Connector, Source-Agnostic Layer
+
+**Date:** 2026-06-08
+**Context:** Stage 3.0 evaluation written (`STAGE_3_LEAD_SOURCE_EVALUATION.md` with a weighted scoring table, `LEAD_DATA_MODEL_PLAN.md`, `SOCIAL_CLASSIFIED_SOURCE_MATRIX.md`). The operator clarified the layer is a broad **Social/Classified Lead Discovery Layer**, not just an "Avito parser".
+**Decision (consolidates DEC-067/068/069/076):**
+- **Stage 3 starts with evaluation, not a connector build** (reaffirms DEC-076); no source is approved by this evaluation.
+- The lead layer is **source-agnostic**: request → connector → normalize to `raw_market_records` → `market_record_registry` dedup → optional approval → analyzer → route (`results`/`review_queue`/`content_queue`/`monitor_queue`/`skipped_log`/`technical_errors`).
+- **`raw_market_records` is chosen over `lead_candidates`** (reaffirms DEC-068) because records can be leads, pains, competitor posts, questions/objections, market signals, or irrelevant.
+- **Telegram Control Bot (Stage 4) and Telegram Parser (Stage 3.x connector) are separate systems** (reaffirms DEC-067); the parser needs separate client/MTProto access design.
+- **Manual Records Intake is recommended first** (Stage 3.1) to validate schema + analyzer at zero source risk, before any risky source parsing.
+- **Avito/Classifieds is the preliminary first real connector** (reaffirms DEC-069), pending the feasibility/compliance check; weighted scoring ranks Manual(27) > Avito(20) > Yandex(18) > VK(17) > Telegram(16) > Instagram(13), with Telegram ranked 2nd among *real* connectors on business value despite a lower feasibility total.
+- Lead scoring (`lead_signal_score`/`urgency_score`/`contactability_score`/`region_score`/`collateral_fit_score`) reuses the Stage 2 analyzer but is **hardened in Stage 3.3**.
+**Reason:** lock a safe, source-agnostic architecture and a zero-risk bootstrap before any spend, access risk, or build effort.
+**Files:** `docs/STAGE_3_LEAD_SOURCE_EVALUATION.md`, `docs/LEAD_DATA_MODEL_PLAN.md`, `docs/SOCIAL_CLASSIFIED_SOURCE_MATRIX.md`, `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`, `docs/TABLE_SCHEMA.md`.
+
+---
+
 ## DEC-076 — Stage 3 Starts With Lead Source Evaluation, Not the Telegram Bot
 
 **Date:** 2026-06-07

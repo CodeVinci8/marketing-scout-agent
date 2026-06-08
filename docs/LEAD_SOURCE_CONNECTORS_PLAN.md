@@ -12,9 +12,15 @@
 > second** (parser ≠ control bot; separate access/client design), VK/Instagram/Yandex later. Build nothing
 > until Stage 3.0 is approved.
 
+> **REFRAME (2026-06-08, DEC-078):** these connectors feed **Social/Classified Touchpoint Discovery** (the first
+> domain of the **Business Scout Agent**), not lead parsing alone. They produce **touchpoints** (12 record
+> classes), including comments, competitor audiences, and semantic/ad signals — not only hot leads. Added below:
+> **Yandex Dzen** and **Competitor Audience Mining** (public data only). Requests are tracked in `agent_requests`
+> (generalizing `lead_discovery_requests`); see `AGENT_TOOL_ARCHITECTURE.md`.
+
 All connectors share one output contract: normalize to `raw_market_records` (see `TABLE_SCHEMA.md` →
-"Proposed — Lead Discovery Layer"), compute a composite `dedup_key`, check `market_record_registry`, and set
-`approval_status=new`. Connectors **never** call Claude; the source-agnostic analyzer does that **after**
+"Proposed — Business Scout Agent Layer"), compute a composite `dedup_key`, check `market_record_registry`, and
+set `approval_status=new`. Connectors **never** call Claude; the source-agnostic analyzer does that **after**
 human approval.
 
 Each section below uses the same template: **Goal · Data model · Connector approach · Credentials ·
@@ -169,6 +175,46 @@ flagging forum/Q&A pages for content. Use an Apify/search actor or search API; *
 
 ---
 
+## 5b. Yandex Dzen Connector  *(added in reframe — pains/comments/touchpoints)*
+
+**Goal.** Find **touchpoints, contacts, pains, and questions** on thematic Dzen pages and **their comments**
+("go to thematic pages and comments"). Better for warm touchpoints/audience than hot leads.
+
+**Likely data model.** `source_type=social`, `platform=dzen`. Fields: `post_url`, `profile_url`/`profile_name`,
+`published_at`, `text_context` (article), `comment_text`, `record_type_hint` ∈
+{`warm_touchpoint`,`question_objection`,`client_pain`,`content_idea`,`competitor_activity`,`market_signal`},
+`dedup_key = dzen + (post_url|comment_id)` fallback `dzen + author + text_hash`.
+
+**Connector approach.** Evaluate an Apify Dzen actor / public page fetch over an explicit topic/page allowlist.
+Read-only, bounded.
+
+**Credentials / Risk / Cost.** Apify token (if actor) in n8n only / ToS + comment privacy, public data only /
+actor cost separate, Claude post-approval.
+
+**Test plan.** One thematic page + its public comments, ≤10 records → `raw_market_records` → review → analyzer.
+**Go/No-Go.** GO if public pages/comments are accessible and yield real pains/touchpoints; NO-GO if it needs
+login or yields mostly noise.
+
+## 5c. Competitor Audience Mining Connector  *(added in reframe — PUBLIC DATA ONLY, careful)*
+
+**Goal.** Mine **public** commenters/subscribers/followers of competitor pages ("collect brokers in Moscow,
+analyze their pages, subscribers, comments; find people interested in services") → `competitor_audience` /
+`cold_audience_candidate` / `warm_touchpoint` records.
+
+**Likely data model.** `source_type=social`, varied `platform`. Fields: `profile_url`/`profile_name`/
+`author_handle`, `comment_text` (if from a comment), `competitor_related=true`, `competitor_name`,
+`record_type_hint` ∈ {`competitor_audience`,`cold_audience_candidate`,`warm_touchpoint`,`client_pain`}.
+
+**Connector approach.** Only where **publicly accessible**; per-platform (VK/Dzen/Instagram/Telegram public).
+Minimize stored personal data.
+
+**Credentials / Risk / Cost.** Per-platform (n8n only) / **highest privacy/compliance care — public data only,
+no unauthorized outreach, minimized retention** / per-platform cost separate, Claude post-approval.
+
+**Test plan.** One competitor page, public commenters/subscribers only, ≤10 records → review → analyzer.
+**Go/No-Go.** GO only with a clear public-only, compliant path and minimized retention; NO-GO if it needs
+private data or risks privacy/ToS violations.
+
 ## 6. Manual Records Intake  *(zero-risk bootstrap)*
 
 **Goal.** Let the operator paste records (a phone + text from a listing/chat) directly into
@@ -188,10 +234,24 @@ analyzer integration with **zero** source risk.
 
 ## 7. Sequencing & decision
 
-1. **Stage 3.0 — Lead Source Evaluation** (write + approve first): compare **Avito vs Telegram vs VK** on
-   data availability, cost, risk, lead quality, implementation complexity.
-2. **Preliminary recommendation (pending evaluation):** **Avito/Classifieds first** (public, high-intent,
-   tractable), **Telegram second** (separate parser/client design), VK after, Instagram deferred, Yandex as a
-   discovery aid, **Manual Intake** wired first for analyzer validation.
-3. No connector is built until Stage 3.0 is approved. The Telegram **Control Bot** (Stage 4) is unrelated to
-   the Telegram parser and is also not built yet.
+**No connector is built yet.** Stage 3.0 chooses the first source; build follows only after approval.
+
+| Stage | Scope | Build status |
+|-------|-------|--------------|
+| **3.0 Lead Source Evaluation** | compare Avito vs Telegram vs VK (+ others) on data availability, cost, risk, lead quality, implementation complexity; recommend first source | ✅ **written 2026-06-08** (`STAGE_3_LEAD_SOURCE_EVALUATION.md`), pending operator approval |
+| **3.1 Lead Data Model + Manual Records Intake** | create the 3 proposed sheets; wire Manual Records Intake (zero source risk) | not built |
+| **3.2 First Lead Connector** | likely Avito/Classifieds (pending feasibility/compliance) | not built |
+| **3.3 Lead Analyzer Hardening** | harden lead scoring (`lead_signal_score`/`urgency_score`/`contactability_score`/`region_score`/`collateral_fit_score`) | not built |
+| **3.4 Lead Pipeline E2E** | end-to-end request → connector → records → approval → analyzer → routing | not built |
+
+**Source-specific notes:**
+- **Avito/Classifieds** — likely first real connector; needs evaluation of the Apify actor / search / API
+  route; good for high-intent listings.
+- **Telegram** — split control bot vs parser; the **bot is not the parser**; the parser may require a Telegram
+  client / TDLib / MTProto-style access or trusted public source lists.
+- **VK** — evaluate API/actor and public posts/groups.
+- **Instagram** — likely later; better for competitor/content than hot leads.
+- **Yandex/Search** — good for discovery/content/market pain, weaker for direct leads.
+- **Manual intake** — recommended zero-risk schema/analyzer test, wired first.
+
+The Telegram **Control Bot** (Stage 4) is unrelated to the Telegram parser and is **not** built in Stage 3.

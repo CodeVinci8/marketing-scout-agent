@@ -292,99 +292,154 @@ These fields were requested by the operator (confirmed 2026-06-05). Full mapping
 
 ---
 
-## Proposed — Lead Discovery Layer (PROPOSED, NOT CREATED)
+## Proposed — Business Scout Agent Layer (PROPOSED, NOT CREATED)
 
-> **Status:** 📐 PROPOSED only. These three sheets are **not created** in Google Sheets and **no workflow
-> writes them yet.** They support the future Lead Discovery Layer (see `docs/LEAD_DISCOVERY_ARCHITECTURE.md`
-> and `docs/LEAD_SOURCE_CONNECTORS_PLAN.md`). Build is gated behind Stage 3.0 (Lead Source Evaluation) approval.
-> The existing web-pipeline sheets (6 business tabs, `url_registry`, `url_candidates`, `discovery_requests`)
-> are **unchanged**; `url_registry` semantics are **not** altered.
+> **Status:** 📐 PROPOSED only. These four sheets are **not created** in Google Sheets and **no workflow writes
+> them yet.** They support the **Business Scout Agent** (see `docs/BUSINESS_SCOUT_AGENT_VISION.md`,
+> `docs/AGENT_TOOL_ARCHITECTURE.md`, `docs/AGENT_MEMORY_PLAN.md`, `docs/LEAD_DISCOVERY_ARCHITECTURE.md`). Build is
+> gated behind stakeholder approval of the Stage 3.1 data model. The existing web-pipeline sheets (6 business
+> tabs, `url_registry`, `url_candidates`, `discovery_requests`) are **unchanged**; `url_registry` semantics are
+> **not** altered.
+>
+> **Supersession (DEC-078):** the earlier Stage-3 `lead_discovery_requests` is **generalized into `agent_requests`**
+> (a `request_type` field covers lead search *and* every other tool). We do **not** keep both — one request
+> ledger, no duplicate request tables. `raw_market_records` and `market_record_registry` are kept (records are
+> central) and **expanded** for touchpoints/comments/competitor/semantic signals; the registry FK is renamed
+> `lead_request_id` → `agent_request_id`.
 
-### A. `lead_discovery_requests` (proposed) — lead-search request ledger
+### A. `agent_requests` (proposed) — unified tool-request ledger *(generalizes `lead_discovery_requests`)*
 
-One row per lead-search request (the lead analogue of `discovery_requests`).
+One row per agent task. `request_type` selects which tool runs (see `AGENT_TOOL_ARCHITECTURE.md`).
 
 | # | Column | Type | Notes |
 |---|--------|------|-------|
-| 1 | `lead_request_id` | string | unique id, e.g. `lead_req_YYYYMMDD_hhmmss` |
+| 1 | `agent_request_id` | string | unique id, e.g. `agent_req_YYYYMMDD_hhmmss` |
 | 2 | `created_at` | string | ISO 8601 |
-| 3 | `requested_by` | string | operator id (later: from the control bot) |
-| 4 | `request_text` | string | raw operator command, e.g. "собери лидов по Avito по теме займ под ПТС Москва" |
-| 5 | `source_scope` | string | e.g. `classified` / `social` / `search` / `mixed` |
-| 6 | `platforms` | string | comma list, e.g. `avito` / `telegram,vk` |
-| 7 | `query` | string | normalized search query |
-| 8 | `region` | string | e.g. `Москва/МО` |
-| 9 | `service_focus` | string | e.g. `pts_loan` |
-| 10 | `requested_limit` | integer | max records to discover this run |
-| 11 | `status` | string | see status set below |
-| 12 | `candidate_count` | integer | records discovered |
-| 13 | `unique_count` | integer | non-duplicate records |
-| 14 | `duplicate_count` | integer | duplicates per `market_record_registry` |
-| 15 | `approved_count` | integer | records approved by operator |
-| 16 | `estimated_cost_usd` | number | estimated downstream analysis cost (source cost tracked separately) |
-| 17 | `notes` | string | free text |
+| 3 | `requested_by` | string | operator id (later: from the control agent) |
+| 4 | `request_text` | string | raw command, e.g. "собери брокеров в Москве и их комментаторов" |
+| 5 | `request_type` | string | which tool to run — see values below |
+| 6 | `source_scope` | string | `classified` / `social` / `search` / `web` / `mixed` |
+| 7 | `platforms` | string | comma list, e.g. `avito` / `dzen,vk` |
+| 8 | `query` | string | normalized query |
+| 9 | `region` | string | e.g. `Москва/МО` |
+| 10 | `service_focus` | string | e.g. `pts_loan` |
+| 11 | `requested_limit` | integer | max records this run |
+| 12 | `status` | string | see status set below |
+| 13 | `plan_summary` | string | the agent's proposed plan (shown before approval) |
+| 14 | `estimated_source_cost_usd` | number | source-acquisition cost — spent at collection |
+| 15 | `estimated_analysis_cost_usd` | number | Claude analysis cost — spent after approval |
+| 16 | `approval_required` | boolean | whether human approval gates this run |
+| 17 | `approved_by` | string | operator id |
+| 18 | `approved_at` | string | ISO 8601 |
+| 19 | `result_summary` | string | post-run summary |
+| 20 | `next_action` | string | recommended next action (from `next_action_recommender`) |
+| 21 | `notes` | string | free text |
 
-**`status` values:** `new`, `source_search_done`, `needs_review`, `approved`, `processing`, `processed`,
+**`request_type` values:** `web_competitor_discovery`, `touchpoint_discovery`, `lead_search`,
+`competitor_audience_mining`, `comment_mining`, `semantic_ads_analysis`, `usp_positioning`, `outreach_draft`,
+`report_summary`, `manual_intake`, `unknown`.
+**`status` values:** `new`, `planned`, `needs_approval`, `approved`, `running`, `needs_review`, `processed`,
 `error`, `cancelled`.
 
-### B. `raw_market_records` (proposed) — raw candidate records
+### B. `raw_market_records` (proposed) — raw touchpoint/record table *(expanded)*
 
-Chosen over `lead_candidates` because it holds leads **and** competitor posts, content ideas, and market
-signals (see `LEAD_DISCOVERY_ARCHITECTURE.md` §6). One row per discovered record.
+Central, multi-purpose table. Chosen over `lead_candidates` because it holds **comments, posts, profiles,
+listings, pains, competitor activity, semantic/ad signals, and leads** — not just leads. One row per discovered
+record.
 
 | # | Column | Type | Notes |
 |---|--------|------|-------|
 | 1 | `record_id` | string | unique id, e.g. `rec_YYYYMMDD_hhmmss_N` |
-| 2 | `lead_request_id` | string | FK → `lead_discovery_requests` |
+| 2 | `agent_request_id` | string | FK → `agent_requests` |
 | 3 | `created_at` | string | ISO 8601 |
 | 4 | `source_type` | string | `classified` / `social` / `scraped_web` / `manual` |
-| 5 | `platform` | string | `avito` / `telegram` / `vk` / `instagram` / `website` / `manual` |
-| 6 | `source_url` | string | canonical source URL if any (may be empty) |
+| 5 | `platform` | string | `avito` / `dzen` / `vk` / `telegram` / `instagram` / `website` / `manual` |
+| 6 | `source_url` | string | canonical source URL if any |
 | 7 | `post_url` | string | listing/message/post URL if any |
-| 8 | `profile_url` | string | author/seller profile URL if any |
+| 8 | `profile_url` | string | author/commenter/seller profile URL if any |
 | 9 | `profile_name` | string | display name |
 | 10 | `author_handle` | string | @handle / seller id |
 | 11 | `published_at` | string | original post time if known |
 | 12 | `region_hint` | string | e.g. `Москва/МО` |
 | 13 | `service_hint` | string | e.g. `pts_loan` |
 | 14 | `query` | string | query that surfaced the record |
-| 15 | `text_context` | string | normalized record text (cap ~3500, same as web analyzer input) |
-| 16 | `contact_public` | string | deterministic public contact only (same sanitation rules as Workflow 04) |
-| 17 | `dedup_key` | string | composite key (see `market_record_registry`) |
-| 18 | `record_type_hint` | string | `lead_signal` / `competitor_post` / `content_idea` / `market_signal` / `unknown` |
-| 19 | `lead_intent_hint` | string | deterministic intent guess (no LLM) |
-| 20 | `urgency_hint` | string | deterministic urgency guess (no LLM) |
-| 21 | `candidate_type` | string | reserved (parallels `url_candidates.candidate_type`) |
-| 22 | `confidence_score` | integer | 1–100 deterministic relevance |
-| 23 | `dedup_status` | string | `unique` / `duplicate_in_batch` / `duplicate_in_registry` (advisory — analyzer/runner re-checks) |
-| 24 | `approval_status` | string | `new` / `approved` / `rejected` / `processed` / `duplicate` / `error` |
-| 25 | `approved_by` | string | operator id |
-| 26 | `approved_at` | string | ISO 8601 |
-| 27 | `estimated_analysis_cost_usd` | number | per-record Claude estimate |
-| 28 | `notes` | string | free text |
+| 15 | `text_context` | string | normalized record text (cap ~3500) |
+| 16 | `comment_text` | string | the comment itself when the record is a comment |
+| 17 | `contact_public` | string | deterministic public contact only (WF04 sanitation rules) |
+| 18 | `contact_channel` | string | where contact is reachable: `phone`/`profile`/`messenger`/`handle`/`none` |
+| 19 | `dedup_key` | string | composite key (see `market_record_registry`) |
+| 20 | `record_type_hint` | string | deterministic class guess — see record classes below |
+| 21 | `touchpoint_type` | string | `hot_lead`/`warm_touchpoint`/`cold_audience_candidate`/… (see classes) |
+| 22 | `lead_intent_hint` | string | deterministic intent guess (no LLM) |
+| 23 | `urgency_hint` | string | deterministic urgency guess (no LLM) |
+| 24 | `interest_topic` | string | what the person/post is interested in |
+| 25 | `probable_need` | string | inferred need (e.g. "займ под ПТС, срочно") |
+| 26 | `competitor_related` | boolean | record relates to a competitor |
+| 27 | `competitor_name` | string | competitor if known |
+| 28 | `semantic_keywords` | string | extracted keywords/themes (for semantic analysis) |
+| 29 | `ad_channel_hint` | string | where competitor advertises (avito/dzen/search/…) |
+| 30 | `confidence_score` | integer | 1–100 deterministic relevance |
+| 31 | `lead_temperature` | string | `hot`/`warm`/`cold`/`none` |
+| 32 | `next_action` | string | recommended next action for this record |
+| 33 | `responsible` | string | assigned owner (later) |
+| 34 | `dedup_status` | string | `unique`/`duplicate_in_batch`/`duplicate_in_registry` (advisory) |
+| 35 | `approval_status` | string | `new`/`approved`/`rejected`/`processed`/`duplicate`/`error` |
+| 36 | `approved_by` | string | operator id |
+| 37 | `approved_at` | string | ISO 8601 |
+| 38 | `estimated_analysis_cost_usd` | number | per-record Claude estimate |
+| 39 | `manager_note` | string | operator/manager annotation |
+| 40 | `notes` | string | free text |
 
-**`record_type_hint` values:** `lead_signal`, `competitor_post`, `content_idea`, `market_signal`, `unknown`.
+**Record classes (`record_type_hint` / `touchpoint_type`):** `hot_lead`, `warm_touchpoint`,
+`cold_audience_candidate`, `client_pain`, `question_objection`, `competitor_audience`, `competitor_activity`,
+`semantic_signal`, `ad_channel_signal`, `content_idea`, `market_signal`, `irrelevant`.
 **`approval_status` values:** `new`, `approved`, `rejected`, `processed`, `duplicate`, `error`.
 
 ### C. `market_record_registry` (proposed) — non-URL dedup ledger
 
-Chosen over `lead_registry` (parallels `raw_market_records`). Dedups by a **composite** `dedup_key`, because a
-URL-only key is insufficient for social/classified leads (same intent reposted across places; post IDs vs
-URLs; records with no stable URL; identity may need profile + text hash — see `LEAD_DISCOVERY_ARCHITECTURE.md`
-§7). **Separate from `url_registry`, which stays URL-only for the web pipeline.**
+Dedups by a **composite** `dedup_key`, because a URL-only key is insufficient for social/classified/comment
+records (same intent reposted across places; post IDs vs URLs; records with no stable URL; identity may need
+profile + text hash — see `LEAD_DATA_MODEL_PLAN.md`). **Separate from `url_registry`, which stays URL-only.**
 
 | # | Column | Type | Notes |
 |---|--------|------|-------|
-| 1 | `dedup_key` | string | composite: `platform + (post_url|message_id)` else `platform + profile + hash(normalized_text)` |
+| 1 | `dedup_key` | string | composite, in order: if `post_url` → `platform + post_url`; else if `source_url`+`profile_url`+`published_at` → `hash(those)`; else `platform + (author_handle|profile_url) + text_hash`. **Never domain-only.** |
 | 2 | `source_type` | string | `classified` / `social` / `scraped_web` / `manual` |
-| 3 | `platform` | string | `avito` / `telegram` / `vk` / … |
+| 3 | `platform` | string | `avito` / `dzen` / `vk` / `telegram` / … |
 | 4 | `source_url` | string | if any |
 | 5 | `post_url` | string | if any |
 | 6 | `profile_url` | string | if any |
-| 7 | `first_seen_at` | string | ISO 8601 |
-| 8 | `last_seen_at` | string | ISO 8601 |
-| 9 | `last_route` | string | last analyzer route |
-| 10 | `last_processing_status` | string | last processing status |
-| 11 | `last_entity_type` | string | last classified entity |
-| 12 | `lead_request_id` | string | last request that touched it |
-| 13 | `note` | string | free text |
+| 7 | `author_handle` | string | @handle / seller id (fallback identity) |
+| 8 | `text_hash` | string | hash of normalized record text (fallback identity) |
+| 9 | `first_seen_at` | string | ISO 8601 |
+| 10 | `last_seen_at` | string | ISO 8601 |
+| 11 | `last_route` | string | last analyzer route |
+| 12 | `last_processing_status` | string | last processing status |
+| 13 | `last_entity_type` | string | last classified entity |
+| 14 | `agent_request_id` | string | last request that touched it |
+| 15 | `note` | string | free text |
+
+### D. `agent_memory` (proposed) — project-owned structured memory
+
+See `docs/AGENT_MEMORY_PLAN.md`. Project-owned, auditable memory — **not** vague chatbot memory. Sensitive/
+personal data minimized; no memory may drive unauthorized outreach.
+
+| # | Column | Type | Notes |
+|---|--------|------|-------|
+| 1 | `memory_id` | string | unique id |
+| 2 | `created_at` | string | ISO 8601 |
+| 3 | `updated_at` | string | ISO 8601 |
+| 4 | `memory_type` | string | see values below |
+| 5 | `entity_type` | string | e.g. `competitor` / `source` / `request` / `business` |
+| 6 | `entity_key` | string | e.g. `autolombardn1.ru` / `avito` |
+| 7 | `title` | string | short label |
+| 8 | `content` | string | the remembered fact (minimized) |
+| 9 | `source` | string | where it came from (run id, DEC, operator) |
+| 10 | `confidence` | integer | 1–100 |
+| 11 | `status` | string | `active` / `archived` / `needs_review` |
+| 12 | `last_used_at` | string | ISO 8601 |
+| 13 | `notes` | string | free text |
+
+**`memory_type` values:** `business_profile`, `stakeholder_preference`, `known_competitor`, `source_quality`,
+`lead_followup`, `campaign_insight`, `decision`, `run_summary`, `constraint`.
+**`status` values:** `active`, `archived`, `needs_review`.
