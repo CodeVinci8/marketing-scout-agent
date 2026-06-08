@@ -5,6 +5,8 @@
 **Дата:** 2026-06-08
 **Статус:** ✅ ОДОБРЕН (Stage 2) как потребитель URL (ручные запуски ≤5 URL) + хардненг PTS-override и контактов (DEC-066/070). НЕ активировать.
 
+> **Время (DEC-083):** генерируемые workflow метки (`created_at`, `parsed_at`, `first_seen_at`, `last_seen_at`) и `run_id` (`firecrawl_YYYYMMDD_HHmmss`) теперь в московском времени **+03:00** через `moscowIsoNow()`/`moscowStamp()`, напр. `2026-06-08T21:55:43.425+03:00`. Источниковый `published_at` не меняется; старые UTC-`Z` строки в Sheets не переписываются.
+
 > **Test 6 (2026-06-08) — PASS.** Оператор удалил `autolombardn1.ru` из `url_registry` и запустил WF04:
 > `source_url=https://autolombardn1.ru/`, `entity_type=competitor`, **`service_type=pts_loan`**,
 > `route=monitor_queue`, `processing_status=parsed_success`, `parse_method=repaired_json`, `repair_used=true`

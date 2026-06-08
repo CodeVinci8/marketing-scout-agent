@@ -2,8 +2,12 @@
 
 **Workflow:** `n8n/workflows/07_manual_touchpoint_intake.json`
 **Имя:** `07 - Manual Touchpoint Intake`
-**Статус:** 🔧 BUILT, UNDER TEST. `active=false`. Stage 3.1 (Business Scout Agent).
+**Статус:** ✅ PASS (Stage 3.1). `active=false`. Stage 3.1 (Business Scout Agent).
 **Дата:** 2026-06-08
+
+> **Тест Stage 3.1 — PASS:** 1-й прогон — 12 уникальных → `raw_market_records` + 12 строк реестра; 2-й прогон — 12 `duplicate_in_registry`, реестр +0 (идемпотентный дедуп подтверждён).
+
+> **Время (DEC-083):** генерируемые метки (`created_at`, `parsed_at`, `first_seen_at`, `last_seen_at`) и stamp в `agent_request_id`/`record_id` теперь в московском времени **+03:00** через `moscowIsoNow()`/`moscowStamp()`. Источниковый `published_at` не меняется; старые UTC-`Z` строки не переписываются.
 
 > Это **НЕ парсер и НЕ анализатор**. Workflow только **детерминированно нормализует** вручную собранные примеры
 > в `raw_market_records` и `market_record_registry`. **Никаких внешних вызовов, никакого LLM, никакого скрейпинга.**

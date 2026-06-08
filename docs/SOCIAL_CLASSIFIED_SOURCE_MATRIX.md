@@ -9,6 +9,13 @@ external API call, no credential, no actor run.
 > Tools/actors/APIs named below are **candidates to evaluate later**, not selected, not approved, not tested.
 > "Possible APIs/actors/tools" = things to assess in a future stage, behind explicit operator approval.
 
+> **Stage 3.3 first-source decision (DEC-084, 2026-06-08):** with Stage 3.2 finalized, the **recommended first
+> real connector is the Avito/Classifieds Listing Connector** — lowest complexity, closest to the existing web/URL
+> data model, strong for competitors/offers/semantics (caveat: not for comments/audience mining). **Telegram public
+> parsing (≠ Control Bot) is second/separate feasibility; Instagram comment/audience mining is deferred; Dzen/VK
+> public feasibility follow Avito.** Still **EVALUATION ONLY — no connector built.** Full reasoning:
+> `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
+
 > **REFRAME (2026-06-08, DEC-078):** sources are evaluated for **touchpoints** (hot leads, warm touchpoints,
 > competitor audiences, comments, semantic/ad signals), not hot leads alone — the first domain of the
 > **Business Scout Agent**. Added: **Yandex Dzen** and **Competitor audience / public commenters** (public data

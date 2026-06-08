@@ -157,6 +157,14 @@ deterministic_needs_llm)`) routes obvious records **without any Claude call** (`
 for uncertain records or when enrichment is switched on. This keeps the source-agnostic analyzer cheap and stable
 by default; enrichment can be enabled per-run once Claude's JSON contract is reliable.
 
+**Stage 3.2 finalized (DEC-083/084):** the deterministic_first baseline is **APPROVED** (Test 3: `technical_errors=0`,
+Claude calls=0, routes 6/3/1/2); LLM enrichment is **optional / under test** (Test 4, 4 fixtures) with a hardened
+prompt + a Normalize safety floor (no contact/results without `contact_public`; irrelevant stays `skipped_log`;
+deterministic competitor can't be downgraded to irrelevant; hot/question without contact stays `review_queue`).
+All workflow-generated timestamps + `run_id` use **Moscow time +03:00**; `published_at` is source-provided and
+untouched. The **first real connector decision** is recorded in `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`
+(recommended: **Avito/Classifieds** first; Telegram/Instagram deferred) — **no connector built**.
+
 The **same** Market/Lead Analyzer classifies any normalized record into one of **12 touchpoint classes**:
 `hot_lead`, `warm_touchpoint`, `cold_audience_candidate`, `client_pain`, `question_objection`,
 `competitor_audience`, `competitor_activity`, `semantic_signal`, `ad_channel_signal`, `content_idea`,

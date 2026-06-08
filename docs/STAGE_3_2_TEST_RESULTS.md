@@ -124,36 +124,36 @@ Second live run of Workflow 08 v2 (deterministic-fallback patch) on the 12 Workf
 
 ---
 
-## TEST 3 — RETEST PLAN (deterministic_first) — ⏳ AWAITING OPERATOR RUN
+## TEST 3 — 2026-06-08 — ✅ PASS (deterministic_first baseline — APPROVED)
 
-1. Re-import the patched `08_touchpoint_analyzer.json` (do NOT activate); re-bind Claude + Sheets credentials
-   and the Spreadsheet ID. Keep defaults: `analysis_mode='deterministic_first'`, `llm_enrichment=false`.
-2. Record Claude balance **BEFORE**, **Execute Workflow once**, record balance **AFTER**.
-3. Fill the per-record table below from the 6 business tabs + `Final Summary Output`.
+Live run of Workflow 08 v3 in the default mode (`analysis_mode='deterministic_first'`, `llm_enrichment=false`)
+on the 12 Workflow-07 records.
 
-### Retest target (deterministic_first, enrichment OFF)
-- `technical_errors = 0`
-- **Claude calls = 0** (`Claude Primary API Request` and `Claude Repair API Request` do NOT run) → **cost delta $0**
-- `repair_used = false` for all 12
-- `deterministic_pre_route = 10`
-- `deterministic_irrelevant_skip = 2`
+### Result summary
+- ✅ **`technical_errors = 0`.**
+- ✅ **Claude calls = 0** — `Claude Primary API Request` and `Claude Repair API Request` did not run.
+  **Cost delta = $0.**
+- ✅ **`repair_used = false` for all 12.**
+- ✅ **Route distribution:** `monitor_queue = 6`, `content_queue = 3`, `review_queue = 1`, `skipped_log = 2`,
+  `results = 0`, `technical_errors = 0`.
+- ✅ **parse_method:** `deterministic_pre_route = 10`, `deterministic_irrelevant_skip = 2`.
 
 | # | platform | entity_type | route | recommended_action | lead_signal_score | parse_method | repair_used | PASS? |
 |---|----------|-------------|-------|--------------------|:----:|------|:----:|:----:|
-| 1 | avito | competitor | monitor_queue | monitor |  | deterministic_pre_route | false |  |
-| 2 | avito | competitor | monitor_queue | monitor |  | deterministic_pre_route | false |  |
-| 3 | dzen | competitor | monitor_queue | monitor |  | deterministic_pre_route | false |  |
-| 4 | dzen | competitor | monitor_queue | monitor |  | deterministic_pre_route | false |  |
-| 5 | vk | content_idea | content_queue | create_content |  | deterministic_pre_route | false |  |
-| 6 | yandex_maps | competitor | monitor_queue | monitor |  | deterministic_pre_route | false |  |
-| 7 | telegram | content_idea | content_queue | create_content |  | deterministic_pre_route | false |  |
-| 8 | telegram | content_idea | content_queue | create_content |  | deterministic_pre_route | false |  |
-| 9 | web | irrelevant | skipped_log | ignore | 1 | deterministic_irrelevant_skip | false |  |
-| 10 | dzen | irrelevant | skipped_log | ignore | 1 | deterministic_irrelevant_skip | false |  |
-| 11 | banki_forum | lead_signal | review_queue | investigate | 75 | deterministic_pre_route | false |  |
-| 12 | zoon | competitor | monitor_queue | monitor |  | deterministic_pre_route | false |  |
+| 1 | avito | competitor | monitor_queue | monitor | 1 | deterministic_pre_route | false | ✅ |
+| 2 | avito | competitor | monitor_queue | monitor | 1 | deterministic_pre_route | false | ✅ |
+| 3 | dzen | competitor | monitor_queue | monitor | 1 | deterministic_pre_route | false | ✅ |
+| 4 | dzen | competitor | monitor_queue | monitor | 1 | deterministic_pre_route | false | ✅ |
+| 5 | vk | content_idea | content_queue | create_content | 1 | deterministic_pre_route | false | ✅ |
+| 6 | yandex_maps | competitor | monitor_queue | monitor | 1 | deterministic_pre_route | false | ✅ |
+| 7 | telegram | content_idea | content_queue | create_content | 1 | deterministic_pre_route | false | ✅ |
+| 8 | telegram | content_idea | content_queue | create_content | 1 | deterministic_pre_route | false | ✅ |
+| 9 | web | irrelevant | skipped_log | ignore | 1 | deterministic_irrelevant_skip | false | ✅ |
+| 10 | dzen | irrelevant | skipped_log | ignore | 1 | deterministic_irrelevant_skip | false | ✅ |
+| 11 | banki_forum | lead_signal | review_queue | investigate | 75 | deterministic_pre_route | false | ✅ |
+| 12 | zoon | competitor | monitor_queue | monitor | 1 | deterministic_pre_route | false | ✅ |
 
-### Route distribution (Final Summary Output) — expected
+### Route distribution (Final Summary Output)
 | route | count |
 |-------|:----:|
 | results | 0 |
@@ -163,7 +163,7 @@ Second live run of Workflow 08 v2 (deterministic-fallback patch) on the 12 Workf
 | skipped_log | 2 |
 | technical_errors | 0 |
 
-### parse_method distribution — expected
+### parse_method distribution
 | parse_method | count |
 |--------------|:----:|
 | deterministic_pre_route | 10 |
@@ -173,6 +173,66 @@ Second live run of Workflow 08 v2 (deterministic-fallback patch) on the 12 Workf
 | deterministic_fallback_after_llm_fail | 0 |
 | technical_error | 0 |
 
-> **Optional enrichment check (later):** set `analysis_mode='llm_enriched'` + `llm_enrichment=true` and re-run —
-> Claude is then called for the 10 non-irrelevant records; routing/scores may be enriched but the deterministic
-> floor and fallback still apply, and `technical_errors` must stay 0.
+### Verdict
+- [x] **PASS — deterministic_first baseline APPROVED.** Routing correct, `technical_errors=0`, `repair_used=false`,
+  Claude calls=0, cost $0. This is the **approved safe baseline** for Stage 3.2. LLM enrichment remains
+  **optional / under test** (TEST 4) and must pass its small-batch test before being approved.
+
+---
+
+## TEST 4 — LLM ENRICHMENT SMALL RETEST (template) — ⏳ AWAITING OPERATOR RUN
+
+Optional. Validates the `llm_enriched` path on **4 fixture records only** before approving enrichment.
+
+### How to run (config-driven — Part C)
+1. In `Set Analyzer Config` set **`llm_enrichment_test_mode = true`** (keep `analysis_mode='deterministic_first'`,
+   `llm_enrichment=false`, `max_records=12`). `llm_test_batch_indexes` defaults to **`[1,7,11,12]`**.
+   This sends **only** those four non-irrelevant fixtures through Claude; all other records still route
+   deterministically ($0).
+2. Re-bind Claude + Sheets credentials and the Spreadsheet ID. Record Claude balance **BEFORE**,
+   **Execute Workflow once**, record balance **AFTER**.
+3. (Alternative if not using the flag) set `max_records` and the source rows so only records 1,7,11,12 are
+   eligible — but the **flag is preferred**.
+
+### Fixture records
+1. Avito competitor listing → expect `competitor` / `monitor_queue`.
+7. Telegram `@creditbrokers` source candidate → expect `content_idea` / `content_queue`.
+11. Banki forum hot pattern **without contact** → expect `lead_signal` / `review_queue` / `investigate`
+    (NOT `results`/`contact`).
+12. Zoon reviews / market signal → expect `competitor` / `monitor_queue` (review_source + competitor_related).
+
+### Pass criteria
+- `technical_errors = 0`.
+- `primary_json` **target ≥ 2 of 4**.
+- `repaired_json` allowed **≤ 2 of 4**.
+- `deterministic_fallback_after_llm_fail` allowed but **should not exceed 2 of 4**.
+- **Routes unchanged from the deterministic baseline** (1→monitor_queue, 7→content_queue, 11→review_queue,
+  12→monitor_queue).
+- `reason` / `next_action` quality **improved** vs deterministic text.
+- **No `results`/`contact` without a usable `contact_public`** (record 11 must stay `review_queue`).
+- **Record cost delta** (4 Claude primary calls + any repairs) in the table below.
+
+| # | platform | entity_type | route | parse_method | repair_used | reason improved? | cost note | PASS? |
+|---|----------|-------------|-------|------|:----:|:----:|------|:----:|
+| 1 | avito |  |  |  |  |  |  |  |
+| 7 | telegram |  |  |  |  |  |  |  |
+| 11 | banki_forum |  |  |  |  |  |  |  |
+| 12 | zoon |  |  |  |  |  |  |  |
+
+| metric | target | observed |
+|--------|--------|----------|
+| technical_errors | 0 |  |
+| primary_json | ≥2/4 |  |
+| repaired_json | ≤2/4 |  |
+| deterministic_fallback_after_llm_fail | ≤2/4 |  |
+| Claude cost delta | record it |  |
+
+> If TEST 4 passes, enrichment can be enabled per-run with `analysis_mode='llm_enriched'` + `llm_enrichment=true`
+> (full batch). Until then the **deterministic_first baseline (TEST 3) is the approved default**.
+
+---
+
+> **Timestamps (DEC-083):** from this patch on, workflow-generated timestamps (`created_at`, `parsed_at`,
+> `generated_at`, `first_seen_at`, `last_seen_at`) and `run_id` stamps are written in **explicit Moscow time
+> `+03:00`** (e.g. `2026-06-08T21:55:43.425+03:00`). Source-provided `published_at` is untouched, and existing
+> historical UTC-`Z` rows are left as-is.

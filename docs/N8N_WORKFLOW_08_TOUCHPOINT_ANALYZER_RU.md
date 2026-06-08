@@ -2,8 +2,22 @@
 
 **Workflow:** `n8n/workflows/08_touchpoint_analyzer.json`
 **Имя:** `08 - Touchpoint Analyzer`
-**Статус:** 🔧 BUILT, PATCHED (v3, DETERMINISTIC-FIRST), UNDER RETEST. `active=false`. Stage 3.2 (Business Scout Agent).
-**Дата:** 2026-06-08 (v3-патч после второго live-теста — DEC-082)
+**Статус:** ✅ DETERMINISTIC-FIRST BASELINE ОДОБРЕН (Test 3 PASS); LLM enrichment — ОПЦИОНАЛЬНО / ПОД ТЕСТОМ (Test 4). `active=false`. Stage 3.2 (Business Scout Agent).
+**Дата:** 2026-06-08 (v3 + финализация Stage 3.2 — DEC-082/083)
+
+> **Финализация Stage 3.2 (DEC-083):** детерминированный baseline **ОДОБРЕН** (Test 3: `technical_errors=0`,
+> Claude calls=0, `repair_used=false`, маршруты 6/3/1/2). **LLM enrichment** ужесточён и остаётся **опциональным,
+> требует малого теста (Test 4) до одобрения.** Дефолт неизменен: `analysis_mode='deterministic_first'`,
+> `llm_enrichment=false`.
+
+> **Время (DEC-083):** `created_at`/`parsed_at`/`generated_at` и stamp в `run_id` (`touchpoint_YYYYMMDD_HHmmss`)
+> теперь в московском времени **+03:00** через `moscowIsoNow()`/`moscowStamp()`, напр.
+> `2026-06-08T21:55:43.425+03:00`. Источниковый `published_at` не меняется; старые UTC-`Z` строки не переписываются.
+
+> **LLM-тест (Part C):** в `Set Analyzer Config` есть `llm_enrichment_test_mode` (по умолч. `false`) и
+> `llm_test_batch_indexes=[1,7,11,12]`. При `llm_enrichment_test_mode=true` через Claude идут **только** эти 4
+> не-irrelevant фикстуры (Avito-конкурент, Telegram source candidate, Banki форум hot без контакта, Zoon отзывы),
+> остальные маршрутизируются детерминированно ($0). Шаги — `docs/STAGE_3_2_TEST_RESULTS.md` Test 4.
 
 > **ПАТЧ v3 (DEC-082):** второй live-тест (v2) дал ROUTING PASS, но `primary_json=0`, `repaired_json=2`,
 > `deterministic_fallback_after_llm_fail=8`, и **стоимость Claude ≈ $0.159 за 12 записей** при том, что
@@ -48,9 +62,10 @@ fallback; поля `parse_method`, `repair_used`, `repair_status`, `processing_s
 1. **Overview Note RU / Test Instructions RU** — sticky.
 2. **Manual Start**.
 3. **Set Analyzer Config** (code) — `analysis_mode='deterministic_first'`, `llm_enrichment=false`,
-   `test_mode=true`, `max_records=12`, `analyze_statuses=[approved,new]`; `production_statuses=[approved]`
-   задокументировано (не дефолт); `run_id=touchpoint_YYYYMMDD_HHmmss`. Будущий режим: `analysis_mode='llm_enriched'`
-   + `llm_enrichment=true`.
+   `llm_enrichment_test_mode=false`, `llm_test_batch_indexes=[1,7,11,12]`, `test_mode=true`, `max_records=12`,
+   `analyze_statuses=[approved,new]`; `production_statuses=[approved]` задокументировано (не дефолт);
+   `run_id=touchpoint_YYYYMMDD_HHmmss` (МСК). Будущий режим: `analysis_mode='llm_enriched'` + `llm_enrichment=true`.
+   Малый LLM-тест: `llm_enrichment_test_mode=true` (Claude только по `llm_test_batch_indexes`).
 4. **Read raw_market_records** (Google Sheets read).
 5. **Filter & Select Records** (code) — `dedup_status=unique` + `approval_status` ∈ allowed; в test_mode
    irrelevant тоже берём (уйдут в `skipped_log`); cap `max_records`; присваивает `batch_index`.

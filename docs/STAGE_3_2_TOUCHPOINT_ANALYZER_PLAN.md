@@ -1,9 +1,15 @@
 # STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md — Stage 3.2 Plan
 
-**Status:** 🔧 BUILT, PATCHED v3 — DETERMINISTIC-FIRST (DEC-082), UNDER RETEST (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
+**Status:** ✅ DETERMINISTIC-FIRST BASELINE APPROVED (Test 3 PASS) · LLM enrichment OPTIONAL / UNDER TEST (Test 4) · MSK timestamps (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
 **Stage:** 3.2 (Touchpoint Analyzer) of the Business Scout Agent.
-**Date:** 2026-06-08 · **Decisions:** DEC-080, DEC-081, DEC-082 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
-**Test log:** `docs/STAGE_3_2_TEST_RESULTS.md`.
+**Date:** 2026-06-08 · **Decisions:** DEC-080, DEC-081, DEC-082, DEC-083 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
+**Test log:** `docs/STAGE_3_2_TEST_RESULTS.md`. **Next stage:** `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
+
+> **Stage 3.2 finalized (DEC-083):** Test 3 (deterministic_first) PASS → **baseline APPROVED**
+> (`technical_errors=0`, Claude calls=0, `repair_used=false`, routes 6/3/1/2). **LLM enrichment is optional and
+> must pass the small 4-record Test 4** (fixtures 1,7,11,12 via `llm_enrichment_test_mode=true`) before approval.
+> All workflow-generated timestamps + `run_id` now use **Moscow time +03:00**; `published_at` untouched, historical
+> UTC-`Z` rows unchanged.
 
 > **Patch v3 (DEC-082):** the second live test (v2) was ROUTING PASS but **LLM-stability FAIL + cost-efficiency
 > FAIL** — `primary_json=0`, `repaired_json=2`, `deterministic_fallback_after_llm_fail=8`, Claude cost ≈ **$0.159
@@ -93,6 +99,26 @@ competitor strength 78, review-source competitor 70, source candidate content 55
 hot-no-contact lead 75/review_queue, etc.). **Future `llm_enriched` mode** (`analysis_mode='llm_enriched'`,
 `llm_enrichment=true`) calls Claude on non-irrelevant records; the deterministic fallback still applies.
 
+### LLM enrichment hardening (DEC-083) — optional, test-gated
+- **Prompt:** primary uses only `original_record` + `deterministic_classification`; cannot browse/fetch/verify
+  URLs; no narration ("fetching/checking/analyzing"); exactly one JSON object (first `{` last `}`); no
+  markdown/prose/thinking/comments; scores 1–100; **never output `market_signal` → use `content_idea`**; **if
+  uncertain, preserve the deterministic route/action and enrich only the reason**. Repair builds JSON from
+  `original_record` + `deterministic_classification`.
+- **Parser:** concatenate `text` items, ignore thinking/signature; direct `JSON.parse` → strip fences → first
+  balanced object → first `{`…last `}`; `raw_response_preview` capped 500; thinking/signature/prose-only →
+  `non_json_non_text_or_thinking_response`.
+- **Normalize safety floor:** entity_type ∈ {lead_signal,competitor,content_idea,irrelevant} (`market_signal`→
+  `content_idea`); recommended_action/route validated to the allowed sets; scores clamp 1–100 (1–10 → ×10) with a
+  deterministic floor; **no `contact`/`results` without a usable `contact_public`**; **irrelevant stays
+  `skipped_log`**; **a deterministic `competitor` cannot be downgraded to `irrelevant`**; **hot/question without
+  contact stays `review_queue`**.
+- **Test config (Part C):** `llm_enrichment_test_mode` (default `false`) + `llm_test_batch_indexes=[1,7,11,12]`
+  send **only** the four fixtures (Avito competitor, Telegram source candidate, Banki forum hot-no-contact, Zoon
+  reviews) through Claude; everything else routes deterministically ($0). Pass criteria in
+  `docs/STAGE_3_2_TEST_RESULTS.md` Test 4 (technical_errors=0; primary_json ≥2/4; repaired_json ≤2/4;
+  deterministic_fallback ≤2/4; routes unchanged; reason/next_action improved; no contact without contact_public).
+
 ## 6b. Deterministic pre-classification + fallback (v2, DEC-081)
 
 The analyzer must **not depend fully on Claude JSON**. `Prepare Record` computes a deterministic `det`
@@ -137,9 +163,12 @@ items and ignores thinking/signature blocks; raw preview + original record are p
 - No changes to existing business-tab headers or to Workflows 04/05/06/07.
 - No Telegram Control Bot, no scheduling, no outreach.
 
-## 9. Exit criteria → Stage 3.3 / 3.4
-- The 12 Workflow-07 records route as expected (records 1→monitor_queue, 9–10→skipped_log, 11→review_queue),
-  resilient JSON/repair behaves, `technical_errors` only on genuine failures.
+## 9. Exit criteria → Stage 3.3 (DONE for the baseline)
+- ✅ The 12 Workflow-07 records route as expected (Test 3: 1–4,6,12→monitor_queue, 5,7,8→content_queue,
+  9–10→skipped_log, 11→review_queue), `technical_errors=0`, Claude calls=0, `repair_used=false` →
+  **deterministic_first baseline APPROVED**.
+- ⏳ **LLM enrichment** awaits the small 4-record Test 4 before approval (optional).
 - Record outcomes + Claude cost in `docs/STAGE_3_2_TEST_RESULTS.md`.
-- Then **Stage 3.3 — analyzer/scoring hardening** (calibrate lead/temperature/next_action on real touchpoints)
-  and **Stage 3.4 — E2E** (request → connector → records → approval → analyzer → routing).
+- **Next — Stage 3.3 first real source connector decision:** see `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`
+  (recommended first connector = **Avito/Classifieds Listing**, DEC-084; Telegram/Instagram deferred). Connector
+  build only after explicit approval + feasibility. The analyzer/scoring hardening + E2E follow on real records.

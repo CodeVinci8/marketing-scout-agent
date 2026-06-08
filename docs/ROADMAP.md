@@ -154,17 +154,19 @@ the approved path until Stage 2.4 is built and live-validated.
   VK/Telegram/competitor/forum/reviews + irrelevant + hot-lead control) → `raw_market_records` (40) +
   `market_record_registry` (15) + `agent_requests` (21). Zero source cost/risk, no LLM, no scraping; `agent_memory`
   not written. Next: import/bind/run/verify, then build the Touchpoint Analyzer.
-- **3.3 — First source connector** 📋 PLANNED: build the chosen connector (Avito/Classifieds likely first,
-  pending feasibility). Connectors never call Claude; human approval is the spend gate.
-- **3.3 — Touchpoint Analyzer** 🔧 **BUILT, PATCHED v3 DETERMINISTIC-FIRST, UNDER RETEST (2026-06-08, DEC-080/081/082)**:
+- **3.2 — Touchpoint Analyzer** ✅ **DETERMINISTIC-FIRST BASELINE APPROVED (2026-06-08, DEC-080/081/082/083)**:
   `Workflow 08 — Touchpoint Analyzer` (`active=false`) reads approved/unique `raw_market_records`, classifies
   **deterministically from intake hints**, and routes to the 6 business tabs (existing **35-column** schema) via
-  dynamic sheet. TEST 1 partially failed (prose, not JSON); v2 added a deterministic fallback (DEC-081). **TEST 2
-  was ROUTING PASS but LLM-stability + cost-efficiency FAIL** (`primary_json=0`, ≈$0.159 Claude for 12 records).
-  **Patched v3 (DEC-082):** `analysis_mode='deterministic_first'`, `llm_enrichment=false` (default) — obvious
-  records route **without Claude** (`deterministic_pre_route` / `deterministic_irrelevant_skip`, $0); Claude is
-  optional enrichment, off by default. The task labels this **Stage 3.2**. Next: re-import/bind/run/verify →
-  `docs/STAGE_3_2_TEST_RESULTS.md` (TEST 3, expect Claude calls=0 / $0 / technical_errors=0).
+  dynamic sheet. TEST 1 partially failed; v2 added a deterministic fallback (DEC-081); v3 made it deterministic-first
+  (DEC-082). **TEST 3 PASS** (Claude calls=0 / $0, `repair_used=false`, routes 6/3/1/2, `technical_errors=0`) →
+  **baseline approved**. **LLM enrichment is optional / under test** (Test 4, 4 fixtures via
+  `llm_enrichment_test_mode`) and hardened (no browse/fetch, strict JSON, deterministic safety floor). **Timestamps
+  now Moscow `+03:00`** (DEC-083). Test log: `docs/STAGE_3_2_TEST_RESULTS.md`.
+- **3.3 — First real source connector (DECISION)** 📐 **DECIDED 2026-06-08 (DEC-084), NOT BUILT**: recommended first
+  connector = **Avito/Classifieds Listing Connector** (lowest complexity, matches the web/URL data model; caveat —
+  competitor/offer/semantic source, not audience/comment mining). Telegram public parsing (≠ Control Bot) and
+  Instagram comment/audience mining **deferred to feasibility stages**. Connectors never call Claude; human approval
+  is the spend gate. Build only after explicit approval + feasibility. Plan: `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
 - **3.4 — Analyzer/scoring hardening for touchpoints/leads** 📋 PLANNED (after 3.3 test): calibrate scoring
   (`lead_signal_score`/`urgency_score`/`contactability_score`/`region_score`/`collateral_fit_score`) +
   `lead_temperature` + `next_action` on real touchpoint outcomes.

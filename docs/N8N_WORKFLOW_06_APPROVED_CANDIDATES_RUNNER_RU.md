@@ -4,6 +4,8 @@
 **Имя в n8n:** `06 - Approved Candidates Runner`
 **Статус:** ✅ ОДОБРЕН (Stage 2, с ограничениями) — registry recheck (DEC-065) + доменное разнообразие (DEC-066) + режимы `runner_mode` (DEC-072), `active=false`. Передача в WF04 — **ручная** (`manual_handoff_to_workflow_04`); авто-handoff отложен в Stage 2.4 (`docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md`). Результаты: `docs/STAGE_2_FINAL_TEST_RESULTS.md`. НЕ активировать.
 
+> **Время (DEC-083):** генерируемые метки (`now`) и `run_id` (`approved_run_YYYYMMDD_HHmmss`) теперь в московском времени **+03:00** через `moscowIsoNow()`/`moscowStamp()`. Источниковый `approved_at` (ставит оператор) и `published_at` не меняются; старые UTC-`Z` строки не переписываются.
+
 > **Результаты тестов (2026-06-08).** Test 4 (registry recheck) — ✅ PASS: после возврата уже обработанных URL
 > в `approved` прогон дал `selected_count=0`, `skipped_count=18` (`registry_recheck_duplicate`,
 > `already_processed`, `duplicate_status`, `approval_status_not_approved`). Режимы `first_pass_domain_diversity`
