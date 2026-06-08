@@ -5,6 +5,24 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Stage 3.2 BUILT: Workflow 08 Touchpoint Analyzer (DEC-080)
+
+**Agent role:** project-engineer
+**Session goal:** Build the source-agnostic Touchpoint Analyzer — read `raw_market_records`, analyze via Claude with the Stage 2 resilient JSON/repair pattern, route into the 6 business tabs (35 cols). Reuse, not redesign.
+
+**Built:** `n8n/workflows/08_touchpoint_analyzer.json` — `08 - Touchpoint Analyzer`, `active=false`, **20 nodes**, JSON valid (`json.tool` PASS).
+- Flow: Manual Start → Set Analyzer Config (test_mode=true, max_records=12, analyze_statuses=[approved,new], production_statuses=[approved] documented) → Read raw_market_records → Filter & Select (dedup_status=unique + approval_status allowed; test_mode includes irrelevant) → Loop Over Items (splitInBatches/1) → Prepare Record → **IF Irrelevant?** {true → Build Skip Row (deterministic skipped_log, **no Claude, $0**)} {false → Build Primary Claude Request → Claude Primary → Parse Primary JSON → **IF Primary Parse OK?** {true → Normalize+Route} {false → Build Repair Request → Claude Repair → Parse Repaired JSON (→ technical_errors fallback) → Normalize+Route}} → Append to Dynamic Route Sheet (`Sheet Name={{ $json.route }}`) → loop back; done branch → Final Summary Output.
+- **Reused Stage 2 resilient pattern** verbatim (balanced-brace JSON extract, fence-strip, quote-normalize; `parse_method`/`repair_used`/`repair_status`/`processing_status`/`raw_response_preview`; route validation; `technical_errors` fallback). Claude HTTP nodes = same as Stage 2 (`https://aiprimetech.io/v1/messages`, header `anthropic-version`, credential `Claude API - Marketing Scout`); primary max_tokens=1200/temp=0.2, repair max_tokens=700/temp=0.
+- **Touchpoint→35-schema mapping** (no header/sheet changes): hot_lead/warm→lead_signal; competitor_activity/audience→competitor→monitor_queue; pain/question/semantic/ad/content→content_idea(or market_signal)→content_queue; irrelevant→skipped_log. recommended_action (+add_to_semantics) drives route. **Encoded safeguard:** contact→results needs lead_signal+score≥70+usable contact (forum record 11 → review_queue, not auto-contact).
+- **Verified:** JSON VALID; `active=false`; node types = manualTrigger/code(10)/googleSheets(2)/splitInBatches/if(2)/httpRequest(2)/stickyNote(2); 0 real key patterns; 3× `PASTE_SPREADSHEET_ID_HERE` (2 GS nodes + 1 sticky-note mention); apify/firecrawl only in sticky-note docs; 2 Claude HTTP urls; dynamic route append present; **35 business fields on all 3 output blocks** (Build Skip Row + both Normalize+Route returns); repair layer + technical_errors fallback present; no tool_use; no KEY=VALUE. Workflows 04/05/06/07 untouched.
+
+**Docs created:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, `docs/STAGE_3_2_TEST_RESULTS.md` (empty template).
+**Docs updated:** `LEAD_DISCOVERY_ARCHITECTURE.md`, `LEAD_DATA_MODEL_PLAN.md`, `TABLE_SCHEMA.md`, `DECISIONS.md` (**DEC-080**), `NEXT_ACTIONS.md`, `COSTS_AND_LIMITS.md`, `AGENT_CAPABILITIES.md`, `ROADMAP.md`, `core/hot/recent.md`.
+
+**Next operator action:** import WF08 (don't activate) → bind Claude + Sheets credentials + Spreadsheet ID → record Claude balance → run once on the 12 WF07 records → verify routing (1→monitor_queue, 9–10→skipped_log $0, 11→review_queue) + fill `STAGE_3_2_TEST_RESULTS.md` → then Stage 3.3 scoring hardening. No source parser yet.
+
+---
+
 ## 2026-06-08 — Stage 3.1 BUILT: Workflow 07 Manual Touchpoint Intake (DEC-079)
 
 **Agent role:** project-engineer

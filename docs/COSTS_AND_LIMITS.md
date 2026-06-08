@@ -67,6 +67,17 @@ Three cost axes with different drivers and spend gates — tracked **separately*
   batch) is **planning-only** — a forward estimate for the future Touchpoint Analyzer, **not** money spent.
 - Net spend of a Workflow 07 run: **0**.
 
+### Stage 3.2 — Touchpoint Analyzer (Workflow 08) cost
+- **First Claude spend in Stage 3.** Each **non-irrelevant** record = one primary Claude call (`max_tokens=1200`,
+  `temperature=0.2`); a **repair** call (`max_tokens=700`, `temperature=0`) happens **only** on a primary
+  parse failure. **Irrelevant records cost $0** — they are skipped deterministically before any Claude call.
+- Bounded by `max_records=12`. For the 12 Workflow-07 fixtures: ~10 non-irrelevant analyzed, 2 irrelevant free.
+  Using the Stage 2 measured ~$0.0115 per short record as a rough anchor, a full 12-record run is on the order of
+  **~$0.10–0.20** (record texts are short); **measure exactly** (balance before/after) and log in
+  `docs/STAGE_3_2_TEST_RESULTS.md`.
+- **Source-acquisition cost stays 0** at this stage (records came from manual intake; no scraping/Apify/Firecrawl).
+- No scheduling/automation — manual, bounded runs only.
+
 ---
 
 ## Estimate Table

@@ -5,6 +5,20 @@ Most recent first.
 
 ---
 
+## DEC-080 — Stage 3.2 Touchpoint Analyzer Reuses the Stage 2 Resilient Analyzer and the Existing 35-Column Schema
+
+**Date:** 2026-06-08
+**Context:** With Stage 3.1 records landing in `raw_market_records`, the analyzer could be a new bespoke design or a reuse of the proven Stage 2 resilient analyzer (Workflow 04). The touchpoint model also has 12 record classes, but the business tabs use a fixed 35-column schema with a 5-value `entity_type` enum.
+**Decision:** Build **`Workflow 08 — Touchpoint Analyzer`** (`active=false`) by **reusing the Stage 2 resilient pattern** (primary JSON → repair formatter → `technical_errors` fallback; `parse_method`/`repair_used`/`repair_status`/`processing_status`/`raw_response_preview`/route validation) and **mapping the 12 touchpoint classes onto the existing 35-column schema** rather than adding columns or sheets:
+- hot_lead/warm_touchpoint → `entity_type=lead_signal`; competitor_activity/competitor_audience → `competitor`; client_pain/question_objection/semantic_signal/ad_channel_signal/content_idea → `content_idea` (or `market_signal`); irrelevant → `irrelevant`.
+- Route is driven by `recommended_action` (extended with `add_to_semantics`→content_queue) reconciled with `entity_type`; output is appended via a **dynamic** `Sheet Name = {{ $json.route }}` to the six business tabs. **No business-tab headers change.**
+- **Encoded safeguards (not just prompted):** `contact`→`results` requires `lead_signal` + `lead_signal_score>=70` + a usable public contact, so the forum hot-pattern record (record 11) with no direct contact routes to `review_queue`, not auto-contact; Avito competitor listings → `monitor_queue`; Dzen/VK/Telegram source candidates → review/content, never `results`; **irrelevant is skipped deterministically before any Claude call ($0)**; invalid route → `technical_errors`.
+- Source-agnostic: one analyzer for Avito/Dzen/VK/Telegram/Yandex Maps/forum/review/irrelevant inputs. It reads `raw_market_records` and writes only the business tabs (not `agent_requests`/`market_record_registry`/`agent_memory`). No scraping, no Apify/Firecrawl.
+**Reason:** the resilient analyzer already solves output-contract instability; reusing it (and the stable 35-column schema) minimizes risk and keeps Stage 2 tabs/dashboards intact while extending coverage to social/classified touchpoints. Scoring/temperature calibration is deferred to Stage 3.3.
+**Files:** `n8n/workflows/08_touchpoint_analyzer.json`, `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, `docs/STAGE_3_2_TEST_RESULTS.md`, `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/TABLE_SCHEMA.md`.
+
+---
+
 ## DEC-079 — Stage 3.1 Starts With Manual Touchpoint Intake, Not the Avito Parser
 
 **Date:** 2026-06-08

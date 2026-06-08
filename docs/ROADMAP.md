@@ -156,9 +156,14 @@ the approved path until Stage 2.4 is built and live-validated.
   not written. Next: import/bind/run/verify, then build the Touchpoint Analyzer.
 - **3.3 — First source connector** 📋 PLANNED: build the chosen connector (Avito/Classifieds likely first,
   pending feasibility). Connectors never call Claude; human approval is the spend gate.
-- **3.4 — Analyzer hardening for touchpoints/leads** 📋 PLANNED: source-agnostic analyzer over the 12 classes;
-  harden scoring (`lead_signal_score`/`urgency_score`/`contactability_score`/`region_score`/`collateral_fit_score`)
-  + `lead_temperature` + `next_action`. Routes to the 6 business tabs.
+- **3.3 — Touchpoint Analyzer** 🔧 **BUILT, UNDER TEST (2026-06-08, DEC-080)**: `Workflow 08 — Touchpoint
+  Analyzer` (`active=false`) reads approved/unique `raw_market_records`, analyzes via Claude (Stage 2 resilient
+  JSON/repair), maps 12 touchpoint classes onto the existing **35-column** schema, routes to the 6 business tabs
+  via dynamic sheet. Irrelevant skipped before Claude ($0). The task labels this **Stage 3.2**. Next:
+  import/bind/run/verify → `docs/STAGE_3_2_TEST_RESULTS.md`.
+- **3.4 — Analyzer/scoring hardening for touchpoints/leads** 📋 PLANNED (after 3.3 test): calibrate scoring
+  (`lead_signal_score`/`urgency_score`/`contactability_score`/`region_score`/`collateral_fit_score`) +
+  `lead_temperature` + `next_action` on real touchpoint outcomes.
 - **3.5 — E2E touchpoint pipeline** 📋 PLANNED: `agent_request` → connector → `raw_market_records` → dedup →
   approval → analyzer → routed output; source vs analysis cost measured separately.
 

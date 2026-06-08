@@ -4,7 +4,33 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-08) — Stage 3.1 Manual Touchpoint Intake BUILT → import, bind, run, verify
+## CURRENT PRIORITY (2026-06-08) — Stage 3.2 Touchpoint Analyzer BUILT → import, bind, run, verify routing
+
+`Workflow 08 — Touchpoint Analyzer` is **built** (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`,
+JSON valid; DEC-080). It reads approved/unique `raw_market_records`, analyzes each with Claude (resilient
+JSON/repair), and routes into the 6 business tabs (35 cols) via dynamic `Sheet Name = {{ $json.route }}`.
+**Irrelevant skipped before Claude ($0). No scraping, no Apify/Firecrawl; reads raw_market_records, writes only
+business tabs.**
+
+**Next, in order:**
+1. [ ] **Import Workflow 08** into n8n (do NOT activate).
+2. [ ] **Bind credentials:** Claude Primary + Claude Repair → `Claude API - Marketing Scout`; Read
+   raw_market_records + Append to Dynamic Route Sheet → `Google Sheets - Marketing Scout Service Account`.
+3. [ ] **Replace `PASTE_SPREADSHEET_ID_HERE`** with the real Spreadsheet ID on the 2 Google Sheets nodes.
+4. [ ] **Record Claude balance BEFORE**, then **Execute Workflow once** (test_mode: approved+new, incl. 2 irrelevant).
+5. [ ] **Verify routing** and fill `docs/STAGE_3_2_TEST_RESULTS.md`: record 1 (Avito)→`monitor_queue`; records
+   9–10 (irrelevant)→`skipped_log` ($0, no Claude); record 11 (forum hot-pattern, no contact)→`review_queue`
+   (investigate, NOT auto-contact); reviews→`content_queue`; check `technical_errors`=0 unless a real failure.
+6. [ ] **Record Claude balance AFTER** (cost ≈ 10 non-irrelevant records).
+7. [ ] **Then Stage 3.3 — analyzer/scoring hardening** (calibrate lead/temperature/next_action on real
+   touchpoints) and **Stage 3.4 — E2E**. **Do NOT build any source parser yet.**
+
+> Still NOT built/approved: Avito/Dzen/VK/Telegram/Instagram parsers, competitor-audience scraping, Telegram
+> Control Bot, outreach/autocall, scheduled scraping.
+
+---
+
+## PRIOR PRIORITY (2026-06-08) — Stage 3.1 Manual Touchpoint Intake BUILT → import, bind, run, verify
 
 `Workflow 07 — Manual Touchpoint Intake` is **built** (`n8n/workflows/07_manual_touchpoint_intake.json`,
 `active=false`, JSON valid; DEC-079). It normalizes 12 manually-provided mixed-source examples into

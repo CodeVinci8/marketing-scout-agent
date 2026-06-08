@@ -303,6 +303,12 @@ These fields were requested by the operator (confirmed 2026-06-05). Full mapping
 > sheets (6 business tabs, `url_registry`, `url_candidates`, `discovery_requests`) are **unchanged**;
 > `url_registry` semantics are **not** altered.
 >
+> **Stage 3.2 (Workflow 08 — Touchpoint Analyzer, `active=false`):** reads `raw_market_records` and writes the
+> existing **35-column** business tabs (`results`/`review_queue`/`monitor_queue`/`content_queue`/`skipped_log`/
+> `technical_errors`) via a dynamic route. **No business-tab headers change**; it does not write `agent_requests`,
+> `market_record_registry`, or `agent_memory`. The 6 business tabs keep their 35-column schema (see "Production
+> columns" above).
+>
 > **Supersession (DEC-078):** the earlier Stage-3 `lead_discovery_requests` is **generalized into `agent_requests`**
 > (a `request_type` field covers lead search *and* every other tool). We do **not** keep both — one request
 > ledger, no duplicate request tables. `raw_market_records` and `market_record_registry` are kept (records are

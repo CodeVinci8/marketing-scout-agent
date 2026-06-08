@@ -132,7 +132,15 @@ Planned connectors (all design-only here; see `LEAD_SOURCE_CONNECTORS_PLAN.md`):
 - **Yandex / Search Connector** (a *discovery* layer, like Workflow 05, not a lead analyzer)
 - **Manual Records Intake** (operator pastes records — the zero-risk bootstrap path)
 
-### 4.2 Source-agnostic analyzer
+### 4.2 Source-agnostic analyzer  *(BUILT — Stage 3.2, Workflow 08)*
+**Implemented as `Workflow 08 — Touchpoint Analyzer`** (`active=false`, BUILT/UNDER TEST). It reads
+approved/unique `raw_market_records`, analyzes each record with Claude using the **Stage 2 resilient pattern**
+(primary JSON → repair formatter → `technical_errors` fallback; `parse_method`/`repair_used`/`repair_status`/
+`processing_status`/route validation), maps touchpoints onto the existing **35-column** `entity_type` schema,
+and appends to the six business tabs via a **dynamic route** (`Sheet Name = {{ $json.route }}`). Irrelevant
+records are skipped **deterministically before any Claude call** ($0). It does **not** scrape or parse sources.
+See `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md` and `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`.
+
 The **same** Market/Lead Analyzer classifies any normalized record into one of **12 touchpoint classes**:
 `hot_lead`, `warm_touchpoint`, `cold_audience_candidate`, `client_pain`, `question_objection`,
 `competitor_audience`, `competitor_activity`, `semantic_signal`, `ad_channel_signal`, `content_idea`,

@@ -110,6 +110,15 @@ the 40-column record shape, the composite `dedup_key`, and registry dedup with h
 no scraping, no external API.** See `docs/STAGE_3_1_MANUAL_TOUCHPOINT_INTAKE_PLAN.md` and
 `docs/N8N_WORKFLOW_07_MANUAL_TOUCHPOINT_INTAKE_RU.md`. `agent_memory` is **not** written yet.
 
+## 4b. Stage 3.2 — analyzer consumes the data model (BUILT, UNDER TEST)
+
+`Workflow 08 — Touchpoint Analyzer` (`active=false`) is the **first consumer** of `raw_market_records`. It reads
+`dedup_status=unique` records whose `approval_status` is allowed, analyzes them (Claude, resilient JSON/repair),
+and writes the existing **35-column** business tabs (`results`/`review_queue`/`monitor_queue`/`content_queue`/
+`skipped_log`/`technical_errors`). It does **not** modify `raw_market_records`, `market_record_registry`,
+`agent_requests`, or `agent_memory`. The connector→record→analyzer→route contract is now exercised end to end on
+manually-provided records. See `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`.
+
 ## 5. Invariants
 
 - `raw_market_records` is **separate** from `url_candidates`; `market_record_registry` is **separate** from

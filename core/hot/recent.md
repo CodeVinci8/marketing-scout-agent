@@ -4,6 +4,20 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Stage 3.2 BUILT: Workflow 08 Touchpoint Analyzer (DEC-080)
+
+**What was done (source-agnostic analyzer; reuses Stage 2 resilient pattern):**
+- **Built `n8n/workflows/08_touchpoint_analyzer.json`** — `08 - Touchpoint Analyzer`, `active=false`, **20 nodes**, JSON VALID.
+- Flow: Manual Start → Set Analyzer Config (test_mode=true, max_records=12, statuses=[approved,new]) → Read raw_market_records → Filter & Select (unique + allowed status; test_mode keeps irrelevant) → Loop(1) → Prepare Record → **IF Irrelevant?** {true→deterministic skipped_log, **no Claude $0**} {false→Claude Primary→Parse→IF parse ok→Normalize+Route; else→Repair→Parse Repaired→(technical_errors fallback)→Normalize+Route} → Append Dynamic Route Sheet (`{{ $json.route }}`)→loop; done→Final Summary.
+- **Reused Stage 2 resilient** (primary JSON→repair formatter→technical_errors fallback; parse_method/repair_used/repair_status/route validation). Claude HTTP = same creds/url as Stage 2 (`Claude API - Marketing Scout`); primary 1200/0.2, repair 700/0.
+- **Touchpoint→35-col mapping** (no header changes): hot/warm→lead_signal; competitor→monitor_queue; pain/question/semantic/ad/content→content_queue; irrelevant→skipped_log. **Safeguard:** contact→results needs lead_signal+score≥70+usable contact ⇒ forum record 11 → review_queue (not auto-contact).
+- **Verified:** JSON VALID; active=false; 0 real keys; 3× PASTE_SPREADSHEET_ID_HERE (2 GS nodes + sticky); apify/firecrawl only in docs; 2 Claude HTTP; dynamic route append; **35 business fields on all output paths**; repair + technical_errors fallback; no tool_use/KEY=VALUE. WF04/05/06/07 untouched.
+- **Docs:** new `N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, `STAGE_3_2_TEST_RESULTS.md` (template); updated LEAD_DISCOVERY_ARCHITECTURE, LEAD_DATA_MODEL_PLAN, TABLE_SCHEMA, DECISIONS (DEC-080), NEXT_ACTIONS, COSTS, AGENT_CAPABILITIES, ROADMAP, AGENT_LOG.
+
+**Next operator action:** import WF08 (don't activate) → bind Claude + Sheets creds + Spreadsheet ID → record Claude balance → run once on the 12 WF07 records → verify (1→monitor_queue, 9–10→skipped_log $0, 11→review_queue) + fill `STAGE_3_2_TEST_RESULTS.md` → then Stage 3.3 scoring hardening. No source parser yet.
+
+---
+
 ## Session: 2026-06-08 — Stage 3.1 BUILT: Workflow 07 Manual Touchpoint Intake (DEC-079)
 
 **What was done (first Stage 3 build — NO LLM, NO scraping, NO external API, 0 spend):**
