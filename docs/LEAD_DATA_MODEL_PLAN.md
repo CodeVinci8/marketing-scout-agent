@@ -119,6 +119,12 @@ and writes the existing **35-column** business tabs (`results`/`review_queue`/`m
 `agent_requests`, or `agent_memory`. The connector→record→analyzer→route contract is now exercised end to end on
 manually-provided records. See `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`.
 
+**Hints power deterministic routing (DEC-081).** The hint columns (`record_type_hint`, `touchpoint_type`,
+`competitor_related`, `lead_temperature`, `lead_intent_hint`, `urgency_hint`, `service_hint`, `competitor_name`,
+`probable_need`, `contact_public`) are not only triage aids — Workflow 08 uses them to **deterministically
+classify and route every record** when Claude fails to return valid JSON. This makes the analyzer resilient to
+gateway prose/thinking output and confirms the intake hints carry enough signal to route without an LLM.
+
 ## 5. Invariants
 
 - `raw_market_records` is **separate** from `url_candidates`; `market_record_registry` is **separate** from

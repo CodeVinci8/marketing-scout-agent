@@ -4,6 +4,19 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Stage 3.2 PATCHED v2: Workflow 08 deterministic fallback (DEC-081)
+
+**What was done (patch after failed first live test):**
+- **Root cause:** gateway returns prose/thinking/signature instead of JSON (often no `text` item) → primary+repair failed → classifiable records (2,3,4,5,7,11,12) went to `technical_errors`; record 11 (forum lead control) wrongly → technical_errors.
+- **Patched `08_touchpoint_analyzer.json` (v2, 20 nodes, JSON VALID, active=false):** `Prepare Record` now computes a **deterministic classification (`det`)** from intake hints for every record; `Parse Repaired JSON` falls back to a `det`-based 35-field routed row (`deterministic_fallback_after_llm_fail`) instead of technical_errors; `technical_errors` only if `det` has no valid route or Sheets/API error. Prompts hardened (strict JSON, "first char {, last }"); parser concatenates all text items + ignores thinking/signature.
+- **Det routing rules:** irrelevant→skipped_log(pre-Claude $0); competitor_activity/competitor_related→monitor_queue; market_signal+source_candidate→content_queue; review_source→monitor_queue(if competitor_related) else content_queue; question_objection/hot/high→lead_signal (results+contact if usable contact+direct need, else review_queue/investigate score≥70); default→review_queue.
+- **Verified:** JSON VALID; active=false; 0 real keys; dynamic route append; 35 fields on all paths; deterministic_irrelevant_skip + deterministic_fallback_after_llm_fail + technical_errors all present; no tool_use/KEY=VALUE. **Logic dry-run on 12 fixtures → 0 technical_errors**; 1–4,6,12→monitor_queue; 5,7,8→content_queue; 9–10→skipped_log; 11→review_queue/lead_signal/investigate/75. WF04/05/06/07 untouched.
+- **Docs:** STAGE_3_2_TEST_RESULTS (TEST 1 PARTIAL FAIL + dry-run + TEST 2 plan), WF08 guide, plan, architecture, data model, DECISIONS (DEC-081), NEXT_ACTIONS, COSTS, AGENT_CAPABILITIES, ROADMAP, AGENT_LOG.
+
+**Next operator action:** re-import patched WF08 → bind creds + Spreadsheet ID → record Claude balance → run once → fill `STAGE_3_2_TEST_RESULTS.md` TEST 2 (expect technical_errors=0; record 11→review_queue) → then Stage 3.3. No source parser yet.
+
+---
+
 ## Session: 2026-06-08 — Stage 3.2 BUILT: Workflow 08 Touchpoint Analyzer (DEC-080)
 
 **What was done (source-agnostic analyzer; reuses Stage 2 resilient pattern):**

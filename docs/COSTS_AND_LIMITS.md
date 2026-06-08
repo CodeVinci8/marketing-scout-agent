@@ -78,6 +78,15 @@ Three cost axes with different drivers and spend gates — tracked **separately*
 - **Source-acquisition cost stays 0** at this stage (records came from manual intake; no scraping/Apify/Firecrawl).
 - No scheduling/automation — manual, bounded runs only.
 
+### Stage 3.2 patch v2 (DEC-081) — cost impact
+- **No extra Claude cost from the deterministic fallback** — the fallback runs **only after** the primary (and
+  repair) calls already happened; it adds **zero** new API calls. It changes only *where the record routes*
+  (a hint-based business tab instead of `technical_errors`).
+- A failed-LLM record still costs the primary call (and the repair call if reached) — same as before; the patch
+  recovers the *routing*, not the spend.
+- Irrelevant records remain $0 (skipped before Claude). Cost ceiling unchanged: ≤12 records/run, ≈10 incurring
+  a primary call for the fixtures.
+
 ---
 
 ## Estimate Table

@@ -141,6 +141,13 @@ and appends to the six business tabs via a **dynamic route** (`Sheet Name = {{ $
 records are skipped **deterministically before any Claude call** ($0). It does **not** scrape or parse sources.
 See `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md` and `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`.
 
+**Resilience (DEC-081):** the analyzer does **not depend fully on Claude JSON**. The gateway often returns
+prose/thinking/signature instead of JSON; so a **deterministic classification from `raw_market_records` hints**
+is computed for every record and used as a **fallback after LLM+repair failure**
+(`parse_method=deterministic_fallback_after_llm_fail`). `technical_errors` is reserved for records that are
+unclassifiable even by hints, or Sheets/API failures — a Claude parse failure alone never sends a classifiable
+record there.
+
 The **same** Market/Lead Analyzer classifies any normalized record into one of **12 touchpoint classes**:
 `hot_lead`, `warm_touchpoint`, `cold_audience_candidate`, `client_pain`, `question_objection`,
 `competitor_audience`, `competitor_activity`, `semantic_signal`, `ad_channel_signal`, `content_idea`,

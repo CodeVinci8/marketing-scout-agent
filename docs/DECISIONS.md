@@ -5,6 +5,21 @@ Most recent first.
 
 ---
 
+## DEC-081 — Workflow 08 Uses a Deterministic Fallback After LLM/Repair Failure; Claude JSON Failure Alone Must Not Send Classifiable Records to technical_errors
+
+**Date:** 2026-06-08
+**Context:** Workflow 08's first live test partially failed (`docs/STAGE_3_2_TEST_RESULTS.md`, TEST 1). The Claude gateway frequently returns prose / extended-thinking / signature content instead of strict JSON — sometimes with **no `text` content item at all** — so both primary and repair parses failed, and classifiable records (records 2,3,4,5,7,11,12) dropped to `technical_errors`. The forum positive-control record 11 (a clear lead) wrongly landed in `technical_errors` instead of `review_queue`.
+**Decision:** Workflow 08 must **not depend fully on Claude JSON**. Patch v2:
+- **Deterministic pre-classification (`det`) for every record** in `Prepare Record`, derived from the `raw_market_records` hints (`record_type_hint`, `touchpoint_type`, `competitor_related`, `lead_temperature`/`lead_intent_hint`/`urgency_hint`, `service_hint`, `competitor_name`, `contact_public`, `source_url`/`profile_name`). Rules: irrelevant→skipped_log (pre-Claude, $0); competitor_activity / competitor_related+competitor touchpoint→competitor/monitor_queue; market_signal+source_candidate→content_idea/content_queue; review_source→monitor_queue (competitor_related) or content_queue; question_objection/hot/high-intent/high-urgency→lead_signal (results+contact if usable contact+direct need, else review_queue/investigate, score≥70); default→review_queue.
+- **Deterministic fallback after LLM+repair failure** (`parse_method=deterministic_fallback_after_llm_fail`, `repair_status=failed_fallback`) builds a routed 35-field row from `det`. **`technical_errors` is reserved** for records with no valid `det` route, an invalid route after normalization, or Sheets/API failure. **A Claude parse failure alone never sends a classifiable record to `technical_errors`.**
+- **Prompt + parser hardening:** primary & repair prompts demand strict JSON only (no prose/markdown/thinking; "Return exactly one JSON object. First char `{`, last `}`"); the repair prompt builds JSON from `original_record` when the raw response has no usable JSON; the parser concatenates **all** `text` content items and ignores thinking/signature blocks; raw preview + original record preserved on failure.
+- **parse_method** values: `primary_json`, `repaired_json`, `deterministic_irrelevant_skip`, `deterministic_fallback_after_llm_fail`, `deterministic_pre_route`, `technical_error`. **repair_status**: `''`, `success`, `failed_fallback`, `failed`.
+- Preserved from v1: deterministic irrelevant skip (no Claude, $0), dynamic route append, 35-field output on every path, resilient primary→repair structure.
+**Reason:** the gateway's non-JSON output is the dominant failure mode; the intake hints already carry enough signal to classify/route deterministically, so the analyzer should degrade gracefully to a hint-based route rather than discard usable records. Logic dry-run on the 12 fixtures: **0 technical_errors**, record 11 → `review_queue`/`lead_signal`/`investigate`/score 75.
+**Files:** `n8n/workflows/08_touchpoint_analyzer.json`, `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, `docs/STAGE_3_2_TEST_RESULTS.md`, `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_DATA_MODEL_PLAN.md`.
+
+---
+
 ## DEC-080 — Stage 3.2 Touchpoint Analyzer Reuses the Stage 2 Resilient Analyzer and the Existing 35-Column Schema
 
 **Date:** 2026-06-08

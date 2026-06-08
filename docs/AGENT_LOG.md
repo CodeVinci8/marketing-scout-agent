@@ -5,6 +5,28 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Stage 3.2 PATCHED v2: Workflow 08 deterministic fallback after failed live test (DEC-081)
+
+**Agent role:** project-engineer
+**Session goal:** Patch Workflow 08 after its first live test partially failed — make routing resilient to the gateway returning prose/thinking instead of JSON, so classifiable records stop landing in `technical_errors`.
+
+**Root cause:** the gateway frequently returns extended-thinking/prose/signature content (often **no `text` item**), so primary+repair both failed and classifiable records (2,3,4,5,7,11,12) dropped to `technical_errors`; the forum positive-control (record 11) wrongly hit `technical_errors` instead of `review_queue`.
+
+**Patch (v2, `08_touchpoint_analyzer.json`, still 20 nodes, JSON valid, `active=false`):**
+- **`Prepare Record`** now computes a **deterministic classification `det`** for every record from the intake hints (record_type_hint, touchpoint_type, competitor_related, lead_temperature/intent/urgency, service_hint, competitor_name, contact_public, source_url/profile_name) — rules per DEC-081.
+- **`Parse Repaired JSON`** now falls back to a `det`-based 35-field routed row (`parse_method=deterministic_fallback_after_llm_fail`, `repair_status=failed_fallback`) instead of `technical_errors`. `technical_errors` only when `det` has no valid route (or Sheets/API error).
+- **Prompt hardening:** primary + repair demand strict JSON only ("Return exactly one JSON object. First char `{`, last `}`"); repair builds JSON from `original_record` when no usable JSON.
+- **Parser hardening:** `joinText()` concatenates **all** `text` content items and ignores thinking/signature; preserves raw preview + original record on failure.
+- New parse_method values: `deterministic_fallback_after_llm_fail` (+ documented `deterministic_pre_route`); repair_status `failed_fallback`. Final Summary adds `parse_method_counts` + `deterministic_fallback_after_llm_fail` count.
+- Preserved: deterministic irrelevant skip (pre-Claude, $0), dynamic route append, **35-field output on all 3 paths**, primary→repair structure, Claude creds/url.
+- **Verified:** JSON VALID; `active=false`; 0 real keys; 3× `PASTE_SPREADSHEET_ID_HERE` (2 GS nodes + sticky); apify/firecrawl only in sticky docs; 2 Claude HTTP; dynamic route append; deterministic_irrelevant_skip + deterministic_fallback_after_llm_fail + technical_errors all present; no tool_use/KEY=VALUE. **Logic dry-run on the 12 fixtures → 0 technical_errors**; record 11 → review_queue/lead_signal/investigate/score 75; 1–4,6,12→monitor_queue; 5,7,8→content_queue; 9–10→skipped_log. Workflows 04/05/06/07 untouched.
+
+**Docs updated:** `STAGE_3_2_TEST_RESULTS.md` (TEST 1 PARTIAL FAIL + patch dry-run + TEST 2 retest plan), `N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, `LEAD_DISCOVERY_ARCHITECTURE.md`, `LEAD_DATA_MODEL_PLAN.md`, `DECISIONS.md` (**DEC-081**), `NEXT_ACTIONS.md`, `COSTS_AND_LIMITS.md`, `AGENT_CAPABILITIES.md`, `ROADMAP.md`, `core/hot/recent.md`.
+
+**Next operator action:** re-import patched WF08 → bind creds + Spreadsheet ID → record Claude balance → run once → fill `STAGE_3_2_TEST_RESULTS.md` TEST 2 (expect technical_errors=0; record 11→review_queue) → then Stage 3.3. No source parser yet.
+
+---
+
 ## 2026-06-08 — Stage 3.2 BUILT: Workflow 08 Touchpoint Analyzer (DEC-080)
 
 **Agent role:** project-engineer

@@ -2,8 +2,17 @@
 
 **Workflow:** `n8n/workflows/08_touchpoint_analyzer.json`
 **Имя:** `08 - Touchpoint Analyzer`
-**Статус:** 🔧 BUILT, UNDER TEST. `active=false`. Stage 3.2 (Business Scout Agent).
-**Дата:** 2026-06-08
+**Статус:** 🔧 BUILT, PATCHED (v2), UNDER RETEST. `active=false`. Stage 3.2 (Business Scout Agent).
+**Дата:** 2026-06-08 (v2-патч после неудачного первого live-теста — DEC-081)
+
+> **ПАТЧ v2 (DEC-081):** первый live-тест показал, что шлюз часто возвращает **прозу/thinking/signature вместо
+> JSON** (иногда вообще без `text`-блока), из-за чего primary+repair падали и классифицируемые записи (включая
+> контрольный лид — запись 11) уходили в `technical_errors`. Теперь для **каждой** записи в `Prepare Record`
+> считается **детерминированная классификация (`det`)** по подсказкам приёма, и если Claude+repair не дали
+> валидный JSON — используется **детерминированный fallback** (`parse_method=deterministic_fallback_after_llm_fail`),
+> а НЕ `technical_errors`. `technical_errors` — только если запись нельзя классифицировать даже по подсказкам или
+> сбой Sheets/API. Промпты ужесточены (строго JSON, «первый символ `{`, последний `}`»); парсер склеивает все
+> `text`-блоки и игнорирует thinking/signature.
 
 > **Source-agnostic анализатор точек касания.** Читает approved/unique записи из `raw_market_records`,
 > анализирует через Claude (resilient JSON + repair, как Stage 2) и маршрутизирует в 6 существующих
@@ -66,6 +75,32 @@ fallback; поля `parse_method`, `repair_used`, `repair_status`, `processing_s
 
 `recommended_action` → route: `contact`→results, `investigate`→review_queue, `monitor`→monitor_queue,
 `create_content`/`add_to_semantics`→content_queue, `ignore`→skipped_log. Невалидный route → `technical_errors`.
+
+## 4a. Детерминированная классификация и fallback (v2, DEC-081)
+
+`Prepare Record` считает `det` для каждой записи по подсказкам приёма:
+1. `record_type_hint=irrelevant` ИЛИ `touchpoint_type ∈ {irrelevant_source, weak_market_noise}` → `skipped_log`
+   (до Claude, `deterministic_irrelevant_skip`, $0).
+2. `record_type_hint=competitor_activity` ИЛИ (`competitor_related=true` И `touchpoint_type` содержит
+   `competitor`) → `competitor` → `monitor_queue`; `competitor_strength` 70–85 (есть оффер/цена) иначе 55–69;
+   `company_name` из `competitor_name`/`profile_name`/домена; `service_type` из `service_hint`.
+3. `record_type_hint=market_signal` И `touchpoint_type=source_candidate` → `content_idea` → `content_queue`
+   (`content_idea_score` 40–65, `needs_manual_review=true`).
+4. `touchpoint_type=review_source` → если `competitor_related=true` → `competitor`/`monitor_queue`; иначе
+   `content_idea`/`content_queue`.
+5. `record_type_hint=question_objection` ИЛИ `lead_temperature=hot` ИЛИ `lead_intent_hint=high` ИЛИ
+   `urgency_hint=high` → `lead_signal`; есть пригодный контакт + прямой запрос → `results`/`contact`
+   (`lead_signal_score` 85–95); иначе → `review_queue`/`investigate` (`lead_signal_score` 70–85,
+   `needs_manual_review=true`).
+6. иначе → `review_queue`/`content_idea`/`investigate` (всё ещё классифицируемо).
+
+**Применение `det`:** (а) решает `is_irrelevant` до Claude; (б) если Claude+repair не дали валидный JSON —
+строит строку по `det` (`deterministic_fallback_after_llm_fail`). `technical_errors` — только если у `det` нет
+валидного маршрута или сбой Sheets/API.
+
+**parse_method:** `primary_json` | `repaired_json` | `deterministic_irrelevant_skip` |
+`deterministic_fallback_after_llm_fail` | `deterministic_pre_route` | `technical_error`.
+**repair_status:** `''` | `success` | `failed_fallback` | `failed`.
 
 ## 5. Импорт и настройка
 

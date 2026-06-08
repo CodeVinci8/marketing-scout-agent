@@ -1,9 +1,15 @@
 # STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md — Stage 3.2 Plan
 
-**Status:** 🔧 BUILT, UNDER TEST (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
+**Status:** 🔧 BUILT, PATCHED v2 (DEC-081), UNDER RETEST (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
 **Stage:** 3.2 (Touchpoint Analyzer) of the Business Scout Agent.
-**Date:** 2026-06-08 · **Decision:** DEC-080 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
+**Date:** 2026-06-08 · **Decisions:** DEC-080, DEC-081 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
 **Test log:** `docs/STAGE_3_2_TEST_RESULTS.md`.
+
+> **Patch v2 (DEC-081):** the first live test failed partially — the gateway returns prose/thinking/signature
+> instead of JSON, so primary+repair failed and classifiable records (incl. the forum lead, record 11) fell to
+> `technical_errors`. The analyzer no longer depends fully on Claude JSON: it computes a **deterministic
+> classification from `raw_market_records` hints for every record** and uses it as a **fallback after LLM+repair
+> failure**. See §6a below.
 
 ---
 
@@ -66,6 +72,35 @@ investigate→review_queue, monitor→monitor_queue, create_content/add_to_seman
 - Reviews/comments → `content_idea`/`content_queue`.
 - Irrelevant → `skipped_log` **deterministically before Claude** (no spend).
 - Invalid route → `technical_errors`.
+
+## 6a. Deterministic pre-classification + fallback (v2, DEC-081)
+
+The analyzer must **not depend fully on Claude JSON**. `Prepare Record` computes a deterministic `det`
+classification from the intake hints (`record_type_hint`, `touchpoint_type`, `competitor_related`,
+`lead_temperature`/`lead_intent_hint`/`urgency_hint`, `service_hint`, `competitor_name`, `contact_public`,
+`source_url`/`profile_name`) for **every** record. Pipeline order:
+
+1. Filter selected records. 2. Build `det` for every record. 3. Irrelevant → `skipped_log` **before Claude**
+(`deterministic_irrelevant_skip`, $0). 4. Non-irrelevant → Claude primary. 5. Primary parse. 6. On failure →
+repair. 7. On repair failure → **deterministic fallback from `det`** (`deterministic_fallback_after_llm_fail`).
+8. Only if `det` has no valid route (or Sheets/API error) → `technical_errors`.
+
+Deterministic routing rules (also the floor when the gateway misbehaves):
+- **irrelevant** (`record_type_hint=irrelevant` or `touchpoint_type∈{irrelevant_source,weak_market_noise}`) → `skipped_log`.
+- **competitor_activity / competitor_related+competitor touchpoint** → `competitor` → `monitor_queue` (strength 70–85 clear / 55–69 weak; company from competitor_name/profile/host; service from service_hint).
+- **market_signal + source_candidate** (VK/Telegram channels, search) → `content_idea` → `content_queue` (score 40–65).
+- **review_source** → `monitor_queue` if competitor_related else `content_queue`.
+- **question_objection / hot / high intent / high urgency** → `lead_signal`; with usable contact + direct need → `results`/`contact` (score 85–95); else → `review_queue`/`investigate` (score 70–85, needs_manual_review).
+- default → `review_queue`/`content_idea`/`investigate` (still classifiable).
+
+`parse_method` values: `primary_json`, `repaired_json`, `deterministic_irrelevant_skip`,
+`deterministic_fallback_after_llm_fail`, `deterministic_pre_route`, `technical_error`.
+`repair_status`: `''`, `success`, `failed_fallback`, `failed`.
+
+**Prompt/parser hardening:** primary + repair prompts demand strict JSON only (no prose/markdown/thinking;
+"Return exactly one JSON object. First char `{`, last `}`"); the repair prompt builds JSON from
+`original_record` when the raw response has no usable JSON; the parser concatenates **all** `text` content
+items and ignores thinking/signature blocks; raw preview + original record are preserved on failure.
 
 ## 7. Cost posture
 
