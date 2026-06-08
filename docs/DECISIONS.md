@@ -5,6 +5,34 @@ Most recent first.
 
 ---
 
+## DEC-084 — Stage 3.3 Recommended First Real Connector Is Avito/Classifieds; Telegram & Instagram Deferred to Feasibility Stages
+
+**Date:** 2026-06-08
+**Context:** With Stage 3.1 (manual intake) passed and Stage 3.2 (analyzer) baseline approved, the connector→record→analyzer→route contract is proven on manual records. The next step is the **first real source connector**, but the source must be chosen deliberately (data value vs complexity vs risk) and **nothing should be built yet**. See `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
+**Decision:** The recommended **first real connector after Stage 3.2 is the Avito/Classifieds Listing Connector**, because it is the **lowest-complexity** real source, **closest to the existing Stage 2 web/URL data model** (reuses URL-normalize + `*_registry` dedup + the Apify-actor pattern), strong for **competitors / offers / prices / ad wording / semantics** in the secured-lending niche, with **simple dedup by listing URL/id** and **lower risk** than Telegram/Instagram audience/comment scraping.
+- **Caveat:** Avito is **not** for comments/subscribers/audience mining — treat it as a **competitor listing source**, an **offer/semantic source**, and an **occasional lead-like source**; hot-lead yield is modest.
+- **Telegram is second / separate feasibility:** useful for public channel messages, questions, market pains, but the **Telegram Control Bot ≠ Telegram Parser** (reaffirms DEC-067); the parser needs a separate client/MTProto + compliance design, and **groups/members/comments/DMs are higher-risk** and require their own design.
+- **Instagram** is useful for competitor content/comments, **less useful for hot leads**, higher access/ToS risk → **deferred** until after Avito + Telegram feasibility. Dzen/VK public feasibility also follows Avito.
+- **Nothing built here.** The analyzer (Workflow 08) and data model are reused unchanged for every source. Build only after explicit operator approval + a per-source feasibility/compliance check.
+**Reason:** sequence value by accessibility and lowest architectural jump; lock the lowest-risk, highest-fit first connector before any access-risky social/audience scraping; keep controller-vs-parser separation intact.
+**Files:** `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`, `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/SOCIAL_CLASSIFIED_SOURCE_MATRIX.md`, `docs/ROADMAP.md`, `docs/NEXT_ACTIONS.md`.
+
+---
+
+## DEC-083 — Operational Timestamps Use Explicit Moscow Time (+03:00); Stage 3.2 Finalized (deterministic_first baseline approved, LLM enrichment optional & test-gated)
+
+**Date:** 2026-06-08
+**Context:** Live rows wrote operational timestamps as UTC-`Z` (e.g. `2026-06-08T18:55:43.425Z`); the operator (Moscow business) wants Moscow wall-clock with an explicit offset (`2026-06-08T21:55:43.425+03:00`). Separately, Stage 3.2 needed to be finalized: the deterministic_first baseline passed (TEST 3), but the LLM enrichment path still needed prompt/parser hardening and a small live retest before approval, and the docs needed to clearly separate "approved baseline" from "optional/under test".
+**Decision:**
+- **Moscow-time timestamps (all workflow-generated):** Workflows 04/05/06/07/08 use helpers `moscowIsoNow()` (now → `+03:00`) and `moscowStamp()` (compact `YYYYMMDD_HHmmss` in Moscow time) for `created_at`, `parsed_at`, `generated_at`, `first_seen_at`, `last_seen_at`, workflow-generated `approved_at` (none currently), and the `run_id` timestamp source (`touchpoint_…`, `firecrawl_…`, `approved_run_…`, `disc_…`, `agentreq_…`, `rec_…`, `cand_…`). **Source-provided `published_at` is NOT altered.** **Existing historical UTC-`Z` rows are left as-is** (no rewrite of Google Sheets). No schema change.
+- **Workflow 08 default stays `deterministic_first`, `llm_enrichment=false`** — the approved safe baseline (TEST 3: `technical_errors=0`, Claude calls=0, `repair_used=false`, routes 6/3/1/2).
+- **LLM enrichment is OPTIONAL and must pass a small-batch test before approval.** Hardened the `llm_enriched` path: primary prompt uses only `original_record` + `deterministic_classification`, cannot browse/fetch/verify URLs, no narration ("fetching/checking/analyzing"), one strict JSON object (first `{` last `}`), no markdown/prose/thinking/comments, scores 1–100, **never output `market_signal` (use `content_idea`)**, and **if uncertain preserve the deterministic route/action and enrich only the reason**; repair builds JSON from `original_record` + `deterministic_classification`; parser concatenates text items / ignores thinking+signature / caps preview at 500 / emits `non_json_non_text_or_thinking_response` for thinking-only. **Deterministic safety floor in `Normalize + Route`:** no `contact`/`results` without a usable `contact_public`; irrelevant stays `skipped_log`; a deterministic `competitor` record cannot be downgraded to `irrelevant`; hot/question without contact stays `review_queue`; `market_signal`→`content_idea`; scores clamped 1–100 (1–10 → ×10) with deterministic floor.
+- **LLM enrichment test config (Part C):** `Set Analyzer Config` adds `llm_enrichment_test_mode=false` and `llm_test_batch_indexes=[1,7,11,12]`; when the flag is true, **only** those four non-irrelevant fixtures (Avito competitor, Telegram source candidate, Banki forum hot-no-contact, Zoon reviews) are sent through Claude — all other records still route deterministically ($0). Test plan = `docs/STAGE_3_2_TEST_RESULTS.md` TEST 4.
+**Reason:** the operator needs human-readable Moscow timestamps without corrupting history; finalizing Stage 3.2 means making the cheap deterministic path the documented default while keeping a clearly-bounded, test-gated, safety-floored enrichment switch.
+**Files:** `n8n/workflows/04_firecrawl_url_list_resilient.json`, `n8n/workflows/05_apify_search_candidate_discovery.json`, `n8n/workflows/06_approved_candidates_runner.json`, `n8n/workflows/07_manual_touchpoint_intake.json`, `n8n/workflows/08_touchpoint_analyzer.json`, `docs/STAGE_3_2_TEST_RESULTS.md`, `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, the five workflow RU guides, `docs/COSTS_AND_LIMITS.md`, `docs/AGENT_CAPABILITIES.md`, `docs/ROADMAP.md`, `docs/NEXT_ACTIONS.md`, `docs/AGENT_LOG.md`, `core/hot/recent.md`.
+
+---
+
 ## DEC-082 — Workflow 08 Is Deterministic-First; Claude Is Optional Enrichment, Disabled by Default Until JSON Stability Is Proven
 
 **Date:** 2026-06-08

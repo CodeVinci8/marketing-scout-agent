@@ -5,6 +5,29 @@ Most recent first.
 
 ---
 
+## 2026-06-08 — Stage 3.2 FINALIZED: MSK timestamps + LLM enrichment hardening + test matrix + Stage 3.3 source decision (DEC-083/084)
+
+**Agent role:** project-engineer
+**Session goal:** finalize Stage 3.2 — switch operational timestamps to Moscow time, harden the optional LLM-enrichment path and add a 4-record test config, complete the 3-test matrix + Test 4 template, and document the Stage 3.3 first-source decision (no connector built).
+
+**Part A — Moscow-time timestamps (Workflows 04/05/06/07/08):** added `moscowIsoNow()` (→ `+03:00`) and `moscowStamp()` (compact Moscow `YYYYMMDD_HHmmss`) helpers and replaced every workflow-generated `new Date().toISOString()` / local stamp for `created_at`, `parsed_at`, `generated_at`, `first_seen_at`, `last_seen_at`, and `run_id` stamps (`touchpoint_/firecrawl_/approved_run_/disc_/agentreq_/rec_/cand_`). **`published_at` (source-provided) untouched; no Sheets rows rewritten; no schema change.** Verified: 0 bare `new Date().toISOString()` remain; helper produces `2026-06-08T18:55:43.425Z → 2026-06-08T21:55:43.425+03:00` exactly.
+
+**Part B — Workflow 08 LLM enrichment hardening (optional mode):** default stays `deterministic_first` / `llm_enrichment=false`. Primary prompt now: use only `original_record` + `deterministic_classification`; cannot browse/fetch/verify URLs; no narration; one strict JSON object (first `{` last `}`); no markdown/prose/thinking/comments; scores 1–100; **never `market_signal` → `content_idea`**; **if uncertain, preserve deterministic route/action, enrich only reason**. Primary user message now carries `deterministic_classification`. Repair already builds from `original_record` + `deterministic_classification`. **Normalize safety floor:** entity set {lead_signal,competitor,content_idea,irrelevant}; `market_signal`→`content_idea`; route/action validated; scores clamp 1–100 (1–10 → ×10) with deterministic floor; **no `contact`/`results` without usable `contact_public`; irrelevant stays `skipped_log`; deterministic `competitor` cannot be downgraded to `irrelevant`; hot/question without contact stays `review_queue`.**
+
+**Part C — LLM enrichment test config:** `Set Analyzer Config` adds `llm_enrichment_test_mode=false` + `llm_test_batch_indexes=[1,7,11,12]`; `Prepare Record` gate sends Claude **only** to those four fixtures when the flag is on (verified by simulation: batches 1,7,11,12 → call_claude=true, all others false; irrelevant excluded). Deterministic default still 0 Claude calls.
+
+**Part D — Test matrix (`STAGE_3_2_TEST_RESULTS.md`):** Test 1 PARTIAL FAIL; Test 2 ROUTING PASS / LLM-stability FAIL / cost FAIL ($0.159/12); **Test 3 PASS — deterministic_first baseline APPROVED** (routes 6/3/1/2, `deterministic_pre_route=10`, `deterministic_irrelevant_skip=2`, Claude calls=0, repair_used=false, technical_errors=0); **Test 4 template** — 4-record enrichment retest (1,7,11,12) with targets technical_errors=0 / primary_json≥2/4 / repaired_json≤2/4 / det_fallback≤2/4 / routes unchanged / no contact without contact_public / record cost.
+
+**Part E — `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md` created (no connector built):** recommends **Avito/Classifieds Listing Connector** first (lowest complexity, matches web/URL data model, strong for competitors/offers/semantics; caveat — not audience/comment mining); Telegram public parsing (≠ Control Bot) second/separate feasibility; Instagram deferred; Dzen/VK follow. **DEC-084.**
+
+**Validation (Part G):** all five workflows `python3 -m json.tool` VALID (`/tmp/04|05|06|07|08_validated.json`); every code node compiles (`new Function`); `active=false` preserved on all; no real API keys / no real Spreadsheet ID (PASTE placeholders); no schema change; no source connector created; no Apify/Firecrawl call; no tool_use / no KEY=VALUE; WF08 default remains `deterministic_first`; LLM gate present; MSK helper applied (moscowIsoNow refs: 04=13, 05=6, 06=4, 07=6, 08=8).
+
+**Docs updated:** five workflow RU guides, `STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, `STAGE_3_2_TEST_RESULTS.md`, new `STAGE_3_3_SOURCE_DECISION_PLAN.md`, `LEAD_DISCOVERY_ARCHITECTURE.md`, `LEAD_DATA_MODEL_PLAN.md`, `SOCIAL_CLASSIFIED_SOURCE_MATRIX.md`, `DECISIONS.md` (DEC-083/084), `NEXT_ACTIONS.md`, `COSTS_AND_LIMITS.md`, `AGENT_CAPABILITIES.md`, `ROADMAP.md`, `core/hot/recent.md`.
+
+**Next operator action:** (A) timestamp smoke test on any workflow → confirm `+03:00` rows; (B) WF08 deterministic baseline sanity (Claude=0/$0); (C) optional WF08 4-record enrichment test via `llm_enrichment_test_mode=true` → fill Test 4. Then review Stage 3.3 plan (Avito first). No connector built; no scraping.
+
+---
+
 ## 2026-06-08 — Stage 3.2 PATCHED v3: Workflow 08 deterministic-first + optional LLM enrichment (DEC-082)
 
 **Agent role:** project-engineer

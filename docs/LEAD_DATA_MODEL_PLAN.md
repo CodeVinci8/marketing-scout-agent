@@ -134,6 +134,13 @@ set by the connector / manual intake — now directly determines routing quality
 `record_type_hint`, `touchpoint_type`, `competitor_related`, `lead_temperature`/`lead_intent_hint`/`urgency_hint`,
 `service_hint`, and `contact_public` as accurately as possible.
 
+**Finalized (DEC-083/084).** The deterministic_first baseline is **APPROVED** (Test 3) and LLM enrichment is
+**optional / under test** (Test 4). Operational timestamps written by the connectors/analyzer (`created_at`,
+`parsed_at`, `first_seen_at`, `last_seen_at`, and the `run_id` stamp) now use **Moscow time +03:00**; the
+**source-provided `published_at` is never altered**, and existing UTC-`Z` rows are not rewritten. When the first
+real connector (Avito/Classifieds, DEC-084) is built, it must (a) populate the hint columns accurately, (b) set
+`published_at` from the source, and (c) write its own operational timestamps in Moscow time.
+
 ## 5. Invariants
 
 - `raw_market_records` is **separate** from `url_candidates`; `market_record_registry` is **separate** from

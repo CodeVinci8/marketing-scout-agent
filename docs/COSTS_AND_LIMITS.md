@@ -101,6 +101,14 @@ Three cost axes with different drivers and spend gates — tracked **separately*
 - **Future `llm_enriched` mode** (opt-in): primary call per non-irrelevant record (≈10), repair only on parse
   failure — same ceiling as the v2 estimate; enable **only after** Claude JSON stability is proven.
 
+### Stage 3.2 finalization (DEC-083) — cost impact
+- **TEST 3 confirmed $0** — deterministic_first baseline ran with **Claude calls=0** (balance unchanged). Approved.
+- **Moscow-time timestamp patch costs nothing** — `moscowIsoNow()`/`moscowStamp()` are pure n8n Code-node logic
+  (a `+03:00` offset), no API calls, no schema change, applied across Workflows 04/05/06/07/08.
+- **LLM enrichment small test (TEST 4) is bounded to 4 Claude primary calls** via `llm_enrichment_test_mode=true`
+  + `llm_test_batch_indexes=[1,7,11,12]` (≈$0.04–0.06 plus any ≤2 repairs); record the exact delta. Full
+  `llm_enriched` mode stays opt-in and is not approved until TEST 4 passes.
+
 ---
 
 ## Estimate Table

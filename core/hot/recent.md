@@ -4,6 +4,21 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-08 — Stage 3.2 FINALIZED: MSK timestamps + LLM enrichment hardening + test matrix + Stage 3.3 source decision (DEC-083/084)
+
+**What was done:**
+- **Part A — Moscow time (WF04/05/06/07/08):** added `moscowIsoNow()` (+03:00) and `moscowStamp()` helpers; all workflow-generated `created_at`/`parsed_at`/`generated_at`/`first_seen_at`/`last_seen_at` + `run_id` stamps now Moscow time. `published_at` (source) untouched; no Sheets rewrite; no schema change. Verified `…18:55:43.425Z → …21:55:43.425+03:00` exactly; 0 bare UTC generators remain.
+- **Part B — WF08 LLM enrichment hardened (optional, default OFF):** primary prompt uses only original_record + deterministic_classification, no browse/fetch, no narration, one strict JSON object, never market_signal→content_idea, preserve deterministic route/action if uncertain; primary msg now carries deterministic_classification. Normalize safety floor: no contact/results without contact_public; irrelevant stays skipped_log; deterministic competitor can't become irrelevant; hot/question w/o contact stays review_queue; scores clamp 1–100 (1–10→×10) with det floor.
+- **Part C — LLM test config:** `Set Analyzer Config` adds `llm_enrichment_test_mode=false` + `llm_test_batch_indexes=[1,7,11,12]`; gate sends Claude only to those 4 fixtures when ON (sim-verified). Deterministic default = 0 Claude.
+- **Part D — Test matrix:** Test 1 PARTIAL FAIL; Test 2 ROUTING PASS / LLM+cost FAIL ($0.159/12); **Test 3 PASS — deterministic_first baseline APPROVED** (6 monitor/3 content/1 review/2 skipped, pre_route=10, irrel_skip=2, Claude=0, repair=false, tech=0); **Test 4 template** for the 4-record enrichment retest.
+- **Part E — Stage 3.3 decision (no build):** new `STAGE_3_3_SOURCE_DECISION_PLAN.md` → **Avito/Classifieds first** (lowest complexity, matches web/URL model; caveat: not audience/comment mining); Telegram public parsing (≠ Control Bot) second/separate feasibility; Instagram deferred. DEC-084.
+- **Validation:** all 5 workflows JSON VALID; every code node compiles; active=false; no real keys/Spreadsheet ID; no schema change; no connector created; no Apify/Firecrawl; no tool_use/KEY=VALUE; WF08 default stays deterministic_first; LLM gate present; MSK helper applied.
+- **Decisions:** DEC-083 (MSK timestamps + Stage 3.2 finalized: baseline approved, enrichment optional/test-gated), DEC-084 (Stage 3.3 first source = Avito/Classifieds; Telegram/Instagram deferred). Docs: 5 RU guides, plan, test results, lead architecture/data model, source matrix, COSTS, CAPABILITIES, ROADMAP, NEXT_ACTIONS, AGENT_LOG.
+
+**Next operator action:** (A) timestamp smoke test → confirm `+03:00`; (B) WF08 deterministic baseline (Claude=0/$0); (C) optional WF08 4-record enrichment test (`llm_enrichment_test_mode=true`) → fill Test 4; then review Stage 3.3 plan. No connector built; no scraping.
+
+---
+
 ## Session: 2026-06-08 — Stage 3.2 PATCHED v3: Workflow 08 deterministic-first + optional LLM enrichment (DEC-082)
 
 **What was done (cost/stability patch after second live test):**
