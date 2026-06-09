@@ -4,37 +4,40 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-09) — Workflow 08 C2 PARTIAL PASS → enrichment-quality patch (v6, DEC-087) → re-run Test C3 (NOT Stage 3.3 yet)
+## CURRENT PRIORITY (2026-06-09) — Workflow 08 C3 PARTIAL PASS → specialized source_candidate schema (v7, DEC-088) → re-run Test C4 (NOT Stage 3.3 yet)
 
-The deterministic_first baseline stays **APPROVED** (Test 3). **Test C2 attempt #2 was a PARTIAL PASS — LLM enrichment
-NOT APPROVED:** it processed the intended 4 fixtures (batch_index 1, 7, 11, 12) with `technical_errors=0` and routes
-preserved, but `primary_json=2/4` (target ≥3/4), and four reason/classification issues remained — Telegram (7) fell
-back, Zoon (12) needed repair and was classified too strongly as a competitor, Banki (11) reason said «обратиться
-напрямую» without a contact, and reasons risked unsupported "demand-growth" claims. **Patched v6 (DEC-087):** compact
-source/review prompt + deterministic HINTS; review directories are competitors only when a `competitor_name` is named
-(Zoon generic → `content_idea`/`content_queue`, competitor_strength ≤45); deterministic sanitizers strip no-contact
-outreach phrases and unsupported trend claims. `max_tokens` unchanged; no cost increase. Defaults remain
+The deterministic_first baseline stays **APPROVED** (Test 3). **Test C3 was a PARTIAL PASS — LLM enrichment NOT
+APPROVED:** it processed the intended 4 fixtures with `technical_errors=0` and routes preserved, and quality improved
+(Avito good `primary_json`; Banki correct `review_queue`/`lead_signal`/`investigate`, no direct-contact, lead 75; Zoon
+`content_idea`/`content_queue`, competitor_strength 45), **but `primary_json=2/4`** because the **Telegram
+`source_candidate` (7) still failed strict JSON and fell back**. **Patched v7 (DEC-088):** source_candidate / social
+channels (`market_signal`+`source_candidate`, or `source_type=social_channel`, or `platform=telegram` w/o a direct
+personal request) now use a **specialized ultra-short 7-key enrichment schema** (`profile_name, service_type,
+offer_text, detected_need, reason, content_idea_score, quality_score`) with a minimal payload; repair uses the same
+7-key schema; a **post-merge safety assertion** keeps route/entity/action/contact/lead/competitor deterministic. Avito/
+Banki/Zoon are untouched. `max_tokens` 500/400 for the specialized path (no cost increase). Defaults remain
 `deterministic_first` / `llm_enrichment=false` / `llm_enrichment_test_mode=false`.
 
-**Re-run Test C3 (WF08; gates LLM approval):**
+**Re-run Test C4 (WF08; gates LLM approval):**
 1. [ ] Re-import WF08 (do NOT activate); re-bind Claude + Sheets creds + Spreadsheet ID.
 2. [ ] Set **`llm_enrichment_test_mode=true`** (keeps `llm_test_batch_indexes=[1,7,11,12]`).
 3. [ ] Record Claude balance **BEFORE** → **Execute once** → balance **AFTER**.
-4. [ ] Fill `docs/STAGE_3_2_TEST_RESULTS.md` **Test C3**: expect **all 4 processed** (`selected_count=4` /
-   `total_processed=4`, other 8 not written), `technical_errors=0`, **`primary_json ≥3/4`**,
-   `deterministic_fallback ≤1/4`; **Banki (11)** reason has no «обратиться/написать/позвонить/связаться» and stays
-   `review_queue`/`investigate`; **Zoon (12)** → `content_idea`/`content_queue` (or at least no demand-growth/strong-
-   competitor claim), `detected_need` = «быстрое одобрение, без поручителей/справок, оплата комиссии после
-   результата»; **Telegram (7)** → `primary_json`/`repaired_json` (not fallback), `content_queue`; **cost ≤ $0.04**.
+4. [ ] Fill `docs/STAGE_3_2_TEST_RESULTS.md` **Test C4**: expect **all 4 processed** (`selected_count=4` /
+   `total_processed=4`, other 8 not written), `technical_errors=0`, **`primary_json ≥3/4`**, `deterministic_fallback=0`
+   ideally (≤1 acceptable); **Telegram (7)** → `primary_json`/`repaired_json` (**NOT fallback**), `content_queue` /
+   `content_idea` / `create_content`, `lead_signal_score=1`, `competitor_strength=1`, `contact_public=""`,
+   `service_type=credit_broker`; **Banki (11)** reason no direct-contact, stays `review_queue`/`investigate`;
+   **Zoon (12)** stays `content_idea`/`content_queue`; **cost ≤ $0.04**.
 5. [ ] **Restore `llm_enrichment_test_mode=false` after the test.**
-6. [ ] If C3 passes → enrichment may be enabled per-run (`analysis_mode='llm_enriched'` + `llm_enrichment=true`);
-   if it fails → keep deterministic_first as the production default and iterate the prompt.
+6. [ ] If C4 passes → enrichment may be enabled per-run (`analysis_mode='llm_enriched'` + `llm_enrichment=true`);
+   if it fails or enrichment is explicitly deferred → keep deterministic_first as the production default.
+   **Stage 3.3 stays blocked until C4 passes or LLM enrichment is explicitly deferred.**
 
 **Optional baseline re-confirm (defaults):** Execute once with all flags `false` → Claude calls=0 / $0,
 `deterministic_pre_route=10`, `deterministic_irrelevant_skip=2`, routes 6/3/1/2, `technical_errors=0`.
 
-**Only AFTER Test C3** — Stage 3.3 source decision is documented (`docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`,
-Avito/Classifieds first, DEC-084). **Do NOT build any source connector yet.**
+**Only AFTER Test C4 passes (or LLM enrichment is explicitly deferred)** — Stage 3.3 source decision is documented
+(`docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`, Avito/Classifieds first, DEC-084). **Do NOT build any source connector yet.**
 
 > Still NOT built/approved: Avito/Dzen/VK/Telegram/Instagram parsers, competitor-audience scraping, Telegram
 > Control Bot, outreach/autocall, scheduled scraping.

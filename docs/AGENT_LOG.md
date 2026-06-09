@@ -5,6 +5,27 @@ Most recent first.
 
 ---
 
+## 2026-06-09 — Workflow 08 specialized source_candidate schema v7 after C3 PARTIAL PASS (DEC-088)
+
+**Agent role:** project-engineer
+**Session goal:** stabilize the last failing LLM-enrichment case (Telegram `source_candidate` fallback) after Test C3 PARTIAL PASS, without regressing Avito/Banki/Zoon or raising cost; touch only WF08 + docs.
+
+**C3 (recorded):** processed the 4 fixtures, `technical_errors=0`, routes preserved, MSK OK; `primary_json=2/4`, `repaired_json=1/4`, `deterministic_fallback_after_llm_fail=1/4`. Avito (1) good `primary_json` competitor 78/80; Banki (11) correct `review_queue`/`lead_signal`/`investigate`, no direct-contact, lead 75; Zoon (12) `content_idea`/`content_queue`, comp 45 / content 70 / qual 68. **Telegram (7) still fails strict JSON → `deterministic_fallback_after_llm_fail`.** **PARTIAL PASS — LLM enrichment NOT APPROVED.**
+
+**Patch v7 (`08_touchpoint_analyzer.json`, JSON valid, active=false, versionId `…v007-c4-source-candidate-schema-20260609`):**
+- **A** `Build Primary Claude Request`: source_candidate / `source_type=social_channel` / telegram-content_idea use a **specialized ultra-short prompt + minimal payload (`task=enrich_source_candidate`) + 7-key schema** (`profile_name, service_type, offer_text, detected_need, reason, content_idea_score, quality_score`); model told NOT to emit company_name/route/entity_type/recommended_action/lead/competitor, no outreach, not a direct lead, no claim users ask questions unless text says so. `max_tokens=500`. General prompt unchanged for everything else.
+- **B** Avito/Banki keep the general prompt; Zoon keeps the review-source compact prompt — no regression.
+- **C** `Build Repair Request`: same family repairs into the **same 7-key schema** (never the 15-key general), `max_tokens=400`, RAW_RESPONSE = capped preview only.
+- **D** `Merge …` post-merge **safety assertion**: for social sources `route` stays `content_queue` (unless det route was `review_queue`), `entity_type=content_idea`, `recommended_action∈{create_content,investigate}`, `contact_public` empty unless present, `lead_signal_score=1` unless a direct personal request, `competitor_strength=1` unless `competitor_activity`. The 7-key output overlays only descriptive fields + content/quality scores; route/action/entity/lead/competitor/contact stay deterministic; `parse_method=primary_json` when it parses.
+
+**Verified:** `python3 -m json.tool` VALID; all 10 code nodes compile; Build Primary selects the specialized 7-key path for the Telegram fixture (max_tokens 500, `enrich_source_candidate`) and general/review for Avito/Banki/Zoon; merge of a 7-key Telegram enrichment → `content_queue`/`content_idea`/`create_content`, lead 1 / comp 1 / contact='' / content 60 / qual 60 with descriptive fields merged; Avito→monitor, Banki→review (forbidden contact phrase sanitized), Zoon→content; **35 business fields** on every path; **C4 test filter selects exactly [1,7,11,12]** (default 12); MSK `+03:00` preserved; defaults (`deterministic_first`/`llm_enrichment=false`/`llm_enrichment_test_mode=false`) intact; no real keys, no real Spreadsheet ID (PASTE ×3), only gated aiprimetech Claude HTTP (Apify/Firecrawl disclaimer text only), no source connector, no tool_use, no KEY=VALUE. WF04/05/06/07 untouched.
+
+**Decision:** DEC-088. **LLM enrichment stays NOT APPROVED until Test C4 passes** (same 4 fixtures; `primary_json≥3/4`, `deterministic_fallback=0` ideally ≤1, Telegram not fallback, Banki no direct-contact, Zoon→content, cost ≤$0.04) **or is explicitly deferred**. Deterministic_first (Test 3) remains the approved default; **Stage 3.3 blocked until then.** Docs: STAGE_3_2_TEST_RESULTS, DECISIONS, WF08 RU, plan, NEXT_ACTIONS, COSTS, AGENT_CAPABILITIES, ROADMAP, core/hot/recent.
+
+**Next operator action:** re-import WF08 → bind creds + Spreadsheet ID → `llm_enrichment_test_mode=true` → record Claude balance → Execute once → fill Test C4 → restore `llm_enrichment_test_mode=false`. No connector built.
+
+---
+
 ## 2026-06-09 — Workflow 08 enrichment-quality patch v6 after C2 PARTIAL PASS (DEC-087)
 
 **Agent role:** project-engineer
