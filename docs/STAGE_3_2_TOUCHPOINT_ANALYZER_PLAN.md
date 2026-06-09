@@ -1,14 +1,24 @@
 # STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md — Stage 3.2 Plan
 
-**Status:** ✅ DETERMINISTIC-FIRST BASELINE APPROVED (Test 3 PASS) · LLM enrichment OPTIONAL / UNDER TEST (Test C2 attempt #2 after the v5 fix) · MSK timestamps (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
+**Status:** ✅ DETERMINISTIC-FIRST BASELINE APPROVED (Test 3 PASS) · **LLM enrichment NOT APPROVED / UNDER TEST (Test C3 after the v6 quality patch)** · MSK timestamps (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
 **Stage:** 3.2 (Touchpoint Analyzer) of the Business Scout Agent.
-**Date:** 2026-06-08 · **Decisions:** DEC-080, DEC-081, DEC-082, DEC-083, DEC-085, DEC-086 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
+**Date:** 2026-06-09 · **Decisions:** DEC-080, DEC-081, DEC-082, DEC-083, DEC-085, DEC-086, DEC-087 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
 **Test log:** `docs/STAGE_3_2_TEST_RESULTS.md`. **Next stage:** `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
 
+> **Enrichment-quality patch v6 (DEC-087):** Test C2 attempt #2 processed the intended 4 fixtures (`technical_errors=0`,
+> routes preserved) but was a **PARTIAL PASS / NOT APPROVED** — `primary_json=2/4` (target ≥3/4); Telegram (7) fell
+> back, Zoon (12) needed repair and was over-classified as a competitor, Banki (11) reason had a no-contact outreach
+> phrase, plus a risk of unsupported "demand-growth" claims. v6 (no `max_tokens`/cost change): shorter compact
+> source/review prompt + deterministic HINTS; review directories are competitors only when a `competitor_name` is named
+> (Zoon generic → `content_idea`/`content_queue`, competitor_strength ≤45); deterministic sanitizers strip no-contact
+> outreach phrases and unsupported trend claims. Default deterministic baseline unchanged. Re-test = **Test C3**
+> (`primary_json≥3/4`, fallback≤1/4, Banki no direct-contact, Zoon→content, Telegram not fallback, cost ≤$0.04).
+> **LLM enrichment stays NOT APPROVED until Test C3 passes.**
+>
 > **C2 filter fix (DEC-086):** LLM enrichment is compact enrichment-only merged into the deterministic row (DEC-085);
 > C2 attempt #1 only wrote record 1 because the test filter used `return []` inside `Build Deterministic Row` (stalls
 > the Split-in-Batches loop). v5 moves C2 filtering **pre-loop** into `Filter & Select Records` (loop gets exactly the
-> 4 fixtures) and removes the empty return. Default deterministic baseline unchanged. Re-test = Test C2 attempt #2.
+> 4 fixtures) and removes the empty return.
 
 > **Stage 3.2 finalized (DEC-083):** Test 3 (deterministic_first) PASS → **baseline APPROVED**
 > (`technical_errors=0`, Claude calls=0, `repair_used=false`, routes 6/3/1/2). **LLM enrichment is optional and

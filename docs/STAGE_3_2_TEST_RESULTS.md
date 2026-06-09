@@ -271,7 +271,119 @@ stalls** — the loop never advances to records 7/11/12.
 
 ---
 
-## TEST C2 — ATTEMPT #2 (after the v5 fix) — ⏳ AWAITING OPERATOR RUN
+## TEST C2 — ATTEMPT #2 (after the v5 fix) — ⚠️ PARTIAL PASS / LLM ENRICHMENT NOT APPROVED
+
+Re-ran the 4-fixture enrichment test against the v4 compact design **with the v5 pre-loop filter**. The run
+processed the **intended 4 records** (batch_index 1, 7, 11, 12) and produced clean operational behaviour, but **missed
+the `primary_json ≥ 3/4` target** and surfaced reason-quality issues, so enrichment is **not approved**.
+
+### Result summary (C2 attempt #2 — actual)
+- ✅ **`technical_errors = 0`.** Routes did **not** degrade. MSK `+03:00` timestamps OK.
+- ⚠️ **Parse distribution `primary_json = 2/4`, `repaired_json = 1/4`, `deterministic_fallback_after_llm_fail = 1/4`** — target was `primary_json ≥ 3/4`.
+- Per record:
+  - **batch_index 1 — Avito competitor** → `monitor_queue`, `primary_json`, `repair_used=false`. ✅
+  - **batch_index 11 — Banki forum hot pattern** → `review_queue`, `primary_json`, `repair_used=false`. ✅ route, ❌ reason said «обратиться напрямую» although `contact_public` is empty and `recommended_action=investigate`.
+  - **batch_index 12 — Zoon reviews** → `monitor_queue`, `repaired_json`, `repair_used=true`. ❌ needed repair and was classified **too strongly as a competitor** (it is a generic category/review directory).
+  - **batch_index 7 — Telegram @creditbrokers** → `content_queue`, `deterministic_fallback_after_llm_fail`, `repair_used=true`. ❌ still fails strict JSON and falls back.
+
+### C2 attempt #2 table (actual)
+| # | platform | entity_type | route | parse_method | repair_used | issue |
+|---|----------|-------------|-------|------|:----:|------|
+| 1 | avito | competitor | monitor_queue | primary_json | false | — |
+| 7 | telegram | content_idea | content_queue | deterministic_fallback_after_llm_fail | true | JSON fails → fallback |
+| 11 | banki_forum | lead_signal | review_queue | primary_json | false | reason: «обратиться напрямую» without a contact |
+| 12 | zoon | competitor | monitor_queue | repaired_json | true | needed repair; too strongly competitor |
+
+| metric | target | observed |
+|--------|--------|----------|
+| selected LLM records | exactly 4 | 4 |
+| technical_errors | 0 | 0 |
+| primary_json | ≥3/4 | **2/4** |
+| repaired_json | ≤1/4 | 1/4 |
+| deterministic_fallback_after_llm_fail | ≤1/4 | 1/4 |
+
+### Verdict
+- [x] **PARTIAL PASS — LLM enrichment NOT APPROVED.** Processed the 4 intended records; `technical_errors=0`; routes
+  preserved; MSK timestamps OK. **Not approved** because the `primary_json ≥ 3/4` target was missed (2/4) and the
+  reason-quality issues above remain. **Decision (DEC-087): patch enrichment quality and re-test as Test C3.**
+
+---
+
+## PATCH v6 (2026-06-09, DEC-087) — enrichment-quality patch after C2 PARTIAL PASS
+
+Targets the four C2 issues without increasing `max_tokens` or cost.
+
+- **Task A — source_candidate / Telegram prompt path.** `Build Primary Claude Request` now branches a **shorter,
+  compact** system prompt for `record_type_hint=market_signal AND touchpoint_type=source_candidate`, and for
+  `platform=telegram` content-idea records with no direct personal request. It forces `entity_type=content_idea`,
+  `recommended_action=create_content|investigate`, frames the reason as «источник мониторинга тем, вопросов и
+  рыночных сигналов» (**not** a direct lead, **not** outreach, **no** contact claim, **no** broad external facts).
+- **Task B — `review_source` logic (`Prepare Record`).** Only a **named competitor** (`competitor_name` set) is a
+  strong competitor → `monitor_queue` (competitor_strength 70). A **generic category / listing / review directory**
+  (e.g. a Zoon "кредитные брокеры в Москве" category) → `entity_type=content_idea`, `route=content_queue`,
+  `recommended_action=create_content`, **competitor_strength capped at 45**, content_idea_score 70, quality_score 68;
+  `detected_need` seeded from `probable_need`.
+- **Task C — no-contact lead reason safety (`Merge …`).** A deterministic sanitizer: when there is **no usable
+  `contact_public`**, the reason may **not** contain «обратиться напрямую / написать / позвонить / связаться» — it is
+  replaced with a manual-review-safe sentence. Route stays `review_queue`, `recommended_action` stays `investigate`.
+- **Task D — no unsupported claims (prompt + `Merge …`).** «спрос растёт», «активно задают вопросы», «много лидов»,
+  «высокая конверсия» are forbidden in the prompt and stripped in the merge unless the phrase is literally present in
+  `ORIGINAL_RECORD`. Allowed framing: «есть рыночный паттерн», «подходит для мониторинга», «требует ручной проверки».
+- **Task E — JSON reliability.** Compact enrichment schema kept; shorter prompt for source_candidate/review_source;
+  deterministic **HINTS** (`expected_entity_type`, `expected_action`, `expected_route`, `no_contact_safety`,
+  `forbidden_phrases`) injected into the primary **and** repair payloads. Primary prompt still: one JSON object only,
+  first char `{` last `}`, no markdown/prose/thinking, no browse/fetch/analyze language. `max_tokens` unchanged
+  (primary 700 / repair 600); thinking disabled; no cost increase.
+
+---
+
+## TEST C3 — ⏳ AWAITING OPERATOR RUN (gates LLM enrichment approval)
+
+Re-run the **same 4 fixtures** (`llm_enrichment_test_mode=true`, `llm_test_batch_indexes=[1,7,11,12]`) against the
+v6 enrichment-quality patch.
+
+### How to run
+1. Re-import WF08 (do **NOT** activate). Re-bind Claude + Sheets credentials and the Spreadsheet ID.
+2. `Set Analyzer Config`: set **`llm_enrichment_test_mode=true`** (keep `analysis_mode='deterministic_first'`,
+   `llm_enrichment=false`, `max_records=12`; `llm_test_batch_indexes=[1,7,11,12]`).
+3. Record Claude balance **BEFORE** → **Execute once** → balance **AFTER** → fill the table below.
+4. **Restore `llm_enrichment_test_mode=false` after the test.**
+
+### Acceptance (C3 target)
+- All 4 fixtures processed (`selected_count=4`, `total_processed=4`); other 8 records not written.
+- `technical_errors = 0`.
+- **`primary_json ≥ 3/4`.**
+- `deterministic_fallback_after_llm_fail ≤ 1/4`.
+- **Banki (11):** reason contains **no** direct-contact instruction («обратиться/написать/позвонить/связаться»);
+  stays `review_queue` / `investigate`.
+- **Zoon (12):** generic review source becomes **`content_idea` / `content_queue`** (or, at minimum, **no** unsupported
+  "demand-growth" / "strong-competitor" claim); `detected_need` captures «быстрое одобрение, без поручителей/справок,
+  оплата комиссии после результата».
+- **Telegram (7):** `source_candidate` gets **valid `primary_json` or `repaired_json`, not fallback**;
+  `entity_type=content_idea`, `route=content_queue`.
+- No `results` / `contact` without usable `contact_public`. Cost delta ≤ $0.04 for 4 records.
+
+| # | platform | entity_type | route | parse_method | repair_used | no forbidden contact phrase? | no unsupported trend? | PASS? |
+|---|----------|-------------|-------|------|:----:|:----:|:----:|:----:|
+| 1 | avito |  |  |  |  |  |  |  |
+| 7 | telegram |  |  |  |  |  |  |  |
+| 11 | banki_forum |  |  |  |  |  |  |  |
+| 12 | zoon |  |  |  |  |  |  |  |
+
+| metric | target | observed |
+|--------|--------|----------|
+| selected LLM records | exactly 4 |  |
+| technical_errors | 0 |  |
+| primary_json | ≥3/4 |  |
+| deterministic_fallback_after_llm_fail | ≤1/4 |  |
+| Claude cost delta | ≤ $0.04 |  |
+
+> **LLM enrichment stays NOT APPROVED until Test C3 passes.** Until then the **deterministic_first baseline (TEST 3)
+> is the approved default**; keep all LLM flags `false`.
+
+---
+
+## TEST C2 — ATTEMPT #2 — ORIGINAL RUN INSTRUCTIONS (superseded by the actual result above)
 
 Re-run the 4-fixture enrichment test against the v4 compact design **with the v5 pre-loop filter**.
 

@@ -4,6 +4,41 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-09 — Workflow 08 enrichment-quality patch v6 after C2 PARTIAL PASS (DEC-087)
+
+**What was done (quality patch; baseline + routing safety untouched):**
+- **C2 attempt #2 result recorded = PARTIAL PASS / LLM NOT APPROVED:** processed the intended 4 fixtures (1,7,11,12),
+  `technical_errors=0`, routes preserved, MSK OK — but `primary_json=2/4` (target ≥3/4), `repaired_json=1/4`,
+  `fallback=1/4`. Issues: TG (7) fell back; Zoon (12) needed repair + classified too strongly as competitor; Banki
+  (11) reason said «обратиться напрямую» without a contact; risk of unsupported «спрос растёт» claims.
+- **Patch v6 (`08_touchpoint_analyzer.json`, JSON valid, active=false, versionId …v006-c3…):**
+  - **A** `Build Primary Claude Request`: branches a **shorter compact prompt** for source_candidate / Telegram
+    content-idea records — forces `content_idea` + `create_content/investigate`, frames reason as «источник
+    мониторинга», bans direct-lead/contact/external-fact claims.
+  - **B** `Prepare Record` `review_source`: only a **named** `competitor_name` → competitor/`monitor_queue`; generic
+    review directory (Zoon category) → `content_idea`/`content_queue`, competitor_strength **≤45**, content 70/qual 68.
+  - **C** `Merge …` sanitizer: no usable contact ⇒ strip «обратиться напрямую/написать/позвонить/связаться» → safe
+    manual-review reason; route stays `review_queue`/`investigate`.
+  - **D** prompt + merge: forbid «спрос растёт/активно задают/много лидов/высокая конверсия» unless literally in
+    ORIGINAL_RECORD (stripped in merge → «есть рыночный паттерн»).
+  - **E** deterministic **HINTS** (expected_entity_type/action/route, no_contact_safety, forbidden_phrases) injected
+    into primary **and** repair payloads. `max_tokens` unchanged (700/600); thinking disabled; no cost increase.
+- **Verified:** `json.tool` VALID; all 10 code nodes compile; det routes for fixtures = 1 monitor / 7 content / 11
+  review / 12 **content** (Zoon now content, compStr 45); named-competitor review still monitor; sanitizer strips
+  forbidden contact phrases + unsupported trends (ё-fixed regex); 35 fields + MSK preserved; 4-record test filter,
+  defaults, no real keys/Spreadsheet ID, only aiprimetech URL, no Apify/Firecrawl (only disclaimer text), no
+  tool_use/KEY=VALUE; WF04/05/06/07 untouched; no Stage 3.3 connector.
+- **Decision:** DEC-087. Docs: STAGE_3_2_TEST_RESULTS (C2 PARTIAL PASS + v6 patch + C3 target), DECISIONS, WF08 RU,
+  plan, NEXT_ACTIONS, COSTS, CAPABILITIES, ROADMAP, AGENT_LOG.
+
+**Next operator action:** re-import WF08 → bind creds + Spreadsheet ID → `llm_enrichment_test_mode=true` → record Claude
+balance → Execute once → fill **Test C3** (expect `primary_json≥3/4`, fallback≤1/4, Banki reason no direct-contact,
+Zoon→content_idea/content_queue, TG not fallback, cost ≤$0.04) → **restore `llm_enrichment_test_mode=false`**. LLM
+enrichment stays NOT APPROVED until C3 passes; deterministic_first remains the approved default. Then Stage 3.3
+(decision only). No connector built.
+
+---
+
 ## Session: 2026-06-08 — Workflow 08 C2 filter-placement bug fixed (pre-loop filtering, DEC-086)
 
 **What was done (loop-stall fix; baseline untouched):**

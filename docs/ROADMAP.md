@@ -160,10 +160,14 @@ the approved path until Stage 2.4 is built and live-validated.
   dynamic sheet. **TEST 3 PASS** (Claude calls=0 / $0, `repair_used=false`, routes 6/3/1/2, `technical_errors=0`) →
   **baseline approved**. **LLM enrichment**: full-row run (Test C) failed → **v4 (DEC-085) = compact enrichment-only
   JSON merged into the deterministic row** (`thinking` disabled; route/action/entity/contact stay deterministic).
-  **C2 attempt #1 wrote only record 1** (test filter used `return []` inside `Build Deterministic Row`, stalling the
-  loop) → **v5 (DEC-086) moves C2 filtering pre-loop into `Filter & Select Records`** (loop gets exactly the 4
-  fixtures; no empty returns). Re-test = **Test C2 attempt #2** (target `primary_json≥3/4`, `selected_count=4`, cost
-  ≤$0.04) before enabling. **Timestamps Moscow `+03:00`** (DEC-083). Test log: `docs/STAGE_3_2_TEST_RESULTS.md`.
+  **C2 attempt #1 wrote only record 1** (loop-stall) → **v5 (DEC-086) moves C2 filtering pre-loop**. **Test C2
+  attempt #2 = PARTIAL PASS / NOT APPROVED** (4 fixtures processed, `technical_errors=0`, routes preserved, but
+  `primary_json=2/4`; Telegram fell back, Zoon over-classified as competitor, Banki reason had a no-contact outreach
+  phrase) → **v6 (DEC-087)**: shorter compact source/review prompt + deterministic HINTS, named-only competitor for
+  review directories (Zoon generic → `content_idea`/`content_queue`, competitor_strength ≤45), and deterministic
+  no-contact + no-trend reason sanitizers; `max_tokens`/cost unchanged. Re-test = **Test C3** (target `primary_json≥3/4`,
+  `fallback≤1/4`, Banki reason no direct-contact, Zoon→content, Telegram not fallback, cost ≤$0.04) before enabling.
+  **Timestamps Moscow `+03:00`** (DEC-083). Test log: `docs/STAGE_3_2_TEST_RESULTS.md`.
 - **3.3 — First real source connector (DECISION)** 📐 **DECIDED 2026-06-08 (DEC-084), NOT BUILT**: recommended first
   connector = **Avito/Classifieds Listing Connector** (lowest complexity, matches the web/URL data model; caveat —
   competitor/offer/semantic source, not audience/comment mining). Telegram public parsing (≠ Control Bot) and
