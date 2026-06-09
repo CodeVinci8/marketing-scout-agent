@@ -135,6 +135,14 @@ Three cost axes with different drivers and spend gates — tracked **separately*
   **Test C3 keeps the same cost target ≤ $0.04 for 4 records** — record the exact delta. Default mode remains **$0**.
   Better JSON reliability should reduce repair calls, which only **lowers** cost.
 
+### C3 result + v7 specialized source_candidate schema (DEC-088) — cost impact
+- **C3 (actual):** 4 fixtures, `technical_errors=0`, routes preserved, quality improved, but `primary_json=2/4`
+  (Telegram `source_candidate` still fell back) → **PARTIAL PASS, LLM enrichment NOT APPROVED**.
+- **v7 (DEC-088) does NOT raise cost — it lowers it for the source_candidate family:** the specialized path uses a
+  **smaller** prompt + 7-key schema with `max_tokens=500` (primary) / `400` (repair), vs the general `700`/`600`.
+  General Avito/Banki/Zoon paths are unchanged. **Test C4 keeps the cost target ≤ $0.04 for 4 records** — record the
+  exact delta; removing the Telegram repair/fallback round-trip should reduce spend. Default mode remains **$0**.
+
 ---
 
 ## Estimate Table

@@ -1,10 +1,21 @@
 # STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md — Stage 3.2 Plan
 
-**Status:** ✅ DETERMINISTIC-FIRST BASELINE APPROVED (Test 3 PASS) · **LLM enrichment NOT APPROVED / UNDER TEST (Test C3 after the v6 quality patch)** · MSK timestamps (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
+**Status:** ✅ DETERMINISTIC-FIRST BASELINE APPROVED (Test 3 PASS) · **LLM enrichment NOT APPROVED / UNDER TEST (Test C4 after the v7 specialized-schema patch)** · MSK timestamps (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
 **Stage:** 3.2 (Touchpoint Analyzer) of the Business Scout Agent.
-**Date:** 2026-06-09 · **Decisions:** DEC-080, DEC-081, DEC-082, DEC-083, DEC-085, DEC-086, DEC-087 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
+**Date:** 2026-06-09 · **Decisions:** DEC-080, DEC-081, DEC-082, DEC-083, DEC-085, DEC-086, DEC-087, DEC-088 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
 **Test log:** `docs/STAGE_3_2_TEST_RESULTS.md`. **Next stage:** `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
 
+> **Specialized source_candidate schema v7 (DEC-088):** Test C3 processed the 4 fixtures (`technical_errors=0`, routes
+> preserved) and improved Avito/Banki/Zoon, but was a **PARTIAL PASS / NOT APPROVED** — `primary_json=2/4` because the
+> **Telegram `source_candidate` (7) still failed strict JSON and fell back**. v7 gives source_candidate /
+> `source_type=social_channel` / Telegram a **specialized ultra-short 7-key enrichment schema** (`profile_name,
+> service_type, offer_text, detected_need, reason, content_idea_score, quality_score`) with a minimal payload; repair
+> uses the same 7-key schema; a post-merge safety assertion keeps route/entity/action/contact/lead/competitor
+> deterministic. Avito/Banki/Zoon untouched. Specialized `max_tokens` 500/400 (no cost rise). Re-test = **Test C4**
+> (`primary_json≥3/4`, `fallback=0` ideally ≤1, **Telegram not fallback**, Banki no direct-contact, Zoon→content, cost
+> ≤$0.04). **LLM enrichment stays NOT APPROVED until Test C4 passes (or is explicitly deferred); Stage 3.3 blocked
+> until then.**
+>
 > **Enrichment-quality patch v6 (DEC-087):** Test C2 attempt #2 processed the intended 4 fixtures (`technical_errors=0`,
 > routes preserved) but was a **PARTIAL PASS / NOT APPROVED** — `primary_json=2/4` (target ≥3/4); Telegram (7) fell
 > back, Zoon (12) needed repair and was over-classified as a competitor, Banki (11) reason had a no-contact outreach

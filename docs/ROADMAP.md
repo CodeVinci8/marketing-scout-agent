@@ -164,10 +164,15 @@ the approved path until Stage 2.4 is built and live-validated.
   attempt #2 = PARTIAL PASS / NOT APPROVED** (4 fixtures processed, `technical_errors=0`, routes preserved, but
   `primary_json=2/4`; Telegram fell back, Zoon over-classified as competitor, Banki reason had a no-contact outreach
   phrase) → **v6 (DEC-087)**: shorter compact source/review prompt + deterministic HINTS, named-only competitor for
-  review directories (Zoon generic → `content_idea`/`content_queue`, competitor_strength ≤45), and deterministic
-  no-contact + no-trend reason sanitizers; `max_tokens`/cost unchanged. Re-test = **Test C3** (target `primary_json≥3/4`,
-  `fallback≤1/4`, Banki reason no direct-contact, Zoon→content, Telegram not fallback, cost ≤$0.04) before enabling.
-  **Timestamps Moscow `+03:00`** (DEC-083). Test log: `docs/STAGE_3_2_TEST_RESULTS.md`.
+  review directories, no-contact + no-trend reason sanitizers. **Test C3 = PARTIAL PASS / NOT APPROVED** (4 fixtures,
+  `technical_errors=0`, routes preserved, Avito/Banki/Zoon now good, but `primary_json=2/4` because **Telegram
+  `source_candidate` still fell back**) → **v7 (DEC-088)**: source_candidate / `source_type=social_channel` / Telegram
+  use a **specialized ultra-short 7-key enrichment schema** (`profile_name, service_type, offer_text, detected_need,
+  reason, content_idea_score, quality_score`) + minimal payload; repair uses the same 7-key schema; a post-merge safety
+  assertion keeps route/entity/action/contact/lead/competitor deterministic; specialized `max_tokens` 500/400 (no cost
+  rise). Re-test = **Test C4** (target `primary_json≥3/4`, `fallback=0` ideally ≤1, **Telegram not fallback**, Banki no
+  direct-contact, Zoon→content, cost ≤$0.04) before enabling. **Timestamps Moscow `+03:00`** (DEC-083). Test log:
+  `docs/STAGE_3_2_TEST_RESULTS.md`.
 - **3.3 — First real source connector (DECISION)** 📐 **DECIDED 2026-06-08 (DEC-084), NOT BUILT**: recommended first
   connector = **Avito/Classifieds Listing Connector** (lowest complexity, matches the web/URL data model; caveat —
   competitor/offer/semantic source, not audience/comment mining). Telegram public parsing (≠ Control Bot) and

@@ -2,8 +2,35 @@
 
 **Workflow:** `n8n/workflows/08_touchpoint_analyzer.json`
 **Имя:** `08 - Touchpoint Analyzer`
-**Статус:** ✅ DETERMINISTIC-FIRST BASELINE ОДОБРЕН (Test 3 PASS); **LLM enrichment — НЕ ОДОБРЕН, ПОД ТЕСТОМ (Test C3 после патча v6).** `active=false`. Stage 3.2 (Business Scout Agent).
-**Дата:** 2026-06-09 (v6 — качество обогащения после C2 PARTIAL PASS — DEC-087; ранее DEC-085/086/082/083)
+**Статус:** ✅ DETERMINISTIC-FIRST BASELINE ОДОБРЕН (Test 3 PASS); **LLM enrichment — НЕ ОДОБРЕН, ПОД ТЕСТОМ (Test C4 после патча v7).** `active=false`. Stage 3.2 (Business Scout Agent).
+**Дата:** 2026-06-09 (v7 — специализированная схема source_candidate — DEC-088; ранее DEC-087/085/086/082/083)
+
+> **ПАТЧ v7 (DEC-088) — специализированные компактные схемы обогащения ПО СЕМЕЙСТВУ записей. LLM enrichment остаётся
+> НЕ ОДОБРЕН до прохождения Test C4 (или явного отказа от обогащения).** Test C3 обработал 4 записи
+> (`technical_errors=0`, маршруты сохранены, MSK OK), качество выросло (Avito — хороший `primary_json` 78/80; Banki —
+> корректно `review_queue`/`lead_signal`/`investigate`, без прямого контакта, lead 75; Zoon — `content_idea`/
+> `content_queue`, comp 45 / content 70 / qual 68), **но `primary_json=2/4`: Telegram `source_candidate` (7) по-прежнему
+> срывает строгий JSON и уходит в fallback.** Патч v7 (без роста стоимости — путь даже короче):
+> - **Специализированный путь для source_candidate / social-каналов.** Записи с
+>   `record_type_hint=market_signal AND touchpoint_type=source_candidate`, **или** `source_type=social_channel`,
+>   **или** `platform=telegram` без прямого личного запроса — используют **отдельный ультра-короткий системный промпт**
+>   («Return JSON only… первый символ `{`, последний `}`… только данная запись, без браузинга… публичный источник
+>   мониторинга/контента, НЕ прямой лид и НЕ outreach») и **минимальный payload** (`task=enrich_source_candidate`,
+>   platform, profile_name, profile_url, text_context, interest_topic, service_hint, deterministic_entity_type,
+>   deterministic_action). Выходная схема — **только 7 ключей**: `profile_name, service_type, offer_text, detected_need,
+>   reason, content_idea_score, quality_score`. Модели **запрещено** возвращать `company_name / route / entity_type /
+>   recommended_action / lead_signal_score / competitor_strength`. **Меньшая поверхность ответа = выше надёжность
+>   строгого JSON**, и Telegram больше не уходит в fallback. `max_tokens=500`.
+> - **Repair для этого семейства** чинит в **те же 7 ключей** (не раздувает до 15-ключевой общей схемы), `max_tokens=400`.
+> - **Merge** накладывает только эти 7 описательных полей + content/quality-баллы; `route=content_queue`,
+>   `entity_type=content_idea`, `recommended_action=create_content`, `lead_signal_score=1`, `competitor_strength=1`,
+>   `contact_public=''` остаются **детерминированными**. **Пост-merge safety assertion** (Task D) гарантирует это для
+>   social-источников: route остаётся `content_queue` (если det-маршрут не был `review_queue`), entity=content_idea,
+>   action∈{create_content,investigate}, контакт пуст (если не указан явно), lead=1 (если нет прямого личного запроса),
+>   competitor_strength=1 (если запись не `competitor_activity`).
+> - **Avito/Banki/Zoon — без изменений** (общий промпт / review-source v6). Регрессии нет.
+> Цель Test C4: `primary_json≥3/4`, `fallback=0` (идеально, ≤1 допустимо), `technical_errors=0`, **Telegram не
+> fallback**, Banki без прямого контакта, Zoon→content, стоимость ≤$0.04. Шаги — `docs/STAGE_3_2_TEST_RESULTS.md` Test C4.
 
 > **ПАТЧ v6 (DEC-087) — качество обогащения после C2 PARTIAL PASS. LLM enrichment остаётся НЕ ОДОБРЕН до прохождения
 > Test C3.** Test C2 (attempt #2) обработал нужные 4 записи (`technical_errors=0`, маршруты сохранены, MSK OK), но

@@ -4,6 +4,44 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-09 — Workflow 08 specialized source_candidate schema v7 after C3 PARTIAL PASS (DEC-088)
+
+**What was done (C4 — Telegram JSON stabilization; baseline + Avito/Banki/Zoon untouched):**
+- **C3 result recorded = PARTIAL PASS / LLM NOT APPROVED:** processed the 4 fixtures, `technical_errors=0`, routes
+  preserved, MSK OK; `primary_json=2/4`, `repaired_json=1/4`, `fallback=1/4`. Quality improved — Avito good
+  `primary_json` (78/80); Banki correct `review_queue`/`lead_signal`/`investigate`, no direct-contact, lead 75; Zoon
+  `content_idea`/`content_queue`, comp 45 / content 70 / qual 68. **Only weakness left: Telegram source_candidate (7)
+  still fails strict JSON → fallback.**
+- **Patch v7 (`08_touchpoint_analyzer.json`, JSON valid, active=false, versionId …v007-c4…):**
+  - **A** `Build Primary Claude Request`: source_candidate / `source_type=social_channel` / telegram-content_idea now
+    use a **specialized ultra-short prompt + minimal payload + 7-key schema** (`profile_name, service_type, offer_text,
+    detected_need, reason, content_idea_score, quality_score`); model told NOT to emit company_name/route/entity_type/
+    recommended_action/lead/competitor, no outreach, no "direct lead". `max_tokens=500`.
+  - **B** Avito/Banki keep the general prompt; Zoon keeps the review-source compact prompt (v6) — no regression.
+  - **C** `Build Repair Request`: same family repairs into the **same 7-key schema** (not the 15-key general), `max_tokens=400`.
+  - **D** `Merge …` **safety assertion**: for social sources route stays `content_queue` (unless det route was
+    `review_queue`), entity_type=content_idea, action∈{create_content,investigate}, contact='' unless present,
+    lead_signal_score=1 unless a direct personal request, competitor_strength=1 unless competitor_activity. The 7-key
+    output overlays only descriptive fields + content/quality scores.
+- **Verified:** `json.tool` VALID; all 10 code nodes compile; Build Primary picks the specialized 7-key path for the
+  Telegram fixture (max_tokens 500, `enrich_source_candidate`) and general/review paths for Avito/Banki/Zoon; merge of
+  a 7-key Telegram enrichment → `content_queue`/`content_idea`/`create_content`, lead 1 / comp 1 / contact='' / content
+  60 / qual 60 with descriptive fields merged; Avito→monitor, Banki→review (forbidden contact phrase sanitized),
+  Zoon→content; **35 fields** on every path; **C4 test filter selects exactly [1,7,11,12]**, default 12; MSK preserved;
+  no real keys / no real Spreadsheet ID (3× PASTE) / only aiprimetech URL / no Apify-Firecrawl (disclaimer only) / no
+  tool_use / no KEY=VALUE; WF04/05/06/07 untouched; no Stage 3.3 connector.
+- **Decision:** DEC-088 (specialized compact schemas by record family; source candidates/social channels use a minimal
+  7-key schema + deterministic route preservation). Docs: STAGE_3_2_TEST_RESULTS (C3 PARTIAL PASS + v7 + C4 target),
+  DECISIONS, WF08 RU, plan, NEXT_ACTIONS, COSTS, CAPABILITIES, ROADMAP, AGENT_LOG.
+
+**Next operator action:** re-import WF08 → bind creds + Spreadsheet ID → `llm_enrichment_test_mode=true` → record Claude
+balance → Execute once → fill **Test C4** (expect `primary_json≥3/4`, **Telegram not fallback**, fallback 0 ideally,
+Banki no direct-contact, Zoon→content, cost ≤$0.04) → **restore `llm_enrichment_test_mode=false`**. LLM enrichment
+stays NOT APPROVED until C4 passes or is explicitly deferred; deterministic_first remains the approved default. Stage
+3.3 blocked until then. No connector built.
+
+---
+
 ## Session: 2026-06-09 — Workflow 08 enrichment-quality patch v6 after C2 PARTIAL PASS (DEC-087)
 
 **What was done (quality patch; baseline + routing safety untouched):**
