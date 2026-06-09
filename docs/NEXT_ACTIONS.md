@@ -4,33 +4,36 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-08) — Workflow 08 C2 filter bug fixed (v5, DEC-086) → re-run Test C2 attempt #2 (NOT Stage 3.3 yet)
+## CURRENT PRIORITY (2026-06-09) — Workflow 08 C2 PARTIAL PASS → enrichment-quality patch (v6, DEC-087) → re-run Test C3 (NOT Stage 3.3 yet)
 
-The deterministic_first baseline stays **APPROVED** (Test 3). **C2 attempt #1 was INCOMPLETE (not failed):** the v4
-compact enrichment worked on batch_index=1 (Avito → `monitor_queue`, `primary_json`, no repair, good enrichment) but
-the run **stalled after record 1** — the test filter used `return []` inside `Build Deterministic Row`, which stops
-Split-in-Batches loop continuation. **Patched v5 (DEC-086):** C2 filtering moved **pre-loop** into
-`Filter & Select Records` (loop now receives exactly the 4 fixtures); `Build Deterministic Row` no longer returns
-`[]`; `Final Summary` reports `selected_count` + test flags. Defaults remain
+The deterministic_first baseline stays **APPROVED** (Test 3). **Test C2 attempt #2 was a PARTIAL PASS — LLM enrichment
+NOT APPROVED:** it processed the intended 4 fixtures (batch_index 1, 7, 11, 12) with `technical_errors=0` and routes
+preserved, but `primary_json=2/4` (target ≥3/4), and four reason/classification issues remained — Telegram (7) fell
+back, Zoon (12) needed repair and was classified too strongly as a competitor, Banki (11) reason said «обратиться
+напрямую» without a contact, and reasons risked unsupported "demand-growth" claims. **Patched v6 (DEC-087):** compact
+source/review prompt + deterministic HINTS; review directories are competitors only when a `competitor_name` is named
+(Zoon generic → `content_idea`/`content_queue`, competitor_strength ≤45); deterministic sanitizers strip no-contact
+outreach phrases and unsupported trend claims. `max_tokens` unchanged; no cost increase. Defaults remain
 `deterministic_first` / `llm_enrichment=false` / `llm_enrichment_test_mode=false`.
 
-**Re-run Test C2 attempt #2 (WF08; gates LLM approval):**
+**Re-run Test C3 (WF08; gates LLM approval):**
 1. [ ] Re-import WF08 (do NOT activate); re-bind Claude + Sheets creds + Spreadsheet ID.
 2. [ ] Set **`llm_enrichment_test_mode=true`** (keeps `llm_test_batch_indexes=[1,7,11,12]`).
 3. [ ] Record Claude balance **BEFORE** → **Execute once** → balance **AFTER**.
-4. [ ] Fill `docs/STAGE_3_2_TEST_RESULTS.md` **Test C2 (attempt #2)**: expect **all 4 processed** —
-   `Final Summary` `selected_count=4` / `total_processed=4`, **exactly 4 rows** (1,7,11,12; other 8 not written),
-   `technical_errors=0`, **`primary_json ≥3/4`**, `repaired_json ≤1/4`, `deterministic_fallback ≤1/4`, routes
-   unchanged (1→monitor, 7→content, 11→review (never results/contact), 12→monitor), reason improved, **cost delta
-   ≤ $0.04**.
+4. [ ] Fill `docs/STAGE_3_2_TEST_RESULTS.md` **Test C3**: expect **all 4 processed** (`selected_count=4` /
+   `total_processed=4`, other 8 not written), `technical_errors=0`, **`primary_json ≥3/4`**,
+   `deterministic_fallback ≤1/4`; **Banki (11)** reason has no «обратиться/написать/позвонить/связаться» and stays
+   `review_queue`/`investigate`; **Zoon (12)** → `content_idea`/`content_queue` (or at least no demand-growth/strong-
+   competitor claim), `detected_need` = «быстрое одобрение, без поручителей/справок, оплата комиссии после
+   результата»; **Telegram (7)** → `primary_json`/`repaired_json` (not fallback), `content_queue`; **cost ≤ $0.04**.
 5. [ ] **Restore `llm_enrichment_test_mode=false` after the test.**
-6. [ ] If C2 passes → enrichment may be enabled per-run (`analysis_mode='llm_enriched'` + `llm_enrichment=true`);
+6. [ ] If C3 passes → enrichment may be enabled per-run (`analysis_mode='llm_enriched'` + `llm_enrichment=true`);
    if it fails → keep deterministic_first as the production default and iterate the prompt.
 
 **Optional baseline re-confirm (defaults):** Execute once with all flags `false` → Claude calls=0 / $0,
 `deterministic_pre_route=10`, `deterministic_irrelevant_skip=2`, routes 6/3/1/2, `technical_errors=0`.
 
-**Only AFTER Test C2** — Stage 3.3 source decision is documented (`docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`,
+**Only AFTER Test C3** — Stage 3.3 source decision is documented (`docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`,
 Avito/Classifieds first, DEC-084). **Do NOT build any source connector yet.**
 
 > Still NOT built/approved: Avito/Dzen/VK/Telegram/Instagram parsers, competitor-audience scraping, Telegram

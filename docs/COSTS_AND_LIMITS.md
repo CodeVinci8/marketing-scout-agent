@@ -126,6 +126,15 @@ Three cost axes with different drivers and spend gates — tracked **separately*
   return) — **no extra API calls, no cost change.** The corrected C2 attempt #2 will make **4 primary calls**
   (+ ≤1 repair); **target cost delta ≤ $0.04** — record the exact delta. Default mode remains **$0**.
 
+### C2 attempt #2 result + v6 enrichment-quality patch (DEC-087) — cost impact
+- **C2 attempt #2 (actual):** processed the intended 4 fixtures, `technical_errors=0`, routes preserved, but
+  `primary_json=2/4` (target ≥3/4), `repaired_json=1/4`, `fallback=1/4` → **PARTIAL PASS, LLM enrichment NOT
+  APPROVED**.
+- **v6 (DEC-087) does NOT change cost:** `max_tokens` unchanged (primary 700 / repair 600), thinking still disabled,
+  schema still compact; it only shortens the source/review prompt and adds deterministic HINTS + reason sanitizers.
+  **Test C3 keeps the same cost target ≤ $0.04 for 4 records** — record the exact delta. Default mode remains **$0**.
+  Better JSON reliability should reduce repair calls, which only **lowers** cost.
+
 ---
 
 ## Estimate Table

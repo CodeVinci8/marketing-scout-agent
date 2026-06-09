@@ -2,8 +2,24 @@
 
 **Workflow:** `n8n/workflows/08_touchpoint_analyzer.json`
 **Имя:** `08 - Touchpoint Analyzer`
-**Статус:** ✅ DETERMINISTIC-FIRST BASELINE ОДОБРЕН (Test 3 PASS); LLM enrichment — ОПЦИОНАЛЬНО / ПОД ТЕСТОМ (Test C2). `active=false`. Stage 3.2 (Business Scout Agent).
-**Дата:** 2026-06-08 (v4 — enrichment-only merge — DEC-085; ранее DEC-082/083)
+**Статус:** ✅ DETERMINISTIC-FIRST BASELINE ОДОБРЕН (Test 3 PASS); **LLM enrichment — НЕ ОДОБРЕН, ПОД ТЕСТОМ (Test C3 после патча v6).** `active=false`. Stage 3.2 (Business Scout Agent).
+**Дата:** 2026-06-09 (v6 — качество обогащения после C2 PARTIAL PASS — DEC-087; ранее DEC-085/086/082/083)
+
+> **ПАТЧ v6 (DEC-087) — качество обогащения после C2 PARTIAL PASS. LLM enrichment остаётся НЕ ОДОБРЕН до прохождения
+> Test C3.** Test C2 (attempt #2) обработал нужные 4 записи (`technical_errors=0`, маршруты сохранены, MSK OK), но
+> `primary_json=2/4` (цель ≥3/4) и были проблемы качества: Telegram (7) ушёл в fallback; Zoon (12) потребовал repair и
+> классифицирован как сильный конкурент (хотя это обобщённый каталог отзывов); Banki (11) reason содержал «обратиться
+> напрямую» без публичного контакта; риск необоснованных «спрос растёт». Патч v6 (без роста `max_tokens`/стоимости):
+> (A) **короткий компактный промпт** для source_candidate/Telegram (`content_idea` + `create_content/investigate`,
+> reason как «источник мониторинга», без прямого лида/контакта/внешних фактов); (B) **`review_source`**: сильный
+> конкурент только при заданном `competitor_name` → `monitor_queue`; обобщённый каталог/категория (Zoon
+> «кредитные брокеры в Москве») → `content_idea`/`content_queue`, `competitor_strength` ≤45; (C) **санитайзер reason**
+> в `Merge …`: без контакта нельзя «обратиться напрямую/написать/позвонить/связаться» (замена на «требует ручной
+> проверки»), маршрут остаётся `review_queue`/`investigate`; (D) запрет «спрос растёт/активно задают/много
+> лидов/высокая конверсия», если их нет в исходной записи; (E) детерминированные **HINTS**
+> (`expected_entity_type/action/route`, `no_contact_safety`, `forbidden_phrases`) в payload primary **и** repair.
+> Цель Test C3: `primary_json≥3/4`, fallback≤1/4, `technical_errors=0`, Banki без прямого контакта, Zoon→content,
+> Telegram не fallback, стоимость ≤$0.04. Шаги — `docs/STAGE_3_2_TEST_RESULTS.md` Test C3.
 
 > **ПАТЧ v4 (DEC-085) — обогащение через компактный JSON, мерж в детерминированную строку.** Первый LLM-тест (Test C,
 > v3) был PARTIAL PASS / LLM НЕ ОДОБРЕН: маршруты безопасны, но слишком много fallback и **стоимость $0.0967 за 4
