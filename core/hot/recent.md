@@ -4,6 +4,38 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-10 — Stage 3.3 Competitor Ad/Semantic Intelligence quality patch (WF09 v2 + WF08 v9, DEC-092)
+
+**What was done (improve Avito competitor ad-intelligence; fixture-mode only, baseline preserved):**
+- **WF09** (`…v002-ad-intel`): `max_items=6` + `include_irrelevant_control_fixture=true` (fixture max_items = total
+  emitted incl. control; `requested_limit`=actual count); richer `service_hint`
+  (credit_broker/business_credit[explicit ИП/ООО only]/credit_after_refusals/mortgage_refinance/unknown, from
+  title+desc+category not query) + concrete deduplicated `semantic_keywords`; `manager_note` keeps offer+price+terms;
+  Apify live node → `genericCredentialType`/`httpHeaderAuth` (placeholder cred; `Authorization: Bearer <APIFY_TOKEN>`),
+  runs only on `fixture_mode=false`, no secrets.
+- **WF08** (`…v009-classified-ad-intel`): new `classifiedCompetitorDet()` for `source_type=classified`+`platform=avito`
+  rows with the `^Avito объявление:` signature (WF09-only → WF07 manual avito untouched): `offer_text`=listing title,
+  `terms`=price+conditions, preserved specific `service_type`, competitor-ad `reason`; scores competitor_strength
+  75–85 / lead=1 / content_idea 35–55 / quality 70–85; irrelevant control all-1. Build Deterministic Row now emits
+  `terms:str(det.terms)` + `det.reason`. No Claude in deterministic_first; no-contact safety unchanged.
+- **Verified (sim):** both JSON VALID; active=false; defaults fixture_mode=true/live_mode=false/max_items=6;
+  WF08 filtered handoff → monitor_queue=5/skipped_log=1, deterministic_pre_route×5+deterministic_irrelevant_skip×1,
+  offer_text=title, terms=price+conditions, content_idea 50–55, service themes preserved; **12-record Stage 3.2
+  baseline route counts identical to pre-patch HEAD** (5/4/2/1); WF09 40/15/21 cols + WF08 35 fields + source-handoff
+  filters preserved; Apify header-auth + placeholders only; MSK preserved; no business-tab writes; no tool_use/KEY=VALUE;
+  WF04/05/06/07 untouched.
+- **Important:** all tests fixture-mode only — **no real Avito scrape** (source cost $0, Apify node did not run).
+  Status: fixture + handoff approved; **live scrape not tested**.
+- **Decision:** DEC-092. Docs: WF09 RU, WF08 RU (§4b), STAGE_3_3_TEST_RESULTS, STAGE_3_3 plan + source decision,
+  LEAD_DISCOVERY_ARCHITECTURE, LEAD_DATA_MODEL_PLAN, SOCIAL_CLASSIFIED_SOURCE_MATRIX, NEXT_ACTIONS, COSTS,
+  AGENT_CAPABILITIES, ROADMAP (Stage 3.4 = Social Source Parsing Strategy), AGENT_LOG, core/hot/recent.
+
+**Next operator action:** re-import WF09+WF08 → (A) WF08 handoff retest with `avito_req_20260610_214709` (5/1 unchanged +
+rich offer/terms/scores) → (B) optional WF09 duplicate retest → (C) optional future live Apify smoke. Real Avito scrape
+untested until live_mode=true.
+
+---
+
 ## Session: 2026-06-10 — Workflow 08 PATCHED v8: source-handoff filters (DEC-091)
 
 **What was done (scope WF08 to one connector run; baseline + llm test mode preserved):**

@@ -177,7 +177,7 @@ the approved path until Stage 2.4 is built and live-validated.
   APPROVED WITH WATCH ITEM** for optional / test use; **default stays `deterministic_first` unless the operator
   explicitly enables `llm_enrichment`**; watch item = Banki/forum lead-pattern still falls back (safe). C4 cost delta:
   TODO_OPERATOR_FILL. **Timestamps Moscow `+03:00`** (DEC-083). Test log: `docs/STAGE_3_2_TEST_RESULTS.md`.
-- **3.3 — First real source connector: Avito/Classifieds Listing Connector** 🔧 **BUILT, UNDER TEST (2026-06-10, DEC-090)**:
+- **3.3 — First real source connector: Avito/Classifieds Listing Connector** 🔧 **BUILT + AD-INTELLIGENCE PATCH; FIXTURE + HANDOFF PASS, LIVE SCRAPE NOT TESTED (2026-06-10, DEC-090/092)**: WF09 fixture tests + the WF08 deterministic handoff passed (monitor 5 / skipped 1 / technical_errors 0 / Claude 0); **fixture-mode only — no real Avito scrape** (`fixture_mode=true`, `live_mode=false`, source cost $0). **DEC-092 quality patch:** WF09 `max_items=6` (= total fixture records), richer `service_hint`/`semantic_keywords`, Apify live node wired for HTTP Header Auth (no secrets); WF08 deterministically enriches Avito competitor rows (offer/title, price/terms, specific service theme, content_idea_score 35–55, competitor_strength 75–85) — gated to WF09-origin rows, Stage 3.2 baseline unchanged. Live Apify smoke (actor id + bound credential, `max_items=3–5`) still pending.
   `Workflow 09 — Avito Classifieds Listing Connector` (`active=false`, **fixture mode default, $0, no Apify call, no
   LLM**) transforms Avito/classified listings into `raw_market_records` for the Touchpoint Analyzer (Workflow 08).
   First real source after manual intake; directly supports **Competitor Ad Intelligence / Semantic Intelligence**
@@ -190,10 +190,15 @@ the approved path until Stage 2.4 is built and live-validated.
   40/15/21-column outputs match WF07. Plan: `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`; guide:
   `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`; test log: `docs/STAGE_3_3_TEST_RESULTS.md`; source
   decision: `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
-- **3.4 — Telegram public source feasibility (NEXT)** 📋 PLANNED — **not built**: feasibility/design for reading
-  **public** Telegram channels/messages as a source connector (questions, market pains, content/market signals). The
-  **Telegram Parser ≠ Telegram Control Bot** (DEC-067): it needs a separate client/MTProto-style session + compliance
-  design; groups/members/comments/DMs are higher-risk and out of scope here. Build only after explicit approval.
+- **3.4 — Social Source Parsing Strategy (NEXT — strategy doc, NOT a build)** 📋 PLANNED — **not built**: Avito is only
+  the **first** connector. A wider strategy must compare future social sources — **Telegram** public channels/groups,
+  **VK** public posts/groups/comments, **Instagram** public posts/comments/competitors, **Dzen** posts/comments,
+  **review platforms / maps** — across: official APIs where practical · Apify/actor approach · Firecrawl/web approach
+  for public pages · public-preview parsing · account/client-based scraping risks · legal/platform/rate-limit risks ·
+  dedup & data quality · competitor-intelligence value · lead-signal value · cost comparison · **source ranking**. The
+  **Telegram Parser ≠ Telegram Control Bot** (DEC-067): needs a separate client/MTProto-style session + compliance
+  design; groups/members/comments/DMs are higher-risk. **No social parser is built in this stage** — strategy only;
+  build only after explicit approval + per-source feasibility/compliance.
 - **3.5 — Competitor Semantic & Ad Intelligence aggregation (later)** 📋 PLANNED — **not built**: aggregate competitor
   offers, prices/terms, ad wording, positioning, semantic keywords, and ad channels across collected
   `raw_market_records` into reusable competitor/semantic intelligence (read-only over existing sheets; no new

@@ -36,9 +36,11 @@ external API call, no credential, no actor run.
 - **Attributes:** ease **high** · business value **high** (competitors / offers / semantics / ad wording) · lead
   value **medium/low** (unless a listing shows direct client demand) · risk **medium** (scraping/marketplace ToS) ·
   **recommended stage 3.3**.
-- **Build status:** `Workflow 09 — Avito Classifieds Listing Connector` built, **fixture mode by default ($0)**;
-  live Apify mode documented + disabled by default. Writes only `agent_requests`/`raw_market_records`/
-  `market_record_registry`; no business-tab writes; no auto-handoff to Workflow 08.
+- **Build status:** `Workflow 09 — Avito Classifieds Listing Connector` built + ad-intelligence quality patch
+  (DEC-092), **fixture mode by default ($0)**; **fixture + WF08 handoff tested PASS, live Apify scrape NOT tested**
+  (`fixture_mode=true`, `live_mode=false`, Apify node did not run). Writes only `agent_requests`/`raw_market_records`/
+  `market_record_registry`; no business-tab writes; no auto-handoff to Workflow 08. Workflow 08 now deterministically
+  enriches Avito competitor rows (offer/title, price/terms, specific service theme, content_idea_score 35–55).
 - **Target use case:** **competitor ad / semantic intelligence first** (offers, prices/terms, ad wording,
   positioning, keywords, ad channels); secondary direct, high-intent leads ("займ под ПТС / деньги под авто Москва").
 - **Data expected:** classified listings + seller profiles, region/category filterable.

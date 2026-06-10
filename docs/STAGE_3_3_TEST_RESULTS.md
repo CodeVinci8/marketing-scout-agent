@@ -1,10 +1,45 @@
 # STAGE_3_3_TEST_RESULTS.md — Avito/Classifieds Listing Connector Test Results
 
 **Workflow:** `n8n/workflows/09_avito_classifieds_listing_connector.json` (`09 - Avito Classifieds Listing Connector`, `active=false`)
-**Stage:** 3.3 · **Related:** `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`, `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`, DEC-090.
+**Stage:** 3.3 · **Related:** `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`, `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`, DEC-090, DEC-092.
 
 > Templates below are filled by the operator after each run. Logic was **simulation-verified** at build time
 > (see "Build-time simulation" notes); live Google Sheets writes still need an operator run to confirm.
+
+---
+
+## RESULTS SO FAR (recorded 2026-06-10) — fixture + handoff PASS; live scrape NOT tested
+
+> **Fixture-mode only — no real Avito scrape happened.** `fixture_mode=true`, `live_mode=false`, source cost $0, the
+> Apify HTTP node did not run. These runs prove the **pipeline shape** (Avito-like listing → `raw_market_records` →
+> `market_record_registry` → Workflow 08 → monitor/skipped), **not** real Avito scraping.
+
+- **Test 1 — fixture first run: ✅ PASS** — `agent_requests +1`, `raw_market_records +6`, `market_record_registry +6`;
+  `platform=avito`, `source_type=classified`; 5 competitor listings + 1 irrelevant POS-terminal control;
+  `dedup_status=unique`, `approval_status=new`; MSK `+03:00` OK; `semantic_keywords`/`ad_channel_hint`/`competitor_related`
+  populated; `estimated_analysis_cost_usd=0`. Example `agent_request_id=avito_req_20260610_214709`.
+- **Test 2 — fixture duplicate run: ✅ PASS** — `agent_requests +1`, `market_record_registry +0`, all
+  `duplicate_in_registry`; `raw_market_records +6` audit (write_duplicate_audit=true).
+- **Test 3 (handoff) — Workflow 08 deterministic handoff: ✅ PASS** — `agent_request_id_filter` set to the latest
+  `avito_req`, `max_records=6` → `monitor_queue=5`, `skipped_log=1`, `technical_errors=0`, Claude calls=0.
+- **Issue found:** Competitor Ad Intelligence business fields were weak — `offer_text` held the query (not the listing
+  title), `terms` empty, `content_idea_score=1`, specific service themes lost. **Fixed by DEC-092** (WF09 service_hint/
+  keywords + WF08 deterministic Avito enrichment). **Retest after the patch — see "RETEST TARGET (post-DEC-092)" below.**
+- **Live Avito scrape: NOT tested** — requires `fixture_mode=false`, `live_mode=true`, a real Apify actor id, and a
+  bound Apify HTTP Header credential. Until then status = **fixture + handoff approved; live scrape not tested**.
+
+### RETEST TARGET (post-DEC-092) — WF08 handoff still 5/1, now with rich ad intelligence
+Re-run the handoff (same filter, `max_records=6`) and confirm routing is unchanged **and** the business fields improved:
+- `monitor_queue=5`, `skipped_log=1`, `technical_errors=0`, Claude calls=0 (unchanged).
+- `offer_text` = actual listing title (e.g. «Помощь в получении кредита. Кредитный брокер»), **not** the query.
+- `terms` = price + explicit conditions (e.g. «от 30 000 ₽; оплата за результат; работа по договору»).
+- `content_idea_score` = 35–55 for competitor listings (50–55 for strong-pain/semantics; 1 stays only for irrelevant).
+- `service_type` preserves the specific theme (credit_broker / business_credit / credit_after_refusals / mortgage_refinance).
+- `reason` mentions offer/price/semantic angle + Avito/classifieds + monitor.
+
+Build-time simulation (post-DEC-092, filtered handoff): monitor_queue=5 / skipped_log=1; `deterministic_pre_route×5 +
+deterministic_irrelevant_skip×1`; competitor_strength 78–85; lead_signal_score=1; content_idea_score 50–55;
+quality_score 78–82; offer_text=title; terms=price+conditions; service_type themes preserved; irrelevant control all-1.
 
 ---
 

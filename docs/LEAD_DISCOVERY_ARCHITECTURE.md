@@ -32,7 +32,11 @@
 > ```
 >
 > The connector **never** calls Claude and **never** writes the business tabs; Workflow 08 owns routing. No
-> auto-handoff. Supports **Competitor Ad / Semantic Intelligence**. **Handoff scoping (DEC-091):** Workflow 08 reads
+> auto-handoff. Supports **Competitor Ad / Semantic Intelligence** — and after **DEC-092** Workflow 08 deterministically
+> turns Avito competitor rows into rich ad-intelligence: `offer_text`=listing title, `terms`=price+conditions, specific
+> `service_type` (credit_broker/business_credit/credit_after_refusals/mortgage_refinance), `content_idea_score` 35–55,
+> `competitor_strength` 75–85, competitor-ad `reason` — no Claude, routing unchanged. **Fixture + handoff tested; live
+> Avito scrape NOT tested** (`fixture_mode=true`, source cost $0). **Handoff scoping (DEC-091):** Workflow 08 reads
 > *all* `raw_market_records`, so the operator scopes a connector handoff with WF08's optional
 > `agent_request_id_filter` (+ `platform_filter` / `source_type_filter`) so only that run's rows are processed (not
 > old Stage 3.1/3.2 rows). Empty filters = unchanged default behavior. Guide:

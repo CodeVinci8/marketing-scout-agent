@@ -1,6 +1,15 @@
 # STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md — Stage 3.3 Plan
 
-**Status:** 🔧 BUILT, UNDER TEST (fixture mode default) — `n8n/workflows/09_avito_classifieds_listing_connector.json`, `active=false`.
+**Status:** 🔧 BUILT + AD-INTELLIGENCE QUALITY PATCH (DEC-092); fixture + WF08 handoff PASS, **live Avito scrape NOT tested** — `n8n/workflows/09_avito_classifieds_listing_connector.json`, `active=false`.
+
+> **Quality patch (DEC-092, 2026-06-10):** WF09 — `max_items=6` (= total fixture records incl. the irrelevant
+> control; `requested_limit` matches actual output), richer `service_hint`
+> (credit_broker/business_credit/credit_after_refusals/mortgage_refinance/unknown) and concrete `semantic_keywords`,
+> Apify live node now wired for HTTP Header Auth (no secrets, runs only on `fixture_mode=false`). WF08 — deterministic
+> Avito/classified enrichment: `offer_text`=listing title, `terms`=price+conditions, preserved `service_type`,
+> `content_idea_score` 35–55, `competitor_strength` 75–85, competitor-ad `reason`; gated to WF09-origin rows so the
+> Stage 3.2 baseline is unchanged. **Fixture/handoff tests only — no real Avito scrape yet** (`fixture_mode=true`,
+> `live_mode=false`, source cost $0, Apify node did not run).
 **Stage:** 3.3 (First real source connector) of the Business Scout Agent.
 **Date:** 2026-06-10 · **Decisions:** DEC-090 (build) · DEC-084 (source choice) · prior DEC-078/079/080/089.
 **Guide:** `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md` · **Test log:** `docs/STAGE_3_3_TEST_RESULTS.md`.
@@ -96,6 +105,10 @@ Apify smoke test, Test 4 Workflow 08 handoff).
 
 ## 9. Next stage
 
-- **Stage 3.4 — Telegram public source feasibility** (separate parser design; ≠ Control Bot).
+- **Stage 3.4 — Social Source Parsing Strategy** (strategy doc, not a build): Telegram public channels/groups, VK
+  public posts/groups/comments, Instagram public posts/comments, Dzen posts/comments, review platforms/maps — compare
+  official APIs vs Apify/actor vs Firecrawl/web vs public-preview parsing; account/client scraping risks; legal/
+  platform/rate-limit risks; dedup & data quality; competitor-intelligence value vs lead-signal value; cost; source
+  ranking. Avito is only the **first** connector. No parser built here.
 - **Stage 3.5 — Competitor Semantic & Ad Intelligence aggregation** (later) — aggregate offers/keywords/ad channels
   across collected records into reusable competitor/semantic intelligence.

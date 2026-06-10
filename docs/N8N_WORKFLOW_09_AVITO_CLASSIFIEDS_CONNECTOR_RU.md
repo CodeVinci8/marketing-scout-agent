@@ -58,7 +58,8 @@ Manual Start
 | `region` | `Москва/МО` | регион |
 | `service_focus` | `credit_broker` | продуктовый фокус |
 | `search_queries` | 5 запросов (брокер/после отказов/бизнес/ИП) | поисковые запросы |
-| `max_items` | `10` | лимит на сбор |
+| `max_items` | **`6`** | в fixture-режиме = **общее число эмитируемых записей** (конкуренты + контрольная нерелевантная) |
+| `include_irrelevant_control_fixture` | **`true`** | включать нерелевантную контрольную запись (POS-терминал) для теста `skipped_log` |
 | `approval_status_for_unique` | `new` | статус уникальных строк |
 | `write_duplicate_audit` | `true` | писать дубликаты в raw (аудит) |
 | `duplicate_next_action` | `monitor_duplicate` | next_action для дубликата-конкурента |
@@ -75,27 +76,42 @@ Manual Start
 
 ## 4. Fixture-режим (по умолчанию)
 
-`Build Fixture Avito Listings` отдаёт **6 представительных объявлений**:
-1. кредитный брокер, цена **от 30 000 ₽** (competitor);
-2. дешёвый брокер **от 500 ₽** (competitor);
-3. кредит для бизнеса/ИП/ООО (competitor, `business_credit`);
-4. кредит после отказов банков (competitor, `probable_need`=после отказов);
-5. ипотечный брокер / рефинансирование (competitor, `mortgage_refinance`);
-6. продажа POS-терминала (**нерелевантно** → демонстрация skip).
+`Build Fixture Avito Listings` отдаёт **6 представительных объявлений** (5 конкурентов + 1 контрольная нерелевантная).
+В fixture-режиме **`max_items` = общее число эмитируемых записей**, включая контрольную; при
+`include_irrelevant_control_fixture=true` контрольная запись всегда сохраняется (даже при урезании `max_items`):
+1. кредитный брокер, цена **от 30 000 ₽** → `service_hint=credit_broker`;
+2. брокер, помощь при отказах, **от 500 ₽**, без предоплаты → `service_hint=credit_after_refusals`;
+3. кредит для бизнеса/ИП/ООО, оборотные/тендерные/гарантии → `service_hint=business_credit`;
+4. кредит после отказов / просрочки / плохая КИ → `service_hint=credit_after_refusals`;
+5. ипотечный брокер / рефинансирование / снижение ставки → `service_hint=mortgage_refinance`;
+6. продажа POS-терминала (**нерелевантно** → `service_hint=unknown`, демонстрация skip).
 
 Поля fixture: `title, description, url, price, location, seller_name, seller_url, category, published_at, query,
-listing_id`. Реального вызова Apify нет.
+listing_id`. Реального вызова Apify нет ($0). **`max_items=6` по умолчанию — соответствует 6 эмитируемым записям**
+(`agent_requests.requested_limit` в fixture-режиме равен фактическому числу выданных записей; `result_summary` не
+противоречит `requested_limit`).
+
+> **Важно: fixture ≠ реальный скрейпинг Avito.** Fixture-тесты доказывают только **форму конвейера**
+> (Avito-подобное объявление → `raw_market_records` → реестр → Workflow 08 → monitor/skipped), а **не** реальный сбор
+> с Avito. Реальный скрейпинг не выполнялся: `fixture_mode=true`, `live_mode=false`, source cost = 0, Apify HTTP-нода
+> не запускалась. Статус: **fixture + handoff одобрены; live-скрейпинг не тестировался** (см. §5).
 
 ## 5. Live-режим Apify (опционально)
 
-Нода **`Apify Avito Classifieds Actor Request`** выполняется **только** при `fixture_mode=false` (ветка ELSE):
-- `POST https://api.apify.com/v2/acts/PASTE_AVITO_ACTOR_ID/run-sync-get-dataset-items`;
+Нода **`Apify Avito Classifieds Actor Request`** выполняется **только** при `fixture_mode=false` (ветка ELSE из IF).
+**Live-режим НЕ тестировался** — описание ниже для будущего прогона:
+- `POST https://api.apify.com/v2/acts/{{ $json.apify_actor_id }}/run-sync-get-dataset-items` (actor id берётся из
+  конфигурации, плейсхолдер `PASTE_AVITO_ACTOR_ID`);
 - тело JSON: `queries` (из `search_queries`), `maxItems`, `region`, `proxyConfiguration`;
-- аутентификация: привязать Apify-креденшл (HTTP Header Auth) **в n8n** ИЛИ передать токен в query. В файле
-  **нет** реального токена/ключа;
-- `onError=continueRegularOutput` — при сбое actor прогон не падает.
+- **аутентификация (предпочтительно, настроено):** `authentication=genericCredentialType`,
+  `genericAuthType=httpHeaderAuth`. **Оператор привязывает в n8n** HTTP Header Auth креденшл `Apify API - Marketing
+  Scout`: **header name = `Authorization`, header value = `Bearer <APIFY_TOKEN>`**. В файле **нет** реального токена/
+  ключа/actor id (только плейсхолдеры);
+  - *допустимый fallback:* `Send Headers=true`, `Authorization: Bearer {{$env.APIFY_TOKEN}}` (токен из env, не в файле);
+  - *альтернатива:* query-параметр `token={{$env.APIFY_TOKEN}}` — но **header-auth предпочтительнее**;
+- `onError=continueRegularOutput` — при сбое actor прогон не падает;
 - Включать **только** после явного одобрения оператора и выбора actor. Прямой скрейпинг Avito не делаем; ToS
-  площадки соблюдаем.
+  площадки соблюдаем. **По умолчанию (fixture_mode=true) эта нода не выполняется.**
 
 `Normalize Avito Listings` читает поля и из fixture, и из ответа actor (общие имена: `title/description/url/
 price/location/seller_name/seller_url/category/listing_id/published_at`), поэтому работает в обоих режимах.
@@ -110,8 +126,16 @@ price/location/seller_name/seller_url/category/listing_id/published_at`), поэ
     `competitor_related=true`, `competitor_name=seller_name`, прогноз маршрута `monitor_queue` / `competitor`;
   - более широкое финансовое объявление → `market_signal` / `classified_offer` → `content_queue` / `content_idea`;
   - явно нерелевантное (продажа оборудования и т.п.) → `irrelevant` / `irrelevant_source` → `skipped_log`;
-- `service_hint`: `mortgage_refinance` / `business_credit` / `credit_broker` (или `unknown` для нерелевантного);
-- `semantic_keywords`: список ключевых слов из title/description (для нерелевантного — пусто);
+- `service_hint` (DEC-092, по title+description+category, **не** по поисковому запросу):
+  - `business_credit` — только при явном ИП/ООО/«для бизнеса»/оборотные/тендерные/банковские гарантии (не просто слово «бизнесу»);
+  - `mortgage_refinance` — ипотека/рефинансирование/снижение ставки;
+  - `credit_after_refusals` — после отказов / просрочки / плохая кредитная история;
+  - `credit_broker` — общий брокер;
+  - `unknown` — нерелевантное;
+- `semantic_keywords` (DEC-092): конкретные рекламные/семантические фразы из title/description/query
+  (помощь в получении кредита, после отказов, без предоплаты, оплата за результат, работа по договору, ИП, ООО,
+  оборотные кредиты, тендерные займы, банковские гарантии, рефинансирование, снижение ставки, …), без дублей,
+  через запятую; для нерелевантного — пусто;
 - `ad_channel_hint='classifieds'`;
 - `interest_topic=query`, `probable_need` — выведенная потребность (после отказов / бизнес / ипотека / помощь);
 - `lead_intent_hint='low'`, `urgency_hint='low'` (если нет явной срочности); `lead_temperature`: конкурент=`cold`,
