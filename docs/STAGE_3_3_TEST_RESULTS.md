@@ -105,32 +105,67 @@
 
 ---
 
-## TEST 4 — Workflow 08 handoff (manual) — ⏳ AWAITING OPERATOR RUN
+## TEST 4 — Workflow 08 handoff (manual, source-handoff filter REQUIRED) — ⏳ AWAITING OPERATOR RUN
+
+> **REQUIRES the WF08 source-handoff filter (DEC-091).** Workflow 08 reads **all** `raw_market_records`, so without a
+> filter it would also process old Stage 3.1/3.2 rows. For the Stage 3.3 handoff test you **must** set
+> `agent_request_id_filter` to this connector run's `agent_request_id` (and optionally `platform_filter` /
+> `source_type_filter`). **Do NOT** use `llm_test_batch_indexes` for source handoff — that selects positions for the
+> LLM 4-record test, not a source.
 
 ### How to run
-1. After Test 1 (or Test 3), open `raw_market_records` and confirm the Avito rows look right.
-2. **Manually run Workflow 08 (Touchpoint Analyzer)** on the collected records (default
-   `analysis_mode=deterministic_first`, all LLM flags `false`). WF09 does **not** auto-run WF08.
+1. After Test 1 (fixture) or Test 3 (live), open `raw_market_records` and note the connector run's `agent_request_id`
+   (fixture first run from WF09 build context = `avito_req_20260610_214709`; your actual run id may differ — copy it
+   from `agent_requests` / `raw_market_records`).
+2. In WF08 `Set Analyzer Config` set:
+   ```
+   agent_request_id_filter  = "avito_req_20260610_214709"   // <- this run's id
+   platform_filter          = "avito"
+   source_type_filter       = "classified"
+   max_records              = 6
+   analysis_mode            = "deterministic_first"
+   llm_enrichment           = false
+   llm_enrichment_test_mode = false
+   ```
+3. **Manually run Workflow 08** (WF09 does **not** auto-run WF08).
+4. **After the test, clear the three filters** (set back to `""`) to restore default behavior.
 
-### Acceptance (Test 4 target)
-- The 5 competitor listings → `monitor_queue` (competitor); the irrelevant listing → `skipped_log`.
-- `technical_errors=0`; no `results`/`contact` without `contact_public`; Claude calls=0 / $0 (deterministic default).
-- (Optional) competitor offer/semantic enrichment if the operator explicitly enables `llm_enrichment` (Stage 3.2
+### Acceptance (Test 4 target — expected counts)
+- Only the **6 rows of this `agent_request_id`** are processed (old rows excluded; filter applies before `max_records`).
+- `monitor_queue = 5`, `skipped_log = 1`, `content_queue = 0`, `review_queue = 0`, `technical_errors = 0`.
+- `parse_method`: `deterministic_pre_route` ×5 (competitor listings), `deterministic_irrelevant_skip` ×1 (irrelevant
+  POS-terminal).
+- **Claude calls = 0** / $0 (deterministic_first default). No `results`/`contact` without `contact_public`.
+- (Optional) competitor offer/semantic enrichment only if the operator explicitly enables `llm_enrichment` (Stage 3.2
   watch item still applies).
 
 ### Observed (operator fills)
-| # | platform | entity_type | route (WF08) | note |
-|---|----------|-------------|--------------|------|
-| 1 | avito | | | |
-| 2 | avito | | | |
-| 3 | avito | | | |
-| 4 | avito | | | |
-| 5 | avito | | | |
-| 6 | avito | | | (irrelevant → skipped_log) |
+| # | platform | entity_type | route (WF08) | parse_method | note |
+|---|----------|-------------|--------------|--------------|------|
+| 1 | avito | | | | competitor → monitor_queue |
+| 2 | avito | | | | competitor → monitor_queue |
+| 3 | avito | | | | competitor → monitor_queue |
+| 4 | avito | | | | competitor → monitor_queue |
+| 5 | avito | | | | competitor → monitor_queue |
+| 6 | avito | | | | irrelevant → skipped_log |
+
+| metric | target | observed |
+|--------|--------|----------|
+| rows processed (this agent_request_id only) | 6 | |
+| monitor_queue | 5 | |
+| skipped_log | 1 | |
+| content_queue / review_queue | 0 / 0 | |
+| technical_errors | 0 | |
+| Claude calls | 0 | |
 
 - [ ] **PASS / FAIL:** ____
+
+> **Filter behavior (DEC-091, simulation-verified):** with empty filters WF08 default behavior is unchanged; with the
+> filters set, only matching rows flow, and the filter is applied **before** `max_records` and before per-record
+> processing. `llm_enrichment_test_mode` is independent and still works.
 
 ---
 
 > **Note:** WF09 default mode is fixture ($0). Live Apify and the WF08 handoff are operator-controlled. WF09 never
-> writes the business route tabs and never auto-runs WF08.
+> writes the business route tabs and never auto-runs WF08. The WF08 source-handoff filter (DEC-091) is what scopes the
+> handoff to one connector run.

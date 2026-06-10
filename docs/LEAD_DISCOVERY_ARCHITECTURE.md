@@ -27,12 +27,15 @@
 > ```
 > Avito/Classifieds (Apify actor | fixture) → Workflow 09 (normalize + dedup, NO Claude)
 >   → raw_market_records (+ market_record_registry dedup, + agent_requests)
->   → [manual handoff] → Workflow 08 Touchpoint Analyzer (deterministic_first)
+>   → [manual handoff, scoped by WF08 agent_request_id_filter] → Workflow 08 Touchpoint Analyzer (deterministic_first)
 >   → monitor_queue (competitor) / content_queue (semantic/content) / review_queue (ambiguous) / skipped_log (irrelevant)
 > ```
 >
 > The connector **never** calls Claude and **never** writes the business tabs; Workflow 08 owns routing. No
-> auto-handoff. Supports **Competitor Ad / Semantic Intelligence**. Guide:
+> auto-handoff. Supports **Competitor Ad / Semantic Intelligence**. **Handoff scoping (DEC-091):** Workflow 08 reads
+> *all* `raw_market_records`, so the operator scopes a connector handoff with WF08's optional
+> `agent_request_id_filter` (+ `platform_filter` / `source_type_filter`) so only that run's rows are processed (not
+> old Stage 3.1/3.2 rows). Empty filters = unchanged default behavior. Guide:
 > `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`; plan: `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`.
 
 > **REFRAME (2026-06-08, DEC-078 — stakeholder interview):** this layer is **Social/Classified Touchpoint
