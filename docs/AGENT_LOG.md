@@ -5,6 +5,40 @@ Most recent first.
 
 ---
 
+## 2026-06-10 — Stage 3.3 BUILT: Workflow 09 Avito/Classifieds Listing Connector (DEC-090)
+
+**Agent role:** project-engineer
+**Session goal:** build the first real source connector after manual intake — the Avito/Classifieds Listing Connector — fixture-first, deterministic, no-LLM; feed `raw_market_records` for Workflow 08. Do not break Stage 3.2; no activation; no external API.
+
+**Built `n8n/workflows/09_avito_classifieds_listing_connector.json`** — `09 - Avito Classifieds Listing Connector`, `active=false`, **18 nodes**, JSON VALID, versionId `…v001-stage-3-3-20260610`.
+- Flow: Manual Start → Set Avito Connector Config (`fixture_mode=true`, `live_mode=false`, MSK ids/timestamps) → **IF fixture_mode?** {true→Build Fixture Avito Listings (6 listings, no Apify, $0)} {false→Apify Avito Classifieds Actor Request (live only, disabled by default)} → Normalize Avito Listings (deterministic → raw_market_records shape) → Read market_record_registry → Deduplicate Listings → Build raw_market_records Rows (40) → Append raw_market_records → (Build market_record_registry Rows (15, unique) → Append; Build agent_requests Row (21, status=completed) → Append) → Final Summary.
+- **Competitor Ad / Semantic Intelligence:** classifies competitor listings (from title+description+category, not the search query), extracts offer/price into `text_context`+`manager_note`, `semantic_keywords`, `ad_channel_hint=classifieds`, `competitor_name`, `service_hint`, `probable_need`; `contact_public` only if explicit (never invented).
+- **Dedup:** `dedup_key=avito::classified::avito_listing_<id>` (or `…avito_url_<hash>`); `text_hash`=hash(title+description+price); duplicate_in_registry not appended to registry; unique appended.
+- **Writes only** `agent_requests` (21) / `raw_market_records` (40) / `market_record_registry` (15, unique). **Never** business tabs. **No auto-handoff** to Workflow 08 (manual). No Claude/Firecrawl; no real Apify call by default.
+
+**Verified (simulation + checks):** `python3 -m json.tool` VALID; `active=false`; all code nodes compile; fixture run 1 → 6 raw / 6 unique registry / 1 agent_requests (completed), predicted `monitor_queue=5`/`skipped_log=1`, `skipped_count=1`; fixture run 2 → all 6 `duplicate_in_registry`, raw +6 (audit), registry +0, competitor dup `next_action=monitor_duplicate` / irrelevant `ignore`; raw=40 / registry=15 / agent_requests=21 columns (exact WF07 match); no business-tab writes; MSK helpers present, both `toISOString()` occurrences carry `+03:00` (no bare operational timestamp); no real keys / Spreadsheet ID (PASTE placeholders ×); no `tool_use`; no `KEY=VALUE`; fixture runs without Apify. WF04/05/06/07/08 untouched; Stage 3.2 not broken.
+
+**Decision:** DEC-090. Docs: STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN (new), N8N_WORKFLOW_09_…RU (new), STAGE_3_3_TEST_RESULTS (new template), STAGE_3_3_SOURCE_DECISION_PLAN (selected+built), SOCIAL_CLASSIFIED_SOURCE_MATRIX, LEAD_DISCOVERY_ARCHITECTURE, LEAD_DATA_MODEL_PLAN (Avito mapping), DECISIONS (DEC-090), NEXT_ACTIONS, COSTS_AND_LIMITS, AGENT_CAPABILITIES, ROADMAP, AGENT_LOG, core/hot/recent.
+
+**Next operator action:** import WF09 (don't activate) → bind Google Sheets cred + Spreadsheet ID on 4 nodes → Test 1 (fixture first run) → Test 2 (fixture duplicate) → optional Test 3 (live Apify, max_items=5, after actor choice + approval) → Test 4 (run Workflow 08 manually on collected rows). No connector activated; no scraping by default.
+
+---
+
+## 2026-06-10 — Stage 3.2 CLOSED: Workflow 08 Test C4 PASS — LLM enrichment APPROVED WITH WATCH ITEM (DEC-089)
+
+**Agent role:** project-engineer
+**Session goal:** record the Test C4 (v7 specialized-schema) result, close Stage 3.2, and update all finalization docs. **Docs only — no workflow JSON changed.**
+
+**C4 (recorded — PASS):** the 4-fixture LLM-enrichment retest (`llm_enrichment_test_mode=true`, batch_index 1,7,11,12) against the v7 patch passed: exactly 4 records processed (other 8 not written), `technical_errors=0`, **`primary_json=3/4`** (target ≥3/4), `repaired_json=0/4`, **`deterministic_fallback_after_llm_fail=1/4`** (≤1 acceptable), `repair_used=false` for the 3 `primary_json` rows and `true` only for the fallback row, MSK `+03:00` timestamps correct, routes preserved. **Telegram `source_candidate` (7) is fixed** (now `primary_json`, no longer falls back). Per record: 1 Avito → `monitor_queue`/competitor/monitor/`primary_json`; 7 Telegram @creditbrokers → `content_queue`/content_idea/create_content/`primary_json`; 11 Banki forum hot pattern → `review_queue`/lead_signal/investigate/`deterministic_fallback_after_llm_fail` (safe — stayed `review_queue`, NOT `results`; no unsafe «обратиться напрямую» in the final row); 12 Zoon reviews → `content_queue`/content_idea/create_content/`primary_json`. No `results`/`contact` without `contact_public`. Compact overlay mode produced useful `offer_text`/`detected_need`/`reason` for the 3 `primary_json` rows.
+
+**Verdict / decision (DEC-089 — Stage 3.2 CLOSED):** deterministic_first baseline **APPROVED**; **compact LLM enrichment APPROVED WITH WATCH ITEM** for optional / test use. **Default stays `deterministic_first` (all LLM flags `false`) unless the operator explicitly enables `llm_enrichment`.** **Watch item:** the Banki/forum lead-pattern still falls back (safe); improve in a future enrichment iteration. **C4 cost delta: TODO_OPERATOR_FILL** (target ≤$0.04 / 4 records). **Stage 3.3 (Avito/Classifieds Listing Connector, DEC-084) unblocked — proceed after commit.**
+
+**Docs updated:** STAGE_3_2_TEST_RESULTS (C4 PASS result + final verdict), STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN (status + exit criteria), N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU (status + C4-pass note), DECISIONS (DEC-089), NEXT_ACTIONS (Stage 3.2 closed → commit → Stage 3.3), COSTS_AND_LIMITS (C4 result + cost placeholder), AGENT_CAPABILITIES, ROADMAP (3.2 closed, 3.3 unblocked), AGENT_LOG, core/hot/recent. No workflow JSON / no n8n/workflows edits; no external API; no credentials; no deletions.
+
+**Next operator action:** commit the finalization (docs); optionally fill the C4 cost delta from the measured Claude balance; then begin **Stage 3.3 Avito/Classifieds Listing Connector** feasibility/build (only after explicit approval + feasibility). No connector built this pass.
+
+---
+
 ## 2026-06-09 — Workflow 08 specialized source_candidate schema v7 after C3 PARTIAL PASS (DEC-088)
 
 **Agent role:** project-engineer

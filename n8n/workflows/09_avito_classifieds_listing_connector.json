@@ -1,0 +1,533 @@
+{
+  "name": "09 - Avito Classifieds Listing Connector",
+  "nodes": [
+    {
+      "id": "a9000000-0000-0000-0000-0000000000n1",
+      "name": "Overview Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        -260
+      ],
+      "parameters": {
+        "content": "## 09 — Avito/Classifieds Listing Connector — Stage 3.3\n\nПЕРВЫЙ реальный коннектор-источник после ручного приёма (Workflow 07). НЕ анализатор и НЕ маршрутизатор.\n\nЧто делает:\n1. Ручной старт → Set Avito Connector Config (fixture_mode=true по умолчанию).\n2. IF fixture_mode=true → Build Fixture Avito Listings (без Apify, $0). Иначе → Apify Avito/Classifieds Actor Request (live, только при fixture_mode=false).\n3. Normalize Avito Listings → детерминированная нормализация в shape raw_market_records (без LLM): record_type_hint, touchpoint_type, semantic_keywords, ad_channel_hint, competitor_name, dedup_key, text_hash, предсказанный маршрут/entity.\n4. Read market_record_registry → Deduplicate Listings (по dedup_key).\n5. Build raw_market_records Rows (40 колонок) — все строки (аудит) при write_duplicate_audit=true.\n6. Build market_record_registry Rows (15 колонок) — ТОЛЬКО уникальные.\n7. Build agent_requests Row (21 колонка, status=completed).\n8. Append: agent_requests, raw_market_records, market_record_registry (уникальные).\n9. Final Summary.\n\nКОМПЕТЕНТНОСТЬ: Competitor Ad Intelligence / Semantic Intelligence — оффер/цена/условия/семантика/позиционирование конкурента из объявлений.\n\nЧЕГО НЕ ДЕЛАЕТ:\n- НЕ пишет в бизнес-вкладки (results/review_queue/monitor_queue/content_queue/skipped_log/technical_errors) — это делает Workflow 08.\n- НЕ вызывает Apify по умолчанию (fixture_mode=true), НЕ Firecrawl, НЕ Claude.\n- НЕ авто-запускает Workflow 08. Хэндофф только вручную.\n- НЕ Telegram/Instagram/VK/Dzen парсер, НЕ Telegram-бот, НЕ расписание. active=false.",
+        "height": 720,
+        "width": 600,
+        "color": 4
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000n2",
+      "name": "Setup and Test Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -260
+      ],
+      "parameters": {
+        "content": "## Настройка и тест\n\n1. НЕ активировать (active=false).\n2. Вкладки уже созданы (Stage 3.1): agent_requests (21), raw_market_records (40), market_record_registry (15).\n3. ПОСЛЕ ИМПОРТА перепривязать креденшл Google Sheets на 4 нодах (Read market_record_registry, Append agent_requests, Append raw_market_records, Append market_record_registry) → Google Sheets - Marketing Scout Service Account.\n4. Заменить PASTE_SPREADSHEET_ID_HERE на реальный Spreadsheet ID на всех Google Sheets нодах.\n5. Apify нода НЕ нужна для fixture-теста и НЕ выполняется при fixture_mode=true. Для live: задать apify_actor_id, привязать Apify креденшл (или токен), и поставить fixture_mode=false + live_mode=true.\n\nТест 1 (fixture, пустой реестр):\n- fixture_mode=true. Execute once.\n- Ожидаемо: 6 строк в raw_market_records; 6 уникальных в market_record_registry; 1 agent_requests (status=completed); 5 competitor (monitor_queue прогноз) + 1 irrelevant (skipped_log прогноз).\n\nТест 2 (fixture, повтор):\n- Execute снова → все 6 dedup_status=duplicate_in_registry, approval_status=duplicate; raw +6 (аудит при write_duplicate_audit=true); реестр +0.\n\nТест 3 (опционально, live Apify, max_items=5):\n- fixture_mode=false, live_mode=true, apify_actor_id задан. Записать стоимость Apify. 0 Firecrawl/Claude.\n\nТест 4 (хэндофф):\n- Запустить Workflow 08 ВРУЧНУЮ на собранных raw_market_records. Авто-хэндоффа нет.\n\nСтоимость: fixture = $0. live = только Apify actor. Анализа здесь нет ($0).",
+        "height": 720,
+        "width": 600,
+        "color": 4
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000ap",
+      "name": "Apify Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        800,
+        -260
+      ],
+      "parameters": {
+        "content": "## Apify Avito/Classifieds Actor Request (live only)\n\nВыполняется ТОЛЬКО когда fixture_mode=false (ветка ELSE из IF). По умолчанию НЕ выполняется.\n\n- URL: https://api.apify.com/v2/acts/PASTE_AVITO_ACTOR_ID/run-sync-get-dataset-items\n- Метод: POST, тело JSON со search_queries + maxItems из конфигурации.\n- Аутентификация: привязать Apify креденшл (HTTP Header Auth) ИЛИ передать токен в query (?token=...). В файле НЕТ реального токена/ключа.\n- onError=continueRegularOutput: при сбое actor нормализация получит пусто, прогон не упадёт.\n\nБЕЗОПАСНОСТЬ: не запускать live без явного одобрения оператора и выбранного actor. Не скрейпить Avito напрямую. Соблюдать ToS площадки.",
+        "height": 320,
+        "width": 440,
+        "color": 5
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-000000000002",
+      "name": "Manual Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        120,
+        520
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000cf",
+      "name": "Set Avito Connector Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Avito/Classifieds connector config. Deterministic ids; MSK timestamps; no external calls.\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nreturn [{ json: {\n  fixture_mode:true,\n  live_mode:false,\n  source_type:'classified',\n  platform:'avito',\n  requested_by:'operator',\n  request_type:'classified_competitor_discovery',\n  region:'Москва/МО',\n  service_focus:'credit_broker',\n  search_queries:[\n    'кредитный брокер Москва',\n    'помощь в получении кредита Москва',\n    'кредит после отказов Москва',\n    'кредитный брокер для бизнеса Москва',\n    'помощь с кредитом ИП'\n  ],\n  max_items:10,\n  approval_status_for_unique:'new',\n  write_duplicate_audit:true,\n  duplicate_next_action:'monitor_duplicate',\n  apify_actor_id:'PASTE_AVITO_ACTOR_ID',\n  apify_token_placeholder:'PASTE_APIFY_TOKEN_OR_USE_CREDENTIAL',\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  agent_request_id:'avito_req_'+stamp,\n  run_id:'avito_'+stamp,\n  created_at:now\n}}];"
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000if",
+      "name": "IF fixture_mode?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        560,
+        520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-fixture-mode",
+              "leftValue": "={{ $json.fixture_mode }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000bf",
+      "name": "Build Fixture Avito Listings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        400
+      ],
+      "parameters": {
+        "jsCode": "// 6 representative Avito/classified listing fixtures. No external calls.\nconst listings=[\n  { listing_id:'4379480780', title:'Помощь в получении кредита. Кредитный брокер', description:'Поможем получить кредит физлицам и бизнесу. Работаем по договору, оплата за результат. Сложные случаи, большие суммы.', url:'https://www.avito.ru/moskva/predlozheniya_uslug/pomosch_v_poluchenii_kredita_kreditnyy_broker_4379480780', price:'от 30 000 ₽', location:'Москва', seller_name:'Финанс Групп', seller_url:'https://www.avito.ru/user/abc12300/profile', category:'Предложения услуг', published_at:'', query:'кредитный брокер Москва' },\n  { listing_id:'7961833832', title:'Кредитный брокер. Реальная помощь с кредитами', description:'Реальная помощь с кредитами при отказах банков. Консультация от 500 ₽. Москва и область, без предоплаты.', url:'https://www.avito.ru/moskva/predlozheniya_uslug/kreditnyy_broker_realnaya_pomosch_7961833832', price:'от 500 ₽', location:'Москва', seller_name:'КредитЭксперт', seller_url:'https://www.avito.ru/user/def45600/profile', category:'Предложения услуг', published_at:'', query:'помощь в получении кредита Москва' },\n  { listing_id:'5521099004', title:'Кредит для бизнеса, ИП и ООО. Кредитный брокер', description:'Привлечение финансирования для ИП и ООО: оборотные кредиты, тендерные займы, банковские гарантии. Поможем с пакетом документов.', url:'https://www.avito.ru/moskva/predlozheniya_uslug/kredit_dlya_biznesa_ip_ooo_5521099004', price:'от 15 000 ₽', location:'Москва', seller_name:'БизнесФинанс Консалт', seller_url:'https://www.avito.ru/user/ghi78900/profile', category:'Предложения услуг', published_at:'', query:'кредитный брокер для бизнеса Москва' },\n  { listing_id:'6610233771', title:'Кредит после отказов банков. Поможем получить', description:'Поможем получить кредит после отказов, с просрочками и плохой кредитной историей. Индивидуальный подбор банка.', url:'https://www.avito.ru/moskva/predlozheniya_uslug/kredit_posle_otkazov_bankov_6610233771', price:'', location:'Москва', seller_name:'Одобрение24', seller_url:'https://www.avito.ru/user/jkl01200/profile', category:'Предложения услуг', published_at:'', query:'кредит после отказов Москва' },\n  { listing_id:'7188450923', title:'Ипотечный брокер. Рефинансирование ипотеки', description:'Подбор и одобрение ипотеки, рефинансирование действующих кредитов, снижение ставки. Работаем с большинством банков.', url:'https://www.avito.ru/moskva/predlozheniya_uslug/ipotechnyy_broker_refinansirovanie_7188450923', price:'от 10 000 ₽', location:'Москва', seller_name:'Ипотека Просто', seller_url:'https://www.avito.ru/user/mno34500/profile', category:'Предложения услуг', published_at:'', query:'помощь с кредитом ИП' },\n  { listing_id:'3300771199', title:'Продам POS-терминал для эквайринга, б/у', description:'Продаётся б/у POS-терминал для приёма карт. Рабочий, в комплекте блок питания. Самовывоз, Москва.', url:'https://www.avito.ru/moskva/oborudovanie_dlya_biznesa/pos-terminal_dlya_ekvayringa_3300771199', price:'4 500 ₽', location:'Москва', seller_name:'Частное лицо', seller_url:'https://www.avito.ru/user/pqr67800/profile', category:'Оборудование для бизнеса', published_at:'', query:'кредитный брокер Москва' }\n];\nreturn listings.map((r,i)=>({ json: Object.assign({ _index:i+1, _source:'fixture' }, r) }));"
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000aq0",
+      "name": "Apify Avito Classifieds Actor Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        820,
+        640
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/{{ $json.apify_actor_id }}/run-sync-get-dataset-items",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"queries\": {{ JSON.stringify($json.search_queries) }},\n  \"maxItems\": {{ $json.max_items }},\n  \"region\": \"{{ $json.region }}\",\n  \"proxyConfiguration\": { \"useApifyProxy\": true }\n}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Apify API - Marketing Scout"
+        }
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000nz",
+      "name": "Normalize Avito Listings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Deterministic normalization of Avito/classified listings into raw_market_records shape. No LLM, no external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction any(b,arr){for(const w of arr){if(b.indexOf(w)>=0)return true;}return false;}\nfunction normUrl(u){u=str(u);if(!u)return '';try{const x=new URL(u.split('#')[0]);x.hostname=(x.hostname||'').toLowerCase();let p=x.pathname||'/';if(p.length>1&&p.endsWith('/'))p=p.slice(0,-1);x.pathname=p;return x.toString();}catch(e){return u.toLowerCase();}}\nfunction hashText(s){s=str(s);let h=5381;for(let i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))>>>0;}return ('00000000'+h.toString(16)).slice(-8);}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nconst cfg=$('Set Avito Connector Config').first().json;\nconst defFocus=low(cfg.service_focus)||'credit_broker';\nconst region=str(cfg.region)||'Москва/МО';\nconst items=$input.all().map(i=>i.json).filter(Boolean);\nconst KW=['кредитный брокер','брокер','кредит','ипотека','рефинансирование','без справок','без отказа','после отказов','просрочк','под залог','бизнес','ип','ооо','одобрение','помощь с кредитом','без поручителей','банк'];\nconst out=[];\nfor(const r of items){\n  const title=str(r.title);\n  const description=str(r.description);\n  const price=str(r.price);\n  const location=str(r.location)||region;\n  const seller_name=str(r.seller_name);\n  const seller_url=normUrl(r.seller_url);\n  const category=str(r.category);\n  const query=str(r.query)|| (Array.isArray(cfg.search_queries)?cfg.search_queries.join('; '):'');\n  const listing_id=str(r.listing_id);\n  const url=normUrl(r.url||r.source_url);\n  const published_at=str(r.published_at);\n  const classBlob=(title+' '+description+' '+category).toLowerCase();\n  const blob=(title+' '+description+' '+query+' '+category).toLowerCase();\n  const isSell=any(classBlob,['продам','продаётся','продается','б/у','самовывоз','pos-терминал','терминал','оборудование']);\n  const isService=!isSell && any(classBlob,['брокер','помощь в получени','помощь с кредит','подбор кредит','одобрение','рефинансир','ипотечный брокер','кредит для бизнеса','кредит после отказов','кредитов','кредит']);\n  let record_type_hint, touchpoint_type, predicted_route, predicted_entity_type, next_action, lead_temperature, confidence_score;\n  if(isSell && !isService){ record_type_hint='irrelevant'; touchpoint_type='irrelevant_source'; predicted_route='skipped_log'; predicted_entity_type='irrelevant'; next_action='ignore'; lead_temperature='none'; confidence_score=40; }\n  else if(isService){ record_type_hint='competitor_activity'; touchpoint_type='competitor_listing'; predicted_route='monitor_queue'; predicted_entity_type='competitor'; next_action='monitor'; lead_temperature='cold'; confidence_score=price?82:74; }\n  else { record_type_hint='market_signal'; touchpoint_type='classified_offer'; predicted_route='content_queue'; predicted_entity_type='content_idea'; next_action='create_content'; lead_temperature='cold'; confidence_score=65; }\n  const competitor_related=(record_type_hint==='competitor_activity');\n  const competitor_name=competitor_related?seller_name:'';\n  let service_hint=defFocus;\n  if(record_type_hint==='irrelevant')service_hint='unknown';\n  else if(any(classBlob,['ипотек','рефинансир']))service_hint='mortgage_refinance';\n  else if(any(classBlob,['бизнес','ип ','ооо','тендер','оборотн']))service_hint='business_credit';\n  else service_hint='credit_broker';\n  let probable_need='';\n  if(record_type_hint!=='irrelevant'){\n    if(any(classBlob,['после отказов','просрочк','плохой кредитной']))probable_need='получить кредит после отказов / с плохой КИ';\n    else if(service_hint==='business_credit')probable_need='финансирование для бизнеса (ИП/ООО)';\n    else if(service_hint==='mortgage_refinance')probable_need='ипотека / рефинансирование';\n    else probable_need='помощь в получении кредита';\n  }\n  const semantic_keywords=(record_type_hint==='irrelevant')?'':KW.filter(k=>classBlob.indexOf(k)>=0).join(', ');\n  const offer_short=cut(title+(price?(' — '+price):''),140);\n  const manager_note=(record_type_hint==='irrelevant')\n    ? 'Avito/classified: нерелевантное объявление, пропуск.'\n    : 'Семантика/оффер конкурента: '+offer_short+' | ключевые слова: '+(semantic_keywords||'—')+' | площадка: Avito (classifieds).';\n  const text_context=cut('Avito объявление: '+title+(price?(' | цена: '+price):'')+' | '+location+(seller_name?(' | продавец: '+seller_name):'')+' | '+description+' | запрос: '+query, 1200);\n  const text_hash=hashText(low(title)+'||'+low(description)+'||'+low(price));\n  let basekey;\n  if(listing_id)basekey='avito_listing_'+listing_id;\n  else basekey='avito_url_'+hashText(url||text_context);\n  const dedup_key=low(cfg.platform||'avito')+'::'+low(cfg.source_type||'classified')+'::'+basekey;\n  out.push({ json: {\n    source_type:low(cfg.source_type)||'classified',\n    platform:low(cfg.platform)||'avito',\n    source_url:url,\n    post_url:url,\n    profile_url:seller_url,\n    profile_name:seller_name,\n    author_handle:'',\n    seller_name:seller_name,\n    published_at:published_at,\n    region_hint:region,\n    service_hint:service_hint,\n    query:query,\n    text_context:text_context,\n    comment_text:'',\n    contact_public:'',\n    contact_channel:'',\n    dedup_key:dedup_key,\n    text_hash:text_hash,\n    record_type_hint:record_type_hint,\n    touchpoint_type:touchpoint_type,\n    lead_intent_hint:'low',\n    urgency_hint:'low',\n    interest_topic:query,\n    probable_need:probable_need,\n    competitor_related:competitor_related,\n    competitor_name:competitor_name,\n    semantic_keywords:semantic_keywords,\n    ad_channel_hint:'classifieds',\n    confidence_score:confidence_score,\n    lead_temperature:lead_temperature,\n    next_action:next_action,\n    predicted_route:predicted_route,\n    predicted_entity_type:predicted_entity_type,\n    responsible:'',\n    estimated_analysis_cost_usd:0,\n    manager_note:manager_note,\n    listing_id:listing_id,\n    price:price,\n    location:location,\n    title:title,\n    description:description\n  }});\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000rg",
+      "name": "Read market_record_registry",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1320,
+        520
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "market_record_registry",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000dd",
+      "name": "Deduplicate Listings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Dedup normalized listings against market_record_registry (by dedup_key) + within batch. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Avito Connector Config').first().json;\nconst approvalUnique=str(cfg.approval_status_for_unique)||'new';\nconst dupNext=str(cfg.duplicate_next_action)||'monitor_duplicate';\nconst recs=$('Normalize Avito Listings').all().map(i=>i.json);\nlet reg=[];\ntry{reg=$('Read market_record_registry').all().map(i=>i.json).filter(Boolean);}catch(e){reg=[];}\nconst regSet=new Set(reg.map(r=>str(r&&r.dedup_key)).filter(Boolean));\nconst seen=new Set();\nconst out=[];\nfor(const r of recs){\n  const key=str(r.dedup_key);\n  let dedup_status='unique';\n  let approval_status=approvalUnique;\n  let next_action=str(r.next_action);\n  if(key&&regSet.has(key)){\n    dedup_status='duplicate_in_registry';approval_status='duplicate';\n    next_action=(str(r.record_type_hint)==='irrelevant')?'ignore':dupNext;\n  } else if(key&&seen.has(key)){\n    dedup_status='duplicate_in_batch';approval_status='duplicate';\n    next_action=(str(r.record_type_hint)==='irrelevant')?'ignore':dupNext;\n  } else {\n    dedup_status='unique';if(key)seen.add(key);\n  }\n  out.push({ json: Object.assign({}, r, { dedup_status:dedup_status, approval_status:approval_status, next_action:next_action }) });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000brw",
+      "name": "Build raw_market_records Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Build raw_market_records rows (exactly 40 columns, matching Workflow 07 schema). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst cfg=$('Set Avito Connector Config').first().json;\nconst reqId=str(cfg.agent_request_id);\nconst created=str(cfg.created_at);\nconst stamp=str(cfg.run_id).replace(/^avito_/,'')||moscowStamp();\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst recs=$('Deduplicate Listings').all().map(i=>i.json);\nconst out=[];let idx=0;\nfor(const r of recs){\n  idx++;\n  if(!writeDupAudit && str(r.dedup_status)!=='unique')continue;\n  out.push({ json: {\n    record_id:'avito_rec_'+stamp+'_'+idx,\n    agent_request_id:reqId,\n    created_at:created,\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    profile_name:str(r.profile_name),\n    author_handle:str(r.author_handle),\n    published_at:str(r.published_at),\n    region_hint:str(r.region_hint),\n    service_hint:str(r.service_hint),\n    query:str(r.query),\n    text_context:str(r.text_context),\n    comment_text:str(r.comment_text),\n    contact_public:str(r.contact_public),\n    contact_channel:str(r.contact_channel),\n    dedup_key:str(r.dedup_key),\n    record_type_hint:str(r.record_type_hint),\n    touchpoint_type:str(r.touchpoint_type),\n    lead_intent_hint:str(r.lead_intent_hint),\n    urgency_hint:str(r.urgency_hint),\n    interest_topic:str(r.interest_topic),\n    probable_need:str(r.probable_need),\n    competitor_related:(r.competitor_related===true||str(r.competitor_related).toLowerCase()==='true'),\n    competitor_name:str(r.competitor_name),\n    semantic_keywords:str(r.semantic_keywords),\n    ad_channel_hint:str(r.ad_channel_hint),\n    confidence_score:Number(r.confidence_score)||0,\n    lead_temperature:str(r.lead_temperature),\n    next_action:str(r.next_action),\n    responsible:str(r.responsible),\n    dedup_status:str(r.dedup_status),\n    approval_status:str(r.approval_status),\n    approved_by:'',\n    approved_at:'',\n    estimated_analysis_cost_usd:Number(r.estimated_analysis_cost_usd)||0,\n    manager_note:str(r.manager_note),\n    notes:'stage_3_3_avito_classifieds_connector'\n  }});\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000ar",
+      "name": "Append raw_market_records",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1980,
+        520
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "raw_market_records",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000brr",
+      "name": "Build market_record_registry Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Build market_record_registry rows for UNIQUE records only (exactly 15 columns). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nconst now=moscowIsoNow();\nconst recs=$('Deduplicate Listings').all().map(i=>i.json);\nconst out=[];\nfor(const r of recs){\n  if(str(r.dedup_status)!=='unique')continue;\n  out.push({ json: {\n    dedup_key:str(r.dedup_key),\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    author_handle:str(r.seller_name||r.author_handle),\n    text_hash:str(r.text_hash),\n    first_seen_at:now,\n    last_seen_at:now,\n    last_route:str(r.predicted_route),\n    last_processing_status:'raw_collected',\n    last_entity_type:str(r.predicted_entity_type),\n    agent_request_id:str($('Set Avito Connector Config').first().json.agent_request_id),\n    note:'avito_classifieds_connector_stage_3_3'\n  }});\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000rr",
+      "name": "Append market_record_registry",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2420,
+        380
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "market_record_registry",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000bq",
+      "name": "Build agent_requests Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        660
+      ],
+      "parameters": {
+        "jsCode": "// One agent_requests row (exactly 21 columns). status=completed. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Avito Connector Config').first().json;\nconst recs=$('Deduplicate Listings').all().map(i=>i.json);\nconst total=recs.length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst skipped=recs.filter(r=>str(r.predicted_route)==='skipped_log').length;\nconst queries=Array.isArray(cfg.search_queries)?cfg.search_queries.join('; '):str(cfg.query);\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\nreturn [{ json: {\n  agent_request_id:str(cfg.agent_request_id),\n  created_at:str(cfg.created_at),\n  requested_by:str(cfg.requested_by)||'operator',\n  request_text:'Avito/classified competitor discovery: '+queries,\n  request_type:str(cfg.request_type)||'classified_competitor_discovery',\n  source_scope:'classified_listings',\n  platforms:'avito',\n  query:queries,\n  region:str(cfg.region)||'Москва/МО',\n  service_focus:str(cfg.service_focus)||'credit_broker',\n  requested_limit:Number(cfg.max_items)||10,\n  status:'completed',\n  plan_summary:'Avito/Classifieds listing connector ('+(fixtureMode?'fixture mode':'live Apify mode')+') → raw_market_records for the Touchpoint Analyzer (Workflow 08).',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:0,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:'total_items='+total+'; unique='+unique+'; duplicates='+duplicate+'; skipped='+skipped+'.',\n  next_action:'Run Workflow 08 on collected raw records manually',\n  notes:'No auto-handoff in v0.1. Competitor Ad / Semantic Intelligence connector. Source: '+(fixtureMode?'fixture':'apify_live')+'.'\n}}];"
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000aq",
+      "name": "Append agent_requests",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2420,
+        660
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "agent_requests",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-0000000000fs",
+      "name": "Final Summary Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        660
+      ],
+      "parameters": {
+        "jsCode": "// Final run summary. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Avito Connector Config').first().json;\nconst recs=$('Deduplicate Listings').all().map(i=>i.json);\nconst total=recs.length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst skipped=recs.filter(r=>str(r.predicted_route)==='skipped_log').length;\nconst predicted_route_counts={};const record_type_counts={};\nfor(const r of recs){\n  const pr=str(r.predicted_route)||'unknown';predicted_route_counts[pr]=(predicted_route_counts[pr]||0)+1;\n  const t=str(r.record_type_hint)||'unknown';record_type_counts[t]=(record_type_counts[t]||0)+1;\n}\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst rawWritten=writeDupAudit?total:unique;\nreturn [{ json: {\n  workflow:'09 - Avito Classifieds Listing Connector',\n  agent_request_id:str(cfg.agent_request_id),\n  run_id:str(cfg.run_id),\n  fixture_mode:(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true'),\n  live_mode:(cfg.live_mode===true||str(cfg.live_mode).toLowerCase()==='true'),\n  total_items:total,\n  unique_count:unique,\n  duplicate_count:duplicate,\n  skipped_count:skipped,\n  raw_market_records_written:rawWritten,\n  registry_rows_written:unique,\n  predicted_route_counts:predicted_route_counts,\n  record_type_counts:record_type_counts,\n  next_action:'Inspect raw_market_records, then run Workflow 08 (Touchpoint Analyzer) manually. No auto-handoff. No business-tab writes here.'\n}}];"
+      }
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Set Avito Connector Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Avito Connector Config": {
+      "main": [
+        [
+          {
+            "node": "IF fixture_mode?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF fixture_mode?": {
+      "main": [
+        [
+          {
+            "node": "Build Fixture Avito Listings",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Apify Avito Classifieds Actor Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Fixture Avito Listings": {
+      "main": [
+        [
+          {
+            "node": "Normalize Avito Listings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify Avito Classifieds Actor Request": {
+      "main": [
+        [
+          {
+            "node": "Normalize Avito Listings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Avito Listings": {
+      "main": [
+        [
+          {
+            "node": "Read market_record_registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read market_record_registry": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Listings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Listings": {
+      "main": [
+        [
+          {
+            "node": "Build raw_market_records Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build raw_market_records Rows": {
+      "main": [
+        [
+          {
+            "node": "Append raw_market_records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append raw_market_records": {
+      "main": [
+        [
+          {
+            "node": "Build market_record_registry Rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build agent_requests Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build market_record_registry Rows": {
+      "main": [
+        [
+          {
+            "node": "Append market_record_registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build agent_requests Row": {
+      "main": [
+        [
+          {
+            "node": "Append agent_requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append agent_requests": {
+      "main": [
+        [
+          {
+            "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a9000000-avito-classifieds-listing-connector-v001-stage-3-3-20260610",
+  "meta": {
+    "instanceId": "marketing-scout-v7-avito-classifieds-listing-connector"
+  }
+}

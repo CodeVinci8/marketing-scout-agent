@@ -154,7 +154,7 @@ the approved path until Stage 2.4 is built and live-validated.
   VK/Telegram/competitor/forum/reviews + irrelevant + hot-lead control) → `raw_market_records` (40) +
   `market_record_registry` (15) + `agent_requests` (21). Zero source cost/risk, no LLM, no scraping; `agent_memory`
   not written. Next: import/bind/run/verify, then build the Touchpoint Analyzer.
-- **3.2 — Touchpoint Analyzer** ✅ **DETERMINISTIC-FIRST BASELINE APPROVED (2026-06-08, DEC-080/081/082/083/085/086)**:
+- **3.2 — Touchpoint Analyzer** ✅ **STAGE 3.2 CLOSED (2026-06-10, DEC-089) — DETERMINISTIC-FIRST BASELINE APPROVED + compact LLM enrichment APPROVED WITH WATCH ITEM (DEC-080/081/082/083/085/086/087/088/089)**:
   `Workflow 08 — Touchpoint Analyzer` (`active=false`) reads approved/unique `raw_market_records`, classifies
   **deterministically from intake hints**, and routes to the 6 business tabs (existing **35-column** schema) via
   dynamic sheet. **TEST 3 PASS** (Claude calls=0 / $0, `repair_used=false`, routes 6/3/1/2, `technical_errors=0`) →
@@ -170,18 +170,38 @@ the approved path until Stage 2.4 is built and live-validated.
   use a **specialized ultra-short 7-key enrichment schema** (`profile_name, service_type, offer_text, detected_need,
   reason, content_idea_score, quality_score`) + minimal payload; repair uses the same 7-key schema; a post-merge safety
   assertion keeps route/entity/action/contact/lead/competitor deterministic; specialized `max_tokens` 500/400 (no cost
-  rise). Re-test = **Test C4** (target `primary_json≥3/4`, `fallback=0` ideally ≤1, **Telegram not fallback**, Banki no
-  direct-contact, Zoon→content, cost ≤$0.04) before enabling. **Timestamps Moscow `+03:00`** (DEC-083). Test log:
-  `docs/STAGE_3_2_TEST_RESULTS.md`.
-- **3.3 — First real source connector (DECISION)** 📐 **DECIDED 2026-06-08 (DEC-084), NOT BUILT**: recommended first
-  connector = **Avito/Classifieds Listing Connector** (lowest complexity, matches the web/URL data model; caveat —
-  competitor/offer/semantic source, not audience/comment mining). Telegram public parsing (≠ Control Bot) and
-  Instagram comment/audience mining **deferred to feasibility stages**. Connectors never call Claude; human approval
-  is the spend gate. Build only after explicit approval + feasibility. Plan: `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
-- **3.4 — Analyzer/scoring hardening for touchpoints/leads** 📋 PLANNED (after 3.3 test): calibrate scoring
+  rise). **Test C4 = PASS (2026-06-10, DEC-089):** 4 fixtures, `technical_errors=0`, **`primary_json=3/4`**,
+  `repaired_json=0/4`, **`deterministic_fallback_after_llm_fail=1/4`** (the Banki/forum lead-pattern, safe — stayed
+  `review_queue`), `repair_used=false` for the 3 `primary_json` rows, MSK OK, routes preserved, **Telegram fixed**
+  (`primary_json` → `content_queue`). **Verdict:** deterministic_first baseline approved + **compact LLM enrichment
+  APPROVED WITH WATCH ITEM** for optional / test use; **default stays `deterministic_first` unless the operator
+  explicitly enables `llm_enrichment`**; watch item = Banki/forum lead-pattern still falls back (safe). C4 cost delta:
+  TODO_OPERATOR_FILL. **Timestamps Moscow `+03:00`** (DEC-083). Test log: `docs/STAGE_3_2_TEST_RESULTS.md`.
+- **3.3 — First real source connector: Avito/Classifieds Listing Connector** 🔧 **BUILT, UNDER TEST (2026-06-10, DEC-090)**:
+  `Workflow 09 — Avito Classifieds Listing Connector` (`active=false`, **fixture mode default, $0, no Apify call, no
+  LLM**) transforms Avito/classified listings into `raw_market_records` for the Touchpoint Analyzer (Workflow 08).
+  First real source after manual intake; directly supports **Competitor Ad Intelligence / Semantic Intelligence**
+  (offers, prices/terms, ad wording, positioning, semantic keywords, ad channels). Deterministic normalize +
+  `market_record_registry` dedup (by listing id / URL hash) + one `agent_requests` row; writes **only**
+  `agent_requests`/`raw_market_records`/`market_record_registry` (unique only) — **never** business tabs, **no
+  auto-handoff** to Workflow 08. Live Apify mode documented + disabled by default (gated behind a chosen actor +
+  explicit approval; no direct Avito scraping). Build-sim: fixture run → 6 raw / 6 unique registry / 1 agent_requests,
+  predicted `monitor_queue=5`/`skipped_log=1`; duplicate run → all `duplicate_in_registry`, registry +0. MSK `+03:00`;
+  40/15/21-column outputs match WF07. Plan: `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`; guide:
+  `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`; test log: `docs/STAGE_3_3_TEST_RESULTS.md`; source
+  decision: `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
+- **3.4 — Telegram public source feasibility (NEXT)** 📋 PLANNED — **not built**: feasibility/design for reading
+  **public** Telegram channels/messages as a source connector (questions, market pains, content/market signals). The
+  **Telegram Parser ≠ Telegram Control Bot** (DEC-067): it needs a separate client/MTProto-style session + compliance
+  design; groups/members/comments/DMs are higher-risk and out of scope here. Build only after explicit approval.
+- **3.5 — Competitor Semantic & Ad Intelligence aggregation (later)** 📋 PLANNED — **not built**: aggregate competitor
+  offers, prices/terms, ad wording, positioning, semantic keywords, and ad channels across collected
+  `raw_market_records` into reusable competitor/semantic intelligence (read-only over existing sheets; no new
+  collection). Builds on the Avito connector + Workflow 08 enrichment.
+- **3.6 — Analyzer/scoring hardening for touchpoints/leads** 📋 PLANNED (after 3.3/3.4 tests): calibrate scoring
   (`lead_signal_score`/`urgency_score`/`contactability_score`/`region_score`/`collateral_fit_score`) +
   `lead_temperature` + `next_action` on real touchpoint outcomes.
-- **3.5 — E2E touchpoint pipeline** 📋 PLANNED: `agent_request` → connector → `raw_market_records` → dedup →
+- **3.7 — E2E touchpoint pipeline** 📋 PLANNED: `agent_request` → connector → `raw_market_records` → dedup →
   approval → analyzer → routed output; source vs analysis cost measured separately.
 
 ---

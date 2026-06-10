@@ -1,15 +1,26 @@
 # STAGE_3_3_SOURCE_DECISION_PLAN.md — First Real Source Connector Decision
 
-**Status:** 📐 DECISION PLAN ONLY — **no connector built**, nothing approved to scrape.
+**Status:** ✅ **AVITO/CLASSIFIEDS SELECTED — Workflow 09 BUILT (fixture mode, `active=false`), UNDER TEST (DEC-090).**
 **Stage:** 3.3 (First real source connector) of the Business Scout Agent.
-**Date:** 2026-06-08 · **Decisions:** DEC-084 (recommendation) · prior: DEC-077/078/079/080/081/082.
-**Related:** `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_DATA_MODEL_PLAN.md`,
+**Date:** 2026-06-10 · **Decisions:** DEC-090 (Avito connector built) · DEC-084 (recommendation) · prior: DEC-077/078/079/080/081/082/089.
+**Related:** `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`, `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`,
+`docs/STAGE_3_3_TEST_RESULTS.md`, `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/LEAD_DATA_MODEL_PLAN.md`,
 `docs/SOCIAL_CLASSIFIED_SOURCE_MATRIX.md`, `docs/STAGE_3_LEAD_SOURCE_EVALUATION.md`.
 
-> **Scope guard:** this document only **recommends** the first real connector and records the reasoning.
-> It does **not** build the Avito connector, Telegram parser, Dzen/VK/Instagram parser, or the Telegram bot,
-> and it authorizes **no** scraping / Apify / Firecrawl / external API call. Build only after explicit operator
-> approval and a per-source feasibility/compliance check.
+> **SELECTED & BUILT (DEC-090, 2026-06-10):** the first real source connector is the **Avito/Classifieds Listing
+> Connector** (`Workflow 09`, `active=false`, **fixture mode by default — no Apify call, $0**). It transforms
+> Avito/classified listings into `raw_market_records` for the Touchpoint Analyzer (Workflow 08); it directly
+> supports **Competitor Ad Intelligence / Semantic Intelligence** (offers, prices/terms, ad wording, positioning,
+> semantic keywords, ad channels). It writes only `agent_requests`/`raw_market_records`/`market_record_registry`,
+> never the business tabs, and **never auto-runs Workflow 08** (manual handoff). Live Apify mode is documented but
+> disabled by default; build-out beyond fixture requires a chosen actor + explicit operator approval + a
+> feasibility/compliance check (no direct Avito scraping). **Telegram public parsing (≠ Control Bot) is the next
+> feasibility (Stage 3.4); Instagram/VK/Dzen deferred.** Plan: `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`.
+
+> **Scope guard:** this document records the source choice and reasoning. The built Workflow 09 runs in **fixture
+> mode** ($0) by default; it authorizes **no** live scraping / Apify run / external API call without explicit
+> operator approval and a per-source feasibility/compliance check. No Telegram/Instagram/VK/Dzen parser or Telegram
+> bot is built.
 
 ---
 
@@ -92,5 +103,11 @@ The analyzer (Workflow 08) and data model are **reused unchanged** for every sou
 ## 8. Decision recorded
 **DEC-084:** Stage 3.3's recommended first real connector is the **Avito/Classifieds Listing Connector** (lowest
 complexity, matches the existing web/URL data model, strong for competitors/offers/semantics), with Telegram
-public parsing and Instagram comment/audience mining **deferred to separate feasibility stages**. No connector
-is built by this plan.
+public parsing and Instagram comment/audience mining **deferred to separate feasibility stages**.
+
+**DEC-090 (2026-06-10):** the Avito/Classifieds Listing Connector is **built** as `Workflow 09` (`active=false`,
+**fixture mode by default — no Apify call, $0**), implementing this decision. It is a deterministic, no-LLM,
+fixture-first connector that supports **Competitor Ad / Semantic Intelligence** and writes only
+`agent_requests`/`raw_market_records`/`market_record_registry` (never the business tabs, no auto-handoff to
+Workflow 08). Live Apify mode is documented but disabled by default and gated behind a chosen actor + explicit
+operator approval. See `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md` and `docs/STAGE_3_3_TEST_RESULTS.md`.

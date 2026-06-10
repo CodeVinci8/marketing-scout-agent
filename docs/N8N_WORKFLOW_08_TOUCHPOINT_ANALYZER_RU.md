@@ -2,11 +2,25 @@
 
 **Workflow:** `n8n/workflows/08_touchpoint_analyzer.json`
 **Имя:** `08 - Touchpoint Analyzer`
-**Статус:** ✅ DETERMINISTIC-FIRST BASELINE ОДОБРЕН (Test 3 PASS); **LLM enrichment — НЕ ОДОБРЕН, ПОД ТЕСТОМ (Test C4 после патча v7).** `active=false`. Stage 3.2 (Business Scout Agent).
-**Дата:** 2026-06-09 (v7 — специализированная схема source_candidate — DEC-088; ранее DEC-087/085/086/082/083)
+**Статус:** ✅ **STAGE 3.2 ЗАКРЫТ (DEC-089).** DETERMINISTIC-FIRST BASELINE ОДОБРЕН (Test 3 PASS); **компактный LLM enrichment ОДОБРЕН С WATCH ITEM для опционального / тестового использования (Test C4 PASS — `primary_json=3/4`, fallback 1/4 безопасный).** Дефолт остаётся `deterministic_first`, пока оператор явно не включит `llm_enrichment`. `active=false`. Stage 3.2 (Business Scout Agent).
+**Дата:** 2026-06-10 (Test C4 PASS — DEC-089; v7 — специализированная схема source_candidate — DEC-088; ранее DEC-087/085/086/082/083)
 
-> **ПАТЧ v7 (DEC-088) — специализированные компактные схемы обогащения ПО СЕМЕЙСТВУ записей. LLM enrichment остаётся
-> НЕ ОДОБРЕН до прохождения Test C4 (или явного отказа от обогащения).** Test C3 обработал 4 записи
+> **TEST C4 PASS — STAGE 3.2 ЗАКРЫТ (DEC-089).** Патч v7 прошёл ретест на 4 фикстурах: ровно 4 записи,
+> `technical_errors=0`, **`primary_json=3/4`** (цель ≥3/4), `repaired_json=0/4`, **`deterministic_fallback_after_llm_fail=1/4`**
+> (≤1 допустимо), `repair_used=false` для 3 строк `primary_json` и `true` только для строки fallback, MSK `+03:00` OK,
+> маршруты сохранены. **Telegram `source_candidate` (7) исправлен** (теперь `primary_json` → `content_queue`/
+> `content_idea`/`create_content`). Маршруты: 1 Avito → `monitor_queue`/competitor/monitor/`primary_json`; 7 Telegram →
+> `content_queue`/content_idea/create_content/`primary_json`; 11 Banki → `review_queue`/lead_signal/investigate/
+> `deterministic_fallback_after_llm_fail` (безопасно — остался `review_queue`, без «обратиться напрямую»); 12 Zoon →
+> `content_queue`/content_idea/create_content/`primary_json`. Обогащение дало полезные `offer_text`/`detected_need`/
+> `reason` для 3 строк `primary_json`. **Решение:** baseline `deterministic_first` одобрен; **компактный LLM enrichment
+> ОДОБРЕН С WATCH ITEM** (опционально/тест); **дефолт остаётся `deterministic_first`, пока оператор явно не включит
+> `llm_enrichment`.** **Watch item:** форумный лид-паттерн Banki всё ещё уходит в fallback (безопасно) — улучшить в
+> будущей итерации обогащения. C4 cost delta: TODO_OPERATOR_FILL. **Stage 3.3 (Avito/Classifieds Listing Connector,
+> DEC-084) можно начинать после коммита.**
+
+> **ПАТЧ v7 (DEC-088) — специализированные компактные схемы обогащения ПО СЕМЕЙСТВУ записей. LLM enrichment ОДОБРЕН С
+> WATCH ITEM после Test C4 (DEC-089).** Test C3 обработал 4 записи
 > (`technical_errors=0`, маршруты сохранены, MSK OK), качество выросло (Avito — хороший `primary_json` 78/80; Banki —
 > корректно `review_queue`/`lead_signal`/`investigate`, без прямого контакта, lead 75; Zoon — `content_idea`/
 > `content_queue`, comp 45 / content 70 / qual 68), **но `primary_json=2/4`: Telegram `source_candidate` (7) по-прежнему
