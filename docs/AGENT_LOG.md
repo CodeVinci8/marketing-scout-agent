@@ -5,6 +5,29 @@ Most recent first.
 
 ---
 
+## 2026-06-10 — Stage 3.3 Competitor Ad/Semantic Intelligence quality patch: WF09 v2 + WF08 v9 (DEC-092)
+
+**Agent role:** project-engineer
+**Session goal:** after WF09 fixture + WF08 handoff PASS (fixture-mode only), fix max_items/fixture-count clarity, richer service_hint/keywords, safe Apify header-auth, and deterministic Avito/classified business-field enrichment in WF08 — without breaking the Stage 3.2 baseline or calling Claude. Touch only WF09/WF08 + docs.
+
+**WF09 (`09_…json`, JSON valid, active=false, versionId `…v002-ad-intel-20260610`):**
+- **Task A:** `max_items=6` (default) + new `include_irrelevant_control_fixture=true`; in fixture mode `max_items` = total emitted records (competitors + control); `Build Fixture` caps to maxItems and always keeps the control when flagged; `agent_requests.requested_limit` = actual fixture count in fixture mode (matches result_summary).
+- **Task B:** richer `service_hint` (credit_broker / business_credit [explicit ИП/ООО/business only] / credit_after_refusals / mortgage_refinance / unknown) classified from title+description+category (not the query); concrete deduplicated `semantic_keywords` phrases; `manager_note` preserves offer+price+terms+keywords+platform.
+- **Task C:** live Apify node → `authentication=genericCredentialType` + `genericAuthType=httpHeaderAuth` (placeholder credential `Apify API - Marketing Scout`; operator binds header `Authorization: Bearer <APIFY_TOKEN>`). No real token/actor id; runs only on `fixture_mode=false`.
+
+**WF08 (`08_…json`, JSON valid, active=false, versionId `…v009-classified-ad-intel-20260610`):**
+- **Task D/E:** new `classifiedCompetitorDet()` fires only for `source_type=classified`+`platform=avito` rows whose text_context matches `^Avito объявление:` (WF09 signature → WF07 manual avito untouched). Parses title/price/location/seller/description/query; sets `offer_text`=title, `terms`=price+conditions, preserved specific `service_type`, `detected_need`=probable_need, competitor-ad `reason`; scores competitor_strength 75–85, lead_signal_score=1, content_idea_score 35/45/50–55, quality_score 70–85; irrelevant control stays all-1. `Build Deterministic Row` now emits `terms:str(det.terms)` and uses `det.reason` when present. No-contact safety unchanged; no Claude in deterministic_first.
+
+**Verified (simulation):** both JSON VALID; active=false; defaults fixture_mode=true/live_mode=false/max_items=6/include_control=true; WF09 fixtures → credit_broker/credit_after_refusals/business_credit/credit_after_refusals/mortgage_refinance/unknown, concrete keywords, manager_note with offer+price+terms; WF08 filtered handoff → monitor_queue=5 / skipped_log=1, deterministic_pre_route×5 + deterministic_irrelevant_skip×1, competitor_strength 78–85, lead=1, content_idea 50–55, quality 78–82, offer_text=title, terms=price+conditions, service_type themes preserved; **12-record Stage 3.2 baseline route counts identical to pre-patch HEAD** (monitor 5 / content 4 / skipped 2 / review 1); Apify node header-auth + placeholders only (no real token/actor/key/Spreadsheet ID); MSK helpers, no bare toISOString; WF09 writes only intake sheets (no business tabs); WF09 40/15/21 cols + WF08 35 business fields + source-handoff filters preserved; no tool_use / KEY=VALUE; WF04/05/06/07 untouched.
+
+**Important:** all tests so far are **fixture-mode** — no real Avito scrape (`fixture_mode=true`, `live_mode=false`, source cost $0, Apify node did not run). Status: fixture + handoff approved; **live scrape not tested**.
+
+**Decision:** DEC-092. Docs: WF09 RU, WF08 RU (§4b + v9 banner), STAGE_3_3_TEST_RESULTS (results recorded + post-patch retest target), STAGE_3_3 plan, STAGE_3_3_SOURCE_DECISION_PLAN, LEAD_DISCOVERY_ARCHITECTURE, LEAD_DATA_MODEL_PLAN, SOCIAL_CLASSIFIED_SOURCE_MATRIX, NEXT_ACTIONS, COSTS, AGENT_CAPABILITIES, ROADMAP (Stage 3.4 = Social Source Parsing Strategy), AGENT_LOG, core/hot/recent.
+
+**Next operator action:** re-import WF09+WF08 → (A) WF08 handoff retest using existing `avito_req_20260610_214709` (expect 5/1 unchanged + rich offer/terms/scores) → (B) optional WF09 duplicate retest → (C) optional future live Apify smoke (`max_items=3–5`, bound credential). Real Avito scrape remains untested until live_mode=true.
+
+---
+
 ## 2026-06-10 — Workflow 08 PATCHED v8: source-handoff filters for Stage 3.3 handoff (DEC-091)
 
 **Agent role:** project-engineer

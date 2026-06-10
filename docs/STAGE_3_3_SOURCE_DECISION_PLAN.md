@@ -22,6 +22,14 @@
 > operator approval and a per-source feasibility/compliance check. No Telegram/Instagram/VK/Dzen parser or Telegram
 > bot is built.
 
+> **Status update (DEC-092, 2026-06-10):** WF09 fixture tests + the WF08 deterministic handoff **passed** (monitor 5 /
+> skipped 1 / technical_errors 0 / Claude 0), and the Competitor Ad / Semantic Intelligence fields were upgraded
+> (offer/title, price/terms, specific service themes, richer keywords). **This is fixture-mode only — real Avito
+> scraping has NOT been tested** (`fixture_mode=true`, `live_mode=false`, source cost $0, Apify node did not run).
+> Avito remains the **first** connector; the **wider social-source parsing strategy is Stage 3.4** (Telegram/VK/
+> Instagram/Dzen/review-maps — official APIs vs Apify/actor vs Firecrawl/web vs public-preview; access/legal/rate-limit
+> risks; dedup/quality; competitor-intel vs lead-signal value; cost; source ranking). No social parser is built here.
+
 ---
 
 ## 1. Prerequisite — Stage 3.2 is closed

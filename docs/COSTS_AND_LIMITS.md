@@ -167,6 +167,11 @@ Three cost axes with different drivers and spend gates — tracked **separately*
 - **Downstream analysis (Workflow 08) is separate:** deterministic_first routing of the collected records = **$0**
   (Claude calls=0). Optional compact LLM enrichment is opt-in (≤ $0.04 / 4-record test; see the C4 section above).
 - **Net:** Stage 3.3 adds **no fixed cost**; the only variable cost is an optional, operator-approved Apify live run.
+- **DEC-092 quality patch = $0:** the WF09 fixture/keywords/service_hint improvements and the WF08 deterministic Avito
+  enrichment (offer/title, price/terms, scores) are pure Code-node logic — **no Claude, no Apify, no extra calls**.
+  The competitor ad-intelligence enrichment happens in `deterministic_first` (Claude calls=0). **Fixture + handoff
+  tests cost $0; real Avito scrape (live Apify) remains untested** — its cost depends on the chosen actor and is
+  recorded only when an approved live run happens.
 
 ---
 

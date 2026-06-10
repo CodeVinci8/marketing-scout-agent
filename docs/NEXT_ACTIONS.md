@@ -4,40 +4,35 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-10) — Stage 3.3 BUILT: Avito/Classifieds Listing Connector (Workflow 09, DEC-090) → import, bind, fixture test, duplicate test, optional live, WF08 handoff
+## CURRENT PRIORITY (2026-06-10) — Stage 3.3 fixture + handoff PASS, ad-intelligence quality patch (DEC-092) → re-import + retest; live Avito scrape still NOT tested
 
-`Workflow 09 — Avito Classifieds Listing Connector` is **built** (`n8n/workflows/09_avito_classifieds_listing_connector.json`,
-`active=false`, JSON valid; DEC-090). It is the **first real source connector** after manual intake: it transforms
-Avito/classified listings into `raw_market_records` so Workflow 08 can route them. **Fixture mode by default
-(`fixture_mode=true`, `live_mode=false`) — no Apify call, $0, no LLM.** It writes only `agent_requests` /
-`raw_market_records` / `market_record_registry` (unique only); **never** the business tabs; **no auto-handoff** to
-Workflow 08. Supports **Competitor Ad Intelligence / Semantic Intelligence** (offers, prices/terms, ad wording,
-positioning, semantic keywords, ad channels). Build-time simulation: fixture run → 6 raw / 6 unique registry / 1
-agent_requests (completed); predicted `monitor_queue=5`, `skipped_log=1`. Stage 3.2 unchanged and not broken.
+`Workflow 09 — Avito Classifieds Listing Connector` (`active=false`, DEC-090) + the Workflow 08 deterministic handoff
+**passed fixture tests** (Test 1 raw+6/registry+6/agent_requests+1; Test 2 duplicate registry+0; handoff
+monitor_queue=5 / skipped_log=1 / technical_errors=0 / Claude=0). **All fixture-mode only — no real Avito scrape**
+(`fixture_mode=true`, `live_mode=false`, source cost $0, Apify node did not run). **DEC-092 quality patch applied:**
+WF09 `max_items=6` (= total fixture records incl. control), richer `service_hint`/`semantic_keywords`, Apify live node
+wired for HTTP Header Auth (no secrets); WF08 deterministic Avito enrichment (offer/title, price/terms, specific
+service theme, content_idea_score 35–55, competitor_strength 75–85, competitor-ad reason), gated to WF09-origin rows so
+the Stage 3.2 baseline is unchanged.
 
 **Next, in order:**
-1. [ ] **Import Workflow 09** into n8n (do NOT activate).
-2. [ ] **Bind the Google Sheets credential** (`Google Sheets - Marketing Scout Service Account`) on the 4 sheet nodes
-   (Read market_record_registry, Append raw_market_records, Append market_record_registry, Append agent_requests) and
-   **replace `PASTE_SPREADSHEET_ID_HERE`** with the real Spreadsheet ID. (Apify not needed for fixture tests.)
-3. [ ] **Test 1 — fixture first run** (`fixture_mode=true`, empty/fresh registry): Execute once. Expect raw +6,
-   registry +6 unique, agent_requests +1 (status=completed), predicted `monitor_queue=5` / `skipped_log=1`,
-   `skipped_count=1`, cost $0. Fill `docs/STAGE_3_3_TEST_RESULTS.md` Test 1.
-4. [ ] **Test 2 — fixture duplicate run:** Execute again. Expect all 6 `duplicate_in_registry` / `approval_status=
-   duplicate`; raw +6 (audit); registry +0; competitor dup `next_action=monitor_duplicate`, irrelevant `ignore`.
-   Fill Test 2.
-5. [ ] **Test 3 (optional) — live Apify smoke test (`max_items=5`):** only after choosing + approving an Apify Avito
-   actor. Set `fixture_mode=false`, `live_mode=true`, `apify_actor_id`, bind the Apify credential in n8n. Record the
-   Apify source cost. 0 Firecrawl/Claude. No direct Avito scraping. Fill Test 3.
-6. [ ] **Test 4 — handoff (WF08 source-handoff filter REQUIRED, DEC-091):** in WF08 `Set Analyzer Config` set
-   `agent_request_id_filter` to this WF09 run's `agent_request_id` (e.g. `avito_req_20260610_214709`), `platform_filter
-   ="avito"`, `source_type_filter="classified"`, `max_records=6`, `analysis_mode="deterministic_first"`, all LLM flags
-   `false`. Run **Workflow 08 manually** → expect `monitor_queue=5`, `skipped_log=1`, `content/review/technical=0`,
-   `deterministic_pre_route×5 + deterministic_irrelevant_skip×1`, Claude calls=0. **Then clear the three filters
-   (back to `""`).** Do **not** use `llm_test_batch_indexes` for source handoff. Fill Test 4.
+1. [ ] **Re-import WF09 and WF08** (do NOT activate). Rebind the Google Sheets credential on WF09's 4 sheet nodes +
+   real Spreadsheet ID. (Apify not needed for fixture/handoff retests.)
+2. [ ] **(A) Workflow 08 handoff RETEST** using the existing `avito_req_20260610_214709` rows: WF08 `Set Analyzer
+   Config` → `agent_request_id_filter="avito_req_20260610_214709"`, `platform_filter="avito"`,
+   `source_type_filter="classified"`, `max_records=6`, `analysis_mode="deterministic_first"`, all LLM flags `false`.
+   Run WF08 → expect **monitor_queue=5 / skipped_log=1 / technical_errors=0 / Claude=0** (unchanged) **and** now:
+   `offer_text`=listing title, `terms`=price+conditions, `content_idea_score` 35–55, `service_type` preserves the
+   theme, `reason` mentions offer/price/semantic. **Clear the 3 filters after.** Fill `docs/STAGE_3_3_TEST_RESULTS.md`.
+3. [ ] **(B, optional) WF09 fixture duplicate retest:** Execute WF09 again on the populated registry → all 6
+   `duplicate_in_registry`, registry +0, raw +6 audit, `requested_limit=6`.
+4. [ ] **(C, optional, future) live Apify smoke test (`max_items=3–5`):** only after choosing + approving an Apify
+   Avito actor. Set `fixture_mode=false`, `live_mode=true`, `apify_actor_id`; bind the Apify HTTP Header credential
+   (`Authorization: Bearer <APIFY_TOKEN>`) in n8n. Record the Apify source cost. 0 Firecrawl/Claude. No direct Avito
+   scraping. **Until this runs, real Avito scrape remains untested.**
 
-**Next stage after Stage 3.3 validates:** Stage 3.4 — Telegram public source feasibility (separate parser ≠ Control
-Bot); Stage 3.5 — Competitor Semantic & Ad Intelligence aggregation (later).
+**Next stage after Stage 3.3 validates:** Stage 3.4 — **Social Source Parsing Strategy** (Telegram/VK/Instagram/Dzen/
+review-maps; strategy doc, no build); Stage 3.5 — Competitor Semantic & Ad Intelligence aggregation (later).
 
 > Still NOT built/approved: Telegram/Instagram/VK/Dzen parsers, competitor-audience scraping, Telegram Control Bot,
 > outreach/autocall, scheduled scraping, auto-handoff WF09→WF08. Live Avito scraping gated behind a chosen actor +

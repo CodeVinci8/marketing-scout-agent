@@ -3,7 +3,15 @@
 **Workflow:** `n8n/workflows/08_touchpoint_analyzer.json`
 **Имя:** `08 - Touchpoint Analyzer`
 **Статус:** ✅ **STAGE 3.2 ЗАКРЫТ (DEC-089).** DETERMINISTIC-FIRST BASELINE ОДОБРЕН (Test 3 PASS); **компактный LLM enrichment ОДОБРЕН С WATCH ITEM для опционального / тестового использования (Test C4 PASS — `primary_json=3/4`, fallback 1/4 безопасный).** Дефолт остаётся `deterministic_first`, пока оператор явно не включит `llm_enrichment`. `active=false`. Stage 3.2 (Business Scout Agent).
-**Дата:** 2026-06-10 (v8 — source-handoff фильтры — DEC-091; Test C4 PASS — DEC-089; v7 source_candidate — DEC-088; ранее DEC-087/085/086/082/083)
+**Дата:** 2026-06-10 (v9 — детерминированное обогащение Avito/classified — DEC-092; v8 source-handoff фильтры — DEC-091; Test C4 PASS — DEC-089; ранее DEC-088/087/085/086/082/083)
+
+> **ПАТЧ v9 (DEC-092) — Competitor Ad Intelligence для Avito/classified.** Для записей Workflow 09
+> (`source_type=classified` + `platform=avito`, text_context начинается с `Avito объявление:`) детерминированная
+> ветка competitor теперь извлекает из объявления `offer_text`=заголовок, `terms`=цена+условия, сохраняет
+> специфический `service_type`, ставит `content_idea_score` 35–55 и `competitor_strength` 75–85, формирует
+> reason про оффер/цену/семантику. **Строго ограничено выходом Workflow 09** — ручные Avito-записи Stage 3.1 и
+> детерминированный baseline Stage 3.2 НЕ затрагиваются (маршруты идентичны). Claude в deterministic_first не
+> вызывается. Подробно — §4b.
 
 > **ПАТЧ v8 (DEC-091) — source-handoff фильтры.** В `Set Analyzer Config` добавлены три **необязательных** фильтра
 > (по умолчанию пустые): `agent_request_id_filter`, `platform_filter`, `source_type_filter`. При непустом значении
@@ -260,6 +268,34 @@ llm_enrichment_test_mode= false
 **parse_method:** `primary_json` | `repaired_json` | `deterministic_irrelevant_skip` |
 `deterministic_fallback_after_llm_fail` | `deterministic_pre_route` | `technical_error`.
 **repair_status:** `''` | `success` | `failed_fallback` | `failed`.
+
+## 4b. Детерминированное обогащение Avito/classified (Competitor Ad Intelligence, DEC-092)
+
+Для записей коннектора Workflow 09 (`source_type=classified` + `platform=avito` + `text_context` начинается с
+`Avito объявление:`) ветка competitor использует специальный детерминированный построитель `classifiedCompetitorDet`
+(без Claude). Он разбирает сигнатуру text_context
+`Avito объявление: <TITLE> | цена: <PRICE> | <LOCATION> | продавец: <SELLER> | <DESC> | запрос: <QUERY>` и заполняет
+бизнес-поля:
+- `offer_text` = заголовок объявления (не поисковый запрос);
+- `terms` = цена + явные условия из описания (без предоплаты, оплата за результат, работа по договору, консультация,
+  после отказов, с просрочками, плохая КИ, пакет документов, банковские гарантии, рефинансирование, снижение ставки);
+- `service_type` = сохранённая специфика `service_hint` (credit_broker / business_credit / credit_after_refusals /
+  mortgage_refinance; `unknown` только для нерелевантного);
+- `company_name` = competitor_name / продавец / profile_name; `detected_need` = `probable_need`;
+- `reason` = «Avito-объявление конкурента: <оффер> (<цена>); <условия>. Сохранить оффер, цену и семантику для
+  мониторинга конкурентов и рекламных углов (площадка Avito/classifieds). Действие: monitor.»
+
+**Баллы (Task E):** `competitor_strength` 75–85 (по полноте/специфике), `lead_signal_score=1` (это реклама
+конкурента, а не прямой запрос клиента), `content_idea_score` 35 (обычное) / 45 (есть оффер/цена/условия) / 50–55
+(сильная боль/семантика: отказы, плохая КИ, просрочки, без предоплаты, оплата за результат, ИП/ООО, бизнес-кредит,
+банковские гарантии, рефинансирование), `quality_score` 70–85 (title+price+seller+description+profile_url → 80+).
+Нерелевантная контрольная запись остаётся со всеми баллами=1 и `skipped_log`.
+
+**Важно:** обогащение **строго ограничено** записями с сигнатурой `Avito объявление:` (выход Workflow 09) — ручные
+Avito-записи Stage 3.1 (Workflow 07, начинаются с «Объявление Avito:») идут по прежней общей competitor-ветке, поэтому
+**детерминированный baseline Stage 3.2 не меняется** (маршруты идентичны: monitor 5 / content 4 / skipped 2 / review 1
+после DEC-087; обогащаются только значения бизнес-полей Avito-строк Workflow 09). Маршрут/действие/контакт остаются
+детерминированными; Claude в `deterministic_first` не вызывается; no-contact safety без изменений.
 
 ## 5. Импорт и настройка
 

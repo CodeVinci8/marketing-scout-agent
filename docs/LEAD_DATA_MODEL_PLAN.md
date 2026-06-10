@@ -156,7 +156,7 @@ classified listing onto `raw_market_records` (40 cols) **deterministically, no L
 | platform/category | `ad_channel_hint='classifieds'`, `platform='avito'`, `source_type='classified'` |
 | listing kind (derived from title+desc+category, **not** the query) | `record_type_hint` (`competitor_activity` / `market_signal` / `irrelevant`) + `touchpoint_type` (`competitor_listing` / `classified_offer` / `irrelevant_source`) |
 | seller identity (service ads) | `competitor_related=true`, `competitor_name=seller_name` |
-| inferred product | `service_hint` (`credit_broker` / `business_credit` / `mortgage_refinance`) |
+| inferred product | `service_hint` (`credit_broker` / `business_credit` / `credit_after_refusals` / `mortgage_refinance` / `unknown`; DEC-092 — `business_credit` only when ИП/ООО/business financing is explicit) |
 | inferred customer need | `probable_need` |
 | (no public phone unless explicit) | `contact_public` / `contact_channel` empty unless literally present |
 
@@ -165,6 +165,13 @@ hash(title+description+price). The connector predicts a route for the registry `
 (`monitor_queue`/`content_queue`/`review_queue`/`skipped_log`) but **routing is finalized by Workflow 08** — the
 connector never writes the business tabs. Primary value: **Competitor Ad / Semantic Intelligence**. See
 `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`.
+
+**Workflow 08 deterministic enrichment of these rows (DEC-092):** for `source_type=classified` + `platform=avito`
+rows with the WF09 `text_context` signature, Workflow 08 parses the listing and populates the 35-field business row
+deterministically (no Claude): `offer_text`=listing title, `terms`=price + explicit conditions, `service_type`=the
+preserved specific `service_hint`, `detected_need`=`probable_need`, plus `competitor_strength` 75–85 /
+`lead_signal_score`=1 / `content_idea_score` 35–55 / `quality_score` 70–85 and a competitor-ad `reason`. Routing is
+unchanged (competitor → `monitor_queue`; irrelevant → `skipped_log`).
 
 ## 5. Invariants
 
