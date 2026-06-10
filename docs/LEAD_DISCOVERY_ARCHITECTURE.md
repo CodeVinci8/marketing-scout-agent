@@ -20,6 +20,21 @@
 > `docs/SOCIAL_CLASSIFIED_SOURCE_MATRIX.md`. Recommended order: **Manual Intake → Avito → Telegram (parser) →
 > VK → Yandex (discovery aid); Instagram deferred.**
 
+> **Stage 3.3 — first real connector BUILT (2026-06-10, DEC-090):** the **Avito/Classifieds Listing Connector**
+> (`Workflow 09`, `active=false`, fixture mode default, $0) is the first concrete instance of this architecture
+> after manual intake. Live flow:
+>
+> ```
+> Avito/Classifieds (Apify actor | fixture) → Workflow 09 (normalize + dedup, NO Claude)
+>   → raw_market_records (+ market_record_registry dedup, + agent_requests)
+>   → [manual handoff] → Workflow 08 Touchpoint Analyzer (deterministic_first)
+>   → monitor_queue (competitor) / content_queue (semantic/content) / review_queue (ambiguous) / skipped_log (irrelevant)
+> ```
+>
+> The connector **never** calls Claude and **never** writes the business tabs; Workflow 08 owns routing. No
+> auto-handoff. Supports **Competitor Ad / Semantic Intelligence**. Guide:
+> `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`; plan: `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`.
+
 > **REFRAME (2026-06-08, DEC-078 — stakeholder interview):** this layer is **Social/Classified Touchpoint
 > Discovery**, the first capability domain of the broader **Business Scout Agent** (`docs/BUSINESS_SCOUT_AGENT_VISION.md`).
 > **Lead discovery is a subset of touchpoint discovery.** Records span 12 classes (`hot_lead`,

@@ -9,12 +9,18 @@ external API call, no credential, no actor run.
 > Tools/actors/APIs named below are **candidates to evaluate later**, not selected, not approved, not tested.
 > "Possible APIs/actors/tools" = things to assess in a future stage, behind explicit operator approval.
 
-> **Stage 3.3 first-source decision (DEC-084, 2026-06-08):** with Stage 3.2 finalized, the **recommended first
-> real connector is the Avito/Classifieds Listing Connector** — lowest complexity, closest to the existing web/URL
-> data model, strong for competitors/offers/semantics (caveat: not for comments/audience mining). **Telegram public
-> parsing (≠ Control Bot) is second/separate feasibility; Instagram comment/audience mining is deferred; Dzen/VK
-> public feasibility follow Avito.** Still **EVALUATION ONLY — no connector built.** Full reasoning:
-> `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
+> **Stage 3.3 — Avito/Classifieds SELECTED & BUILT (DEC-090, 2026-06-10):** `Workflow 09 — Avito Classifieds
+> Listing Connector` is built (`active=false`, **fixture mode by default, $0, no Apify call**) and transforms
+> Avito/classified listings into `raw_market_records` for the Touchpoint Analyzer (Workflow 08). It is the first
+> real connector after manual intake and directly supports **Competitor Ad Intelligence / Semantic Intelligence**.
+> **Telegram public parsing (≠ Control Bot) is next feasibility (Stage 3.4); Instagram/VK/Dzen deferred.** Live
+> Apify mode is documented but disabled by default (gated behind a chosen actor + explicit approval; no direct Avito
+> scraping). Plan: `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`; guide:
+> `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`. (Prior recommendation: DEC-084.)
+>
+> **Quick attributes — Avito/Classifieds (recommended stage 3.3):** ease **high**; business value **high** for
+> competitors/offers/semantics; lead value **medium/low** unless direct demand appears; risk **medium** (scraping /
+> marketplace ToS / anti-bot) — mitigated by Apify-actor pattern + fixture-first + explicit approval for live.
 
 > **REFRAME (2026-06-08, DEC-078):** sources are evaluated for **touchpoints** (hot leads, warm touchpoints,
 > competitor audiences, comments, semantic/ad signals), not hot leads alone — the first domain of the
@@ -26,8 +32,15 @@ external API call, no credential, no actor run.
 
 ---
 
-## 1. Avito / Classifieds
-- **Target use case:** direct, high-intent leads ("займ под ПТС / деньги под авто Москва"); secondary competitor listings.
+## 1. Avito / Classifieds  ✅ SELECTED & BUILT — Workflow 09 (fixture mode, `active=false`, DEC-090)
+- **Attributes:** ease **high** · business value **high** (competitors / offers / semantics / ad wording) · lead
+  value **medium/low** (unless a listing shows direct client demand) · risk **medium** (scraping/marketplace ToS) ·
+  **recommended stage 3.3**.
+- **Build status:** `Workflow 09 — Avito Classifieds Listing Connector` built, **fixture mode by default ($0)**;
+  live Apify mode documented + disabled by default. Writes only `agent_requests`/`raw_market_records`/
+  `market_record_registry`; no business-tab writes; no auto-handoff to Workflow 08.
+- **Target use case:** **competitor ad / semantic intelligence first** (offers, prices/terms, ad wording,
+  positioning, keywords, ad channels); secondary direct, high-intent leads ("займ под ПТС / деньги под авто Москва").
 - **Data expected:** classified listings + seller profiles, region/category filterable.
 - **Likely fields:** `post_url` (listing), `profile_url`/`profile_name`/`author_handle`, `published_at`,
   `region_hint`, `text_context` (title+body), `contact_public` (phone/profile when public).

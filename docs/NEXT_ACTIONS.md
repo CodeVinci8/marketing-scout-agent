@@ -4,7 +4,44 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-10) — Stage 3.2 CLOSED (Test C4 PASS, DEC-089) → commit → Stage 3.3 Avito/Classifieds Listing Connector
+## CURRENT PRIORITY (2026-06-10) — Stage 3.3 BUILT: Avito/Classifieds Listing Connector (Workflow 09, DEC-090) → import, bind, fixture test, duplicate test, optional live, WF08 handoff
+
+`Workflow 09 — Avito Classifieds Listing Connector` is **built** (`n8n/workflows/09_avito_classifieds_listing_connector.json`,
+`active=false`, JSON valid; DEC-090). It is the **first real source connector** after manual intake: it transforms
+Avito/classified listings into `raw_market_records` so Workflow 08 can route them. **Fixture mode by default
+(`fixture_mode=true`, `live_mode=false`) — no Apify call, $0, no LLM.** It writes only `agent_requests` /
+`raw_market_records` / `market_record_registry` (unique only); **never** the business tabs; **no auto-handoff** to
+Workflow 08. Supports **Competitor Ad Intelligence / Semantic Intelligence** (offers, prices/terms, ad wording,
+positioning, semantic keywords, ad channels). Build-time simulation: fixture run → 6 raw / 6 unique registry / 1
+agent_requests (completed); predicted `monitor_queue=5`, `skipped_log=1`. Stage 3.2 unchanged and not broken.
+
+**Next, in order:**
+1. [ ] **Import Workflow 09** into n8n (do NOT activate).
+2. [ ] **Bind the Google Sheets credential** (`Google Sheets - Marketing Scout Service Account`) on the 4 sheet nodes
+   (Read market_record_registry, Append raw_market_records, Append market_record_registry, Append agent_requests) and
+   **replace `PASTE_SPREADSHEET_ID_HERE`** with the real Spreadsheet ID. (Apify not needed for fixture tests.)
+3. [ ] **Test 1 — fixture first run** (`fixture_mode=true`, empty/fresh registry): Execute once. Expect raw +6,
+   registry +6 unique, agent_requests +1 (status=completed), predicted `monitor_queue=5` / `skipped_log=1`,
+   `skipped_count=1`, cost $0. Fill `docs/STAGE_3_3_TEST_RESULTS.md` Test 1.
+4. [ ] **Test 2 — fixture duplicate run:** Execute again. Expect all 6 `duplicate_in_registry` / `approval_status=
+   duplicate`; raw +6 (audit); registry +0; competitor dup `next_action=monitor_duplicate`, irrelevant `ignore`.
+   Fill Test 2.
+5. [ ] **Test 3 (optional) — live Apify smoke test (`max_items=5`):** only after choosing + approving an Apify Avito
+   actor. Set `fixture_mode=false`, `live_mode=true`, `apify_actor_id`, bind the Apify credential in n8n. Record the
+   Apify source cost. 0 Firecrawl/Claude. No direct Avito scraping. Fill Test 3.
+6. [ ] **Test 4 — handoff:** run **Workflow 08 manually** on the collected `raw_market_records` (default
+   `deterministic_first`) → expect 5 competitor → `monitor_queue`, 1 irrelevant → `skipped_log`. Fill Test 4.
+
+**Next stage after Stage 3.3 validates:** Stage 3.4 — Telegram public source feasibility (separate parser ≠ Control
+Bot); Stage 3.5 — Competitor Semantic & Ad Intelligence aggregation (later).
+
+> Still NOT built/approved: Telegram/Instagram/VK/Dzen parsers, competitor-audience scraping, Telegram Control Bot,
+> outreach/autocall, scheduled scraping, auto-handoff WF09→WF08. Live Avito scraping gated behind a chosen actor +
+> explicit operator approval.
+
+---
+
+## PRIOR PRIORITY (2026-06-10) — Stage 3.2 CLOSED (Test C4 PASS, DEC-089) → commit → Stage 3.3 Avito/Classifieds Listing Connector
 
 **Stage 3.2 is CLOSED (DEC-089).** Test C4 (the 4-fixture LLM-enrichment retest against the v7 specialized-schema
 patch) **passed**: exactly 4 records processed, `technical_errors=0`, **`primary_json=3/4`** (target ≥3/4),

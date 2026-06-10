@@ -177,15 +177,31 @@ the approved path until Stage 2.4 is built and live-validated.
   APPROVED WITH WATCH ITEM** for optional / test use; **default stays `deterministic_first` unless the operator
   explicitly enables `llm_enrichment`**; watch item = Banki/forum lead-pattern still falls back (safe). C4 cost delta:
   TODO_OPERATOR_FILL. **Timestamps Moscow `+03:00`** (DEC-083). Test log: `docs/STAGE_3_2_TEST_RESULTS.md`.
-- **3.3 — First real source connector (DECISION)** 📐 **DECIDED 2026-06-08 (DEC-084), NOT BUILT — UNBLOCKED 2026-06-10 (proceed after commit, DEC-089)**: recommended first
-  connector = **Avito/Classifieds Listing Connector** (lowest complexity, matches the web/URL data model; caveat —
-  competitor/offer/semantic source, not audience/comment mining). Telegram public parsing (≠ Control Bot) and
-  Instagram comment/audience mining **deferred to feasibility stages**. Connectors never call Claude; human approval
-  is the spend gate. Build only after explicit approval + feasibility. Plan: `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
-- **3.4 — Analyzer/scoring hardening for touchpoints/leads** 📋 PLANNED (after 3.3 test): calibrate scoring
+- **3.3 — First real source connector: Avito/Classifieds Listing Connector** 🔧 **BUILT, UNDER TEST (2026-06-10, DEC-090)**:
+  `Workflow 09 — Avito Classifieds Listing Connector` (`active=false`, **fixture mode default, $0, no Apify call, no
+  LLM**) transforms Avito/classified listings into `raw_market_records` for the Touchpoint Analyzer (Workflow 08).
+  First real source after manual intake; directly supports **Competitor Ad Intelligence / Semantic Intelligence**
+  (offers, prices/terms, ad wording, positioning, semantic keywords, ad channels). Deterministic normalize +
+  `market_record_registry` dedup (by listing id / URL hash) + one `agent_requests` row; writes **only**
+  `agent_requests`/`raw_market_records`/`market_record_registry` (unique only) — **never** business tabs, **no
+  auto-handoff** to Workflow 08. Live Apify mode documented + disabled by default (gated behind a chosen actor +
+  explicit approval; no direct Avito scraping). Build-sim: fixture run → 6 raw / 6 unique registry / 1 agent_requests,
+  predicted `monitor_queue=5`/`skipped_log=1`; duplicate run → all `duplicate_in_registry`, registry +0. MSK `+03:00`;
+  40/15/21-column outputs match WF07. Plan: `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`; guide:
+  `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`; test log: `docs/STAGE_3_3_TEST_RESULTS.md`; source
+  decision: `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
+- **3.4 — Telegram public source feasibility (NEXT)** 📋 PLANNED — **not built**: feasibility/design for reading
+  **public** Telegram channels/messages as a source connector (questions, market pains, content/market signals). The
+  **Telegram Parser ≠ Telegram Control Bot** (DEC-067): it needs a separate client/MTProto-style session + compliance
+  design; groups/members/comments/DMs are higher-risk and out of scope here. Build only after explicit approval.
+- **3.5 — Competitor Semantic & Ad Intelligence aggregation (later)** 📋 PLANNED — **not built**: aggregate competitor
+  offers, prices/terms, ad wording, positioning, semantic keywords, and ad channels across collected
+  `raw_market_records` into reusable competitor/semantic intelligence (read-only over existing sheets; no new
+  collection). Builds on the Avito connector + Workflow 08 enrichment.
+- **3.6 — Analyzer/scoring hardening for touchpoints/leads** 📋 PLANNED (after 3.3/3.4 tests): calibrate scoring
   (`lead_signal_score`/`urgency_score`/`contactability_score`/`region_score`/`collateral_fit_score`) +
   `lead_temperature` + `next_action` on real touchpoint outcomes.
-- **3.5 — E2E touchpoint pipeline** 📋 PLANNED: `agent_request` → connector → `raw_market_records` → dedup →
+- **3.7 — E2E touchpoint pipeline** 📋 PLANNED: `agent_request` → connector → `raw_market_records` → dedup →
   approval → analyzer → routed output; source vs analysis cost measured separately.
 
 ---

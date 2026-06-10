@@ -155,6 +155,19 @@ Three cost axes with different drivers and spend gates — tracked **separately*
   **opt-in only** (`analysis_mode='llm_enriched'` + `llm_enrichment=true`); the default does **not** change unless the
   operator explicitly enables it.
 
+### Stage 3.3 — Avito/Classifieds Listing Connector (Workflow 09, DEC-090) — cost impact
+- **Fixture mode (default) = $0.** `fixture_mode=true` builds 6 listings in-workflow with **no Apify call, no
+  Firecrawl, no Claude**. Tests 1 (first run) and 2 (duplicate run) are free.
+- **Analysis cost = $0 in Workflow 09.** The connector does **no** LLM analysis (it only normalizes + dedups +
+  writes the intake sheets). `estimated_analysis_cost_usd=0` on every row; `agent_requests.estimated_source_cost_usd=0`
+  and `estimated_analysis_cost_usd=0` in fixture mode.
+- **Live mode source cost = Apify actor usage only** (`fixture_mode=false`, `live_mode=true`). Depends on the chosen
+  Apify Avito/classifieds actor (per-run / per-result pricing). Bounded by `max_items` (default 10; use 5 for the
+  smoke test). **Record the actual Apify cost** when (if) a live run is approved — no live run by default.
+- **Downstream analysis (Workflow 08) is separate:** deterministic_first routing of the collected records = **$0**
+  (Claude calls=0). Optional compact LLM enrichment is opt-in (≤ $0.04 / 4-record test; see the C4 section above).
+- **Net:** Stage 3.3 adds **no fixed cost**; the only variable cost is an optional, operator-approved Apify live run.
+
 ---
 
 ## Estimate Table

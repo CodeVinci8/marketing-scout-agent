@@ -141,6 +141,31 @@ set by the connector / manual intake — now directly determines routing quality
 real connector (Avito/Classifieds, DEC-084) is built, it must (a) populate the hint columns accurately, (b) set
 `published_at` from the source, and (c) write its own operational timestamps in Moscow time.
 
+## 4a. Avito/Classifieds connector mapping (Workflow 09, DEC-090)
+
+The first real connector (`Workflow 09 — Avito Classifieds Listing Connector`, fixture mode default) maps an Avito/
+classified listing onto `raw_market_records` (40 cols) **deterministically, no LLM**. Listing → record:
+
+| Listing field | `raw_market_records` field(s) |
+|---------------|-------------------------------|
+| listing URL | `source_url` = `post_url` (normalized) |
+| seller URL / name | `profile_url` / `profile_name` (and registry `author_handle`) |
+| title + price + location + description + query | `text_context` (compact) |
+| price/terms + offer wording | captured in `text_context` + `manager_note` ("Семантика/оффер конкурента: …") |
+| title/description keywords | `semantic_keywords` (comma-separated) |
+| platform/category | `ad_channel_hint='classifieds'`, `platform='avito'`, `source_type='classified'` |
+| listing kind (derived from title+desc+category, **not** the query) | `record_type_hint` (`competitor_activity` / `market_signal` / `irrelevant`) + `touchpoint_type` (`competitor_listing` / `classified_offer` / `irrelevant_source`) |
+| seller identity (service ads) | `competitor_related=true`, `competitor_name=seller_name` |
+| inferred product | `service_hint` (`credit_broker` / `business_credit` / `mortgage_refinance`) |
+| inferred customer need | `probable_need` |
+| (no public phone unless explicit) | `contact_public` / `contact_channel` empty unless literally present |
+
+Dedup key: `avito::classified::avito_listing_<listing_id>` (or `…avito_url_<hash>` when no id). `text_hash` =
+hash(title+description+price). The connector predicts a route for the registry `last_route`
+(`monitor_queue`/`content_queue`/`review_queue`/`skipped_log`) but **routing is finalized by Workflow 08** — the
+connector never writes the business tabs. Primary value: **Competitor Ad / Semantic Intelligence**. See
+`docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`.
+
 ## 5. Invariants
 
 - `raw_market_records` is **separate** from `url_candidates`; `market_record_registry` is **separate** from
