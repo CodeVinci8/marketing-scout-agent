@@ -5,6 +5,21 @@ Most recent first.
 
 ---
 
+## 2026-06-10 — Stage 3.2 CLOSED: Workflow 08 Test C4 PASS — LLM enrichment APPROVED WITH WATCH ITEM (DEC-089)
+
+**Agent role:** project-engineer
+**Session goal:** record the Test C4 (v7 specialized-schema) result, close Stage 3.2, and update all finalization docs. **Docs only — no workflow JSON changed.**
+
+**C4 (recorded — PASS):** the 4-fixture LLM-enrichment retest (`llm_enrichment_test_mode=true`, batch_index 1,7,11,12) against the v7 patch passed: exactly 4 records processed (other 8 not written), `technical_errors=0`, **`primary_json=3/4`** (target ≥3/4), `repaired_json=0/4`, **`deterministic_fallback_after_llm_fail=1/4`** (≤1 acceptable), `repair_used=false` for the 3 `primary_json` rows and `true` only for the fallback row, MSK `+03:00` timestamps correct, routes preserved. **Telegram `source_candidate` (7) is fixed** (now `primary_json`, no longer falls back). Per record: 1 Avito → `monitor_queue`/competitor/monitor/`primary_json`; 7 Telegram @creditbrokers → `content_queue`/content_idea/create_content/`primary_json`; 11 Banki forum hot pattern → `review_queue`/lead_signal/investigate/`deterministic_fallback_after_llm_fail` (safe — stayed `review_queue`, NOT `results`; no unsafe «обратиться напрямую» in the final row); 12 Zoon reviews → `content_queue`/content_idea/create_content/`primary_json`. No `results`/`contact` without `contact_public`. Compact overlay mode produced useful `offer_text`/`detected_need`/`reason` for the 3 `primary_json` rows.
+
+**Verdict / decision (DEC-089 — Stage 3.2 CLOSED):** deterministic_first baseline **APPROVED**; **compact LLM enrichment APPROVED WITH WATCH ITEM** for optional / test use. **Default stays `deterministic_first` (all LLM flags `false`) unless the operator explicitly enables `llm_enrichment`.** **Watch item:** the Banki/forum lead-pattern still falls back (safe); improve in a future enrichment iteration. **C4 cost delta: TODO_OPERATOR_FILL** (target ≤$0.04 / 4 records). **Stage 3.3 (Avito/Classifieds Listing Connector, DEC-084) unblocked — proceed after commit.**
+
+**Docs updated:** STAGE_3_2_TEST_RESULTS (C4 PASS result + final verdict), STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN (status + exit criteria), N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU (status + C4-pass note), DECISIONS (DEC-089), NEXT_ACTIONS (Stage 3.2 closed → commit → Stage 3.3), COSTS_AND_LIMITS (C4 result + cost placeholder), AGENT_CAPABILITIES, ROADMAP (3.2 closed, 3.3 unblocked), AGENT_LOG, core/hot/recent. No workflow JSON / no n8n/workflows edits; no external API; no credentials; no deletions.
+
+**Next operator action:** commit the finalization (docs); optionally fill the C4 cost delta from the measured Claude balance; then begin **Stage 3.3 Avito/Classifieds Listing Connector** feasibility/build (only after explicit approval + feasibility). No connector built this pass.
+
+---
+
 ## 2026-06-09 — Workflow 08 specialized source_candidate schema v7 after C3 PARTIAL PASS (DEC-088)
 
 **Agent role:** project-engineer

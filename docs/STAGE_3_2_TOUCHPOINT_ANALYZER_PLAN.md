@@ -1,9 +1,23 @@
 # STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md — Stage 3.2 Plan
 
-**Status:** ✅ DETERMINISTIC-FIRST BASELINE APPROVED (Test 3 PASS) · **LLM enrichment NOT APPROVED / UNDER TEST (Test C4 after the v7 specialized-schema patch)** · MSK timestamps (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
+**Status:** ✅ **STAGE 3.2 CLOSED (DEC-089).** DETERMINISTIC-FIRST BASELINE APPROVED (Test 3 PASS) · **compact LLM enrichment APPROVED WITH WATCH ITEM for optional / test use (Test C4 PASS — `primary_json=3/4`, fallback 1/4 safe)** · default stays `deterministic_first` unless the operator explicitly enables `llm_enrichment` · MSK timestamps (`n8n/workflows/08_touchpoint_analyzer.json`, `active=false`).
 **Stage:** 3.2 (Touchpoint Analyzer) of the Business Scout Agent.
-**Date:** 2026-06-09 · **Decisions:** DEC-080, DEC-081, DEC-082, DEC-083, DEC-085, DEC-086, DEC-087, DEC-088 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
+**Date:** 2026-06-10 · **Decisions:** DEC-080, DEC-081, DEC-082, DEC-083, DEC-085, DEC-086, DEC-087, DEC-088, DEC-089 · **Guide:** `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`
 **Test log:** `docs/STAGE_3_2_TEST_RESULTS.md`. **Next stage:** `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
+
+> **Stage 3.2 CLOSED — Test C4 PASS (DEC-089):** the v7 specialized-schema patch passed the 4-fixture retest:
+> exactly 4 processed, `technical_errors=0`, **`primary_json=3/4`** (target ≥3/4), `repaired_json=0/4`,
+> **`deterministic_fallback_after_llm_fail=1/4`** (≤1 acceptable), `repair_used=false` for the 3 `primary_json` rows
+> and `true` only for the fallback row, MSK `+03:00` OK, routes preserved. **Telegram `source_candidate` (7) is fixed**
+> (now `primary_json` → `content_queue`/`content_idea`/`create_content`). Routes: 1 Avito → `monitor_queue`/competitor/
+> monitor/`primary_json`; 7 Telegram → `content_queue`/content_idea/create_content/`primary_json`; 11 Banki →
+> `review_queue`/lead_signal/investigate/`deterministic_fallback_after_llm_fail` (safe — stayed `review_queue`, no
+> unsafe «обратиться напрямую»); 12 Zoon → `content_queue`/content_idea/create_content/`primary_json`. Enrichment
+> produced useful `offer_text`/`detected_need`/`reason` for the 3 `primary_json` rows. **Decision:** deterministic_first
+> baseline approved; **compact LLM enrichment APPROVED WITH WATCH ITEM** for optional / test use; **default stays
+> `deterministic_first` unless the operator explicitly enables `llm_enrichment`.** **Watch item:** the Banki/forum
+> lead-pattern still falls back (safe); improve in a future enrichment iteration. C4 cost delta: TODO_OPERATOR_FILL.
+> **Stage 3.3 (Avito/Classifieds Listing Connector, DEC-084) can proceed after commit.**
 
 > **Specialized source_candidate schema v7 (DEC-088):** Test C3 processed the 4 fixtures (`technical_errors=0`, routes
 > preserved) and improved Avito/Banki/Zoon, but was a **PARTIAL PASS / NOT APPROVED** — `primary_json=2/4` because the
@@ -189,12 +203,15 @@ items and ignores thinking/signature blocks; raw preview + original record are p
 - No changes to existing business-tab headers or to Workflows 04/05/06/07.
 - No Telegram Control Bot, no scheduling, no outreach.
 
-## 9. Exit criteria → Stage 3.3 (DONE for the baseline)
+## 9. Exit criteria → Stage 3.3 (DONE — Stage 3.2 CLOSED, DEC-089)
 - ✅ The 12 Workflow-07 records route as expected (Test 3: 1–4,6,12→monitor_queue, 5,7,8→content_queue,
   9–10→skipped_log, 11→review_queue), `technical_errors=0`, Claude calls=0, `repair_used=false` →
   **deterministic_first baseline APPROVED**.
-- ⏳ **LLM enrichment** awaits the small 4-record Test 4 before approval (optional).
-- Record outcomes + Claude cost in `docs/STAGE_3_2_TEST_RESULTS.md`.
-- **Next — Stage 3.3 first real source connector decision:** see `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`
+- ✅ **LLM enrichment** passed the 4-record **Test C4** (`primary_json=3/4`, fallback 1/4 safe, `technical_errors=0`,
+  routes preserved, Telegram fixed) → **APPROVED WITH WATCH ITEM for optional / test use.** Default stays
+  `deterministic_first` unless the operator explicitly enables `llm_enrichment`. **Watch item:** the Banki/forum
+  lead-pattern still falls back (safe).
+- Record outcomes + Claude cost in `docs/STAGE_3_2_TEST_RESULTS.md` (C4 cost delta: TODO_OPERATOR_FILL).
+- **Next — Stage 3.3 first real source connector decision (unblocked, proceed after commit):** see `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`
   (recommended first connector = **Avito/Classifieds Listing**, DEC-084; Telegram/Instagram deferred). Connector
   build only after explicit approval + feasibility. The analyzer/scoring hardening + E2E follow on real records.

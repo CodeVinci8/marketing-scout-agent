@@ -143,6 +143,18 @@ Three cost axes with different drivers and spend gates — tracked **separately*
   General Avito/Banki/Zoon paths are unchanged. **Test C4 keeps the cost target ≤ $0.04 for 4 records** — record the
   exact delta; removing the Telegram repair/fallback round-trip should reduce spend. Default mode remains **$0**.
 
+### C4 result — Stage 3.2 CLOSED, LLM enrichment APPROVED WITH WATCH ITEM (DEC-089) — cost impact
+- **C4 (actual):** 4 fixtures processed, `technical_errors=0`, **`primary_json=3/4`**, `repaired_json=0/4`,
+  **`deterministic_fallback_after_llm_fail=1/4`** (the Banki/forum lead-pattern), `repair_used=false` for the 3
+  `primary_json` rows / `true` only for the fallback row, routes preserved, MSK `+03:00` OK. **Telegram fixed**
+  (`primary_json`). → **PASS, LLM enrichment APPROVED WITH WATCH ITEM** for optional / test use.
+- **C4 cost delta: TODO_OPERATOR_FILL** (target ≤ $0.04 for 4 records). Only 1 repair round-trip (the single fallback
+  row), so the delta should sit at or below target. **Operator: fill the measured Claude balance before/after here and
+  in `docs/STAGE_3_2_TEST_RESULTS.md`.**
+- **Default production mode is still $0** — `deterministic_first` with all LLM flags `false`. Compact LLM enrichment is
+  **opt-in only** (`analysis_mode='llm_enriched'` + `llm_enrichment=true`); the default does **not** change unless the
+  operator explicitly enables it.
+
 ---
 
 ## Estimate Table

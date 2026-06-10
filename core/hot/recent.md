@@ -4,6 +4,30 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-10 — Stage 3.2 CLOSED: Workflow 08 Test C4 PASS — LLM enrichment APPROVED WITH WATCH ITEM (DEC-089)
+
+**What was done (docs only — no workflow JSON, no n8n/workflows, no external API, no credentials, no deletions):**
+- **Test C4 recorded = PASS.** 4-fixture LLM-enrichment retest (batch_index 1,7,11,12) vs the v7 specialized-schema
+  patch: exactly 4 processed, `technical_errors=0`, **`primary_json=3/4`**, `repaired_json=0/4`,
+  **`deterministic_fallback_after_llm_fail=1/4`** (the Banki/forum lead-pattern), `repair_used=false` for the 3
+  `primary_json` rows / `true` only for the fallback row, MSK `+03:00` OK, routes preserved. **Telegram (7) fixed**
+  (`primary_json` → `content_queue`/content_idea/create_content). Routes: 1 Avito→monitor/competitor/`primary_json`;
+  7 Telegram→content/content_idea/`primary_json`; 11 Banki→review/lead_signal/investigate/`deterministic_fallback_after_llm_fail`
+  (safe — stayed review_queue, no «обратиться напрямую»); 12 Zoon→content/content_idea/`primary_json`. No results/contact
+  without contact_public. Enrichment gave useful offer_text/detected_need/reason for the 3 `primary_json` rows.
+- **Decision DEC-089 — Stage 3.2 CLOSED:** deterministic_first baseline APPROVED; **compact LLM enrichment APPROVED WITH
+  WATCH ITEM** for optional / test use; **default stays `deterministic_first` unless the operator explicitly enables
+  `llm_enrichment`.** Watch item = Banki/forum lead-pattern still falls back (safe). C4 cost delta: TODO_OPERATOR_FILL.
+  **Stage 3.3 (Avito/Classifieds Listing Connector, DEC-084) unblocked — proceed after commit.**
+- **Docs updated:** STAGE_3_2_TEST_RESULTS, STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN, N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU,
+  DECISIONS (DEC-089), NEXT_ACTIONS, COSTS_AND_LIMITS, AGENT_CAPABILITIES, ROADMAP, AGENT_LOG, core/hot/recent.
+
+**Next operator action:** commit the finalization (docs); optionally fill the C4 cost delta from the measured Claude
+balance; then begin **Stage 3.3 Avito/Classifieds Listing Connector** (only after explicit approval + feasibility). No
+connector built.
+
+---
+
 ## Session: 2026-06-09 — Workflow 08 specialized source_candidate schema v7 after C3 PARTIAL PASS (DEC-088)
 
 **What was done (C4 — Telegram JSON stabilization; baseline + Avito/Banki/Zoon untouched):**

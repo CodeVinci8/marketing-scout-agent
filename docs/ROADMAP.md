@@ -154,7 +154,7 @@ the approved path until Stage 2.4 is built and live-validated.
   VK/Telegram/competitor/forum/reviews + irrelevant + hot-lead control) → `raw_market_records` (40) +
   `market_record_registry` (15) + `agent_requests` (21). Zero source cost/risk, no LLM, no scraping; `agent_memory`
   not written. Next: import/bind/run/verify, then build the Touchpoint Analyzer.
-- **3.2 — Touchpoint Analyzer** ✅ **DETERMINISTIC-FIRST BASELINE APPROVED (2026-06-08, DEC-080/081/082/083/085/086)**:
+- **3.2 — Touchpoint Analyzer** ✅ **STAGE 3.2 CLOSED (2026-06-10, DEC-089) — DETERMINISTIC-FIRST BASELINE APPROVED + compact LLM enrichment APPROVED WITH WATCH ITEM (DEC-080/081/082/083/085/086/087/088/089)**:
   `Workflow 08 — Touchpoint Analyzer` (`active=false`) reads approved/unique `raw_market_records`, classifies
   **deterministically from intake hints**, and routes to the 6 business tabs (existing **35-column** schema) via
   dynamic sheet. **TEST 3 PASS** (Claude calls=0 / $0, `repair_used=false`, routes 6/3/1/2, `technical_errors=0`) →
@@ -170,10 +170,14 @@ the approved path until Stage 2.4 is built and live-validated.
   use a **specialized ultra-short 7-key enrichment schema** (`profile_name, service_type, offer_text, detected_need,
   reason, content_idea_score, quality_score`) + minimal payload; repair uses the same 7-key schema; a post-merge safety
   assertion keeps route/entity/action/contact/lead/competitor deterministic; specialized `max_tokens` 500/400 (no cost
-  rise). Re-test = **Test C4** (target `primary_json≥3/4`, `fallback=0` ideally ≤1, **Telegram not fallback**, Banki no
-  direct-contact, Zoon→content, cost ≤$0.04) before enabling. **Timestamps Moscow `+03:00`** (DEC-083). Test log:
-  `docs/STAGE_3_2_TEST_RESULTS.md`.
-- **3.3 — First real source connector (DECISION)** 📐 **DECIDED 2026-06-08 (DEC-084), NOT BUILT**: recommended first
+  rise). **Test C4 = PASS (2026-06-10, DEC-089):** 4 fixtures, `technical_errors=0`, **`primary_json=3/4`**,
+  `repaired_json=0/4`, **`deterministic_fallback_after_llm_fail=1/4`** (the Banki/forum lead-pattern, safe — stayed
+  `review_queue`), `repair_used=false` for the 3 `primary_json` rows, MSK OK, routes preserved, **Telegram fixed**
+  (`primary_json` → `content_queue`). **Verdict:** deterministic_first baseline approved + **compact LLM enrichment
+  APPROVED WITH WATCH ITEM** for optional / test use; **default stays `deterministic_first` unless the operator
+  explicitly enables `llm_enrichment`**; watch item = Banki/forum lead-pattern still falls back (safe). C4 cost delta:
+  TODO_OPERATOR_FILL. **Timestamps Moscow `+03:00`** (DEC-083). Test log: `docs/STAGE_3_2_TEST_RESULTS.md`.
+- **3.3 — First real source connector (DECISION)** 📐 **DECIDED 2026-06-08 (DEC-084), NOT BUILT — UNBLOCKED 2026-06-10 (proceed after commit, DEC-089)**: recommended first
   connector = **Avito/Classifieds Listing Connector** (lowest complexity, matches the web/URL data model; caveat —
   competitor/offer/semantic source, not audience/comment mining). Telegram public parsing (≠ Control Bot) and
   Instagram comment/audience mining **deferred to feasibility stages**. Connectors never call Claude; human approval

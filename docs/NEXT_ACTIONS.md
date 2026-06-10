@@ -4,40 +4,34 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-09) — Workflow 08 C3 PARTIAL PASS → specialized source_candidate schema (v7, DEC-088) → re-run Test C4 (NOT Stage 3.3 yet)
+## CURRENT PRIORITY (2026-06-10) — Stage 3.2 CLOSED (Test C4 PASS, DEC-089) → commit → Stage 3.3 Avito/Classifieds Listing Connector
 
-The deterministic_first baseline stays **APPROVED** (Test 3). **Test C3 was a PARTIAL PASS — LLM enrichment NOT
-APPROVED:** it processed the intended 4 fixtures with `technical_errors=0` and routes preserved, and quality improved
-(Avito good `primary_json`; Banki correct `review_queue`/`lead_signal`/`investigate`, no direct-contact, lead 75; Zoon
-`content_idea`/`content_queue`, competitor_strength 45), **but `primary_json=2/4`** because the **Telegram
-`source_candidate` (7) still failed strict JSON and fell back**. **Patched v7 (DEC-088):** source_candidate / social
-channels (`market_signal`+`source_candidate`, or `source_type=social_channel`, or `platform=telegram` w/o a direct
-personal request) now use a **specialized ultra-short 7-key enrichment schema** (`profile_name, service_type,
-offer_text, detected_need, reason, content_idea_score, quality_score`) with a minimal payload; repair uses the same
-7-key schema; a **post-merge safety assertion** keeps route/entity/action/contact/lead/competitor deterministic. Avito/
-Banki/Zoon are untouched. `max_tokens` 500/400 for the specialized path (no cost increase). Defaults remain
-`deterministic_first` / `llm_enrichment=false` / `llm_enrichment_test_mode=false`.
+**Stage 3.2 is CLOSED (DEC-089).** Test C4 (the 4-fixture LLM-enrichment retest against the v7 specialized-schema
+patch) **passed**: exactly 4 records processed, `technical_errors=0`, **`primary_json=3/4`** (target ≥3/4),
+`repaired_json=0/4`, **`deterministic_fallback_after_llm_fail=1/4`** (≤1 acceptable), `repair_used=false` for the 3
+`primary_json` rows and `true` only for the fallback row, MSK `+03:00` OK, routes preserved. **The Telegram
+`source_candidate` (7) is fixed** (now `primary_json` → `content_queue`/`content_idea`/`create_content`). Routes: 1
+Avito → `monitor_queue`/competitor/monitor/`primary_json`; 7 Telegram → `content_queue`/content_idea/create_content/
+`primary_json`; 11 Banki → `review_queue`/lead_signal/investigate/`deterministic_fallback_after_llm_fail` (safe — stayed
+`review_queue`, no unsafe «обратиться напрямую»); 12 Zoon → `content_queue`/content_idea/create_content/`primary_json`.
 
-**Re-run Test C4 (WF08; gates LLM approval):**
-1. [ ] Re-import WF08 (do NOT activate); re-bind Claude + Sheets creds + Spreadsheet ID.
-2. [ ] Set **`llm_enrichment_test_mode=true`** (keeps `llm_test_batch_indexes=[1,7,11,12]`).
-3. [ ] Record Claude balance **BEFORE** → **Execute once** → balance **AFTER**.
-4. [ ] Fill `docs/STAGE_3_2_TEST_RESULTS.md` **Test C4**: expect **all 4 processed** (`selected_count=4` /
-   `total_processed=4`, other 8 not written), `technical_errors=0`, **`primary_json ≥3/4`**, `deterministic_fallback=0`
-   ideally (≤1 acceptable); **Telegram (7)** → `primary_json`/`repaired_json` (**NOT fallback**), `content_queue` /
-   `content_idea` / `create_content`, `lead_signal_score=1`, `competitor_strength=1`, `contact_public=""`,
-   `service_type=credit_broker`; **Banki (11)** reason no direct-contact, stays `review_queue`/`investigate`;
-   **Zoon (12)** stays `content_idea`/`content_queue`; **cost ≤ $0.04**.
-5. [ ] **Restore `llm_enrichment_test_mode=false` after the test.**
-6. [ ] If C4 passes → enrichment may be enabled per-run (`analysis_mode='llm_enriched'` + `llm_enrichment=true`);
-   if it fails or enrichment is explicitly deferred → keep deterministic_first as the production default.
-   **Stage 3.3 stays blocked until C4 passes or LLM enrichment is explicitly deferred.**
+**Verdict:** deterministic_first baseline **APPROVED**; **compact LLM enrichment APPROVED WITH WATCH ITEM** for optional
+/ test use. **Default stays `deterministic_first` (all LLM flags `false`) unless the operator explicitly enables
+`llm_enrichment`.** **Watch item:** the Banki/forum lead-pattern still falls back (safe); improve in a future enrichment
+iteration. **C4 cost delta: TODO_OPERATOR_FILL** (target ≤ $0.04 / 4 records).
 
-**Optional baseline re-confirm (defaults):** Execute once with all flags `false` → Claude calls=0 / $0,
-`deterministic_pre_route=10`, `deterministic_irrelevant_skip=2`, routes 6/3/1/2, `technical_errors=0`.
+**Next, in order:**
+1. [ ] **Commit the Stage 3.2 finalization** (docs only — see exact commands in the session report / below). No workflow
+   JSON changed this pass.
+2. [ ] *(Optional, operator)* fill the **C4 cost delta** (Claude balance before/after the C4 run) in
+   `docs/STAGE_3_2_TEST_RESULTS.md` and `docs/COSTS_AND_LIMITS.md` (replace `TODO_OPERATOR_FILL`).
+3. [ ] **Stage 3.3 — Avito/Classifieds Listing Connector** feasibility/build (DEC-084) — **now unblocked**, proceed
+   after commit. Plan: `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`. Connectors never call Claude; human approval is the
+   spend gate. **Build only after explicit operator approval + feasibility/compliance check.**
 
-**Only AFTER Test C4 passes (or LLM enrichment is explicitly deferred)** — Stage 3.3 source decision is documented
-(`docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`, Avito/Classifieds first, DEC-084). **Do NOT build any source connector yet.**
+**Optional enrichment use (operator opt-in only):** `analysis_mode='llm_enriched'` + `llm_enrichment=true` for a run; or
+the bounded 4-record test via `llm_enrichment_test_mode=true` (`llm_test_batch_indexes=[1,7,11,12]`). **Restore
+`llm_enrichment_test_mode=false` after any test.** Default production mode stays `deterministic_first` / $0.
 
 > Still NOT built/approved: Avito/Dzen/VK/Telegram/Instagram parsers, competitor-audience scraping, Telegram
 > Control Bot, outreach/autocall, scheduled scraping.

@@ -406,51 +406,59 @@ raising cost.
 
 ---
 
-## TEST C4 — ⏳ AWAITING OPERATOR RUN (gates LLM enrichment approval)
+## TEST C4 — 2026-06-10 — ✅ PASS / LLM ENRICHMENT APPROVED WITH WATCH ITEM (v7 specialized-schema patch)
 
-Re-run the **same 4 fixtures** (`llm_enrichment_test_mode=true`, `llm_test_batch_indexes=[1,7,11,12]`) against the v7
-specialized-schema patch.
+Re-ran the **same 4 fixtures** (`llm_enrichment_test_mode=true`, `llm_test_batch_indexes=[1,7,11,12]`) against the v7
+specialized-schema patch. The run hit the acceptance targets: **`primary_json = 3/4`** (target ≥3/4),
+`deterministic_fallback_after_llm_fail = 1/4` (≤1 acceptable), `technical_errors = 0`, routes preserved, MSK `+03:00`
+timestamps OK. The Telegram `source_candidate` (the C2/C3 failure) is now **fixed** (`primary_json`, not fallback);
+the one remaining fallback moved to the Banki/forum lead-pattern record, which is **safe** (the deterministic floor
+routed it correctly to `review_queue`).
 
-### How to run
-1. Re-import WF08 (do **NOT** activate). Re-bind Claude + Sheets credentials and the Spreadsheet ID.
-2. `Set Analyzer Config`: set **`llm_enrichment_test_mode=true`** (keep `analysis_mode='deterministic_first'`,
-   `llm_enrichment=false`, `max_records=12`; `llm_test_batch_indexes=[1,7,11,12]`).
-3. Record Claude balance **BEFORE** → **Execute once** → balance **AFTER** → fill the table below.
-4. **Restore `llm_enrichment_test_mode=false` after the test.**
+### Result summary (C4 — actual)
+- ✅ **Exactly 4 records processed** (batch_index 1, 7, 11, 12); the other 8 not written.
+- ✅ **`technical_errors = 0`.**
+- ✅ **`primary_json = 3/4`**, `repaired_json = 0/4`, **`deterministic_fallback_after_llm_fail = 1/4`**.
+- ✅ **`repair_used = false`** for the 3 `primary_json` rows; **`repair_used = true` only for the fallback row** (11).
+- ✅ MSK timestamps correct with `+03:00`.
+- ✅ Routes remained safe (unchanged from the deterministic baseline):
+  - **Record 1 — Avito competitor** → `monitor_queue`, `competitor`, `monitor`, **`primary_json`**.
+  - **Record 7 — Telegram @creditbrokers** → `content_queue`, `content_idea`, `create_content`, **`primary_json`** (no longer falls back). ✅
+  - **Record 11 — Banki forum hot pattern** → `review_queue`, `lead_signal`, `investigate`, **`deterministic_fallback_after_llm_fail`**. Stayed `review_queue` (NOT `results`); no unsafe «обратиться напрямую» wording in the final row.
+  - **Record 12 — Zoon reviews** → `content_queue`, `content_idea`, `create_content`, **`primary_json`**.
+- ✅ No `results` / `contact` without `contact_public`. Record 11 stayed `review_queue`, not `results`.
+- ✅ **LLM enrichment quality improved:** the compact overlay mode produced useful `offer_text` / `detected_need` /
+  `reason` for the 3 `primary_json` rows.
+- ⚠️ **Watch item:** the Banki/forum lead-pattern record still **fell back** (deterministic fallback). The fallback is
+  **safe** (correct `review_queue` route, no unsafe contact wording), but a future enrichment prompt/model iteration
+  can improve strict-JSON reliability for the forum lead-pattern family.
 
-### Acceptance (C4 target)
-- All 4 fixtures processed (`selected_count=4`, `total_processed=4`); other 8 records not written.
-- `technical_errors = 0`. Routes unchanged from the deterministic baseline.
-- **`primary_json ≥ 3/4`.** `repaired_json ≤ 1/4`. **`deterministic_fallback_after_llm_fail = 0` ideally, ≤ 1 acceptable.**
-- **Telegram (7):** `source_candidate` is now **`primary_json` or `repaired_json`, NOT fallback**;
-  `entity_type=content_idea`, `route=content_queue`, `recommended_action=create_content`, `lead_signal_score=1`,
-  `competitor_strength=1`, `contact_public=""`. Expected enrichment ≈ `profile_name="Кредитный Брокер рф"`,
-  `service_type="credit_broker"`, `offer_text="Публичное сообщество о кредитных брокерах, банках, инвесторах и
-  партнёрах"`, `content_idea_score=60`, `quality_score=60`.
-- **Banki (11):** reason must **not** contain a direct-contact instruction; stays `review_queue` / `investigate`.
-- **Zoon (12):** stays `content_idea` / `content_queue` (or a safe review-source classification), **no** unsupported
-  "demand-growth" / "strong-competitor" claim.
-- No `results` / `contact` without usable `contact_public`. Cost delta ≤ $0.04 for 4 records (specialized path is
-  smaller, so cost should not rise).
-
+### C4 table (actual)
 | # | platform | entity_type | route | parse_method | repair_used | Telegram not fallback? | PASS? |
 |---|----------|-------------|-------|------|:----:|:----:|:----:|
-| 1 | avito |  |  |  |  | n/a |  |
-| 7 | telegram |  |  |  |  |  |  |
-| 11 | banki_forum |  |  |  |  | n/a |  |
-| 12 | zoon |  |  |  |  | n/a |  |
+| 1 | avito | competitor | monitor_queue | primary_json | false | n/a | ✅ |
+| 7 | telegram | content_idea | content_queue | primary_json | false | ✅ yes | ✅ |
+| 11 | banki_forum | lead_signal | review_queue | deterministic_fallback_after_llm_fail | true | n/a | ✅ (safe fallback — watch item) |
+| 12 | zoon | content_idea | content_queue | primary_json | false | n/a | ✅ |
 
 | metric | target | observed |
 |--------|--------|----------|
-| selected LLM records | exactly 4 |  |
-| technical_errors | 0 |  |
-| primary_json | ≥3/4 |  |
-| repaired_json | ≤1/4 |  |
-| deterministic_fallback_after_llm_fail | 0 ideally, ≤1 |  |
-| Claude cost delta | ≤ $0.04 |  |
+| selected LLM records | exactly 4 | **4** |
+| technical_errors | 0 | **0** |
+| primary_json | ≥3/4 | **3/4** ✅ |
+| repaired_json | ≤1/4 | **0/4** ✅ |
+| deterministic_fallback_after_llm_fail | 0 ideally, ≤1 | **1/4** (Banki) ✅ |
+| Claude cost delta | ≤ $0.04 | **C4 cost delta: TODO_OPERATOR_FILL** |
 
-> **LLM enrichment stays NOT APPROVED until Test C4 passes** (or is explicitly deferred). Until then the
-> **deterministic_first baseline (TEST 3) is the approved default**; keep all LLM flags `false`.
+### Verdict
+- [x] **PASS — LLM enrichment APPROVED WITH WATCH ITEM.** `primary_json=3/4`, `technical_errors=0`, fallback=1/4 (safe),
+  routes preserved, MSK OK, Telegram fixed. **Decision (DEC-089): Stage 3.2 closed — deterministic_first baseline
+  approved; compact LLM enrichment approved for optional / test use.** The **default stays `deterministic_first`**
+  unless the operator explicitly enables `llm_enrichment`. **Watch item:** the Banki/forum lead-pattern still falls back
+  (safe); improve in a future enrichment iteration. **Stage 3.3 (Avito/Classifieds Listing Connector) can proceed after
+  commit.**
+
+> **Final verdict — Stage 3.2 closed.** Next: **Stage 3.3 Avito/Classifieds Listing Connector** feasibility/build.
 
 ---
 

@@ -5,6 +5,22 @@ Most recent first.
 
 ---
 
+## DEC-089 — Stage 3.2 Closed: Touchpoint Analyzer APPROVED — deterministic_first baseline + compact LLM enrichment APPROVED WITH WATCH ITEM (Test C4 PASS); Default Stays deterministic_first
+
+**Date:** 2026-06-10
+**Context:** Test C4 (`docs/STAGE_3_2_TEST_RESULTS.md`) ran the 4 fixtures (batch_index 1, 7, 11, 12) against the v7 specialized-schema patch (DEC-088) and **passed**: exactly 4 records processed, `technical_errors=0`, **`primary_json=3/4`** (target ≥3/4), `repaired_json=0/4`, **`deterministic_fallback_after_llm_fail=1/4`** (≤1 acceptable), `repair_used=false` for the 3 `primary_json` rows and `true` only for the fallback row, MSK `+03:00` timestamps correct, routes preserved. The C2/C3 failing case — **Telegram `source_candidate` (7) — is fixed** (now `primary_json`, `content_queue`/`content_idea`/`create_content`). The one remaining fallback moved to the **Banki/forum lead-pattern (11)**, which the deterministic floor routed **safely** to `review_queue` (NOT `results`), with **no unsafe «обратиться напрямую» wording** in the final row. Per record: 1 Avito → `monitor_queue`/competitor/monitor/`primary_json`; 7 Telegram → `content_queue`/content_idea/create_content/`primary_json`; 11 Banki → `review_queue`/lead_signal/investigate/`deterministic_fallback_after_llm_fail`; 12 Zoon → `content_queue`/content_idea/create_content/`primary_json`. Compact overlay mode produced useful `offer_text`/`detected_need`/`reason` for the 3 `primary_json` rows. No `results`/`contact` without `contact_public`.
+**Decision (Stage 3.2 closed):**
+- **deterministic_first baseline APPROVED** (Test 3, unchanged) — `technical_errors=0`, Claude calls=0, `repair_used=false`, routes 6/3/1/2, cost $0.
+- **Compact LLM enrichment APPROVED WITH WATCH ITEM** for **optional / test use** (the v4→v7 compact enrichment-only merge with the v7 specialized 7-key source_candidate schema). It can be enabled per-run via `analysis_mode='llm_enriched'` + `llm_enrichment=true`.
+- **Default MUST remain `deterministic_first`** (all LLM flags `false`) **unless the operator explicitly enables `llm_enrichment`.** Enrichment never changes routing/action/entity/contact (deterministic floor + post-merge safety assertion hold).
+- **Watch item:** the Banki/forum lead-pattern record still falls back to `deterministic_fallback_after_llm_fail`. The fallback is **safe** (correct `review_queue`, no unsafe contact wording), but a future enrichment prompt/model iteration can improve strict-JSON reliability for the forum lead-pattern family.
+- **C4 cost delta: TODO_OPERATOR_FILL** (target ≤ $0.04 for 4 records; the specialized Telegram path is smaller, so cost should not rise).
+- **Stage 3.3 unblocked:** the **Avito/Classifieds Listing Connector** (DEC-084) feasibility/build can proceed **after commit**. Connectors never call Claude; human approval is the spend gate; build only after explicit approval + feasibility.
+**Reason:** the only remaining acceptance gap (Telegram strict-JSON) is closed and the lone remaining fallback is on a record class the deterministic floor already routes correctly and safely — so enrichment now adds value (better human-readable fields) at bounded cost without any routing/safety risk. Keeping `deterministic_first` as the default preserves the $0, stable path while making enrichment an explicit, operator-controlled opt-in.
+**Files:** `docs/STAGE_3_2_TEST_RESULTS.md`, `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `docs/DECISIONS.md`, `docs/NEXT_ACTIONS.md`, `docs/COSTS_AND_LIMITS.md`, `docs/AGENT_CAPABILITIES.md`, `docs/ROADMAP.md`, `docs/AGENT_LOG.md`, `core/hot/recent.md`. (No workflow JSON changed.)
+
+---
+
 ## DEC-088 — Workflow 08 Uses Specialized Compact Enrichment Schemas by Record Family; Source Candidates / Social Channels Use a Minimal 7-Key Schema + Deterministic Route Preservation (v7, C4)
 
 **Date:** 2026-06-09
