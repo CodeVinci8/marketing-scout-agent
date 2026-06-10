@@ -167,10 +167,14 @@ Three cost axes with different drivers and spend gates — tracked **separately*
 - **Downstream analysis (Workflow 08) is separate:** deterministic_first routing of the collected records = **$0**
   (Claude calls=0). Optional compact LLM enrichment is opt-in (≤ $0.04 / 4-record test; see the C4 section above).
 - **Net:** Stage 3.3 adds **no fixed cost**; the only variable cost is an optional, operator-approved Apify live run.
-- **First live-smoke actor selected (live-smoke prep, 2026-06-10) — cost still $0 until run:** actor `fatihtahta~avito-russia-scraper`,
-  `live_max_items=3` (small smoke). Cost = the actor's Apify usage (per-run / per-result; consult the actor's Apify
-  page). **Not run yet** (`fixture_mode=true`/`live_mode=false` by default → Apify node does not execute). Record the
-  actual Apify cost only when the approved live smoke runs. 0 Firecrawl / 0 Claude; analysis cost $0 in WF09.
+- **First live-smoke actor `fatihtahta~avito-russia-scraper` — attempt #1 DID incur a real Apify call (DEC-093/094):**
+  the live call executed (`avito_req_20260610_234404`) but returned only an empty/search item (no valid listing). **A real
+  Apify actor cost was incurred — record it** (consult the actor's Apify page / account usage; per-run / per-result).
+  Default mode stays $0 (`fixture_mode=true`/`live_mode=false` → Apify node does not execute). Live smoke uses
+  `actor_limit=10` (sent to Apify — actor min ~10) and `pipeline_limit=3` (valid rows written). 0 Firecrawl / 0 Claude;
+  analysis cost $0 in WF09. **Note:** a bad actor response still costs the Apify call even though `valid_items=0` and
+  nothing is written — inspect the actor first on retest; consider an alternative actor if it keeps returning empty/search
+  items.
 - **DEC-092 quality patch = $0:** the WF09 fixture/keywords/service_hint improvements and the WF08 deterministic Avito
   enrichment (offer/title, price/terms, scores) are pure Code-node logic — **no Claude, no Apify, no extra calls**.
   The competitor ad-intelligence enrichment happens in `deterministic_first` (Claude calls=0). **Fixture + handoff

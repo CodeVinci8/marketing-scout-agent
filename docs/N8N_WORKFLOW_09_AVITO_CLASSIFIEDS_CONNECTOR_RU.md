@@ -2,8 +2,8 @@
 
 **Workflow:** `n8n/workflows/09_avito_classifieds_listing_connector.json`
 **Имя:** `09 - Avito Classifieds Listing Connector`
-**Статус:** 🔧 ПОСТРОЕН; fixture + handoff PASS; **live-smoke подготовлен (actor `fatihtahta~avito-russia-scraper`), ещё НЕ запускался**. `active=false`. Stage 3.3 (Business Scout Agent).
-**Дата:** 2026-06-10 · **Подготовка live-smoke:** actor `fatihtahta~avito-russia-scraper` (2026-06-10) · **Решения:** DEC-092 (ad-intel) · DEC-090 (build) · DEC-084 (выбор источника).
+**Статус:** 🔧 ПОСТРОЕН; fixture + handoff PASS; **live-smoke #1 (actor `fatihtahta~avito-russia-scraper`) запущен → PARTIAL FAIL (actor вернул пустой/поисковый элемент); добавлена строгая валидация (DEC-094); валидная live-выгрузка ещё не достигнута**. `active=false`. Stage 3.3 (Business Scout Agent).
+**Дата:** 2026-06-11 · **Решения:** DEC-094 (валидация live + actor_limit/pipeline_limit) · DEC-093 (actor `fatihtahta~avito-russia-scraper`) · DEC-092 (ad-intel) · DEC-090 (build) · DEC-084 (выбор источника).
 **План:** `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md` · **Тест-лог:** `docs/STAGE_3_3_TEST_RESULTS.md`.
 
 > **ПЕРВЫЙ реальный коннектор-источник после ручного приёма (Workflow 07).** Превращает данные объявлений
@@ -63,7 +63,9 @@ Manual Start
 | `approval_status_for_unique` | `new` | статус уникальных строк |
 | `write_duplicate_audit` | `true` | писать дубликаты в raw (аудит) |
 | `duplicate_next_action` | `monitor_duplicate` | next_action для дубликата-конкурента |
-| `live_max_items` | **`3`** | лимит для live-smoke (используется как `limit` в теле Apify) |
+| `actor_limit` | **`10`** | отправляется в Apify как `limit` (у actor `fatihtahta~avito-russia-scraper` минимум ~10) |
+| `pipeline_limit` | **`3`** | сколько **валидных** нормализованных объявлений WF09 пишет (live-smoke) |
+| `live_max_items` | `3` | legacy-алиас `pipeline_limit` (совместимость) |
 | `start_urls` | 1 URL поиска «кредитный брокер» (Москва) | `startUrls` для actor (live) |
 | `apify_actor_id` | **`fatihtahta~avito-russia-scraper`** | REST-id выбранного actor (формат с `~`, не `/`) |
 | `apify_token_placeholder` | `PASTE_APIFY_TOKEN_OR_USE_CREDENTIAL` | плейсхолдер токена |
@@ -109,11 +111,13 @@ listing_id`. Реального вызова Apify нет ($0). **`max_items=6` 
 - **тело JSON (под этот actor):**
   ```
   {
-    "limit": {{ $json.live_max_items || $json.max_items }},
+    "limit": {{ $json.actor_limit || 10 }},
     "startUrls": {{ JSON.stringify($json.start_urls) }}
   }
   ```
   Actor ожидает `limit` + `startUrls`. **НЕ отправляем** `queries` / `maxItems` / `region`;
+  **`actor_limit` (10) ≠ `pipeline_limit` (3):** `actor_limit` уходит в Apify (минимум actor ~10), а `pipeline_limit`
+  ограничивает, сколько **валидных** объявлений WF09 запишет (DEC-094);
 - **аутентификация (предпочтительно, настроено):** `authentication=genericCredentialType`,
   `genericAuthType=httpHeaderAuth`. **Оператор привязывает в n8n** HTTP Header Auth креденшл `Apify API - Marketing
   Scout`: **header name = `Authorization`, header value = `Bearer <APIFY_TOKEN>`**. В файле **нет** реального токена/
@@ -134,6 +138,25 @@ listing_id`. Реального вызова Apify нет ($0). **`max_items=6` 
    новые объявления. **Если actor вернул 0 объектов — это проблема источника/входа (actor/startUrls), а НЕ сбой
    конвейера** (конвейер на fixture уже доказан).
 5. После live-smoke — запустить Workflow 08 с `agent_request_id_filter=<id этого live-прогона>` (см. §9).
+
+### Валидация листинга и счётчики (DEC-094 — после неудачной live-попытки #1)
+Live-actor может вернуть пустые/поисковые элементы (так и произошло в попытке #1: 1 элемент с пустыми url/title/price и
+только поисковым URL — pre-patch ошибочно зарегистрировал его как unique). Теперь действует **строгая проверка**:
+объявление **валидно**, только если `listing_url` непустой, это `avito.ru`-URL, **не** равен `start_url`, **не** поисковый/
+категорийный URL (нет `?q=`, есть id листинга `_<6+ цифр>` или `/<7+ цифр>`), **и** есть хотя бы одно из title/description/
+price. **Невалидные элементы** (и валидные сверх `pipeline_limit` в live-режиме) **не пишутся** ни в
+`raw_market_records`, ни в `market_record_registry`, **не** считаются unique, **не** записываются как `competitor_activity`
+(`dedup_status=invalid` / `over_pipeline_limit`). Fixture-объявления проверку проходят — поведение fixture не меняется.
+
+`Final Summary` и `agent_requests.result_summary` теперь содержат: `actor_items_received`, `valid_items`,
+`invalid_items`, `unique`, `duplicates`, `skipped`. При наличии невалидных элементов в `notes` добавляется отладочная
+строка: «Live Apify returned item(s), but no valid listing_url/title/price fields were found. Inspect Apify node output
+and actor schema.» + `raw_response_preview` (≤300 символов; полный JSON в Sheets не пишем).
+
+> **Если `valid_items=0` — НЕ запускайте Workflow 08 handoff.** Это означает, что actor не отдал валидных листингов:
+> проверьте JSON-выход ноды Apify и схему actor; если actor продолжает возвращать пустые/поисковые элементы — оцените
+> альтернативный Avito-actor. Пример провальной попытки: `actor_items_received=1; valid_items=0; invalid_items=1;
+> unique=0; duplicates=0; skipped=0` — это **корректное** поведение (ничего не записано, реестр не засорён).
 
 ### Маппинг полей actor `fatihtahta~avito-russia-scraper` (Task D)
 `Normalize Avito Listings` принимает поля и из fixture, и из ответа actor (псевдонимы, без выдумывания

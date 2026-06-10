@@ -5,6 +5,30 @@ Most recent first.
 
 ---
 
+## 2026-06-11 — Workflow 09 live mode: valid-listing guard after failed live smoke #1 (DEC-093/094)
+
+**Agent role:** project-engineer
+**Session goal:** after the first live Apify smoke returned an empty/search-only item that pre-patch WF09 wrongly registered as unique, add strict listing validation, split actor_limit vs pipeline_limit, and count invalid items. Touch only WF09 + docs. **No external API call this session.**
+
+**Live smoke #1 diagnosis (recorded):** `avito_req_20260610_234404`, actor `fatihtahta~avito-russia-scraper`, `Source=apify_live`. The live Apify call **executed**, but the actor returned 1 item with empty url/post_url/title/seller and only the search URL in `query`; pre-patch WF09 normalized it to `market_signal`/`classified_offer`, `dedup_key=avito::classified::avito_url_37f07315`, `approval_status=new`, and **registered it as unique** (polluting raw + registry). → **LIVE SCRAPE PARTIAL FAIL / NORMALIZATION GUARD FAIL** (call worked; extraction/validation did not). Also: this actor's `limit` min ≈10, so pipeline cap of 3 can't be set at the actor.
+
+**WF09 patch (`09_…json`, JSON valid, active=false, versionId `…v004-live-valid-guard-20260610`):**
+- **A — config:** added `actor_limit=10` (→ Apify) and `pipeline_limit=3` (valid writes); `live_max_items=3` kept as alias; `max_items=6` fixture count; defaults `fixture_mode=true`/`live_mode=false` unchanged.
+- **B — Apify body:** `{ "limit": {{ $json.actor_limit || 10 }}, "startUrls": {{ JSON.stringify($json.start_urls) }} }`; no queries/maxItems/region.
+- **C — Normalize aliases:** url=`url|sourceUrl|source_url|listingUrl|adUrl|link`, title=`title|name|heading`, price=`priceText|price|price_text`, seller=`sellerName|seller|seller_name|userName`, description=`description|text` (cap 800), location=`location|address|region`, profile=`profileUrl|sellerUrl`, query=`parentSourceUrl|first start_url`.
+- **D — valid-listing guard:** valid only if listing_url non-empty + avito.ru + not a start_url + not search/category (no `?q=`, has listing id `_<6+>`/`/<7+>`) + has title|description|price. Invalid (+ valid beyond `pipeline_limit` in live) → `dedup_status=invalid`/`over_pipeline_limit`, **not written to raw or registry**, not unique, not competitor. Fixtures all pass → unchanged.
+- **E/F — counts + debug:** Final Summary + `agent_requests.result_summary` now report `actor_items_received/valid_items/invalid_items/unique/duplicates/skipped`; `notes` adds the "no valid listing_url/title/price… inspect Apify node output" message + ≤300-char `raw_response_preview` when invalid; `next_action`="Do NOT run WF08 (valid_items=0)…" when nothing valid. (Bug caught + fixed in sim: invalid/over-cap branches now wrap in `{json:…}`.)
+
+**Verified (simulation):** JSON VALID; failed-smoke item → invalid (`no_listing_url`), 0 raw / 0 registry, summary exactly `actor_items_received=1; valid_items=0; invalid_items=1; unique=0; duplicates=0; skipped=0`, "Do NOT run WF08" + debug note; search-URL-as-url → invalid (`search_or_start_url_not_a_listing`); fixture first run unchanged (6 raw / 6 registry, routes monitor 5 / skipped 1); fixture duplicate unchanged (registry +0, duplicates 6); 5 valid live + `pipeline_limit=3` → 3 unique + 2 over_pipeline_limit (raw 3 / registry 3); body limit+startUrls only; header-auth, no token in URL/file; no real keys/Spreadsheet ID; MSK preserved, no bare toISOString; 40/15/21 cols intact; no tool_use/KEY=VALUE. WF04/05/06/07/08 untouched.
+
+**Important:** a real Apify call already happened in attempt #1 (cost incurred — record it). Valid live extraction **still not achieved** — ready for retest; if the actor keeps returning empty/search items, evaluate an alternative Avito actor.
+
+**Decision:** DEC-094 (validation guard + actor_limit/pipeline_limit + counts) and DEC-093 (actor selection, recorded). Docs: WF09 RU, STAGE_3_3_TEST_RESULTS (attempt #1 PARTIAL FAIL + retest), STAGE_3_3 plan, COSTS, NEXT_ACTIONS, DECISIONS, AGENT_LOG, core/hot/recent.
+
+**Next operator action:** re-import WF09 → LIVE retest (bind Apify header cred, `fixture_mode=false`/`live_mode=true`, inspect Apify JSON output). If `valid_items=0` do not run WF08; if `valid_items>0` run WF08 with `agent_request_id_filter=<live id>`.
+
+---
+
 ## 2026-06-10 — Workflow 09 prepared for FIRST live Apify smoke (actor fatihtahta~avito-russia-scraper)
 
 **Agent role:** project-engineer

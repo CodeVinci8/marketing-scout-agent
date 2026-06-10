@@ -4,6 +4,35 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-11 — Workflow 09 live valid-listing guard after failed live smoke #1 (DEC-093/094)
+
+**What was done (live extraction validation; fixture/baseline preserved):**
+- **Live smoke #1 diagnosis:** actor `fatihtahta~avito-russia-scraper` (`avito_req_20260610_234404`) — the live Apify
+  call ran but returned 1 empty/search-only item; pre-patch WF09 wrongly registered it as unique (raw + registry
+  polluted). **LIVE SCRAPE PARTIAL FAIL / NORMALIZATION GUARD FAIL** (call worked; extraction/validation didn't). Actor
+  `limit` min ≈10.
+- **WF09 patch (`…v004-live-valid-guard`):** (A) config `actor_limit=10` (→Apify) + `pipeline_limit=3` (valid writes);
+  (B) Apify body `{ "limit": actor_limit||10, "startUrls" }`; (C) Normalize broad field aliases
+  (url/sourceUrl/listingUrl/adUrl/link, name/heading, priceText/price_text, sellerName/userName, text, address,
+  parentSourceUrl); (D) **strict valid-listing guard** — valid only if avito.ru listing URL (not start/search, has
+  listing id) + title|price|description; invalid/over-cap items **not written to raw or registry**, not unique;
+  (E/F) summary `actor_items_received/valid_items/invalid_items/unique/duplicates/skipped` + debug note + ≤300-char
+  preview, `next_action`="Do NOT run WF08 (valid_items=0)…".
+- **Verified (sim):** failed-smoke item → invalid, 0 raw/0 registry, summary `actor_items_received=1; valid_items=0;
+  invalid_items=1; unique=0; duplicates=0; skipped=0`; fixture first run unchanged (6/6, monitor 5/skipped 1); fixture
+  duplicate unchanged (reg +0); 5 valid live + pipeline_limit=3 → 3 written + 2 over_pipeline_limit; body limit+startUrls
+  only; header-auth no token; no real keys/Spreadsheet ID; MSK preserved; 40/15/21 cols; no tool_use/KEY=VALUE.
+  WF04/05/06/07/08 untouched. (Fixed in sim: invalid/over-cap pushes now `{json:…}`-wrapped.)
+- **Important:** a real Apify call already happened (attempt #1 cost incurred — record it). Valid live extraction
+  **still not achieved** — retest; if actor keeps returning empty/search items, evaluate alternative actor.
+- **Decisions:** DEC-094 (validation guard + actor_limit/pipeline_limit + counts), DEC-093 (actor selection, recorded).
+  Docs: WF09 RU, STAGE_3_3_TEST_RESULTS, STAGE_3_3 plan, COSTS, NEXT_ACTIONS, DECISIONS, AGENT_LOG, core/hot/recent.
+
+**Next operator action:** re-import WF09 → LIVE retest (bind Apify header cred, fixture_mode=false/live_mode=true,
+inspect Apify JSON output). valid_items=0 → don't run WF08; valid_items>0 → WF08 with `agent_request_id_filter=<live id>`.
+
+---
+
 ## Session: 2026-06-10 — Workflow 09 prepared for FIRST live Apify smoke (actor fatihtahta~avito-russia-scraper)
 
 **What was done (wire WF09 for first live Avito smoke; fixture-safe defaults; not run):**

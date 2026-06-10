@@ -4,7 +4,7 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-10) — Stage 3.3 fixture + handoff PASS, ad-intelligence patch (DEC-092), first live-smoke actor prepared (live-smoke prep, `fatihtahta~avito-russia-scraper`) → re-import + retest; live Avito scrape still NOT tested
+## CURRENT PRIORITY (2026-06-11) — Stage 3.3 fixture + handoff PASS; live smoke #1 PARTIAL FAIL (empty actor item) → validation guard added (DEC-094) → re-import + LIVE RETEST; valid live extraction not yet achieved
 
 `Workflow 09 — Avito Classifieds Listing Connector` (`active=false`, DEC-090) + the Workflow 08 deterministic handoff
 **passed fixture tests** (Test 1 raw+6/registry+6/agent_requests+1; Test 2 duplicate registry+0; handoff
@@ -26,13 +26,16 @@ the Stage 3.2 baseline is unchanged.
    theme, `reason` mentions offer/price/semantic. **Clear the 3 filters after.** Fill `docs/STAGE_3_3_TEST_RESULTS.md`.
 3. [ ] **(B, optional) WF09 fixture duplicate retest:** Execute WF09 again on the populated registry → all 6
    `duplicate_in_registry`, registry +0, raw +6 audit, `requested_limit=6`.
-4. [ ] **(C) FIRST live Apify smoke (actor `fatihtahta~avito-russia-scraper`, prepared/not run, live-smoke prep):** after
-   explicit approval — bind the Apify HTTP Header credential (`Authorization: Bearer <APIFY_TOKEN>`) on the Apify node;
-   set `fixture_mode=false`, `live_mode=true`, `include_irrelevant_control_fixture=false` (keep `live_max_items=3`,
-   `apify_actor_id=fatihtahta~avito-russia-scraper`, `start_urls` as configured). Execute once; record Apify source
-   cost. Expect `agent_requests +1`, `raw_market_records` **0–3**, registry unique new; **0 items = source/input issue,
-   not a pipeline failure.** 0 Firecrawl/Claude. Then run WF08 with `agent_request_id_filter=<this live run's id>`.
-   **Until this runs, real Avito scrape remains untested.**
+4. [ ] **(C) LIVE Apify smoke RETEST (actor `fatihtahta~avito-russia-scraper`; attempt #1 PARTIAL FAIL, DEC-093/094):**
+   after explicit approval — bind the Apify HTTP Header credential (`Authorization: Bearer <APIFY_TOKEN>`); set
+   `fixture_mode=false`, `live_mode=true`, `include_irrelevant_control_fixture=false` (keep `actor_limit=10`,
+   `pipeline_limit=3`, `apify_actor_id`, `start_urls`). Execute once; **record the Apify source cost** (the bad attempt
+   #1 already incurred a real call). **Inspect the Apify HTTP node JSON output** to confirm the actor returns real
+   listing objects. Expected: if the actor still returns empty/search items → `valid_items=0`, **nothing written** to
+   raw/registry, `notes` carries the debug message — this is correct (no pollution); if it returns real listings →
+   ≤`pipeline_limit=3` valid rows written. **If `valid_items=0`, do NOT run the WF08 handoff; inspect the actor schema,
+   and if it keeps returning empty/search items, evaluate an alternative Avito actor.** 0 Firecrawl/Claude. If
+   `valid_items>0`, run WF08 with `agent_request_id_filter=<this live run's id>`.
 
 **Next stage after Stage 3.3 validates:** Stage 3.4 — **Social Source Parsing Strategy** (Telegram/VK/Instagram/Dzen/
 review-maps; strategy doc, no build); Stage 3.5 — Competitor Semantic & Ad Intelligence aggregation (later).
