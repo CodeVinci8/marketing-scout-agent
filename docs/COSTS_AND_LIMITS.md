@@ -167,6 +167,10 @@ Three cost axes with different drivers and spend gates — tracked **separately*
 - **Downstream analysis (Workflow 08) is separate:** deterministic_first routing of the collected records = **$0**
   (Claude calls=0). Optional compact LLM enrichment is opt-in (≤ $0.04 / 4-record test; see the C4 section above).
 - **Net:** Stage 3.3 adds **no fixed cost**; the only variable cost is an optional, operator-approved Apify live run.
+- **First live-smoke actor selected (live-smoke prep, 2026-06-10) — cost still $0 until run:** actor `fatihtahta~avito-russia-scraper`,
+  `live_max_items=3` (small smoke). Cost = the actor's Apify usage (per-run / per-result; consult the actor's Apify
+  page). **Not run yet** (`fixture_mode=true`/`live_mode=false` by default → Apify node does not execute). Record the
+  actual Apify cost only when the approved live smoke runs. 0 Firecrawl / 0 Claude; analysis cost $0 in WF09.
 - **DEC-092 quality patch = $0:** the WF09 fixture/keywords/service_hint improvements and the WF08 deterministic Avito
   enrichment (offer/title, price/terms, scores) are pure Code-node logic — **no Claude, no Apify, no extra calls**.
   The competitor ad-intelligence enrichment happens in `deterministic_first` (Claude calls=0). **Fixture + handoff

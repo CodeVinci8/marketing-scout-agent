@@ -5,6 +5,27 @@ Most recent first.
 
 ---
 
+## 2026-06-10 — Workflow 09 prepared for FIRST live Apify smoke (actor fatihtahta~avito-russia-scraper)
+
+**Agent role:** project-engineer
+**Session goal:** wire Workflow 09 for the first live Avito smoke using the selected Apify actor `fatihtahta~avito-russia-scraper`, keeping fixture-safe defaults and no secrets. Touch only WF09 + docs. **Not run — no external API call.**
+
+**WF09 (`09_…json`, JSON valid, active=false, versionId `…v003-live-smoke-fatihtahta-20260610`):**
+- **Task A — `Set Avito Connector Config`:** `apify_actor_id='fatihtahta~avito-russia-scraper'` (REST id, tilde not slash); added `live_max_items=3` and `start_urls=['https://www.avito.ru/moskva/predlozheniya_uslug?q=<кредитный брокер, url-encoded>']`. Defaults stay `fixture_mode=true`/`live_mode=false`. For live: operator sets `fixture_mode=false`, `live_mode=true`, `include_irrelevant_control_fixture=false`, `write_duplicate_audit=true`, `live_max_items`/`max_items=3`.
+- **Task B — Apify HTTP body:** now exactly `{ "limit": {{ $json.live_max_items || $json.max_items }}, "startUrls": {{ JSON.stringify($json.start_urls) }} }`. Removed `queries`/`maxItems`/`region`/`proxyConfiguration` (this actor expects `limit`+`startUrls`).
+- **Task C — auth (unchanged, safe):** `authentication=genericCredentialType` + `genericAuthType=httpHeaderAuth`, placeholder credential; operator binds header `Authorization: Bearer <APIFY_TOKEN>`. No token in file, no token in URL.
+- **Task D — `Normalize Avito Listings` actor field aliases:** `source_url=post_url=url||sourceUrl`; `published_at=validFrom`; price=`priceText||price`; `location=location||region`; `seller_name=sellerName||seller`; `seller_url=seller_url||sellerUrl||profileUrl`; `query=parentSourceUrl||first start_url||search_queries`; `listing_id=listing_id||trailing digits of URL`. **No invented description** — text_context omits the description segment when absent. `currency`/`image` ignored (no columns). Fixture fields still read identically.
+
+**Verified (simulation):** JSON VALID; active=false; defaults fixture_mode=true/live_mode=false; actor id tilde-format (not slash); body uses limit+startUrls, not queries/maxItems/region; header-auth, no token in URL/file; no real keys/Spreadsheet ID (placeholders); 40/15/21 column outputs preserved; Apify node only on IF false branch (does not run in fixture mode). **Fixture path re-simulated → 6 emitted, unchanged.** Mock fatihtahta actor items → correct mapping (priceText→price, sellerName→seller, validFrom→published, listing_id from URL, query from parentSourceUrl, missing description omitted, stable `avito_listing_<id>` dedup keys). No tool_use/KEY=VALUE. WF04/05/06/07/08 untouched.
+
+**Important:** live smoke **prepared but NOT run** — real Avito scrape still untested (`fixture_mode=true`/`live_mode=false`, Apify node did not execute, source cost $0). If a live run returns 0 items → live source/input issue, not a pipeline failure.
+
+**Docs:** WF09 RU (config table + §5 live-smoke run steps + actor field mapping + status banner), STAGE_3_3_TEST_RESULTS (Test 3 = first live smoke with actor specifics + "0 items = source issue" note), STAGE_3_3 plan, COSTS (live actor cost note), NEXT_ACTIONS (step C actor specifics), AGENT_LOG, core/hot/recent.
+
+**Next operator action:** (A) WF08 handoff retest (existing avito_req) → (B) optional WF09 duplicate retest → (C) FIRST live Apify smoke after approval (bind Apify header credential, `fixture_mode=false`/`live_mode=true`/`live_max_items=3`, run once, record Apify cost) → run WF08 with `agent_request_id_filter=<live run id>`.
+
+---
+
 ## 2026-06-10 — Stage 3.3 Competitor Ad/Semantic Intelligence quality patch: WF09 v2 + WF08 v9 (DEC-092)
 
 **Agent role:** project-engineer

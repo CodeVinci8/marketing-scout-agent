@@ -2,8 +2,8 @@
 
 **Workflow:** `n8n/workflows/09_avito_classifieds_listing_connector.json`
 **Имя:** `09 - Avito Classifieds Listing Connector`
-**Статус:** 🔧 ПОСТРОЕН, ПОД ТЕСТОМ (fixture-режим по умолчанию). `active=false`. Stage 3.3 (Business Scout Agent).
-**Дата:** 2026-06-10 · **Решение:** DEC-090 (ранее DEC-084 — выбор источника).
+**Статус:** 🔧 ПОСТРОЕН; fixture + handoff PASS; **live-smoke подготовлен (actor `fatihtahta~avito-russia-scraper`), ещё НЕ запускался**. `active=false`. Stage 3.3 (Business Scout Agent).
+**Дата:** 2026-06-10 · **Подготовка live-smoke:** actor `fatihtahta~avito-russia-scraper` (2026-06-10) · **Решения:** DEC-092 (ad-intel) · DEC-090 (build) · DEC-084 (выбор источника).
 **План:** `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md` · **Тест-лог:** `docs/STAGE_3_3_TEST_RESULTS.md`.
 
 > **ПЕРВЫЙ реальный коннектор-источник после ручного приёма (Workflow 07).** Превращает данные объявлений
@@ -63,7 +63,9 @@ Manual Start
 | `approval_status_for_unique` | `new` | статус уникальных строк |
 | `write_duplicate_audit` | `true` | писать дубликаты в raw (аудит) |
 | `duplicate_next_action` | `monitor_duplicate` | next_action для дубликата-конкурента |
-| `apify_actor_id` | `PASTE_AVITO_ACTOR_ID` | id actor (live) |
+| `live_max_items` | **`3`** | лимит для live-smoke (используется как `limit` в теле Apify) |
+| `start_urls` | 1 URL поиска «кредитный брокер» (Москва) | `startUrls` для actor (live) |
+| `apify_actor_id` | **`fatihtahta~avito-russia-scraper`** | REST-id выбранного actor (формат с `~`, не `/`) |
 | `apify_token_placeholder` | `PASTE_APIFY_TOKEN_OR_USE_CREDENTIAL` | плейсхолдер токена |
 | `spreadsheet_id_placeholder` | `PASTE_SPREADSHEET_ID` | плейсхолдер ID таблицы |
 | `agent_request_id` | `avito_req_YYYYMMDD_HHmmss` | id запроса (МСК) |
@@ -99,10 +101,19 @@ listing_id`. Реального вызова Apify нет ($0). **`max_items=6` 
 ## 5. Live-режим Apify (опционально)
 
 Нода **`Apify Avito Classifieds Actor Request`** выполняется **только** при `fixture_mode=false` (ветка ELSE из IF).
-**Live-режим НЕ тестировался** — описание ниже для будущего прогона:
-- `POST https://api.apify.com/v2/acts/{{ $json.apify_actor_id }}/run-sync-get-dataset-items` (actor id берётся из
-  конфигурации, плейсхолдер `PASTE_AVITO_ACTOR_ID`);
-- тело JSON: `queries` (из `search_queries`), `maxItems`, `region`, `proxyConfiguration`;
+**Live-режим ещё НЕ запускался (live scrape не тестировался)** — выбран первый smoke-actor
+**`fatihtahta~avito-russia-scraper`** (человекочитаемый slug `fatihtahta/avito-russia-scraper`; в конфиге — REST-id с
+`~`). Описание для будущего прогона:
+- `POST https://api.apify.com/v2/acts/{{ $json.apify_actor_id }}/run-sync-get-dataset-items` (actor id из конфигурации
+  = `fatihtahta~avito-russia-scraper`);
+- **тело JSON (под этот actor):**
+  ```
+  {
+    "limit": {{ $json.live_max_items || $json.max_items }},
+    "startUrls": {{ JSON.stringify($json.start_urls) }}
+  }
+  ```
+  Actor ожидает `limit` + `startUrls`. **НЕ отправляем** `queries` / `maxItems` / `region`;
 - **аутентификация (предпочтительно, настроено):** `authentication=genericCredentialType`,
   `genericAuthType=httpHeaderAuth`. **Оператор привязывает в n8n** HTTP Header Auth креденшл `Apify API - Marketing
   Scout`: **header name = `Authorization`, header value = `Bearer <APIFY_TOKEN>`**. В файле **нет** реального токена/
@@ -113,8 +124,28 @@ listing_id`. Реального вызова Apify нет ($0). **`max_items=6` 
 - Включать **только** после явного одобрения оператора и выбора actor. Прямой скрейпинг Avito не делаем; ToS
   площадки соблюдаем. **По умолчанию (fixture_mode=true) эта нода не выполняется.**
 
-`Normalize Avito Listings` читает поля и из fixture, и из ответа actor (общие имена: `title/description/url/
-price/location/seller_name/seller_url/category/listing_id/published_at`), поэтому работает в обоих режимах.
+### Как запустить первый live-smoke (после одобрения; ещё НЕ запускался)
+1. Привязать Apify HTTP Header Auth креденшл (`Authorization: Bearer <APIFY_TOKEN>`) на ноде Apify.
+2. В `Set Avito Connector Config`: `fixture_mode=false`, `live_mode=true`, `include_irrelevant_control_fixture=false`,
+   `write_duplicate_audit=true`. Лимит — `live_max_items=3` (используется как `limit`). `apify_actor_id` уже
+   `fatihtahta~avito-russia-scraper`; `start_urls` уже задан (поиск «кредитный брокер», Москва).
+3. Execute once. Записать стоимость Apify-actor (source cost). 0 Firecrawl/Claude.
+4. **Ожидаемо:** `agent_requests +1`; `raw_market_records` 0–3 строки (зависит от ответа actor); реестр — уникальные
+   новые объявления. **Если actor вернул 0 объектов — это проблема источника/входа (actor/startUrls), а НЕ сбой
+   конвейера** (конвейер на fixture уже доказан).
+5. После live-smoke — запустить Workflow 08 с `agent_request_id_filter=<id этого live-прогона>` (см. §9).
+
+### Маппинг полей actor `fatihtahta~avito-russia-scraper` (Task D)
+`Normalize Avito Listings` принимает поля и из fixture, и из ответа actor (псевдонимы, без выдумывания
+отсутствующего):
+- `source_url=post_url` = `url || sourceUrl`; `published_at` = `validFrom || ''`;
+- `title` = `title || ''`; цена = `priceText || price || ''` (если есть `currency` — не комбинируем принудительно);
+- `location` = `location || региона из конфигурации`; `seller_name` = `sellerName || seller || ''`;
+- `description` = `description || ''` — **если описания нет, используем только title + цена/локацию, описание не
+  выдумываем** (сегмент описания в `text_context` опускается);
+- `query` = `parentSourceUrl || первый start_url || склейка search_queries`;
+- `listing_id` = `listing_id || числовой id из хвоста URL` (для стабильного дедупа `avito_listing_<id>`).
+Поля `currency` / `image` не имеют колонок в схеме и игнорируются.
 
 ## 6. Нормализация (Competitor Ad / Semantic Intelligence)
 
@@ -195,8 +226,10 @@ Workflow 09 пишет **только**:
   1 `agent_requests` (status=completed); прогноз маршрутов: `monitor_queue=5`, `skipped_log=1`; `skipped_count=1`.
 - **Тест 2 (fixture, повтор):** Execute снова. Ожидаемо: все 6 `duplicate_in_registry`, `approval_status=duplicate`;
   raw +6 (аудит); реестр +0; `next_action` конкурента = `monitor_duplicate`, нерелевантного = `ignore`.
-- **Тест 3 (опц. live Apify, `max_items=5`):** `fixture_mode=false`, `live_mode=true`, задан actor. Записать
-  стоимость Apify-actor. 0 Firecrawl/Claude.
+- **Тест 3 (live Apify smoke, ещё НЕ запускался):** actor `fatihtahta~avito-russia-scraper`, `fixture_mode=false`,
+  `live_mode=true`, `live_max_items=3`, `include_irrelevant_control_fixture=false`, привязан Apify header-auth
+  креденшл. Записать стоимость Apify-actor. 0 Firecrawl/Claude. Ожидаемо: `agent_requests +1`, `raw_market_records`
+  0–3, реестр — уникальные новые. 0 объектов = проблема источника/actor, не сбой конвейера. Шаги — §5.
 - **Тест 4 (хэндофф):** запустить Workflow 08 вручную на собранных строках; проверить маршрутизацию в очереди.
 
 Детали и таблицы — `docs/STAGE_3_3_TEST_RESULTS.md`.
