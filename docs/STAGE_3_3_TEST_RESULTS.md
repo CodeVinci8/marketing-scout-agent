@@ -25,11 +25,13 @@
 - **Issue found:** Competitor Ad Intelligence business fields were weak — `offer_text` held the query (not the listing
   title), `terms` empty, `content_idea_score=1`, specific service themes lost. **Fixed by DEC-092** (WF09 service_hint/
   keywords + WF08 deterministic Avito enrichment). **Retest after the patch — see "RETEST TARGET (post-DEC-092)" below.**
-- **Live Avito scrape: NOT tested (prepared, live-smoke prep)** — first smoke actor selected:
-  **`fatihtahta~avito-russia-scraper`** (slug `fatihtahta/avito-russia-scraper`), body `limit`+`startUrls`,
-  `live_max_items=3`, `start_urls`=Moscow «кредитный брокер» search, header-auth wired (no secrets). Requires
-  `fixture_mode=false`, `live_mode=true`, a bound Apify HTTP Header credential. Until run, status =
-  **fixture + handoff approved; live scrape not tested** — see Test 3 below.
+- **Live Avito scrape: attempt #1 ran (2026-06-10) — PARTIAL FAIL / guard fail (DEC-093/094).** Actor
+  **`fatihtahta~avito-russia-scraper`** was called live (`avito_req_20260610_234404`); it returned 1 empty/search-only
+  item which pre-patch WF09 wrongly registered as unique. **DEC-094 patch** adds a strict valid-listing guard
+  (invalid/empty/search items are not written to raw or registry), splits `actor_limit=10` (Apify) vs `pipeline_limit=3`
+  (valid writes), and reports `actor_items_received/valid_items/invalid_items`. **Valid live extraction still not
+  achieved** — ready for retest (see Test 3). Status: **fixture + handoff approved; live valid-listing extraction not
+  yet achieved.**
 
 ### RETEST TARGET (post-DEC-092) — WF08 handoff still 5/1, now with rich ad intelligence
 Re-run the handoff (same filter, `max_records=6`) and confirm routing is unchanged **and** the business fields improved:
@@ -116,45 +118,65 @@ quality_score 78–82; offer_text=title; terms=price+conditions; service_type th
 
 ---
 
-## TEST 3 — FIRST live Apify smoke test (actor `fatihtahta~avito-russia-scraper`) — ⏳ PREPARED / NOT RUN
+## TEST 3 — FIRST live Apify smoke (actor `fatihtahta~avito-russia-scraper`)
 
-> **Status:** the connector is **prepared** for the first live smoke (live-smoke prep, 2026-06-10) — actor REST id
-> `fatihtahta~avito-russia-scraper` (slug `fatihtahta/avito-russia-scraper`), body `limit`+`startUrls`, header-auth
-> wired (no secrets). **Not run yet — live Avito scrape remains untested.** Run only after explicit operator approval.
-> No direct Avito scraping; respect platform ToS.
+### Attempt #1 — 2026-06-10 — ⚠️ LIVE SCRAPE PARTIAL FAIL / NORMALIZATION GUARD FAIL (pre-patch)
+`agent_request_id=avito_req_20260610_234404`, `Source=apify_live`. **The live Apify call executed** (real provider call), but useful listing extraction **failed**.
+- Actor returned **1 item**; `agent_requests` wrote `total_items=1; unique=1; duplicates=0; skipped=0`.
+- `raw_market_records` wrote **one row** `avito_rec_20260610_234404_1`: `platform=avito`, `source_type=classified`,
+  `source_url` **empty**, `post_url` **empty**, title/offer **empty**, seller/profile **empty**, `query`=the Avito
+  **search URL**, `text_context="Avito объявление: | Москва/МО | запрос: <search_url>"`,
+  `dedup_key=avito::classified::avito_url_37f07315`, `record_type_hint=market_signal`, `touchpoint_type=classified_offer`,
+  `approval_status=new`. Registry wrote one row for `avito_url_37f07315`.
+- **This is NOT a valid Avito listing.** Pre-patch WF09 had no guard, so it **incorrectly registered the empty/search-only
+  item as a unique record** — polluting `raw_market_records` + `market_record_registry`.
+- **Verdict:** the live call worked; **extraction + validation did not**. Recorded as **LIVE SCRAPE PARTIAL FAIL /
+  NORMALIZATION GUARD FAIL**. **Fixed by DEC-094** (strict valid-listing guard; invalid items not registered;
+  `actor_limit`/`pipeline_limit` split; invalid-item counting).
 
-### How to run
-1. Bind the Apify HTTP Header Auth credential on `Apify Avito Classifieds Actor Request` in n8n: header
-   `Authorization` = `Bearer <APIFY_TOKEN>` (no token in the file).
+### Status after the patch (DEC-094): ⏳ READY FOR RETEST — live Avito scrape still not validly extracted
+Connector now validates listings, splits `actor_limit=10` (sent to Apify) vs `pipeline_limit=3` (valid writes), and
+counts `actor_items_received/valid_items/invalid_items`. **Run only after explicit operator approval.** No direct Avito
+scraping; respect platform ToS.
+
+### How to run (retest)
+1. Bind the Apify HTTP Header Auth credential on `Apify Avito Classifieds Actor Request`: header `Authorization` =
+   `Bearer <APIFY_TOKEN>` (no token in the file).
 2. `Set Avito Connector Config`: `fixture_mode=false`, `live_mode=true`, `include_irrelevant_control_fixture=false`,
-   `write_duplicate_audit=true`. `live_max_items=3` (used as the actor `limit`). `apify_actor_id` is already
-   `fatihtahta~avito-russia-scraper`; `start_urls` is already set (Moscow «кредитный брокер» search). Bind Google
-   Sheets credential + real Spreadsheet ID.
-3. Record Apify balance/credits **before** → **Execute once** → **after**.
-4. Note the live run's `agent_request_id` (for the WF08 handoff in Test 4).
+   `write_duplicate_audit=true`. `actor_limit=10` (sent to the actor — its min is ~10), `pipeline_limit=3` (valid rows
+   written). `apify_actor_id`/`start_urls` already set. Bind Google Sheets credential + real Spreadsheet ID.
+3. Record Apify balance/credits **before** → **Execute once** → **after**. **Inspect the Apify HTTP node JSON output**
+   to confirm the actor returns real listing objects (with a listing URL + title/price).
+4. Note the live run's `agent_request_id` (for the WF08 handoff in Test 4) — **only if `valid_items>0`.**
 
-### Acceptance (Test 3 target)
-- `agent_requests +1`; `raw_market_records` **0–3 rows** (depends on the actor result); `market_record_registry` =
-  unique new listings; routes predicted as in Test 1 logic.
-- `technical_errors`/business tabs **not** written (WF09 never writes them). **0 Firecrawl / 0 Claude.**
-- Record the Apify actor cost (source cost). Analysis cost = $0 in WF09.
-- **If the actor returns 0 items → treat as a live source/input issue (actor / `start_urls`), NOT a pipeline failure**
-  (the pipeline shape is already proven by the fixture + handoff tests).
+### Acceptance (retest target)
+- **If the actor returns the same empty/search-only shape:** `actor_items_received=1; valid_items=0; invalid_items=1;
+  unique=0; duplicates=0; skipped=0`; **nothing written to `raw_market_records` or `market_record_registry`**;
+  `agent_requests.notes` carries the "no valid listing_url/title/price" debug note + a ≤300-char `raw_response_preview`;
+  `next_action` = "Do NOT run Workflow 08 (valid_items=0)…". **This is the expected, correct behaviour for a bad actor
+  response** (no pollution).
+- **If the actor returns real listings:** `valid_items>0`; up to `pipeline_limit=3` valid rows → `raw_market_records`
+  (+ unique → registry); extra valid items → `over_pipeline_limit` (not written); invalid items → counted, not written.
+- `technical_errors`/business tabs **not** written. **0 Firecrawl / 0 Claude.** Record the Apify actor cost.
+- **`valid_items=0` → do NOT run the Workflow 08 handoff.** Inspect Apify output / actor schema; if the actor keeps
+  returning empty/search items, evaluate an alternative Avito actor.
 
 ### Observed (operator fills)
-| metric | target | observed |
-|--------|--------|----------|
-| live actor | fatihtahta~avito-russia-scraper | |
-| listings collected | 0–3 | |
-| agent_requests | +1 | |
-| raw written | = collected | |
-| registry written | unique only | |
-| Apify source cost | record | |
-| Firecrawl / Claude | 0 / 0 | |
+| metric | attempt #1 (pre-patch) | retest target | observed |
+|--------|------------------------|---------------|----------|
+| live actor | fatihtahta~avito-russia-scraper | same | |
+| actor_items_received | 1 | record | |
+| valid_items | (n/a — no guard) | record | |
+| invalid_items | (n/a — no guard) | record | |
+| raw written | 1 (WRONG) | = valid (≤3), 0 if all invalid | |
+| registry written | 1 (WRONG) | unique valid only | |
+| Apify source cost | incurred (record) | record | |
+| Firecrawl / Claude | 0 / 0 | 0 / 0 | |
 
 - [ ] **PASS / FAIL / SKIPPED:** ____
 
-> After Test 3, run **Test 4 (WF08 handoff)** with `agent_request_id_filter=<this live run's agent_request_id>`.
+> After Test 3 (only if `valid_items>0`), run **Test 4 (WF08 handoff)** with
+> `agent_request_id_filter=<this live run's agent_request_id>`.
 
 ---
 

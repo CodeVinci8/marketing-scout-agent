@@ -11,13 +11,15 @@
 > Stage 3.2 baseline is unchanged. **Fixture/handoff tests only — no real Avito scrape yet** (`fixture_mode=true`,
 > `live_mode=false`, source cost $0, Apify node did not run).
 
-> **Live-smoke prepared (live-smoke prep, 2026-06-10):** first live Apify actor = **`fatihtahta~avito-russia-scraper`** (slug
-> `fatihtahta/avito-russia-scraper`). Config adds `live_max_items=3` + `start_urls` (Moscow «кредитный брокер»); the
-> Apify body now sends exactly `{ "limit", "startUrls" }` (no queries/maxItems/region); header-auth wired (no token in
-> file). Defaults stay `fixture_mode=true`/`live_mode=false`. **Not run yet — live scrape still untested.** Live run =
-> `fixture_mode=false`, `live_mode=true`, `include_irrelevant_control_fixture=false`, bound Apify credential; expect
-> `agent_requests +1`, `raw_market_records` 0–3, registry unique new; 0 items = source/input issue, not a pipeline
-> failure. See `docs/STAGE_3_3_TEST_RESULTS.md` Test 3.
+> **Live-smoke actor (DEC-093) + live attempt #1 PARTIAL FAIL + validation guard (DEC-094), 2026-06-10/11:** first live
+> Apify actor = **`fatihtahta~avito-russia-scraper`** (slug `fatihtahta/avito-russia-scraper`). **Live attempt #1 ran**
+> (`avito_req_20260610_234404`) — the Apify call executed but the actor returned 1 empty/search-only item which pre-patch
+> WF09 wrongly registered as unique (**LIVE SCRAPE PARTIAL FAIL / NORMALIZATION GUARD FAIL**). **DEC-094 patch:** strict
+> valid-listing guard (invalid/empty/search items never written to raw or registry); `actor_limit=10` (sent to Apify;
+> actor min ~10) vs `pipeline_limit=3` (valid writes); summary reports `actor_items_received/valid_items/invalid_items`;
+> debug note + ≤300-char preview when invalid; "do NOT run WF08 if valid_items=0". Apify body = `{ "limit": actor_limit,
+> "startUrls" }`; header-auth (no token in file). Defaults stay `fixture_mode=true`/`live_mode=false`. **Valid live
+> extraction still not achieved — ready for retest.** See `docs/STAGE_3_3_TEST_RESULTS.md` Test 3.
 **Stage:** 3.3 (First real source connector) of the Business Scout Agent.
 **Date:** 2026-06-10 · **Decisions:** DEC-090 (build) · DEC-084 (source choice) · prior DEC-078/079/080/089.
 **Guide:** `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md` · **Test log:** `docs/STAGE_3_3_TEST_RESULTS.md`.
