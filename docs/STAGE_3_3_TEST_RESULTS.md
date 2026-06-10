@@ -25,8 +25,11 @@
 - **Issue found:** Competitor Ad Intelligence business fields were weak — `offer_text` held the query (not the listing
   title), `terms` empty, `content_idea_score=1`, specific service themes lost. **Fixed by DEC-092** (WF09 service_hint/
   keywords + WF08 deterministic Avito enrichment). **Retest after the patch — see "RETEST TARGET (post-DEC-092)" below.**
-- **Live Avito scrape: NOT tested** — requires `fixture_mode=false`, `live_mode=true`, a real Apify actor id, and a
-  bound Apify HTTP Header credential. Until then status = **fixture + handoff approved; live scrape not tested**.
+- **Live Avito scrape: NOT tested (prepared, live-smoke prep)** — first smoke actor selected:
+  **`fatihtahta~avito-russia-scraper`** (slug `fatihtahta/avito-russia-scraper`), body `limit`+`startUrls`,
+  `live_max_items=3`, `start_urls`=Moscow «кредитный брокер» search, header-auth wired (no secrets). Requires
+  `fixture_mode=false`, `live_mode=true`, a bound Apify HTTP Header credential. Until run, status =
+  **fixture + handoff approved; live scrape not tested** — see Test 3 below.
 
 ### RETEST TARGET (post-DEC-092) — WF08 handoff still 5/1, now with rich ad intelligence
 Re-run the handoff (same filter, `max_records=6`) and confirm routing is unchanged **and** the business fields improved:
@@ -113,30 +116,45 @@ quality_score 78–82; offer_text=title; terms=price+conditions; service_type th
 
 ---
 
-## TEST 3 — optional live Apify smoke test (`max_items=5`) — ⏳ OPTIONAL / NOT RUN
+## TEST 3 — FIRST live Apify smoke test (actor `fatihtahta~avito-russia-scraper`) — ⏳ PREPARED / NOT RUN
 
-> **Gated:** run only after an Apify Avito actor is chosen and explicitly approved. No direct Avito scraping.
+> **Status:** the connector is **prepared** for the first live smoke (live-smoke prep, 2026-06-10) — actor REST id
+> `fatihtahta~avito-russia-scraper` (slug `fatihtahta/avito-russia-scraper`), body `limit`+`startUrls`, header-auth
+> wired (no secrets). **Not run yet — live Avito scrape remains untested.** Run only after explicit operator approval.
+> No direct Avito scraping; respect platform ToS.
 
 ### How to run
-1. `Set Avito Connector Config`: `fixture_mode=false`, `live_mode=true`, `apify_actor_id=<chosen actor>`,
-   `max_items=5`. Bind the Apify credential (HTTP Header Auth) in n8n (no token in the file).
-2. Record any Apify balance/credits **before** → **Execute once** → **after**.
+1. Bind the Apify HTTP Header Auth credential on `Apify Avito Classifieds Actor Request` in n8n: header
+   `Authorization` = `Bearer <APIFY_TOKEN>` (no token in the file).
+2. `Set Avito Connector Config`: `fixture_mode=false`, `live_mode=true`, `include_irrelevant_control_fixture=false`,
+   `write_duplicate_audit=true`. `live_max_items=3` (used as the actor `limit`). `apify_actor_id` is already
+   `fatihtahta~avito-russia-scraper`; `start_urls` is already set (Moscow «кредитный брокер» search). Bind Google
+   Sheets credential + real Spreadsheet ID.
+3. Record Apify balance/credits **before** → **Execute once** → **after**.
+4. Note the live run's `agent_request_id` (for the WF08 handoff in Test 4).
 
 ### Acceptance (Test 3 target)
-- ≤5 normalized listings → `raw_market_records` (+ unique → registry); routes predicted as in Test 1 logic.
+- `agent_requests +1`; `raw_market_records` **0–3 rows** (depends on the actor result); `market_record_registry` =
+  unique new listings; routes predicted as in Test 1 logic.
 - `technical_errors`/business tabs **not** written (WF09 never writes them). **0 Firecrawl / 0 Claude.**
 - Record the Apify actor cost (source cost). Analysis cost = $0 in WF09.
+- **If the actor returns 0 items → treat as a live source/input issue (actor / `start_urls`), NOT a pipeline failure**
+  (the pipeline shape is already proven by the fixture + handoff tests).
 
 ### Observed (operator fills)
 | metric | target | observed |
 |--------|--------|----------|
-| listings collected | ≤5 | |
+| live actor | fatihtahta~avito-russia-scraper | |
+| listings collected | 0–3 | |
+| agent_requests | +1 | |
 | raw written | = collected | |
 | registry written | unique only | |
 | Apify source cost | record | |
 | Firecrawl / Claude | 0 / 0 | |
 
 - [ ] **PASS / FAIL / SKIPPED:** ____
+
+> After Test 3, run **Test 4 (WF08 handoff)** with `agent_request_id_filter=<this live run's agent_request_id>`.
 
 ---
 

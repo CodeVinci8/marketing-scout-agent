@@ -4,6 +4,32 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-10 — Workflow 09 prepared for FIRST live Apify smoke (actor fatihtahta~avito-russia-scraper)
+
+**What was done (wire WF09 for first live Avito smoke; fixture-safe defaults; not run):**
+- **WF09** (`…v003-live-smoke-fatihtahta`): `apify_actor_id='fatihtahta~avito-russia-scraper'` (tilde, not slash);
+  added `live_max_items=3` + `start_urls` (Moscow «кредитный брокер» search). Apify body now exactly
+  `{ "limit": live_max_items||max_items, "startUrls": JSON.stringify(start_urls) }` — removed queries/maxItems/region.
+  Auth unchanged (genericCredentialType + httpHeaderAuth, placeholder; `Authorization: Bearer <APIFY_TOKEN>`), no token
+  in file/URL. Normalize now maps fatihtahta fields: url||sourceUrl, validFrom, priceText||price, sellerName||seller,
+  parentSourceUrl→query, listing_id from URL trailing digits; missing description omitted (not invented).
+- **Defaults stay fixture-safe:** `fixture_mode=true`/`live_mode=false` → Apify node does not run; fixture path
+  re-simulated unchanged (6 emitted). Live run = `fixture_mode=false`/`live_mode=true`/`include_irrelevant_control_fixture=false`/
+  `live_max_items=3` + bound Apify credential.
+- **Verified (sim):** JSON VALID; active=false; actor tilde-format; body limit+startUrls only; no real keys/Spreadsheet
+  ID; 40/15/21 cols preserved; Apify only on IF false branch; mock actor items map correctly + stable
+  `avito_listing_<id>` dedup; no tool_use/KEY=VALUE. WF04/05/06/07/08 untouched.
+- **Important:** live smoke **prepared but NOT run** — real Avito scrape still untested (source cost $0). 0 items on a
+  live run = source/input issue, not pipeline failure.
+- Docs: WF09 RU, STAGE_3_3_TEST_RESULTS (Test 3 first live smoke), STAGE_3_3 plan, COSTS, NEXT_ACTIONS, AGENT_LOG,
+  core/hot/recent. (No DECISIONS.md edit this task — referenced as live-smoke prep, 2026-06-10.)
+
+**Next operator action:** (A) WF08 handoff retest → (B) optional WF09 duplicate → (C) FIRST live Apify smoke after
+approval (bind Apify header cred, fixture_mode=false/live_mode=true/live_max_items=3, run once, record Apify cost) →
+WF08 with `agent_request_id_filter=<live run id>`.
+
+---
+
 ## Session: 2026-06-10 — Stage 3.3 Competitor Ad/Semantic Intelligence quality patch (WF09 v2 + WF08 v9, DEC-092)
 
 **What was done (improve Avito competitor ad-intelligence; fixture-mode only, baseline preserved):**

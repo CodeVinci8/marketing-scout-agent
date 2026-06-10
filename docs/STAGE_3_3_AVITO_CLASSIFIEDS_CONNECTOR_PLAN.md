@@ -10,6 +10,14 @@
 > `content_idea_score` 35–55, `competitor_strength` 75–85, competitor-ad `reason`; gated to WF09-origin rows so the
 > Stage 3.2 baseline is unchanged. **Fixture/handoff tests only — no real Avito scrape yet** (`fixture_mode=true`,
 > `live_mode=false`, source cost $0, Apify node did not run).
+
+> **Live-smoke prepared (live-smoke prep, 2026-06-10):** first live Apify actor = **`fatihtahta~avito-russia-scraper`** (slug
+> `fatihtahta/avito-russia-scraper`). Config adds `live_max_items=3` + `start_urls` (Moscow «кредитный брокер»); the
+> Apify body now sends exactly `{ "limit", "startUrls" }` (no queries/maxItems/region); header-auth wired (no token in
+> file). Defaults stay `fixture_mode=true`/`live_mode=false`. **Not run yet — live scrape still untested.** Live run =
+> `fixture_mode=false`, `live_mode=true`, `include_irrelevant_control_fixture=false`, bound Apify credential; expect
+> `agent_requests +1`, `raw_market_records` 0–3, registry unique new; 0 items = source/input issue, not a pipeline
+> failure. See `docs/STAGE_3_3_TEST_RESULTS.md` Test 3.
 **Stage:** 3.3 (First real source connector) of the Business Scout Agent.
 **Date:** 2026-06-10 · **Decisions:** DEC-090 (build) · DEC-084 (source choice) · prior DEC-078/079/080/089.
 **Guide:** `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md` · **Test log:** `docs/STAGE_3_3_TEST_RESULTS.md`.
