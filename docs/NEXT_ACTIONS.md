@@ -29,8 +29,12 @@ agent_requests (completed); predicted `monitor_queue=5`, `skipped_log=1`. Stage 
 5. [ ] **Test 3 (optional) — live Apify smoke test (`max_items=5`):** only after choosing + approving an Apify Avito
    actor. Set `fixture_mode=false`, `live_mode=true`, `apify_actor_id`, bind the Apify credential in n8n. Record the
    Apify source cost. 0 Firecrawl/Claude. No direct Avito scraping. Fill Test 3.
-6. [ ] **Test 4 — handoff:** run **Workflow 08 manually** on the collected `raw_market_records` (default
-   `deterministic_first`) → expect 5 competitor → `monitor_queue`, 1 irrelevant → `skipped_log`. Fill Test 4.
+6. [ ] **Test 4 — handoff (WF08 source-handoff filter REQUIRED, DEC-091):** in WF08 `Set Analyzer Config` set
+   `agent_request_id_filter` to this WF09 run's `agent_request_id` (e.g. `avito_req_20260610_214709`), `platform_filter
+   ="avito"`, `source_type_filter="classified"`, `max_records=6`, `analysis_mode="deterministic_first"`, all LLM flags
+   `false`. Run **Workflow 08 manually** → expect `monitor_queue=5`, `skipped_log=1`, `content/review/technical=0`,
+   `deterministic_pre_route×5 + deterministic_irrelevant_skip×1`, Claude calls=0. **Then clear the three filters
+   (back to `""`).** Do **not** use `llm_test_batch_indexes` for source handoff. Fill Test 4.
 
 **Next stage after Stage 3.3 validates:** Stage 3.4 — Telegram public source feasibility (separate parser ≠ Control
 Bot); Stage 3.5 — Competitor Semantic & Ad Intelligence aggregation (later).

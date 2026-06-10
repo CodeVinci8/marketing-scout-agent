@@ -3,7 +3,14 @@
 **Workflow:** `n8n/workflows/08_touchpoint_analyzer.json`
 **Имя:** `08 - Touchpoint Analyzer`
 **Статус:** ✅ **STAGE 3.2 ЗАКРЫТ (DEC-089).** DETERMINISTIC-FIRST BASELINE ОДОБРЕН (Test 3 PASS); **компактный LLM enrichment ОДОБРЕН С WATCH ITEM для опционального / тестового использования (Test C4 PASS — `primary_json=3/4`, fallback 1/4 безопасный).** Дефолт остаётся `deterministic_first`, пока оператор явно не включит `llm_enrichment`. `active=false`. Stage 3.2 (Business Scout Agent).
-**Дата:** 2026-06-10 (Test C4 PASS — DEC-089; v7 — специализированная схема source_candidate — DEC-088; ранее DEC-087/085/086/082/083)
+**Дата:** 2026-06-10 (v8 — source-handoff фильтры — DEC-091; Test C4 PASS — DEC-089; v7 source_candidate — DEC-088; ранее DEC-087/085/086/082/083)
+
+> **ПАТЧ v8 (DEC-091) — source-handoff фильтры.** В `Set Analyzer Config` добавлены три **необязательных** фильтра
+> (по умолчанию пустые): `agent_request_id_filter`, `platform_filter`, `source_type_filter`. При непустом значении
+> `Filter & Select Records` обрабатывает только подходящие строки `raw_market_records` — **до `max_records` и до
+> обработки**. Пустые фильтры = прежнее поведение (baseline без изменений). Нужно для хэндоффа из коннекторов
+> (Workflow 09 — Avito): обрабатывать только строки одного прогона, а не старые записи Stage 3.1/3.2. Подробно — §3a.
+> **Не путать с `llm_test_batch_indexes`** (это отбор позиций для LLM-теста, не фильтр источника).
 
 > **TEST C4 PASS — STAGE 3.2 ЗАКРЫТ (DEC-089).** Патч v7 прошёл ретест на 4 фикстурах: ровно 4 записи,
 > `technical_errors=0`, **`primary_json=3/4`** (цель ≥3/4), `repaired_json=0/4`, **`deterministic_fallback_after_llm_fail=1/4`**
@@ -142,11 +149,14 @@ fallback; поля `parse_method`, `repair_used`, `repair_status`, `processing_s
 3. **Set Analyzer Config** (code) — `analysis_mode='deterministic_first'`, `llm_enrichment=false`,
    `llm_enrichment_test_mode=false`, `llm_test_batch_indexes=[1,7,11,12]`, `test_mode=true`, `max_records=12`,
    `analyze_statuses=[approved,new]`; `production_statuses=[approved]` задокументировано (не дефолт);
-   `run_id=touchpoint_YYYYMMDD_HHmmss` (МСК). Будущий режим: `analysis_mode='llm_enriched'` + `llm_enrichment=true`.
-   Малый LLM-тест: `llm_enrichment_test_mode=true` (Claude только по `llm_test_batch_indexes`).
+   **source-handoff фильтры (DEC-091, по умолчанию пустые): `agent_request_id_filter=''`, `platform_filter=''`,
+   `source_type_filter=''`**; `run_id=touchpoint_YYYYMMDD_HHmmss` (МСК). Будущий режим:
+   `analysis_mode='llm_enriched'` + `llm_enrichment=true`. Малый LLM-тест: `llm_enrichment_test_mode=true` (Claude
+   только по `llm_test_batch_indexes`).
 4. **Read raw_market_records** (Google Sheets read).
 5. **Filter & Select Records** (code) — `dedup_status=unique` + `approval_status` ∈ allowed; в test_mode
-   irrelevant тоже берём (уйдут в `skipped_log`); cap `max_records`; присваивает `batch_index`. **C2 (DEC-086):**
+   irrelevant тоже берём (уйдут в `skipped_log`); **source-handoff фильтры применяются здесь, ДО `max_records` и ДО
+   обработки** (см. §3a); cap `max_records`; присваивает `batch_index`. **C2 (DEC-086):**
    при `llm_enrichment_test_mode=true` здесь же, **до цикла**, отбор фильтруется до `llm_test_batch_indexes` — в
    цикл уходит ровно 4 записи; добавляет `selected_count_before/after_test_filter`.
 6. **Loop Over Items** (splitInBatches, по 1) — out0 (done) → Final Summary; out1 (loop) → обработка.
@@ -173,6 +183,45 @@ fallback; поля `parse_method`, `repair_used`, `repair_status`, `processing_s
 18. **Append to Dynamic Route Sheet** (Google Sheets append) — `Sheet Name = {{ $json.route }}` → возврат в Loop.
 19. **Final Summary Output** (code) — сводка: `route_counts`, `entity_counts`, `repair_used_count`,
     `technical_errors_count`.
+
+## 3a. Source-handoff фильтрация (DEC-091)
+
+Чтобы при хэндоффе из коннектора (например, Workflow 09 — Avito) обрабатывать **только строки одного прогона**, а не
+старые записи Stage 3.1/3.2, в `Set Analyzer Config` есть три **необязательных** фильтра (по умолчанию пустые):
+
+| Поле | Назначение |
+|------|-----------|
+| `agent_request_id_filter` | если непусто — берём только строки с этим `agent_request_id` |
+| `platform_filter` | если непусто — только строки с этим `platform` (регистронезависимо) |
+| `source_type_filter` | если непусто — только строки с этим `source_type` (регистронезависимо) |
+
+Поведение:
+- Все три применяются в `Filter & Select Records` **ДО `max_records` и ДО присвоения `batch_index`/обработки**, сразу
+  после проверок `dedup_status=unique` / `approval_status` / irrelevant.
+- **Если фильтры пустые — поведение полностью прежнее** (дефолтный baseline не меняется).
+- Фильтры **независимы** от `llm_enrichment_test_mode` и работают в любом режиме (deterministic_first и llm_enriched).
+- `agent_request_id` сравнивается точно (trim); `platform`/`source_type` — в нижнем регистре.
+
+> ⚠️ **Не используйте `llm_test_batch_indexes` для source-хэндоффа.** `llm_test_batch_indexes` — это отбор **позиций**
+> (1,7,11,12) для маленького 4-записного LLM-теста, а **не** фильтр источника. Для хэндоффа из коннектора используйте
+> `agent_request_id_filter` (+ при желании `platform_filter` / `source_type_filter`) и держите
+> `llm_enrichment_test_mode=false`.
+
+### Пример: хэндофф из Workflow 09 (Avito)
+После прогона Workflow 09 (например, `agent_request_id=avito_req_20260610_214709`, 6 строк, `platform=avito`,
+`source_type=classified`) задать в `Set Analyzer Config`:
+```
+agent_request_id_filter = "avito_req_20260610_214709"
+platform_filter         = "avito"
+source_type_filter      = "classified"
+max_records             = 6
+analysis_mode           = "deterministic_first"
+llm_enrichment          = false
+llm_enrichment_test_mode= false
+```
+Ожидаемо (детерминированный baseline, Claude calls=0): `monitor_queue=5`, `skipped_log=1`, `content_queue=0`,
+`review_queue=0`, `technical_errors=0`; `parse_method` = `deterministic_pre_route` ×5 (конкуренты) +
+`deterministic_irrelevant_skip` ×1 (нерелевантный POS-терминал). После теста очистить фильтры (вернуть `''`).
 
 ## 4. Маппинг точек касания на 35-схему
 

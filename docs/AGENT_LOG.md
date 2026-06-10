@@ -5,6 +5,25 @@ Most recent first.
 
 ---
 
+## 2026-06-10 — Workflow 08 PATCHED v8: source-handoff filters for Stage 3.3 handoff (DEC-091)
+
+**Agent role:** project-engineer
+**Session goal:** let Workflow 08 process only one connector run's rows (e.g. a Workflow 09 Avito request) instead of all accumulated `raw_market_records`, without breaking the deterministic baseline or the LLM test mode. Touch only WF08 + docs.
+
+**Patch v8 (`08_touchpoint_analyzer.json`, JSON valid, active=false, versionId `…v008-source-handoff-filter-20260610`):**
+- **`Set Analyzer Config`:** added three **optional** filters, default `''`: `agent_request_id_filter`, `platform_filter`, `source_type_filter`. Note extended to explain source handoff and to warn against using `llm_test_batch_indexes` for it.
+- **`Filter & Select Records`:** reads the three filters; applies them as `continue` guards **after** dedup/approval/irrelevant checks and **before** the `max_records` cap and `batch_index` assignment. `agent_request_id` exact (trim); `platform`/`source_type` case-insensitive. Empty filters → behavior unchanged. Independent of `llm_enrichment_test_mode` / `llm_test_batch_indexes`.
+
+**Verified (simulation):** `python3 -m json.tool` VALID; active=false; default filters `''`; empty filters → identical selection (3 old + 6 avito → 9 selected); handoff filters (`avito_req_20260610_214709` / `avito` / `classified`, max 6) → exactly the 6 avito rows (batch_index 1–6, 5 competitor_activity + 1 irrelevant); `max_records=3` with filters → first 3 avito rows (old rows excluded by filter, proving filter-before-max_records); `llm_enrichment_test_mode` still filters by batch_index independently; no real keys / Spreadsheet ID (placeholders); no tool_use / KEY=VALUE; MSK timestamps preserved; deterministic baseline + llm_enrichment_test_mode preserved. WF04/05/06/07/09 untouched.
+
+**Stage 3.3 handoff (expected, deterministic_first):** `monitor_queue=5`, `skipped_log=1`, `content_queue=0`, `review_queue=0`, `technical_errors=0`; `parse_method=deterministic_pre_route ×5 + deterministic_irrelevant_skip ×1`; Claude calls=0.
+
+**Decision:** DEC-091. Docs: N8N_WORKFLOW_08_…RU (§3a + v8 banner + WF09 example + warning), STAGE_3_2_TEST_RESULTS (v8 baseline-unaffected note), STAGE_3_3_TEST_RESULTS (Test 4 requires the filter + expected counts), LEAD_DISCOVERY_ARCHITECTURE, NEXT_ACTIONS, DECISIONS, AGENT_LOG, core/hot/recent.
+
+**Next operator action:** run the Stage 3.3 handoff test (WF09 fixture → set WF08 filters to the run's `agent_request_id` → run WF08 → expect 5 monitor_queue / 1 skipped_log / 0 else, Claude=0 → clear filters).
+
+---
+
 ## 2026-06-10 — Stage 3.3 BUILT: Workflow 09 Avito/Classifieds Listing Connector (DEC-090)
 
 **Agent role:** project-engineer

@@ -5,6 +5,26 @@ Most recent first.
 
 ---
 
+## DEC-091 — Workflow 08 Gains Optional Source-Handoff Filters (agent_request_id / platform / source_type) Applied Before max_records; Empty Filters Keep the Deterministic Baseline Unchanged
+
+**Date:** 2026-06-10
+**Context:** Workflow 09 (Avito/Classifieds Connector) fixture tests passed and wrote 6 `raw_market_records` rows under `agent_request_id=avito_req_20260610_214709` (`platform=avito`, `source_type=classified`; 5 competitor + 1 irrelevant). Workflow 08 reads **all** `raw_market_records`, so a Stage 3.3 handoff run would also process old Stage 3.1/3.2 rows — there was no way to scope the analyzer to one connector run. `llm_test_batch_indexes` is **not** a source filter (it selects positions 1/7/11/12 for the small LLM test), so it must not be repurposed for handoff.
+**Decision (patch v8):** Add three **optional** source-handoff filters to `Set Analyzer Config`, all **empty (`''`) by default**:
+- `agent_request_id_filter` — if non-empty, process only `raw_market_records` rows whose `agent_request_id` matches (exact, trimmed).
+- `platform_filter` — if non-empty, process only rows whose `platform` matches (case-insensitive).
+- `source_type_filter` — if non-empty, process only rows whose `source_type` matches (case-insensitive).
+**Behavior:**
+- Implemented in `Filter & Select Records` as additional `continue` guards **after** the existing `dedup_status=unique` / `approval_status` / irrelevant checks and **before** the `max_records` cap and `batch_index` assignment — i.e. filters apply **before `max_records` and before per-record processing**.
+- **Empty filters = current behavior unchanged** — the deterministic_first baseline (Test 3, routes 6/3/1/2) and the LLM tests (C2–C4) select exactly as before.
+- Filters are **independent of `llm_enrichment_test_mode` / `llm_test_batch_indexes`** and work in both `deterministic_first` and `llm_enriched` modes; `llm_enrichment_test_mode` is preserved.
+- No other node changed; MSK `+03:00` timestamps, dynamic route sheet, 35-field output, deterministic fallback, and "no source APIs" all intact. `active=false`.
+**Stage 3.3 handoff config:** `agent_request_id_filter="avito_req_20260610_214709"`, `platform_filter="avito"`, `source_type_filter="classified"`, `max_records=6`, `analysis_mode="deterministic_first"`, `llm_enrichment=false`, `llm_enrichment_test_mode=false`. **Expected:** `monitor_queue=5`, `skipped_log=1`, `content_queue=0`, `review_queue=0`, `technical_errors=0`; `parse_method` = `deterministic_pre_route` ×5 + `deterministic_irrelevant_skip` ×1; Claude calls=0. After the test, clear the filters.
+**Reason:** scoping a connector handoff to one `agent_request_id` is the correct, minimal way to keep WF08 idempotent across accumulating `raw_market_records` history without touching the analyzer's routing logic; doing it pre-`max_records` guarantees the cap counts only the targeted run's rows; keeping the filters empty by default preserves the approved baseline and all prior tests.
+**Verified by simulation:** `python3 -m json.tool` VALID; `active=false`; `Set Analyzer Config` exposes the 3 filters (default `''`); `Filter & Select Records` — empty filters → identical selection (mixed dataset: 3 old + 6 avito → 9 selected); handoff filters → exactly the 6 avito rows (batch_index 1–6, 5 competitor_activity + 1 irrelevant, all `platform=avito`/`source_type=classified`/matching `agent_request_id`); `max_records=3` with filters → first 3 avito rows (old rows excluded by filter, proving filter-before-max_records); `llm_enrichment_test_mode=true` still filters by batch_index independently. No real keys / Spreadsheet ID; no `tool_use`; no `KEY=VALUE`; WF04/05/06/07/09 untouched.
+**Files:** `n8n/workflows/08_touchpoint_analyzer.json`, `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `docs/STAGE_3_2_TEST_RESULTS.md`, `docs/STAGE_3_3_TEST_RESULTS.md`, `docs/LEAD_DISCOVERY_ARCHITECTURE.md`, `docs/NEXT_ACTIONS.md`, `docs/DECISIONS.md`, `docs/AGENT_LOG.md`, `core/hot/recent.md`.
+
+---
+
 ## DEC-090 — Stage 3.3: Avito/Classifieds Listing Connector (Workflow 09) Built as the First Real Source Connector — Fixture-First, Deterministic, No-LLM, Competitor Ad/Semantic Intelligence; Writes Only Intake Sheets, No Auto-Handoff
 
 **Date:** 2026-06-10

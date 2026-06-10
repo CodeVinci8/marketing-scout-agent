@@ -4,6 +4,31 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-10 — Workflow 08 PATCHED v8: source-handoff filters (DEC-091)
+
+**What was done (scope WF08 to one connector run; baseline + llm test mode preserved):**
+- **Patched `08_touchpoint_analyzer.json`** (JSON valid, active=false, versionId `…v008-source-handoff-filter-20260610`):
+  - `Set Analyzer Config`: 3 **optional** filters, default `''`: `agent_request_id_filter`, `platform_filter`,
+    `source_type_filter` (+ note warning not to use `llm_test_batch_indexes` for source handoff).
+  - `Filter & Select Records`: applies the filters **after** dedup/approval/irrelevant and **before** `max_records` +
+    `batch_index`. `agent_request_id` exact (trim); `platform`/`source_type` case-insensitive. Empty → unchanged.
+    Independent of `llm_enrichment_test_mode`.
+- **Verified (sim):** empty filters → identical selection (9 of 3-old+6-avito); handoff (`avito_req_20260610_214709`/
+  `avito`/`classified`, max 6) → exactly the 6 avito rows (5 competitor + 1 irrelevant, batch 1–6); `max_records=3`
+  with filters → first 3 avito (old excluded by filter, proving filter-before-max); `llm_enrichment_test_mode` still
+  works; no real keys/Spreadsheet ID; no tool_use/KEY=VALUE; MSK preserved; deterministic baseline preserved.
+  WF04/05/06/07/09 untouched.
+- **Stage 3.3 handoff expected:** monitor_queue=5, skipped_log=1, content/review/technical=0, deterministic_pre_route
+  ×5 + deterministic_irrelevant_skip ×1, Claude calls=0.
+- **Decision:** DEC-091. Docs: WF08 RU (§3a + v8 banner + WF09 example + warning), STAGE_3_2_TEST_RESULTS,
+  STAGE_3_3_TEST_RESULTS (Test 4 requires filter + counts), LEAD_DISCOVERY_ARCHITECTURE, NEXT_ACTIONS, DECISIONS,
+  AGENT_LOG, core/hot/recent.
+
+**Next operator action:** WF09 fixture → set WF08 filters to that run's `agent_request_id` → run WF08 → expect
+5 monitor_queue / 1 skipped_log / 0 else, Claude=0 → clear filters after the test.
+
+---
+
 ## Session: 2026-06-10 — Stage 3.3 BUILT: Workflow 09 Avito/Classifieds Listing Connector (DEC-090)
 
 **What was done (first real source connector after manual intake; fixture-first, deterministic, no-LLM):**

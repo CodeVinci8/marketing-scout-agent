@@ -3,6 +3,15 @@
 **Workflow:** `n8n/workflows/08_touchpoint_analyzer.json` (`08 - Touchpoint Analyzer`, `active=false`)
 **Stage:** 3.2 · **Related:** `docs/STAGE_3_2_TOUCHPOINT_ANALYZER_PLAN.md`, `docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, DEC-080, DEC-081.
 
+> **PATCH v8 (DEC-091) — source-handoff filters, baseline unaffected.** `Set Analyzer Config` gained three
+> **optional** filters (`agent_request_id_filter`, `platform_filter`, `source_type_filter`), all empty by default.
+> When empty, the deterministic_first baseline and all Stage 3.2 tests (Test 3, Test C2–C4) are **unchanged** —
+> `Filter & Select Records` selects exactly as before. When set, only matching `raw_market_records` rows are selected
+> (applied **before** `max_records` and before per-record processing); `llm_enrichment_test_mode` /
+> `llm_test_batch_indexes` are independent and preserved. Used for connector handoff (e.g. Workflow 09 — Avito); see
+> `docs/STAGE_3_3_TEST_RESULTS.md` Test 4 and the WF08 RU guide §3a. Simulation-verified: empty filters → identical
+> selection; baseline routes 6/3/1/2 unchanged.
+
 ---
 
 ## TEST 1 — 2026-06-08 — ⚠️ PARTIAL FAIL (pre-patch v1)
