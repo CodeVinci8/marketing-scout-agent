@@ -1,9 +1,25 @@
-# N8N_WORKFLOW_10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_RU.md — Workflow 10 (Aggregator v0.1)
+# N8N_WORKFLOW_10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_RU.md — Workflow 10 (Aggregator v0.2)
 
 **Workflow:** `n8n/workflows/10_competitor_audience_intelligence_aggregator.json`
 **Имя:** `10 - Competitor Audience Intelligence Aggregator`
-**Статус:** 🔧 ПОСТРОЕН v0.1 (DEC-104), ожидает первый прогон оператора. `active=false`. Детерминированный, $0.
-**Дата:** 2026-06-11 · **Решения:** DEC-104 (WF10 v0.1) · DEC-099 (план/гейт) · DEC-102 (Stage 3.3 закрыт — гейт выполнен).
+**Статус:** 🔧 v0.2 PATCH (DEC-106/107/108, 2026-06-12) поверх протестированного v0.1 (DEC-104). `active=false`.
+Детерминированный, $0. v0.1 операторские тесты: Тест 1 (87→82 строк, 21 профиль, 9 углов, 8 сигналов, 1 план,
+7 seed-правил, $0), повтор (+0 правил), Avito-фильтр — PASS; no-data тест выявил баг generic-плана → исправлен в v0.2.
+**Дата:** 2026-06-11, обновлено 2026-06-12 · **Решения:** DEC-104 (v0.1) · DEC-106/107/108 (v0.2) ·
+DEC-099 (план/гейт) · DEC-102 (Stage 3.3 закрыт — гейт выполнен) · DEC-112 (Claude — в report-слое, не в WF10).
+
+> **v0.2 изменения:**
+> 1. **No-data guard (DEC-106):** при `rows_after_filters=0` — НЕ пишутся profiles/angles/signals; пишется ОДИН
+>    помеченный `no_data` план (все списки пустые, `source_evidence=rows=0`,
+>    `next_action=no_data; broaden filters or source scope`); `result_summary` начинается с `no_data;`.
+> 2. **Entity resolution (DEC-107):** ключ группировки company_name → profile_url → canonical listing id из
+>    source_url → profile_name → offer+platform (только fallback) — дубликаты `(unnamed)` одного объявления
+>    схлопываются в один профиль (21 профиль из Теста 1 заметно уплотнится).
+> 3. **Source-mix (DEC-108):** `result_summary`/`notes` несут метку
+>    `source_mix=mixed: live + historical/manual + web pipeline` — агрегируются live-строки WF09, ручной/fixture
+>    интейк WF07 и исторический web-пайплайн; отчёт не выдаёт это за свежий live-сбор.
+> Патч проверен симуляцией в vm-sandbox (31 проверка PASS: no-data план, схлопывание listing-групп,
+> seed-правила, детерминизм, размеры колонок 17/9/14/12/5 без изменений).
 **Спецификация таблиц:** `docs/WF10_TABLE_SCHEMAS.md` · **План:** `docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md`.
 
 > **WF08 отвечает: «что это за одна запись?». WF10 отвечает: «что происходит на рынке в целом?».**
@@ -45,8 +61,9 @@ Read-ноды: `alwaysOutputData` + `onError=continueRegularOutput` — отсу
 ## 3. Логика агрегации (детерминированная)
 
 1. **Окно/фильтры:** строки monitor/content/review с парсируемым `created_at` внутри окна + фильтры.
-2. **Группировка конкурентов** (строки `entity_type=competitor` или вкладка monitor_queue), ключ по приоритету:
-   `company_name` → `profile_name` → нормализованный `offer_text`+platform → listing id из `source_url`.
+2. **Группировка конкурентов** (строки `entity_type=competitor` или вкладка monitor_queue), ключ по приоритету
+   (v0.2, DEC-107): `company_name` → нормализованный `profile_url` → canonical listing id из `source_url` →
+   `profile_name` → нормализованный `offer_text`+platform (fallback) → hash записи.
 3. **competitor_profiles (17 колонок):** офферы/цены/семантика/боли/каналы/сильные-слабые стороны/evidence_count/
    `source_confidence_score` (80 — есть цена; 60 — ≥2 свидетельства; 45 — одиночное).
 4. **market_angles (9):** 9 фиксированных углов — скорость, ценовой якорь («от N ₽»), без предоплаты, оплата за
@@ -79,11 +96,17 @@ Read-ноды: `alwaysOutputData` + `onError=continueRegularOutput` — отсу
 
 ### Повторный прогон
 - `source_confidence_rules` **+0** (seed только при пустой вкладке); остальные вкладки — новый snapshot
-  (append-only v0.1; upsert competitor_profiles — v0.2).
+  (append-only; upsert competitor_profiles — будущий v0.3).
 
-## 5. Чего НЕ делает v0.1
+### Тест no-data (v0.2)
+- Поставить заведомо пустой фильтр (например `region_filter='Нигдеград'`) → Execute once → profiles/angles/
+  signals **+0**; `content_positioning_plan` **+1** помеченный `no_data` (списки пустые, `source_evidence=rows=0`);
+  `agent_requests.result_summary` начинается с `no_data;`. Вернуть фильтр после теста.
 
-- НЕ вызывает Claude/Apify/Firecrawl/внешние API (LLM-синтез — возможный v0.2, только с одобрением на прогон).
+## 5. Чего НЕ делает v0.2
+
+- НЕ вызывает Claude/Apify/Firecrawl/внешние API. **LLM-синтез вынесен в report/control-слой (DEC-112)** —
+  см. `docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`; внутри WF10 Claude не появится по умолчанию.
 - НЕ пишет в raw_market_records / market_record_registry / бизнес-вкладки маршрутизации.
 - НЕ выдумывает контакты и НЕ рекомендует outreach (DEC-097/098).
 - НЕ строит графовую логику (Market Graph Engine — backlog №3).

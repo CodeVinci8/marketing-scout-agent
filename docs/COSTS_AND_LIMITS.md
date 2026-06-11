@@ -5,6 +5,20 @@ Updated after each session that incurs or measures real costs.
 
 ---
 
+## Session 2026-06-12 — WF10 v0.2 + WF11 foundation: $0 incurred
+
+- **WF10 v0.2 (DEC-106/107/108)** stays fully deterministic — **$0 per run, always** (no LLM/external calls);
+  the no-data guard costs nothing. v0.1 operator tests confirmed cost=$0.
+- **WF11 — Social Source Connector Foundation (DEC-110):** fixture-only, **no HTTP node exists** — **$0 per
+  run, always**, until a separately approved live patch lands. Estimated future live cost: ~1 Firecrawl page
+  fetch per channel preview (cents) per run; measure and record here at live-approval time.
+- **Report layer (planned, DEC-112):** Report Builder v1 deterministic = $0; the optional Claude summary is
+  disabled by default — when enabled per run, bounded prompt over WF10 table rows only (rough estimate
+  ≤ ~$0.02–0.05 per report; measure on the first enabled run).
+- Google Sheets `validation_lists` dropdowns (DEC-111): $0.
+
+---
+
 ## Monthly Fixed Costs (as of 2026-06-05)
 
 | Service | Cost | Notes |

@@ -190,7 +190,17 @@ the approved path until Stage 2.4 is built and live-validated.
   40/15/21-column outputs match WF07. Plan: `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`; guide:
   `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`; test log: `docs/STAGE_3_3_TEST_RESULTS.md`; source
   decision: `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
-- **3.4 — Social Source Parsing Strategy** ✅ **STRATEGY WRITTEN (2026-06-11, DEC-096)** — `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md`: per-source analysis (Telegram/VK/Instagram/Dzen/reviews-maps/competitor-web) of access methods, risks, costs, quality, lead vs competitor-intel value, contact availability, priorities. **Decision: one-source-at-a-time connector pattern** (source connector → `raw_market_records` → WF08 → aggregator/report); order: Avito stabilize → Telegram public feasibility → VK API → reviews/maps → Dzen → Instagram after a separate risk review. **No parser built.** Companion docs: `CONTACT_AND_OUTREACH_POLICY.md` (DEC-097/098, binding), `WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md` (DEC-099), `NICHE_PACK_SYSTEM_PLAN.md` (DEC-100), `COMPETITOR_AD_INTELLIGENCE_PLAN.md` (DEC-101). Original scope description: Avito is only
+- **3.4 — Social Source Parsing Strategy** 🔧 **STRATEGY WRITTEN (DEC-096) + STEP 2 FOUNDATION BUILT
+  (2026-06-12, DEC-109/110)** — first non-Avito source selected: **Telegram public-channel preview**
+  (`t.me/s/<channel>`; highest competitor-ad value per unit of risk; comparison vs VK/reviews-maps/Dzen in
+  `STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` §5.2). `Workflow 11 — Social Source Connector Foundation`
+  built **fixture-only** (`active=false`, `fixture_mode=true`, `live_mode=false`, **no HTTP node** — live
+  branch is an error guard; writes only `agent_requests`/`raw_market_records`/`market_record_registry`;
+  WF09 dedup/relevance pattern; contact policy enforced; build-sim 31 checks PASS). Live preview fetch =
+  separate future approval (transport + credential + DOM-parser patch). Guide:
+  `docs/N8N_WORKFLOW_11_SOCIAL_SOURCE_CONNECTOR_FOUNDATION_RU.md`. Connector contract (every source):
+  connector → agent_requests → raw_market_records → market_record_registry → WF08 → WF10 → report/Telegram
+  layer. Original strategy record: ✅ STRATEGY WRITTEN (2026-06-11, DEC-096) — `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md`: per-source analysis (Telegram/VK/Instagram/Dzen/reviews-maps/competitor-web) of access methods, risks, costs, quality, lead vs competitor-intel value, contact availability, priorities. **Decision: one-source-at-a-time connector pattern** (source connector → `raw_market_records` → WF08 → aggregator/report); order: Avito stabilize → Telegram public feasibility → VK API → reviews/maps → Dzen → Instagram after a separate risk review. **No parser built.** Companion docs: `CONTACT_AND_OUTREACH_POLICY.md` (DEC-097/098, binding), `WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md` (DEC-099), `NICHE_PACK_SYSTEM_PLAN.md` (DEC-100), `COMPETITOR_AD_INTELLIGENCE_PLAN.md` (DEC-101). Original scope description: Avito is only
   the **first** connector. A wider strategy must compare future social sources — **Telegram** public channels/groups,
   **VK** public posts/groups/comments, **Instagram** public posts/comments/competitors, **Dzen** posts/comments,
   **review platforms / maps** — across: official APIs where practical · Apify/actor approach · Firecrawl/web approach
@@ -199,7 +209,7 @@ the approved path until Stage 2.4 is built and live-validated.
   **Telegram Parser ≠ Telegram Control Bot** (DEC-067): needs a separate client/MTProto-style session + compliance
   design; groups/members/comments/DMs are higher-risk. **No social parser is built in this stage** — strategy only;
   build only after explicit approval + per-source feasibility/compliance.
-- **3.5 — WF10 Market Intelligence Aggregator (Competitor Semantic & Ad Intelligence aggregation)** 🔧 **v0.1 BUILT (2026-06-11, DEC-104), UNDER OPERATOR TEST** — `n8n/workflows/10_competitor_audience_intelligence_aggregator.json` (`active=false`, 22 nodes, manual trigger, **fully deterministic — no LLM/Apify/Firecrawl/external API, $0**). Gate (DEC-099: one stable live source) satisfied by Stage 3.3 closure. Reads monitor/content/review queues, 30-day window + niche/platform/region/service_type filters, groups competitors (company_name → profile_name → offer+platform → listing id), writes `competitor_profiles` (17) / `market_angles` (9, fixed 9-angle taxonomy) / `audience_activity_signals` (14, aggregate-only per contact policy) / `content_positioning_plan` (12) / `source_confidence_rules` (5, seed-once) + 1 `agent_requests` row. Schemas: `docs/WF10_TABLE_SCHEMAS.md`; guide: `docs/N8N_WORKFLOW_10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_RU.md`; v0.2 = upsert profiles + optional bounded LLM synthesis (operator-approved). Plan: `docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md`. Original scope: aggregate competitor
+- **3.5 — WF10 Market Intelligence Aggregator (Competitor Semantic & Ad Intelligence aggregation)** 🔧 **v0.2 PATCHED (2026-06-12, DEC-106/107/108) after v0.1 operator tests** — v0.1 tests: Test 1 (82 rows → 21 profiles / 9 angles / 8 signals / 1 plan / 7 seed rules, $0), repeat (+0 rules), Avito filter — PASS; **no-data test found the generic-plan bug → fixed in v0.2** (no-data guard: marked `no_data` plan only, `result_summary` starts `no_data;`). v0.2 also: entity resolution company_name → profile_url → canonical listing id → profile_name → offer+platform fallback (deflates duplicate `(unnamed)` profiles); mandatory `source_mix=mixed: live + historical/manual + web pipeline` label. **LLM synthesis is permanently OUT of WF10 by default (DEC-112)** — Claude moves to the report/control layer (`REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`). v0.1 record: **v0.1 BUILT (2026-06-11, DEC-104)** — `n8n/workflows/10_competitor_audience_intelligence_aggregator.json` (`active=false`, 22 nodes, manual trigger, **fully deterministic — no LLM/Apify/Firecrawl/external API, $0**). Gate (DEC-099: one stable live source) satisfied by Stage 3.3 closure. Reads monitor/content/review queues, 30-day window + niche/platform/region/service_type filters, groups competitors (company_name → profile_name → offer+platform → listing id), writes `competitor_profiles` (17) / `market_angles` (9, fixed 9-angle taxonomy) / `audience_activity_signals` (14, aggregate-only per contact policy) / `content_positioning_plan` (12) / `source_confidence_rules` (5, seed-once) + 1 `agent_requests` row. Schemas: `docs/WF10_TABLE_SCHEMAS.md`; guide: `docs/N8N_WORKFLOW_10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_RU.md`; v0.2 = upsert profiles + optional bounded LLM synthesis (operator-approved). Plan: `docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md`. Original scope: aggregate competitor
   offers, prices/terms, ad wording, positioning, semantic keywords, and ad channels across collected
   `raw_market_records` into reusable competitor/semantic intelligence (read-only over existing sheets; no new
   collection). Builds on the Avito connector + Workflow 08 enrichment.
@@ -213,7 +223,9 @@ the approved path until Stage 2.4 is built and live-validated.
 
 ## Stage 4 — Control Agent Interface (Later, DEC-067/078)
 
-**Status:** 📋 LATER — **not built.** A **conversational control agent** (future Telegram/chat), **not just slash
+**Status:** 📋 LATER — **not built; plan written (2026-06-12):** `docs/TELEGRAM_CONTROL_AGENT_PLAN.md` —
+Telegram = control/report interface, NOT a parser; creates `agent_requests`, triggers/reads workflows, returns
+digests + Sheets links; paid actions always behind approval; Claude usage per DEC-112. A **conversational control agent** (future Telegram/chat), **not just slash
 commands**: it provides **conversational control over the tools** — receive task → clarify → show plan + cost →
 ask approval → run tool(s) → return summary + next actions. It **chooses** tools and **calls** existing
 workflows; it contains **no parser/scraping logic** (Control Agent ≠ source parser). Requests recorded in
@@ -223,9 +235,12 @@ workflows; it contains **no parser/scraping logic** (Control Agent ≠ source pa
 
 ## Stage 5 — Reporting / Export / Summary (Later)
 
-**Status:** 📋 LATER — **not built.** Operator-facing reporting via `report_summary_tool`: **Google Sheet links,
-XLSX snapshots, weekly summaries, competitor/lead reports, next-action digests.** Read-only over existing sheets;
-no new collection.
+**Status:** 📋 LATER — **not built; architecture written (2026-06-12, DEC-112/113):**
+`docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md` + `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md` (proposed
+`market_intelligence_reports` tab, 20 cols). Flow: WF10 tabs → deterministic Report Builder → **optional**
+Claude summary (disabled by default; facts-only; no contacts/outreach) → `market_intelligence_reports` →
+Telegram digest → later Business Agent Control Kernel. WF10 stays the deterministic fact core; reports always
+carry the `source_mix` label. Read-only over existing sheets; no new collection.
 
 ## Stage 6 — Advanced Business Automations (Future)
 

@@ -4,7 +4,51 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-11, session 3) — ✅ STAGE 3.3 CLOSED (DEC-102) → WF09 v006 canonical-URL fix (DEC-103) → 🔧 WF10 v0.1 BUILT (DEC-104) → import + first WF10 run
+## CURRENT PRIORITY (2026-06-12) — 🔧 WF10 v0.2 patch (DEC-106/107/108) → re-import + retests; 🔧 WF11 Telegram-preview foundation BUILT (DEC-109/110); validation/report/Telegram plans written (DEC-111/112/113)
+
+**WF10 v0.2 (DEC-106/107/108)** patched after the v0.1 operator tests (Test 1: 82 rows → 21 profiles / 9 angles /
+8 signals / 1 plan / 7 rules, $0; repeat +0 rules; Avito filter PASS; **no-data test FOUND BUG** — generic plan
+with lead_magnets at rows=0): no-data guard (marked `no_data` plan only; `result_summary` starts `no_data;`),
+entity resolution company_name → profile_url → canonical listing id → profile_name → offer+platform fallback,
+mandatory `source_mix` label. Sim: 31 checks PASS. Schemas unchanged (17/9/14/12/5).
+
+**WF11 (DEC-109/110)** — first non-Avito connector foundation: **Telegram public-channel preview**, fixture-only
+(`active=false`, `fixture_mode=true`, `live_mode=false`, **no HTTP node**; writes only agent_requests /
+raw_market_records / market_record_registry). Sim: 31 checks PASS. Live fetch = separate future approval.
+
+**New plans:** `GOOGLE_SHEETS_VALIDATION_PLAN.md` (DEC-111, validation_lists dropdowns),
+`REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md` + `MARKET_INTELLIGENCE_REPORT_SCHEMA.md` +
+`TELEGRAM_CONTROL_AGENT_PLAN.md` (DEC-112: Claude in report/control layer, NOT in WF10; DEC-113: MVP =
+connectors → raw → WF08 → WF10 → report/Telegram, Avito is just the first live source).
+
+**Next, in order:**
+1. [ ] **Commit this session** (WF10 v0.2 + WF11 + docs).
+2. [ ] **Re-import WF10 v0.2** (do NOT activate; rebind Sheets credential on all 10 sheet nodes + real
+   Spreadsheet ID).
+3. [ ] **WF10 retest A (normal run, $0):** Execute once → expect FEWER competitor_profiles than v0.1's 21 for the
+   same data (unnamed same-listing rows now collapse); `result_summary` ends with
+   `source_mix=mixed: live + historical/manual + web pipeline`; other tabs as before; rules +0.
+4. [ ] **WF10 retest B (no-data, $0):** set `region_filter='Нигдеград'` → expect profiles/angles/signals +0;
+   `content_positioning_plan` +1 marked `no_data` (empty lists, `source_evidence=rows=0`);
+   `result_summary` starts `no_data;`. **Restore the filter after.**
+5. [ ] **Import WF11** (do NOT activate; rebind Sheets credential on 4 sheet nodes + real Spreadsheet ID).
+6. [ ] **WF11 Test 1 (fixture, $0):** expect `posts_received=6; hard_skipped=1; unique=4; duplicates=1` →
+   raw +5 / registry +4 / agent_requests +1. **Test 2 (repeat):** unique=0, registry +0.
+   **Test 3 (guard):** `fixture_mode=false` → expected error on LIVE Mode Guard; restore `fixture_mode=true`.
+7. [ ] **(Optional) WF08 handoff on the WF11 fixture run** (`agent_request_id_filter=<wf11_req_…>`,
+   `platform_filter='telegram'`, deterministic_first, Claude=0) → expect 3 → monitor_queue, 1 → content/review.
+   Clear filters after.
+8. [ ] **Apply `validation_lists`** per `docs/GOOGLE_SHEETS_VALIDATION_PLAN.md` (operator, Sheets UI, $0).
+9. [ ] **Then (each behind explicit approval):** WF11 live preview transport patch → Report Builder v1
+   (deterministic, needs ≥2 WF10 runs for trends) → Telegram delivery v1.
+
+> Still NOT built/approved: WF11 live mode, Report Builder, `market_intelligence_reports` tab, Telegram Control
+> Bot, Claude report summaries (disabled by default — DEC-112), niche packs (YAML), VK/Dzen/Instagram/reviews
+> parsers, outreach/auto-DM (forbidden by default — DEC-098), scheduled runs.
+
+---
+
+## PRIOR PRIORITY (2026-06-11, session 3) — ✅ STAGE 3.3 CLOSED (DEC-102) → WF09 v006 canonical-URL fix (DEC-103) → 🔧 WF10 v0.1 BUILT (DEC-104) → import + first WF10 run
 
 **Stage 3.3 CLOSED / APPROVED (DEC-102):** live run #3 (`avito_req_20260611_184324`) — 10/10 valid, 7 false
 positives hard-skipped **before** raw/registry, 3 relevant brokers (2 unique + 1 duplicate), registry +2 exact;
