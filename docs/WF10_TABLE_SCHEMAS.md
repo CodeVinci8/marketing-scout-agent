@@ -1,8 +1,21 @@
 # WF10_TABLE_SCHEMAS.md — WF10 Output Table Schemas (BUILD-READY SPEC)
 
-**Status:** ✅ SPEC — these are the exact tabs/columns Workflow 10 v0.1 writes. The operator must create the 5 tabs
-with these headers before the first WF10 run.
-**Date:** 2026-06-11 · **Decisions:** DEC-104 (WF10 v0.1 built, deterministic).
+**Status:** ✅ SPEC — these are the exact tabs/columns Workflow 10 writes. The operator must create the 5 tabs
+with these headers before the first WF10 run. **Column counts are unchanged in v0.2.**
+**Date:** 2026-06-11, updated 2026-06-12 · **Decisions:** DEC-104 (WF10 v0.1 built, deterministic),
+DEC-106/107/108 (v0.2: no-data guard, entity resolution, source_mix label).
+
+> **v0.2 behavior changes (same schemas):**
+> 1) **No-data guard (DEC-106):** when `rows_after_filters=0`, WF10 writes **no** competitor_profiles /
+> market_angles / audience_activity_signals rows and **one clearly marked `no_data` plan row** —
+> `plan_id=plan_<stamp>_no_data`, all list fields empty, `source_evidence=rows=0`,
+> `next_action=no_data; broaden filters or source scope`; `agent_requests.result_summary` starts with `no_data;`.
+> 2) **Entity resolution (DEC-107):** group key priority is now `company_name` → normalized `profile_url` →
+> canonical listing id from `source_url` → `profile_name` → normalized `offer_text`+platform (fallback) →
+> record hash — repeated unnamed rows of one listing form ONE profile.
+> 3) **Source-mix label (DEC-108):** stats and `agent_requests` carry
+> `source_mix=mixed: live + historical/manual + web pipeline` — reports must never imply all aggregated data
+> was collected live in the latest run.
 **Related:** `docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md`,
 `docs/N8N_WORKFLOW_10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_RU.md`, `docs/TABLE_SCHEMA.md` (master index),
 `docs/CONTACT_AND_OUTREACH_POLICY.md`.
@@ -38,8 +51,9 @@ with these headers before the first WF10 run.
 
 - **Primary key:** `competitor_id` (within one run; v0.2 upsert key: `competitor_id`).
 - **Update strategy:** v0.1 append snapshot per run; v0.2 upsert (update last_seen_at/evidence/notes, merge lists).
-- **Entity matching (dedup):** group key priority — normalized `company_name` → normalized `profile_name` →
-  normalized `offer_text`(≤80)+platform → listing id from `source_url` → record hash.
+- **Entity matching (dedup, v0.2 — DEC-107):** group key priority — normalized `company_name` → normalized
+  `profile_url` → canonical listing id from `source_url` → normalized `profile_name` →
+  normalized `offer_text`(≤80)+platform (fallback only) → record hash.
 - **Source inputs:** `monitor_queue` rows + any row with `entity_type=competitor` (content/review), window-filtered.
 - **Confidence scoring:** per `source_confidence_rules` (priced first-party listing = high).
 - **Example row:** `comp_1a2b3c4d | КредитЭксперт | 2026-06-11T18:46:00+03:00 | … | avito | https://www.avito.ru/...8000151804 | credit_broker | Помощь с кредитом быстро. Кредитный брокер | от 500 ₽ | кредитный брокер, помощь с кредитом, после отказов, быстро | отказы банков | classifieds | явный ценовой якорь (от 500 ₽) | виден только один канал (avito) | 1 | 80 | wf10 v0.1 …`

@@ -5,6 +5,80 @@ Most recent first.
 
 ---
 
+## DEC-113 — MVP Is a Market Intelligence Foundation, Not Avito-Only Output
+
+**Date:** 2026-06-12
+**Context:** With Avito live-proven and WF10 v0.1 tested, the MVP risked being framed as "Avito output in Sheets".
+**Decision:** The MVP is the layered market-intelligence foundation: **source connectors → `raw_market_records` → WF08 one-record analysis → WF10 market aggregation → report/Telegram-ready summary → (later) Business Agent Control Kernel.** Avito is the **first stable live source feeding that pipeline**, not the product. Every new capability (WF11, report layer, validation lists) is judged by whether it strengthens this pipeline.
+**Alternatives considered:** ship Avito-only and defer the layered framing (rejected — it would optimize for one connector and make every next source a redesign).
+
+---
+
+## DEC-112 — Claude Belongs in the Report/Control Layer, Not the Deterministic Fact Core
+
+**Date:** 2026-06-12
+**Context:** WF10 v0.1 deferred "bounded LLM synthesis" as a possible in-workflow v0.2 feature. That would make the market facts non-reproducible and add cost to every aggregation run.
+**Decision:** **Claude API is NOT inside WF10 by default — ever.** The deterministic fact core (connectors → WF08 → WF10) stays $0 and reproducible. Claude lives **above** it, in the report/control layer: WF10 tabs → deterministic Report Builder → **optional** Claude summary (disabled by default, per-run operator enablement, facts-only prompt, no contacts, no outreach, cost recorded) → `market_intelligence_reports` → Telegram digest → later Control Kernel. WF08's separately approved compact enrichment (DEC-089) is unaffected (per-record, opt-in). Plans: `docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`, `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md`, `docs/TELEGRAM_CONTROL_AGENT_PLAN.md`.
+**Alternatives considered:** bounded LLM synthesis inside WF10 (rejected — couples cost/non-determinism to fact generation; a wrong summary would corrupt the fact tables instead of being regenerable above them).
+
+---
+
+## DEC-111 — Google Sheets `validation_lists` Is the Operator Safety Layer
+
+**Date:** 2026-06-12
+**Context:** Operators/managers hand-edit fields (`approval_status`, `responsible`, hints) in growing tabs; typos and invented enum values silently break filters and workflow selection logic.
+**Decision:** Add a `validation_lists` helper tab and apply Google Sheets **data validation (dropdowns) to existing manually edited fields** — dropdowns are validation rules, NOT new columns; no schema or workflow changes. 25 named lists (source_type, platform, service_type, entity_type, record_type_hint, touchpoint_type, hints, statuses, route, contact policy enums, request enums, boolean, responsible, etc.) applied to `raw_market_records` (15 cols), `agent_requests` (7), the six 35-col business tabs (12), and WF10 tabs (6) — "Show warning" mode on system-written columns so appends are never blocked, "Reject input" only on human-only fields. Full plan: `docs/GOOGLE_SHEETS_VALIDATION_PLAN.md`.
+**Alternatives considered:** enforcing enums in every workflow only (insufficient — workflows already do; the gap is *human* edits); Apps Script validation (rejected — heavier, another runtime to maintain).
+
+---
+
+## DEC-110 — Workflow 11 Built: Social Source Connector Foundation (fixture-only, no HTTP node)
+
+**Date:** 2026-06-12
+**Context:** Stage 3.4 needed an implementation foundation, but live Telegram fetching requires its own approval, transport choice, and real-markup parser work.
+**Decision:** Built `n8n/workflows/11_social_source_connector_foundation.json` (`active=false`, 17 nodes, manual trigger): Telegram public-channel preview connector, **fixture_mode=true / live_mode=false**, and **no HTTP node exists in the workflow** — the live branch is a guard node that fails with an explanatory error (live needs explicit approval + Firecrawl/HTTP transport + credential + preview-DOM parser patch). 6 fixture posts (channels suffixed `_fixture`): 3 competitor ads, 1 weak finance market signal, 1 hard-negative control (filtered before raw/registry), 1 in-batch duplicate. Mirrors the proven WF09 pattern: relevance filter (strong/weak/hard-negative, hardcoded credit_brokerage v0.1 → niche packs later), `dedup_key=telegram::social_channel::<canonical post_url>`, registry + in-batch dedup, duplicate-audit rows, 8-count `result_summary`. Writes **only** `agent_requests` (21) / `raw_market_records` (40) / `market_record_registry` (15); no auto-handoff to WF08. Contact policy enforced: public contacts verbatim from post text only, evidence URL + `manual_review` recorded in notes; no groups/private chats/MTProto, no outreach.
+**Verified by simulation (vm sandbox, 31 checks PASS):** counts 6 received / 1 hard-skipped / 4 unique / 1 duplicate; raw +5 / registry +4 / agent_requests +1; repeat run unique=0 registry+0; column widths 40/15/21; live guard throws; determinism; no httpRequest node, no real IDs/keys.
+**Files:** `n8n/workflows/11_social_source_connector_foundation.json`, `docs/N8N_WORKFLOW_11_SOCIAL_SOURCE_CONNECTOR_FOUNDATION_RU.md`, `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` §5.
+
+---
+
+## DEC-109 — First Non-Avito Connector: Telegram Public-Channel Preview
+
+**Date:** 2026-06-12
+**Context:** Stage 3.4 strategy ranked sources but no first implementation path was committed. Candidates compared on public availability, compliance risk, complexity, data quality, competitor-intel value, audience-pain value, contact availability, cost, fixture-first testability, and stakeholder-MVP usefulness (`STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` §5.2).
+**Decision:** **Telegram public-channel preview (`t.me/s/<channel>`) is the first non-Avito source.** Highest competitor-ad-copy value per unit of risk and effort: public pages, no login/session/token, no member data, reuses existing Firecrawl/HTTP transport, trivially fixture-able, and immediately adds a second platform to WF10 `market_angles`. Order stays VK API (#3) → reviews/maps (#4) → Dzen (#5) → Instagram after a separate risk review (#6), one source at a time (DEC-096). The MTProto/client-session route remains a deferred high-risk last resort.
+**Alternatives considered:** VK first (rejected for now — account/app/token setup cost and person-data comments); reviews/maps first (high value but no lead signals and benefits from WF10 maturing); Dzen first (lower intel density).
+
+---
+
+## DEC-108 — WF10 v0.2: Mandatory source_mix Label
+
+**Date:** 2026-06-12
+**Context:** WF10 aggregates mixed provenance — live WF09 rows, manual/fixture WF07 intake, and the historical web pipeline (WF03/04/05/06) across platforms (avito/website/dzen/zoon/…). A reader of `agent_requests`/reports could wrongly assume everything was collected live in the latest run.
+**Decision:** WF10 stats, `agent_requests.result_summary`, and `notes` carry the explicit label **`source_mix=mixed: live + historical/manual + web pipeline`** (plus observed platform/tab lists in stats). Mixing is acceptable internally, but every report layer consuming WF10 (Report Builder, Telegram digest) must surface this label — `MARKET_INTELLIGENCE_REPORT_SCHEMA.md` makes it a mandatory report column.
+**Alternatives considered:** per-row provenance columns in WF10 tabs (deferred — heavier schema change; the run-level label solves the misrepresentation risk now).
+
+---
+
+## DEC-107 — WF10 v0.2: Entity Resolution Priority (profile_url / canonical listing id before offer text)
+
+**Date:** 2026-06-12
+**Context:** WF10 Test 1 produced 21 competitor_profiles — useful but inflated: rows without `company_name` grouped by normalized offer_text first, so the same Avito listing with offer-text variants produced multiple `(unnamed)` profiles.
+**Decision:** Group key priority is now **`company_name` → normalized `profile_url` → canonical listing id from `source_url` → `profile_name` → normalized offer_text+platform (fallback only) → record hash.** Stable URL identities outrank text similarity, so repeated unnamed rows of one listing form one profile. Append-only snapshot behavior preserved; upsert remains future work (v0.3) — not implemented because safe upsert needs read-modify-write on `competitor_profiles`, which is not trivial in the append-only v0 design.
+**Verified by simulation:** two unnamed rows of listing `8000151804` with different offer texts → ONE profile (`listing::avito::8000151804`); profile_url-based and named groups intact.
+
+---
+
+## DEC-106 — WF10 v0.2: No-Data Guard (no generic plan on rows=0)
+
+**Date:** 2026-06-12
+**Context:** WF10 v0.1 no-data test: with `rows_after_filters=0` the run still appended a generic `content_positioning_plan` row with template lead_magnets — fabricated-looking advice with zero market evidence.
+**Decision:** When `rows_after_filters=0`: no competitor_profiles / market_angles / audience_activity_signals rows; `content_positioning_plan` gets **one clearly marked no_data row** (`plan_id=plan_<stamp>_no_data`, empty top_angles/recommended_posts/recommended_ads/faq_topics/counterarguments/lead_magnets, `source_evidence=rows=0`, `next_action=no_data; broaden filters or source scope`); `agent_requests.result_summary` starts with `no_data;` and `next_action` repeats the guidance. `source_confidence_rules` seed-on-empty and all normal-run behavior preserved.
+**Alternatives considered:** write no plan row at all (rejected — the marked row keeps the per-run plan time series complete and makes the empty run visible in the tab itself).
+**Verified by simulation (31 checks PASS, incl. normal-run regression and seed/determinism/column-width checks).**
+
+---
+
 ## DEC-105 — Strategic Ideas Preserved in FUTURE_CAPABILITIES_BACKLOG.md
 
 **Date:** 2026-06-11

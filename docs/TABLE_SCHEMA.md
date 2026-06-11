@@ -3,11 +3,19 @@
 One row per analyzed item. All columns populated by the pipeline.
 Claude API fills the analysis columns; n8n fills the metadata columns.
 
-**Last updated:** 2026-06-11 — **WF10 intelligence tabs added (DEC-104):** 5 new tabs written by Workflow 10 v0.1 —
+**Last updated:** 2026-06-12 — **(a) Workflow 11 (Social Source Connector Foundation, Telegram public-channel
+preview, DEC-110)** writes the same three agent tabs as WF07/WF09 — `agent_requests` (21), `raw_market_records`
+(40), `market_record_registry` (15) — **no schema change**; `dedup_key=telegram::social_channel::<canonical
+post_url>`. **(b) `validation_lists` helper tab (DEC-111):** operator-owned tab holding named enum lists for
+Google Sheets data-validation dropdowns on manually edited fields — **not a pipeline tab, never read/written by
+workflows**; see `docs/GOOGLE_SHEETS_VALIDATION_PLAN.md`. **(c) `market_intelligence_reports` (20 cols) is
+PROPOSED** for the report layer (not created) — see `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md`. — (prior:
+2026-06-11 — **WF10 intelligence tabs added (DEC-104):** 5 new tabs written by Workflow 10 —
 `competitor_profiles` (17), `market_angles` (9), `audience_activity_signals` (14), `content_positioning_plan` (12),
-`source_confidence_rules` (5). **Authoritative column lists, keys, update strategy, and example rows:
-`docs/WF10_TABLE_SCHEMAS.md`** (kept there to avoid duplication). — (prior: 2026-06-06 — production reality for
-the Resilient Router added: 6 tabs, 8 technical columns, test-only columns marked non-production, DEC-037.)
+`source_confidence_rules` (5); WF10 v0.2 behavior changes (DEC-106/107/108) do not alter columns. **Authoritative
+column lists, keys, update strategy, and example rows: `docs/WF10_TABLE_SCHEMAS.md`** (kept there to avoid
+duplication).) — (prior: 2026-06-06 — production reality for the Resilient Router added: 6 tabs, 8 technical
+columns, test-only columns marked non-production, DEC-037.)
 
 ---
 

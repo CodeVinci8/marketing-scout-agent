@@ -5,6 +5,53 @@ Most recent first.
 
 ---
 
+## 2026-06-12 — WF10 v0.2 quality patch (DEC-106/107/108) · WF11 Telegram-preview foundation built (DEC-109/110) · validation/report/Telegram architecture (DEC-111/112/113)
+
+**Agent role:** project-engineer
+
+**What was done (no external calls, $0):**
+- **WF10 v0.2 patch** (`10_competitor_audience_intelligence_aggregator.json`, versionId `…v002-no-data-entity-resolution-20260612`)
+  after the v0.1 operator tests (Test 1: 87→82 rows, 21 profiles, 9 angles, 8 signals, 1 plan, 7 seed rules,
+  $0; repeat +0 rules; Avito filter PASS; **no-data test found the bug** — generic plan with template
+  lead_magnets at rows=0):
+  - **DEC-106 no-data guard:** rows_after_filters=0 → no profiles/angles/signals; one marked `no_data` plan row
+    (`plan_<stamp>_no_data`, empty lists, `source_evidence=rows=0`, `next_action=no_data; broaden filters or
+    source scope`); `agent_requests.result_summary` starts `no_data;`. Seed-on-empty rules preserved.
+  - **DEC-107 entity resolution:** group key company_name → normalized profile_url → canonical listing id from
+    source_url → profile_name → offer_text+platform (fallback) → hash; unnamed same-listing rows collapse to one
+    profile. Append-only snapshots kept (upsert = future v0.3, not trivial/safe in append-only design).
+  - **DEC-108 source_mix:** stats/result_summary/notes carry `source_mix=mixed: live + historical/manual + web
+    pipeline` (+ platforms/tabs seen in stats) — reports never imply all data was collected live.
+  - **Verified:** vm-sandbox simulation (no URL global) — **31 checks PASS** (normal-run regression, no-data
+    path, listing-collapse, seed skip, determinism, column widths 17/9/14/12/5, 21-col agent_requests).
+- **WF11 built** (`11_social_source_connector_foundation.json`, `active=false`, 17 nodes, DEC-109/110): first
+  non-Avito connector = **Telegram public-channel preview** (decision matrix vs VK/reviews-maps/Dzen in
+  `STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` §5). Fixture-only: `fixture_mode=true`, `live_mode=false`,
+  **no HTTP node** (live branch = error guard); 6 fixture posts (`*_fixture` channels): 3 competitor ads,
+  1 market signal, 1 hard-negative control, 1 in-batch duplicate; WF09 relevance/dedup/audit pattern;
+  writes only agent_requests (21) / raw_market_records (40) / market_record_registry (15); contact policy
+  enforced (verbatim public contacts, evidence URL + `manual_review` in notes). **Verified:** simulation —
+  **31 checks PASS** (counts 6/1 hard-skip/4 unique/1 dup; raw +5 / registry +4; repeat run unique=0;
+  live guard throws; determinism; no real IDs/keys).
+- **New docs:** `GOOGLE_SHEETS_VALIDATION_PLAN.md` (DEC-111 — validation_lists helper tab, 25 named lists,
+  exact dropdown placement on raw/agent_requests/business/WF10 tabs; dropdowns = validation rules, not new
+  columns), `REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md` + `MARKET_INTELLIGENCE_REPORT_SCHEMA.md` (20-col proposed
+  reports tab) + `TELEGRAM_CONTROL_AGENT_PLAN.md` (DEC-112 — Claude in the report/control layer, NOT in WF10;
+  Telegram = control/report interface, never a parser), `N8N_WORKFLOW_11_SOCIAL_SOURCE_CONNECTOR_FOUNDATION_RU.md`.
+- **DEC-113:** MVP framing — connectors → raw_market_records → WF08 → WF10 → report/Telegram summary → later
+  Control Kernel; Avito is the first stable live source, not the product.
+- **Updated docs:** STAGE_3_4 strategy (§5 foundation), SOCIAL_CLASSIFIED_SOURCE_MATRIX, WF10 plan/schemas/RU
+  guide, TABLE_SCHEMA, DECISIONS (DEC-106…113), ROADMAP (3.4/3.5/Stage 4/Stage 5), NEXT_ACTIONS, COSTS,
+  AGENT_CAPABILITIES, FUTURE_CAPABILITIES_BACKLOG, core/hot/recent.
+- **Untouched:** WF04/05/06/07/08/09 (Stage 3.1/3.2/3.3 behavior unchanged); both new/patched workflows
+  `active=false`, JSON validated.
+
+**Next:** operator commit → re-import WF10 v0.2 (retest normal + no-data) → import WF11 (fixture tests 1/2 +
+guard test) → optional WF08 handoff on the WF11 fixture run → apply validation_lists → then (gated) WF11 live
+transport patch / Report Builder v1.
+
+---
+
 ## 2026-06-11 (session 3) — STAGE 3.3 CLOSED (DEC-102) · WF09 v006 sandbox-safe canonical URLs (DEC-103) · WF10 v0.1 built (DEC-104) · backlog (DEC-105)
 
 **Agent role:** project-engineer

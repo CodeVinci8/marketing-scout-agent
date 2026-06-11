@@ -4,9 +4,15 @@
 (DEC-102: Avito is a stable live source). Implementation: `n8n/workflows/10_competitor_audience_intelligence_aggregator.json`
 (`active=false`, deterministic, $0); exact column specs in `docs/WF10_TABLE_SCHEMAS.md`; operator guide in
 `docs/N8N_WORKFLOW_10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_RU.md`. §4 step 4 (bounded LLM synthesis) is
-**deferred to v0.2** — v0.1 uses deterministic templates only. This document remains the design rationale.
-**Date:** 2026-06-11 · **Decisions:** DEC-099 (WF10 planned after one stable live source), DEC-101 (Competitor Ad
-Intelligence is first-class).
+**deferred** — v0.1/v0.2 use deterministic templates only. This document remains the design rationale.
+**v0.2 PATCH (2026-06-12, DEC-106/107/108):** no-data guard (rows_after_filters=0 → only a clearly marked
+`no_data` plan row, `result_summary` starts with `no_data`), improved entity resolution (company_name →
+profile_url → canonical listing id from source_url → profile_name → offer+platform fallback), and a mandatory
+`source_mix` label (`mixed: live + historical/manual + web pipeline`) in agent_requests. **LLM synthesis is now
+explicitly OUT of WF10 by default (DEC-112)** — Claude belongs in the report/control layer
+(`docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`); WF10 stays the deterministic fact core.
+**Date:** 2026-06-11, updated 2026-06-12 · **Decisions:** DEC-099 (WF10 planned after one stable live source),
+DEC-101 (Competitor Ad Intelligence is first-class), DEC-106/107/108 (v0.2), DEC-112 (Claude placement).
 **Related:** `docs/COMPETITOR_AD_INTELLIGENCE_PLAN.md`, `docs/NICHE_PACK_SYSTEM_PLAN.md`,
 `docs/CONTACT_AND_OUTREACH_POLICY.md`, `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md`.
 

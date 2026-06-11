@@ -22,7 +22,9 @@ no external calls without per-service approval, contact policy binding.
 - **First safe implementation step:** a deterministic "request planner" doc + dry-run mode: parse a written
   request into `{intent, niche, workflows, estimated_cost, approval_needed}` and write a `status=needs_review`
   row to `agent_requests` — no execution.
-- **Related:** `docs/AGENT_TOOL_ARCHITECTURE.md`, `docs/BUSINESS_SCOUT_AGENT_VISION.md`, `docs/ROADMAP.md` Stage 4.
+- **Related:** `docs/AGENT_TOOL_ARCHITECTURE.md`, `docs/BUSINESS_SCOUT_AGENT_VISION.md`, `docs/ROADMAP.md` Stage 4,
+  `docs/TELEGRAM_CONTROL_AGENT_PLAN.md` (2026-06-12 — the slash-command Telegram control/report bot is the
+  kernel's thin transport predecessor; Telegram is a control interface, never a parser).
 
 ## 2. Niche Pack System
 
@@ -54,7 +56,9 @@ no external calls without per-service approval, contact policy binding.
 
 ## 4. Report & Diagram Builder
 
-- **Status:** idea / design-not-started.
+- **Status:** 📐 **architecture written (2026-06-12, DEC-112)** — `docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`
+  + `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md` (proposed `market_intelligence_reports` tab, 20 cols);
+  build not started. Claude is optional and disabled by default; WF10 stays the deterministic fact core.
 - **Purpose:** weekly summaries and competitor reports from WF10 tables — Markdown first, then CSV/Sheets
   export, PDF later; diagrams: sources map, offer frequency, pain frequency, competitor positioning quadrant.
 - **Prerequisites:** WF10 producing real data over ≥2 windows (trend needs two points); Telegram notification
@@ -80,7 +84,10 @@ no external calls without per-service approval, contact policy binding.
 
 ## 6. WF10 Competitor/Audience Intelligence Aggregator
 
-- **Status:** ✅ **v0.1 BUILT (DEC-104), under operator test** — deterministic, $0, `active=false`.
+- **Status:** ✅ **v0.2 PATCHED (2026-06-12, DEC-106/107/108)** after v0.1 operator tests — no-data guard,
+  improved entity resolution (profile_url/canonical-listing-id before offer text), mandatory `source_mix`
+  label. Deterministic, $0, `active=false`. **In-WF10 LLM synthesis is dropped (DEC-112)** — Claude moved to
+  the report/control layer (backlog item 4). Remaining v0.3 idea: upsert competitor_profiles.
 - **Purpose:** aggregate `monitor_queue`/`content_queue`/`review_queue` into `competitor_profiles`,
   `market_angles`, `audience_activity_signals`, `content_positioning_plan` (+ `source_confidence_rules` seed).
 - **Prerequisites (met):** Stage 3.3 closed — one stable live source (Avito) feeding WF08-routed rows.

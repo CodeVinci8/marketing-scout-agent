@@ -1,9 +1,12 @@
 # STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md — Social Source Parsing Strategy
 
-**Status:** 📐 STRATEGY ONLY — **no parser is built or approved by this document.** No external API call, no
-credential, no actor run is authorized here.
-**Stage:** 3.4 of the Business Scout Agent · **Date:** 2026-06-11
-**Decisions:** DEC-096 (one-source-at-a-time connector pattern; do NOT build all social parsers at once).
+**Status:** 🔧 STRATEGY + IMPLEMENTATION FOUNDATION — §1–4 remain strategy; **§5 (2026-06-12, DEC-109/110)
+selects the first non-Avito source and documents the built WF11 foundation** (`active=false`, fixture-only,
+no external call). No live API call, credential, or actor run is authorized by this document.
+**Stage:** 3.4 of the Business Scout Agent · **Date:** 2026-06-11, updated 2026-06-12
+**Decisions:** DEC-096 (one-source-at-a-time connector pattern; do NOT build all social parsers at once),
+DEC-109 (first non-Avito connector = Telegram public-channel preview), DEC-110 (WF11 foundation built,
+fixture-first, live mode guarded/not implemented).
 **Related:** `docs/SOCIAL_CLASSIFIED_SOURCE_MATRIX.md` (Stage 3.0 evaluation), `docs/CONTACT_AND_OUTREACH_POLICY.md`,
 `docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md`, `docs/NICHE_PACK_SYSTEM_PLAN.md`,
 `docs/COMPETITOR_AD_INTELLIGENCE_PLAN.md`.
@@ -144,8 +147,80 @@ competitor-side, no lead signals; benefits from WF10 being live first to absorb 
 Each step gets its own connector workflow, fixture set, niche-pack-driven relevance rules
 (`docs/NICHE_PACK_SYSTEM_PLAN.md`), and live smoke with explicit operator approval before any external call.
 
-## 4. Non-goals of Stage 3.4
+## 4. Non-goals of Stage 3.4 (§1–4)
 
-- No parser implementation, no workflow creation, no actor selection in this document.
+- §1–4 implement no parser, create no workflow, select no actor. (§5 below adds the **fixture-only WF11
+  foundation** — still no external call, no actor, no credential.)
 - No browser/session scraping of any platform without an explicit, separate risk review and operator approval.
 - No private-data collection of any kind — `docs/CONTACT_AND_OUTREACH_POLICY.md` is binding for every source above.
+
+---
+
+## 5. Implementation foundation (2026-06-12, DEC-109/110) — first non-Avito connector
+
+### 5.1 The mandatory connector contract
+
+Every connector — present and future — follows exactly one pipeline. No source skips a stage, no source
+writes anywhere else:
+
+```
+source connector (fixture-first, active=false, $0 by default)
+  → agent_requests            (1 row per run; counts in result_summary)
+  → raw_market_records        (40 cols; unique + duplicate-audit only)
+  → market_record_registry    (15 cols; unique only — the dedup ledger)
+  → WF08 Touchpoint Analyzer  (manual handoff, deterministic_first)
+  → WF10 aggregator           (market-level intelligence tabs)
+  → report / Telegram layer   (planned — docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md)
+```
+
+### 5.2 First-source comparison (decision basis)
+
+Candidates scored against the stakeholder MVP (competitor ad intelligence first, audience pains second,
+public contacts third; fixture-first testability mandatory):
+
+| Criterion | A. Telegram channel preview | B. VK public posts/groups | C. Reviews/maps | D. Dzen |
+|---|---|---|---|---|
+| Public data availability | high — `t.me/s/<channel>` pages, no login | high, but needs VK account/app/token | high (org cards public) | medium (dynamic comments) |
+| Compliance risk | **low** (public preview, no sessions, no member data) | low-med (token scopes, person-data in comments) | medium (scraping ToS) | medium |
+| Implementation complexity | **low** — reuses existing Firecrawl/HTTP transport | medium — new API integration + token lifecycle | low-med — reuses WF04-style Firecrawl | medium |
+| Data quality | med-high (clean ad copy; recent posts only, no comments) | high (structured API JSON) | high (org cards), high-value review text | medium (longreads need trimming) |
+| Competitor intel value | **high** — channels are pure competitor ad copy | high | high (client-voiced strengths/weaknesses) | med-high (content/SEO) |
+| Audience pain value | medium (channels are one-way; pains need groups) | med-high (comments) | high (reviews = objection bank) | low-med |
+| Public contact availability | sometimes (bio/post handles) | profile links (aggregate_only default) | **good** (org cards) | rare |
+| Cost | ~Firecrawl page cost (cents) | free within API limits (+setup) | Firecrawl per page | Firecrawl per page |
+| Fixture-first testability | **high** — preview posts model trivially | high (API JSON fixtures) | high | medium |
+| Stakeholder MVP usefulness | **high** — direct competitor-ad copy for WF10 angles | high but slower to start | high but post-purchase only (no leads) | medium |
+
+### 5.3 Decision (DEC-109): Telegram public-channel preview first
+
+**Telegram public-channel preview is the first non-Avito connector.** Rationale: highest competitor-ad-copy
+value per unit of risk and per unit of implementation effort — public pages, no login/session/token, no member
+data, reuses the existing Firecrawl/HTTP transport, niche competitors actively run Telegram channels, and the
+fixture model is trivial (posts are plain text + URL + date). It also extends WF10's `market_angles` with a
+second platform immediately, which is exactly what the MVP report layer needs. VK stays #3 (token/app setup
+cost; person data in comments demands stricter handling), reviews/maps #4 (high value, but purely
+competitor-side and benefits from WF10 maturity), Dzen #5, Instagram deferred (#6, separate risk review).
+
+### 5.4 What was built (DEC-110): WF11 foundation — fixture-only
+
+`n8n/workflows/11_social_source_connector_foundation.json` (`active=false`, 17 nodes, manual trigger):
+- `fixture_mode=true`, `live_mode=false` by default; **the workflow contains no HTTP node at all** — the live
+  branch is a guard node that fails with an explanatory error. Enabling live requires explicit operator
+  approval + transport choice (Firecrawl fetch of `t.me/s/<channel>` preferred) + credential + a preview-DOM
+  parser patch tested on real-markup fixtures.
+- 6 fixture posts (channels suffixed `_fixture`, not real): 3 competitor ads, 1 weak finance market signal,
+  1 hard-negative control (legal-address ad → hard-skipped before raw/registry), 1 in-batch duplicate.
+- Writes **only** `agent_requests` (21) / `raw_market_records` (40) / `market_record_registry` (15);
+  WF09's dedup/audit/result_summary pattern; no auto-handoff to WF08.
+- Contact policy enforced: public contacts verbatim from post text only, evidence URL recorded, default
+  `manual_review`; no groups, no private chats, no MTProto, no outreach.
+- Build simulation: 31 checks PASS (counts 6/6/1/5/4/1, column widths 40/15/21, repeat-run dedup, live guard,
+  determinism). Guide: `docs/N8N_WORKFLOW_11_SOCIAL_SOURCE_CONNECTOR_FOUNDATION_RU.md`.
+
+### 5.5 Next steps for this connector (in order, each gated)
+
+1. Operator fixture test 1 + repeat test (expected counts in the RU guide) — $0.
+2. WF08 manual handoff on the fixture run (`deterministic_first`, Claude=0) — verify routing.
+3. **Only after explicit approval:** live preview transport patch (real `t.me/s/` markup fixtures first,
+   then 1–2 operator-listed real channels, ≤20 posts, cost recorded).
+4. Stabilize on live data before starting VK (#3) — one source at a time (DEC-096).

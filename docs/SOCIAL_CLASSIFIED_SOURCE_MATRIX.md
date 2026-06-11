@@ -29,6 +29,14 @@ external API call, no credential, no actor run.
 > **Decision: one source at a time** (Avito stabilize → Telegram public feasibility → VK API → reviews/maps →
 > Dzen → Instagram after a separate risk review). Contacts: `docs/CONTACT_AND_OUTREACH_POLICY.md` is binding.
 
+> **Stage 3.4 step 2 STARTED (2026-06-12, DEC-109/110):** the first non-Avito connector is **Telegram
+> public-channel preview** — `Workflow 11 — Social Source Connector Foundation` is built **fixture-only**
+> (`active=false`, `fixture_mode=true`, `live_mode=false`, no HTTP node, $0). It supersedes the older §2
+> Telegram sketch below for build purposes: the chosen path is the **public `t.me/s/<channel>` preview**, NOT
+> the MTProto/client route (which stays a deferred, high-risk last resort behind a separate risk review).
+> See `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` §5 and
+> `docs/N8N_WORKFLOW_11_SOCIAL_SOURCE_CONNECTOR_FOUNDATION_RU.md`.
+
 > **REFRAME (2026-06-08, DEC-078):** sources are evaluated for **touchpoints** (hot leads, warm touchpoints,
 > competitor audiences, comments, semantic/ad signals), not hot leads alone — the first domain of the
 > **Business Scout Agent**. Added: **Yandex Dzen** and **Competitor audience / public commenters** (public data
