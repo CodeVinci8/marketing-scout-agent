@@ -187,9 +187,14 @@ Three cost axes with different drivers and spend gates — tracked **separately*
   filter** means future runs spend the same Apify cost but write only relevant rows; hard-skipped false positives
   cost nothing extra (filtering is Code-node logic, $0). Live retest #3 will be the third real Apify call —
   approve + record cost before running.
-- **Planned (docs only, $0 until built/approved):** WF10 aggregator (DEC-099 — future LLM synthesis cost bounded
-  and approved per run), Stage 3.4 social sources (DEC-096 — each source's cost assessed in
-  `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` before any build), niche packs (DEC-100 — $0, config files).
+- **Live run #3 (2026-06-11, `avito_req_20260611_184324`) — third real Apify call, Stage 3.3 CLOSED (DEC-102):**
+  10 items received, 7 false positives filtered at $0 extra (Code-node logic), 3 relevant rows; WF08 handoff was
+  deterministic — **Claude cost $0**. Record the actual actor cost (operator: Apify usage — TODO_OPERATOR_FILL).
+- **WF10 v0.1 (DEC-104) = $0 always:** deterministic aggregation only — no Claude/Apify/Firecrawl/external API.
+  Future v0.2 LLM synthesis would be bounded and operator-approved per run; not built.
+- **Planned (docs only, $0 until built/approved):** Stage 3.4 social sources (DEC-096 — each source's cost assessed
+  in `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` before any build), niche packs (DEC-100 — $0, config files),
+  backlog items in `docs/FUTURE_CAPABILITIES_BACKLOG.md` (DEC-105).
 
 ---
 

@@ -4,7 +4,46 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-11, session 2) — Live transport PASS but business relevance FAILED (2 legal-address false positives) → DEC-095 relevance filter built → re-import WF09 v005 + LIVE RETEST #3; Stage 3.4 architecture pack created
+## CURRENT PRIORITY (2026-06-11, session 3) — ✅ STAGE 3.3 CLOSED (DEC-102) → WF09 v006 canonical-URL fix (DEC-103) → 🔧 WF10 v0.1 BUILT (DEC-104) → import + first WF10 run
+
+**Stage 3.3 CLOSED / APPROVED (DEC-102):** live run #3 (`avito_req_20260611_184324`) — 10/10 valid, 7 false
+positives hard-skipped **before** raw/registry, 3 relevant brokers (2 unique + 1 duplicate), registry +2 exact;
+WF08 live handoff: **monitor_queue +2 / technical_errors=0 / Claude=0**, full ad-intelligence fields. All closure
+criteria pass. Avito = first stable live source.
+
+**WF09 v006 (DEC-103):** the remaining `?context=` in stored URLs was root-caused (the n8n Code sandbox lacks the
+`URL` global; v005's try/catch silently kept the query and blanked slug evidence) → `normUrl`/`canonUrl`/`slugText`
+rewritten as pure regex/string functions; verified in a URL-free vm sandbox (12 checks PASS, fixture/duplicate/
+relevance unchanged, dedup stable).
+
+**WF10 v0.1 BUILT (DEC-104, gate DEC-099 satisfied):** deterministic Competitor/Audience Intelligence Aggregator
+(`active=false`, $0, no LLM/external calls) — monitor/content/review → competitor_profiles / market_angles /
+audience_activity_signals / content_positioning_plan / source_confidence_rules (+1 agent_requests). Simulated:
+19 checks PASS on the real live monitor rows. Schemas: `docs/WF10_TABLE_SCHEMAS.md`. Backlog of strategic ideas:
+`docs/FUTURE_CAPABILITIES_BACKLOG.md` (DEC-105).
+
+**Next, in order:**
+1. [ ] **Commit this session** (WF09 v006 + WF10 + docs).
+2. [ ] **Re-import WF09 v006** (do NOT activate; rebind Sheets credential + Spreadsheet ID). Canonical-URL watch
+   item: on the next routine live run confirm `source_url`/`post_url` carry no `?context=`.
+3. [ ] **Create the 5 WF10 tabs** with headers from `docs/WF10_TABLE_SCHEMAS.md`: competitor_profiles (17),
+   market_angles (9), audience_activity_signals (14), content_positioning_plan (12), source_confidence_rules (5).
+4. [ ] **Import WF10** (do NOT activate); rebind the Google Sheets credential on all 10 sheet nodes; set the real
+   Spreadsheet ID.
+5. [ ] **WF10 Test 1 (first run, $0):** Execute once → expect competitor_profiles +2 (the live brokers; priced row
+   confidence 80), market_angles ≥3 (price anchor / speed / по договору / после отказов), audience_activity_signals
+   +1 (avito, aggregate-only), content_positioning_plan +1, source_confidence_rules +7 (seed), agent_requests +1
+   (completed, $0). Fill results into `docs/N8N_WORKFLOW_10_…_RU.md` §4 expectations.
+6. [ ] **WF10 Test 2 (repeat run):** source_confidence_rules **+0** (seed only when empty); other tabs get a new
+   snapshot (append-only v0.1).
+7. [ ] **Then Stage 3.4 step 2:** Telegram public-channel feasibility (strategy written, no build without approval).
+
+> Still NOT built/approved: niche packs (YAML), Telegram/VK/Dzen/Instagram parsers, Telegram Control Bot,
+> report builder, market graph, outreach/auto-DM (forbidden by default — DEC-098), scheduled runs, WF10 LLM synthesis.
+
+---
+
+## PRIOR PRIORITY (2026-06-11, session 2) — Live transport PASS but business relevance FAILED (2 legal-address false positives) → DEC-095 relevance filter built → re-import WF09 v005 + LIVE RETEST #3; Stage 3.4 architecture pack created
 
 **Live retest #2 (`avito_req_20260611_001222`, actor `fatihtahta~avito-russia-scraper`) results:**
 `actor_items_received=10; valid_items=10; invalid_items=0; unique=2; duplicates=1; over_pipeline_limit=7` — the

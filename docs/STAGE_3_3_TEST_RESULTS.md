@@ -8,7 +8,43 @@
 
 ---
 
-## RESULTS SO FAR (updated 2026-06-11) — fixture + handoff PASS; live transport PASS; live business relevance FAILED → DEC-095 filter added, retest pending
+## ✅ STAGE 3.3 CLOSED / APPROVED (2026-06-11, DEC-102)
+
+**Live run #3 (Test 3b) — `agent_request_id=avito_req_20260611_184324`, actor `fatihtahta~avito-russia-scraper`: PASS.**
+`actor_items_received=10; structurally_valid_items=10; invalid_items=0; business_relevant_items=3;
+hard_skipped_items=7; unique=2; duplicates=1; over_pipeline_limit=0`.
+- **All 7 hard-skipped false positives (legal-address / query-only) were filtered BEFORE raw/registry writes** —
+  none entered `raw_market_records` or `market_record_registry`.
+- Accepted rows (all genuine credit-broker listings):
+  1. `avito_rec_20260611_184324_4` — `avito_listing_4379480780` — duplicate_in_registry — «Помощь в получении
+     кредита / Кредитный брокер», от 30 000 ₽;
+  2. `avito_rec_20260611_184324_6` — `avito_listing_8000151804` — unique/new — «Помощь с кредитом быстро.
+     Кредитный брокер», от 500 ₽;
+  3. `avito_rec_20260611_184324_7` — `avito_listing_8011965808` — unique/new — «Помощь в получении кредита.
+     Кредитный брокер», Цена договорная.
+- Registry +2 exactly: `avito::classified::avito_listing_8000151804`, `avito::classified::avito_listing_8011965808`.
+
+**Test 4 (WF08 live handoff) — PASS.** Filters `agent_request_id_filter=avito_req_20260611_184324` /
+`platform=avito` / `source_type=classified`, `max_records=10`, `deterministic_first`, all LLM flags false →
+**monitor_queue +2, technical_errors=0, Claude calls=0**; both monitor rows carry full ad-intelligence fields
+(terms «от 500 ₽» / «Цена договорная», competitor_strength=79, lead_signal_score=1, content_idea_score=45,
+quality_score=70, `parse_method=deterministic_pre_route`).
+
+**Closure criteria — all PASS:** fixture first run ✅ · fixture duplicate ✅ · fixture WF08 handoff ✅ · live Apify
+transport ✅ · live business relevance filter ✅ · hard false positives skipped pre-raw/registry ✅ · raw/registry
+consistency ✅ · WF08 live handoff ✅ · technical_errors=0 ✅ · Claude cost $0 ✅.
+
+**Issue found & fixed post-closure (DEC-103, WF09 v006):** stored `source_url`/`post_url` still carried Avito
+`?context=` tracking params. Root cause: the URL helpers depended on the `new URL()` constructor, which the n8n
+Code-node sandbox does not expose — the try/catch fallback silently kept the query (and blanked slug evidence).
+v006 rewrites `normUrl`/`canonUrl`/`slugText` as pure regex/string functions; verified in a URL-global-free vm
+sandbox (12 checks PASS: canonical URLs in raw/registry, fixture/duplicate/relevance behavior unchanged, dedup_key
+stable). **Watch item for the next routine live run:** confirm stored URLs have no `?context=`. Cosmetic only —
+dedup (listing-id-based), relevance, and routing were unaffected.
+
+---
+
+## HISTORY — fixture + handoff PASS; live transport PASS; live business relevance FAILED → DEC-095 filter added (retest #3 = PASS above)
 
 > **Fixture-mode only — no real Avito scrape happened.** `fixture_mode=true`, `live_mode=false`, source cost $0, the
 > Apify HTTP node did not run. These runs prove the **pipeline shape** (Avito-like listing → `raw_market_records` →
@@ -196,7 +232,7 @@ scraping; respect platform ToS.
 
 ---
 
-## TEST 3b — LIVE retest #3 with the DEC-095 business relevance filter — ⏳ AWAITING OPERATOR RUN
+## TEST 3b — LIVE retest #3 with the DEC-095 business relevance filter — ✅ PASS (2026-06-11, `avito_req_20260611_184324`; see closure block at the top; canonical-URL issue → DEC-103 v006)
 
 > Attempt #2 (`avito_req_20260611_001222`) passed transport (10/10 valid) but wrote 2 legal-address false
 > positives. The v005 patch must be re-imported before this retest.

@@ -1,6 +1,8 @@
 # STAGE_3_3_SOURCE_DECISION_PLAN.md — First Real Source Connector Decision
 
-**Status:** ✅ **AVITO/CLASSIFIEDS SELECTED — Workflow 09 BUILT (fixture mode, `active=false`), UNDER TEST (DEC-090).**
+**Status:** ✅ **AVITO/CLASSIFIEDS SELECTED, BUILT, AND STAGE 3.3 CLOSED / APPROVED (DEC-090 → DEC-102, 2026-06-11).**
+Avito is the project's **first stable live source** (live run `avito_req_20260611_184324`: relevance filter PASS,
+WF08 handoff PASS, $0 Claude). Next per DEC-096: Telegram public-channel feasibility (Stage 3.4 step 2).
 **Stage:** 3.3 (First real source connector) of the Business Scout Agent.
 **Date:** 2026-06-10 · **Decisions:** DEC-090 (Avito connector built) · DEC-084 (recommendation) · prior: DEC-077/078/079/080/081/082/089.
 **Related:** `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`, `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`,
