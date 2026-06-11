@@ -1,6 +1,11 @@
 # STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md — Stage 3.3 Plan
 
-**Status:** 🔧 BUILT + LIVE RELEVANCE FILTER (DEC-095, v005); fixture + WF08 handoff PASS; **live transport PASS (retest #2), live business relevance FAILED → filter added, retest #3 pending** — `n8n/workflows/09_avito_classifieds_listing_connector.json`, `active=false`.
+**Status:** ✅ **STAGE 3.3 CLOSED / APPROVED (2026-06-11, DEC-102)** — live retest #3 (`avito_req_20260611_184324`)
+PASS: 10/10 valid, 7 false positives hard-skipped before raw/registry, 3 relevant brokers (2 unique + 1 duplicate),
+registry +2 exact; WF08 live handoff monitor_queue +2 / technical_errors=0 / Claude=0. Post-closure polish: WF09
+v006 (DEC-103) makes URL canonicalization sandbox-safe (`?context=` leak root-caused to the missing `URL` global in
+the n8n Code sandbox); watch item — verify canonical URLs on the next routine live run.
+`n8n/workflows/09_avito_classifieds_listing_connector.json`, `active=false`.
 
 > **Live retest #2 + business relevance filter (DEC-095, 2026-06-11):** retest #2
 > (`avito_req_20260611_001222`) proved the Apify transport works (`actor_items_received=10; valid_items=10;

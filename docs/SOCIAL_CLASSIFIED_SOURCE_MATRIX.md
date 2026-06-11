@@ -39,7 +39,7 @@ external API call, no credential, no actor run.
 
 ---
 
-## 1. Avito / Classifieds  ✅ SELECTED & BUILT — Workflow 09 (fixture mode, `active=false`, DEC-090)
+## 1. Avito / Classifieds  ✅ SELECTED, BUILT & **STAGE 3.3 CLOSED (DEC-102, 2026-06-11)** — Workflow 09 live-proven (`active=false`)
 - **Attributes:** ease **high** · business value **high** (competitors / offers / semantics / ad wording) · lead
   value **medium/low** (unless a listing shows direct client demand) · risk **medium** (scraping/marketplace ToS) ·
   **recommended stage 3.3**.

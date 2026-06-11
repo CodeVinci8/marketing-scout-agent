@@ -112,9 +112,29 @@ Legend: lead = lead-signal value, comp = competitor-intelligence value, contact 
 | Contacts | public org contacts |
 | **Priority** | continuous — feeds WF10 alongside connectors; no new build needed. |
 
+## 2b. Compact decision table
+
+| Source | Access method (chosen path) | Lead value | Competitor value | Public contacts | Risk | Cost | Reliability | Priority | First safe test |
+|--------|------------------------------|-----------|------------------|-----------------|------|------|-------------|----------|-----------------|
+| Avito/Classifieds | Apify actor (✅ built, WF09 — the template) | med/low | **high** | rare (listings hide phones — never bypass) | med | actor per run (measured) | proven live (Stage 3.3 closed) | **#1 — done/stabilized** | routine live run, watch canonical URLs |
+| Telegram **public channels** (preview) | `t.me/s/<channel>` preview via Firecrawl/HTTP — **distinct from groups/client-session** | med | **high** (competitor ad copy) | sometimes (bio/post) | **low** (public preview, no login) | ~Firecrawl page cost | recent posts only, no comments | **#2 — next** | fixture connector + preview parse of 1–2 operator-listed channels |
+| Telegram groups (MTProto client) | client session — **high-risk last resort, NOT planned** | med-high | med | rare | **high** (account ban/ToS) | low $ / high risk | fragile | deferred (separate risk review) | none until risk review |
+| VK public groups/posts | **official VK API** (`wall.get`/`wall.getComments`) — distinct from scraping/actors | med-high | **high** | profile links (aggregate_only default) | low-med (token/limits) | free within limits | high (structured API) | **#3** | API token + read 1 public group, fixture-first |
+| Reviews/maps (Yandex/2GIS/Otzovik/Banki/Zoon) | manual org-URL list + Firecrawl (existing pipeline) | low | **high — emphasized**: client-voiced strengths/weaknesses + objection bank; org cards = public contacts | **good** (org cards) | med (ToS) | Firecrawl per page | high (stable pages) | **#4** | 3–5 competitor org URLs through the WF04-style parse |
+| Dzen | Firecrawl of public articles | low-med | med-high (**content/SEO semantics, not a lead source**) | rare | med (dynamic comments) | Firecrawl per page | medium | **#5** | parse 2–3 competitor articles, no comments |
+| Instagram | **deferred pending separate risk review**; meanwhile manual paste via WF07 | low-med | med-high | bio only | **highest** (Meta anti-bot/ToS) | high (fragile actors) | low | **#6 — deferred** | none; manual WF07 paste only |
+
+All sources follow the same pattern: **source connector → `raw_market_records` → Workflow 08 → WF10/report.**
+No all-social-parsers-at-once build (DEC-096).
+
+**Why Telegram public-channel preview is #2:** highest competitor-ad-copy value per unit of risk — public pages,
+no login/session, no member data, reuses the existing Firecrawl transport, and the niche's competitors actively
+run Telegram channels. VK is #3 (higher setup cost: account/app/token) and reviews/maps #4 (high value but purely
+competitor-side, no lead signals; benefits from WF10 being live first to absorb the strengths/weaknesses data).
+
 ## 3. Recommended order (DEC-096)
 
-1. **Stabilize the Avito live source** (Stage 3.3 — relevance filter live retest, then regular runs).
+1. **Stabilize the Avito live source** ✅ done — Stage 3.3 CLOSED (DEC-102); keep routine runs + canonical-URL watch item.
 2. **Telegram public source feasibility** (preview parsing of a manual channel list; no MTProto).
 3. **VK public groups/posts** (official API).
 4. **Review platforms / maps** (manual org list + Firecrawl).

@@ -73,7 +73,9 @@ contact_policy_overrides: {}   # tighten-only
 
 ## 6. Migration order
 
-1. Stage 3.3 closes with hardcoded credit-broker rules (acceptable for one niche, one source).
+1. Stage 3.3 closed (DEC-102) with hardcoded credit-broker rules (acceptable for one niche, one source).
+   **WF10 v0.1 (DEC-104) also ships with the hardcoded vocabulary** (angle taxonomy + keyword/pain lists) —
+   a third consumer strengthening the case for extraction at the next trigger.
 2. When the **second source connector** (Telegram) or the **second niche** appears — extract the rules into
    `niches/credit_brokerage.yaml` and refit WF09/WF08 to read them (behavior-preserving refactor, fixture-tested).
 3. WF10 is built pack-aware from day one.

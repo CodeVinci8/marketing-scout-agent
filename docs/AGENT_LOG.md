@@ -5,6 +5,25 @@ Most recent first.
 
 ---
 
+## 2026-06-11 (session 3) — STAGE 3.3 CLOSED (DEC-102) · WF09 v006 sandbox-safe canonical URLs (DEC-103) · WF10 v0.1 built (DEC-104) · backlog (DEC-105)
+
+**Agent role:** project-engineer
+**Session goal:** close Stage 3.3 from the operator's live results, fix the remaining `?context=` URL issue, preserve strategic ideas, and build WF10 v0.1 (gate satisfied). **No external API call this session.**
+
+**Stage 3.3 CLOSED / APPROVED (DEC-102):** live run #3 `avito_req_20260611_184324` — `actor_items_received=10; structurally_valid_items=10; invalid_items=0; business_relevant_items=3; hard_skipped_items=7; unique=2; duplicates=1; over_pipeline_limit=0`; all 7 false positives filtered **before** raw/registry; accepted rows = 3 genuine credit-broker listings (1 duplicate `avito_listing_4379480780`, 2 unique `8000151804`/`8011965808`); registry +2 exact. WF08 live handoff (filtered, deterministic_first): **monitor_queue +2 / technical_errors=0 / Claude=0**, full ad-intel fields (terms «от 500 ₽»/«Цена договорная», strength 79, content_idea 45). All 10 closure criteria pass.
+
+**WF09 v006 (DEC-103, `…v006-canonical-url-sandbox-safe-20260611`):** root-caused the `?context=` leak — v005's `normUrl`/`canonUrl`/`slugText` used `new URL()`, which the n8n Code sandbox doesn't expose; the try/catch fallbacks silently kept tracking params and blanked decoded-slug evidence. Rewrote all three as pure regex/string functions (canonical strip only when the path carries a listing id; non-listing URLs untouched; dedup_key unchanged). **Verified in a vm context WITHOUT the URL global (12 checks PASS):** fixture first/duplicate runs byte-compatible (6/6, monitor 5/skipped 1, registry +0 on repeat); live batch modeled on run #3 → accepted rows + registry rows canonical (no `?`), 4 hard_skipped / 1 duplicate / 2 unique pattern intact; slug evidence works sandbox-free.
+
+**WF10 v0.1 BUILT (DEC-104, `10_competitor_audience_intelligence_aggregator.json`, JSON valid, active=false, 22 nodes):** deterministic Competitor/Audience Intelligence Aggregator — $0, no Claude/Apify/Firecrawl/external API. Config: `time_window_days=30`, `niche_id='credit_brokerage'`, `platform_filter=''`, `region_filter='Москва/МО'`, `service_type_filter=''`; MSK `+03:00`, no bare toISOString. Reads monitor/content/review (+ source_confidence_rules for seed check, all `alwaysOutputData`+continue); groups competitors (company_name → profile_name → normalized offer_text+platform → listing id); writes competitor_profiles (17) / market_angles (9; speed, price-anchor, no-prepayment, result-payment, after-refusals, bad-KI, business-finance, mortgage-refinance, guarantees) / audience_activity_signals (14, aggregate-only, author counts never invented) / content_positioning_plan (12, deterministic templates, no-outreach next_action) / source_confidence_rules (5, 7 seed rules only when tab empty) + 1 agent_requests row (21 cols, $0). **Verified (vm sandbox, 19 checks PASS):** window+region filtering, 2 profiles from the real live monitor rows (priced → confidence 80), angles with frequency/examples, seed-skip when populated, exact column counts 17/9/14/12/5, repeated-run determinism, no contacts/outreach anywhere.
+
+**New docs:** `WF10_TABLE_SCHEMAS.md` (build-ready column specs, keys, update strategy, examples, report flow), `FUTURE_CAPABILITIES_BACKLOG.md` (DEC-105 — Control Kernel, Niche Packs, Market Graph [Sheets-first], Report & Diagram Builder, Source/Budget Planner, WF10, Contact Handoff Layer; each with status/purpose/prereqs/risks/first-safe-step), `N8N_WORKFLOW_10_…_RU.md` (operator guide). **Stage 3.4 strategy polished:** compact decision table (access/lead/comp/contacts/risk/cost/reliability/priority/first-test per source); Telegram preview vs client-session split; VK API vs scraping split; reviews/maps emphasized; Telegram-preview-#2 justification. **Contact policy verified — matches operator intent, no edit needed.**
+
+**Docs updated:** STAGE_3_3_TEST_RESULTS (closure block + Test 3b PASS), STAGE_3_3 plan, source decision, WF09 RU (v006 + canonical rule), WF10 plan (built banner), NICHE_PACK (3rd hardcoded consumer), COMPETITOR_AD_INTELLIGENCE, LEAD_DISCOVERY_ARCHITECTURE, SOCIAL_CLASSIFIED_SOURCE_MATRIX, TABLE_SCHEMA (WF10 tabs pointer), DECISIONS (DEC-102…105), NEXT_ACTIONS, COSTS, AGENT_CAPABILITIES, ROADMAP (3.3 closed; 3.5 built), AGENT_LOG, core/hot/recent.
+
+**Next operator action:** commit → re-import WF09 v006 → create the 5 WF10 tabs (headers from WF10_TABLE_SCHEMAS) → import WF10 → first run ($0; expect profiles +2, angles ≥3, signals +1, plan +1, rules +7, agent_requests +1) → repeat run (rules +0) → then Stage 3.4 step 2 (Telegram public feasibility, approval-gated).
+
+---
+
 ## 2026-06-11 (session 2) — WF09 live business relevance filter (DEC-095) + Stage 3.4 architecture pack (DEC-096…101)
 
 **Agent role:** project-engineer

@@ -24,8 +24,8 @@
 > exposed business-relevance false positives → WF09 v005 adds a **source-level relevance filter** (DEC-095):
 > connectors now score relevance from listing evidence only (never the search query) and hard-skip false
 > positives before they reach `raw_market_records`. The discovery layer is extended by a documented
-> intelligence layer: **WF10 Market Intelligence Aggregator** (planned, DEC-099 —
-> `docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md`), the **one-source-at-a-time** rollout
+> intelligence layer: **WF10 Market Intelligence Aggregator** (✅ **v0.1 BUILT 2026-06-11, DEC-104** — deterministic,
+> $0; gate satisfied by Stage 3.3 closure DEC-102; schemas `docs/WF10_TABLE_SCHEMAS.md`), the **one-source-at-a-time** rollout
 > strategy for social sources (DEC-096 — `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md`), the binding
 > **Contact & Outreach Policy** (DEC-097/098 — `docs/CONTACT_AND_OUTREACH_POLICY.md`), the **Niche Pack System**
 > plan (DEC-100 — `docs/NICHE_PACK_SYSTEM_PLAN.md`), and **Competitor Ad Intelligence** as a first-class

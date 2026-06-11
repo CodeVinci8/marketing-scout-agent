@@ -1,0 +1,698 @@
+{
+  "name": "10 - Competitor Audience Intelligence Aggregator",
+  "nodes": [
+    {
+      "id": "aa100000-0000-0000-0000-0000000000n1",
+      "name": "Overview Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        -300
+      ],
+      "parameters": {
+        "content": "## 10 — Competitor/Audience Intelligence Aggregator v0.1 — DEC-104\n\nWF08 отвечает «что это за одна запись?». WF10 отвечает «что происходит на рынке в целом?».\n\nЧто делает (ДЕТЕРМИНИРОВАННО, $0, без LLM/Apify/Firecrawl):\n1. Ручной старт → Set Aggregator Config (окно 30 дней; фильтры niche/platform/region/service_type).\n2. Читает бизнес-вкладки: monitor_queue, content_queue, review_queue (+ source_confidence_rules для seed-проверки).\n3. Aggregate Market Intelligence: фильтр по окну/фильтрам → группировка конкурентов (company_name → profile_name → offer_text+platform → listing id из source_url) → извлечение офферов/цен/семантики/болей → подсчёт повторяющихся рекламных углов (скорость, ценовой якорь, без предоплаты, оплата за результат, после отказов, плохая КИ, бизнес-финансы, ипотека/рефинанс, гарантии).\n4. Пишет: competitor_profiles, market_angles, audience_activity_signals (только агрегаты, без авторов/контактов), content_positioning_plan (1 строка/прогон), source_confidence_rules (seed только если вкладка пуста), agent_requests (1 строка, status=completed).\n\nЧЕГО НЕ ДЕЛАЕТ: не вызывает внешние API; не скрейпит; не вызывает Claude; не выдумывает контакты; не рекомендует outreach (DEC-098); не трогает raw_market_records/registry/бизнес-вкладки на запись. active=false; запуск только вручную. Niche-словарь v0.1 захардкожен (credit_brokerage) — вынос в niche packs по NICHE_PACK_SYSTEM_PLAN.",
+        "height": 660,
+        "width": 620,
+        "color": 4
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000n2",
+      "name": "Setup and Test Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        200,
+        -300
+      ],
+      "parameters": {
+        "content": "## Настройка и тест\n\n1. НЕ активировать (active=false).\n2. СОЗДАТЬ 5 новых вкладок с колонками из docs/WF10_TABLE_SCHEMAS.md: competitor_profiles (17), market_angles (9), audience_activity_signals (14), content_positioning_plan (12), source_confidence_rules (5).\n3. После импорта перепривязать креденшл Google Sheets на ВСЕХ sheet-нодах (4 read + 5 append + agent_requests) и заменить PASTE_SPREADSHEET_ID_HERE на реальный ID.\n4. Тест 1 (первый прогон): Execute once → competitor_profiles ≥1 (из live-строк WF09→WF08), market_angles ≥1, audience_activity_signals = по 1 на платформу, content_positioning_plan +1, source_confidence_rules +7 (seed), agent_requests +1 (completed). Стоимость $0 (0 внешних вызовов).\n5. Тест 2 (повтор): source_confidence_rules +0 (seed только при пустой вкладке); остальные вкладки получают новый snapshot (append-only v0.1; upsert — v0.2).\n6. Окно по умолчанию 30 дней; пустой результат → Final Summary подскажет расширить окно/фильтры.\n\nСтоимость: $0 всегда (детерминированная агрегация, без LLM).",
+        "height": 660,
+        "width": 580,
+        "color": 5
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-000000000001",
+      "name": "Manual Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        520
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000cf",
+      "name": "Set Aggregator Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// WF10 aggregator config. Deterministic ids; MSK timestamps; no external calls, no LLM (DEC-104).\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nreturn [{ json: {\n  time_window_days:30,\n  niche_id:'credit_brokerage',\n  platform_filter:'',\n  region_filter:'Москва/МО',\n  service_type_filter:'',\n  max_examples_per_item:3,\n  write_confidence_seed_rules_if_empty:true,\n  requested_by:'operator',\n  request_type:'market_intelligence_aggregation',\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  agent_request_id:'wf10_req_'+stamp,\n  run_id:'wf10_'+stamp,\n  created_at:now\n}}];"
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000r1",
+      "name": "Read monitor_queue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        60,
+        520
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "monitor_queue",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000r2",
+      "name": "Read content_queue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        280,
+        520
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "content_queue",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000r3",
+      "name": "Read review_queue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        500,
+        520
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "review_queue",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000r4",
+      "name": "Read source_confidence_rules",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        720,
+        520
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "source_confidence_rules",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000ag",
+      "name": "Aggregate Market Intelligence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// WF10 v0.1 — DETERMINISTIC market intelligence aggregation (DEC-104). No LLM, no external calls, $0.\n// WF08 answers \"what is this one record?\"; WF10 answers \"what is happening in the market overall?\".\n// Aggregate-only audience analysis (CONTACT_AND_OUTREACH_POLICY): no contacts invented, no outreach recommendations.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nfunction hashText(s){s=str(s);let h=5381;for(let i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))>>>0;}return ('00000000'+h.toString(16)).slice(-8);}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction uniqPush(arr,v,max){v=str(v);if(!v)return;if(arr.indexOf(v)<0&&arr.length<(max||9999))arr.push(v);}\nconst cfg=$('Set Aggregator Config').first().json;\nconst now=moscowIsoNow();\nconst stamp=str(cfg.run_id).replace(/^wf10_/,'');\nconst windowDays=Number(cfg.time_window_days)||30;\nconst cutoffMs=Date.now()-windowDays*86400000;\nconst maxEx=Number(cfg.max_examples_per_item)||3;\nconst pf=low(cfg.platform_filter);\nconst stf=low(cfg.service_type_filter);\nconst rf=low(cfg.region_filter);\nfunction readTab(node,tab){let out=[];try{out=$(node).all().map(i=>i.json).filter(Boolean);}catch(e){out=[];}\n  return out.filter(r=>Object.keys(r).some(k=>str(r[k])!=='' )).map(r=>Object.assign({_tab:tab},r));}\nlet rows=[].concat(readTab('Read monitor_queue','monitor_queue'),readTab('Read content_queue','content_queue'),readTab('Read review_queue','review_queue'));\nconst rows_considered=rows.length;\nfunction inWindow(r){const t=Date.parse(str(r.created_at)||str(r.parsed_at));if(isNaN(t))return false;return t>=cutoffMs;}\nrows=rows.filter(inWindow);\nconst rows_in_window=rows.length;\nfunction matches(r){\n  if(pf&&low(r.platform)!==pf)return false;\n  if(stf&&low(r.service_type)!==stf)return false;\n  if(rf){const reg=low(r.region);if(reg&&reg.indexOf(rf)<0&&rf.indexOf(reg)<0)return false;}\n  return true;\n}\nrows=rows.filter(matches);\nconst rows_after_filters=rows.length;\n// ---- shared vocab (hardcoded credit_brokerage v0.1; NICHE_PACK_SYSTEM_PLAN will externalize this) ----\nconst KW=[['кредитный брокер','кредитный брокер'],['ипотечный брокер','ипотечный брокер'],['помощь в получени','помощь в получении кредита'],['помощь с кредит','помощь с кредитом'],['после отказов','после отказов'],['плохой кредитн','плохая кредитная история'],['плохая кредитн','плохая кредитная история'],['просрочк','просрочки'],['без предоплаты','без предоплаты'],['оплата за результат','оплата за результат'],['по договору','работа по договору'],['подбор банк','подбор банка'],['одобрение','одобрение кредита'],['для бизнеса','бизнес-кредит'],['оборотн','оборотные кредиты'],['тендерн','тендерные займы'],['банковск гарант','банковские гарантии'],['рефинансир','рефинансирование'],['снижение ставк','снижение ставки'],['быстро','быстро'],['срочно','срочно']];\nfunction extractKw(blob){const seen={};const out=[];for(const p of KW){if(blob.indexOf(p[0])>=0&&!seen[p[1]]){seen[p[1]]=1;out.push(p[1]);}}return out;}\nconst PAINS=[['после отказов','отказы банков'],['отказах банк','отказы банков'],['плохая кредитн','плохая кредитная история'],['плохой кредитн','плохая кредитная история'],['просрочк','просрочки'],['срочно нужны деньги','срочная потребность в деньгах'],['не дают кредит','не дают кредит']];\nfunction extractPains(blob){const seen={};const out=[];for(const p of PAINS){if(blob.indexOf(p[0])>=0&&!seen[p[1]]){seen[p[1]]=1;out.push(p[1]);}}return out;}\nfunction rowBlob(r){return low(str(r.offer_text)+' '+str(r.terms)+' '+str(r.reason)+' '+str(r.detected_need)+' '+cut(str(r.text_context),600));}\nfunction listingId(u){const m=str(u).match(/_(\\d{6,})(?:[\\/?#]|$)/)||str(u).match(/\\/(\\d{7,})(?:[\\/?#]|$)/);return m?m[1]:'';}\nfunction normName(s){return low(s).replace(/[^a-zа-яё0-9]+/gi,' ').replace(/\\s+/g,' ').trim();}\nfunction adChannel(r){const p=low(r.platform);if(p==='avito'||low(r.source_type)==='classified')return 'classifieds';if(p)return p;return 'unknown';}\n// ---- 1. competitor_profiles (group competitor records) ----\nconst compRows=rows.filter(r=>low(r.entity_type)==='competitor'||r._tab==='monitor_queue');\nfunction groupKey(r){\n  const cn=normName(r.company_name);if(cn)return 'name::'+cn;\n  const pn=normName(r.profile_name);if(pn)return 'profile::'+pn;\n  const ot=normName(cut(r.offer_text,80));if(ot)return 'offer::'+low(r.platform)+'::'+ot;\n  const lid=listingId(r.source_url);if(lid)return 'listing::'+low(r.platform)+'::'+lid;\n  return 'rec::'+hashText(low(str(r.source_url)+str(r.offer_text)));\n}\nconst groups={};\nfor(const r of compRows){const k=groupKey(r);(groups[k]=groups[k]||[]).push(r);}\nconst competitor_profiles=[];\nfor(const k of Object.keys(groups)){\n  const g=groups[k];\n  const dates=g.map(r=>Date.parse(str(r.created_at))).filter(t=>!isNaN(t)).sort((a,b)=>a-b);\n  function iso(t){var m=new Date(t+10800000);return m.toISOString().replace('Z','+03:00');}\n  const platforms=[],urls=[],services=[],offers=[],terms=[],channels=[];let kws=[],pains=[];let strengthSum=0,strengthN=0;\n  for(const r of g){\n    uniqPush(platforms,low(r.platform));uniqPush(urls,r.source_url,maxEx);uniqPush(services,low(r.service_type));\n    uniqPush(offers,cut(r.offer_text,140),maxEx);uniqPush(terms,cut(r.terms,140),maxEx);uniqPush(channels,adChannel(r));\n    const blob=rowBlob(r);for(const w of extractKw(blob))uniqPush(kws,w);for(const w of extractPains(blob))uniqPush(pains,w);\n    const cs=Number(r.competitor_strength);if(cs>1){strengthSum+=cs;strengthN++;}\n  }\n  const name=str(g[0].company_name)||str(g[0].profile_name)||('(unnamed) '+cut(str(g[0].offer_text),60));\n  const evid=g.length;\n  const hasPriced=g.some(r=>str(r.terms)!=='');\n  const conf=hasPriced?80:(evid>=2?60:45);\n  const avgStrength=strengthN?Math.round(strengthSum/strengthN):0;\n  const strengths=[];\n  if(hasPriced)strengths.push('явный ценовой якорь ('+terms.join(' / ')+')');\n  if(kws.indexOf('оплата за результат')>=0)strengths.push('оплата за результат');\n  if(kws.indexOf('без предоплаты')>=0)strengths.push('без предоплаты');\n  if(avgStrength>=75)strengths.push('сильное объявление (avg competitor_strength '+avgStrength+')');\n  const weaknesses=[];\n  if(!hasPriced)weaknesses.push('цена/условия не указаны');\n  if(platforms.length===1)weaknesses.push('виден только один канал ('+platforms.join('')+')');\n  competitor_profiles.push({\n    competitor_id:'comp_'+hashText(k),\n    competitor_name:name,\n    first_seen_at:dates.length?iso(dates[0]):'',\n    last_seen_at:dates.length?iso(dates[dates.length-1]):'',\n    platforms:platforms.join(', '),\n    source_urls:urls.join(' | '),\n    service_types:services.join(', '),\n    offers:offers.join(' | '),\n    prices_terms:terms.join(' | '),\n    semantic_keywords:kws.slice(0,12).join(', '),\n    pain_points_targeted:pains.join(', '),\n    ad_channels:channels.join(', '),\n    observed_strengths:strengths.join('; '),\n    observed_weaknesses:weaknesses.join('; '),\n    evidence_count:evid,\n    source_confidence_score:conf,\n    notes:'wf10 v0.1 deterministic; run '+str(cfg.run_id)+'; window '+windowDays+'d; group_key='+cut(k,60)\n  });\n}\n// ---- 2. market_angles ----\nconst ANGLES=[\n ['speed','скорость / срочность («быстро», «за 1 день»)','speed',['быстро','срочно','за 1 день','в день обращения'],'клиенту нужно решение немедленно','Пост «Реальные сроки получения кредита: от чего они зависят» + честный разбор этапов'],\n ['price_anchor','ценовой якорь («от N ₽»)','price',['__PRICE__'],'страх скрытых комиссий','Прозрачная страница цен + пост «Из чего складывается комиссия брокера»'],\n ['no_prepayment','без предоплаты','trust',['без предоплаты'],'страх мошенничества/предоплаты','Пост «Почему честный брокер может работать без предоплаты» + договор-оферта'],\n ['result_payment','оплата за результат','trust',['оплата за результат','платите за результат','оплата по результату'],'недоверие к гарантиям','Кейс с этапами сделки и оплатой по факту одобрения'],\n ['after_refusals','кредит после отказов','pain',['после отказов','отказах банк','отказы банков'],'отказы банков','Чек-лист «7 причин отказа банка и что с ними делать» + кейс одобрения после отказов'],\n ['bad_credit_history','плохая КИ / просрочки','pain',['плохая кредитн','плохой кредитн','просрочк','кредитная истори'],'плохая кредитная история','Гайд «Как исправить кредитную историю» + FAQ по просрочкам'],\n ['business_finance','финансирование бизнеса (ИП/ООО)','segment',['для бизнеса','ип и ооо','оборотн','тендерн','бизнес-кредит'],'кассовый разрыв / тендеры','Серия постов для ИП/ООО: оборотные кредиты, тендерные займы, гарантии'],\n ['mortgage_refinance','ипотека / рефинансирование','segment',['ипотек','рефинансир','снижение ставк'],'высокая ставка по действующему кредиту','Калькулятор выгоды рефинансирования + разбор «когда рефинансироваться невыгодно»'],\n ['guarantees','работа по договору / гарантии','trust',['по договору','банковск гарант','официально'],'страх неофициальной работы','Пост «Что должно быть в договоре с кредитным брокером»']\n];\nconst market_angles=[];\nfor(const a of ANGLES){\n  const hits=[];\n  for(const r of rows){\n    const blob=rowBlob(r);\n    const m=(a[3][0]==='__PRICE__')?(/от\\s*\\d/.test(blob)||/\\d[\\d\\s]*₽/.test(blob)):a[3].some(t=>blob.indexOf(t)>=0);\n    if(m)hits.push(r);\n  }\n  if(!hits.length)continue;\n  const ex=[];for(const r of hits)uniqPush(ex,r.source_url,maxEx);\n  market_angles.push({\n    angle_id:'angle_'+a[0]+'_'+stamp,\n    angle_text:a[1],\n    category:a[2],\n    platforms:(function(){const p=[];for(const r of hits)uniqPush(p,low(r.platform));return p.join(', ');})(),\n    frequency:hits.length,\n    example_sources:ex.join(' | '),\n    related_pain:a[4],\n    recommended_content_response:a[5],\n    confidence:hits.length>=3?'high':(hits.length===2?'medium':'low')\n  });\n}\nmarket_angles.sort((x,y)=>y.frequency-x.frequency);\n// ---- 3. audience_activity_signals (AGGREGATE ONLY — no author identities, no contacts) ----\nconst audience_activity_signals=[];\nconst byPlatform={};\nfor(const r of rows){const p=low(r.platform)||'unknown';(byPlatform[p]=byPlatform[p]||[]).push(r);}\nfor(const p of Object.keys(byPlatform)){\n  const g=byPlatform[p];\n  const topics=[],pains=[];let buying=0,complaints=0,questions=0;\n  for(const r of g){\n    uniqPush(topics,low(r.service_type));\n    const blob=rowBlob(r);\n    for(const w of extractPains(blob))uniqPush(pains,w);\n    if(Number(r.lead_signal_score)>=50)buying++;\n    if(blob.indexOf('жалоб')>=0||blob.indexOf('обман')>=0||blob.indexOf('развод')>=0)complaints++;\n    if(blob.indexOf('посоветуйте')>=0||blob.indexOf('подскажите')>=0||blob.indexOf('?')>=0)questions++;\n  }\n  audience_activity_signals.push({\n    signal_id:'sig_'+p+'_'+stamp,\n    platform:p,\n    source_url:'',\n    time_window:windowDays+'d',\n    active_authors_count:'',\n    repeat_authors_count:'',\n    question_count:questions,\n    objection_count:0,\n    complaint_count:complaints,\n    buying_intent_count:buying,\n    top_topics:topics.join(', '),\n    top_pains:pains.join(', '),\n    confidence:'low',\n    notes:'aggregate-only (CONTACT_AND_OUTREACH_POLICY); classified-listing data carries no audience author info; counts derive from routed business rows'\n  });\n}\n// ---- 4. content_positioning_plan (1 row per run) ----\nconst topAngles=market_angles.slice(0,3);\nconst allPains=[];for(const r of rows){for(const w of extractPains(rowBlob(r)))uniqPush(allPains,w);}\nconst faq=[];const counters=[];const magnets=[];const posts=[];const ads=[];\nfor(const a of topAngles){\n  posts.push(a.recommended_content_response);\n  ads.push('Объявление против угла «'+a.angle_text+'»: конкретика вместо обещаний ('+a.related_pain+')');\n  counters.push('Конкуренты давят на «'+a.angle_text+'» — отвечаем проверяемыми фактами и условиями в договоре');\n}\nfor(const pn of allPains){faq.push('FAQ: '+pn+' — что реально можно сделать');}\nif(allPains.indexOf('отказы банков')>=0)magnets.push('чек-лист «7 причин отказа банка»');\nif(allPains.indexOf('плохая кредитная история')>=0)magnets.push('гайд «Как исправить кредитную историю»');\nif(market_angles.some(a=>a.angle_id.indexOf('mortgage')>=0))magnets.push('калькулятор выгоды рефинансирования');\nif(!magnets.length)magnets.push('чек-лист подготовки документов для кредита');\nconst evidUrls=[];for(const r of rows)uniqPush(evidUrls,r.source_url,maxEx);\nconst content_positioning_plan=[{\n  plan_id:'plan_'+stamp,\n  created_at:now,\n  niche:str(cfg.niche_id),\n  region:str(cfg.region_filter),\n  top_angles:topAngles.map(a=>a.angle_text+' (x'+a.frequency+')').join(' | '),\n  recommended_posts:posts.join(' | '),\n  recommended_ads:ads.join(' | '),\n  faq_topics:faq.join(' | '),\n  counterarguments:counters.join(' | '),\n  lead_magnets:magnets.join(' | '),\n  source_evidence:'rows='+rows_after_filters+' (window '+windowDays+'d); examples: '+evidUrls.join(' | '),\n  next_action:'operator review; use for content plan; no outreach actions (DEC-098)'\n}];\n// ---- 5. source_confidence_rules (seed only if tab is empty) ----\nlet existingRules=[];\ntry{existingRules=$('Read source_confidence_rules').all().map(i=>i.json).filter(r=>r&&str(r.rule_id)!=='');}catch(e){existingRules=[];}\nconst seedWanted=(cfg.write_confidence_seed_rules_if_empty===true||low(cfg.write_confidence_seed_rules_if_empty)==='true');\nlet source_confidence_rules=[];\nif(seedWanted&&existingRules.length===0){\n  source_confidence_rules=[\n    {rule_id:'sc_rule_01',pattern:'direct competitor listing with price/offer',confidence_effect:'high (75-85)',rationale:'first-party ad with concrete terms',created_at:now},\n    {rule_id:'sc_rule_02',pattern:'competitor website page',confidence_effect:'high (75-85)',rationale:'first-party positioning',created_at:now},\n    {rule_id:'sc_rule_03',pattern:'same pain repeated across >=3 independent sources',confidence_effect:'high (75-85)',rationale:'cross-source confirmation',created_at:now},\n    {rule_id:'sc_rule_04',pattern:'one isolated comment',confidence_effect:'low/medium (30-55)',rationale:'single anecdote',created_at:now},\n    {rule_id:'sc_rule_05',pattern:'vague source_candidate',confidence_effect:'low (20-40)',rationale:'unverified origin',created_at:now},\n    {rule_id:'sc_rule_06',pattern:'duplicate/reposted content',confidence_effect:'lower (count once, discount repeats)',rationale:'inflated frequency',created_at:now},\n    {rule_id:'sc_rule_07',pattern:'explicit public contact present',confidence_effect:'raises lead confidence only',rationale:'still requires CONTACT_AND_OUTREACH_POLICY checks',created_at:now}\n  ];\n}\nreturn [{ json: {\n  competitor_profiles:competitor_profiles,\n  market_angles:market_angles,\n  audience_activity_signals:audience_activity_signals,\n  content_positioning_plan:content_positioning_plan,\n  source_confidence_rules:source_confidence_rules,\n  stats:{\n    rows_considered:rows_considered,\n    rows_in_window:rows_in_window,\n    rows_after_filters:rows_after_filters,\n    competitor_rows:compRows.length,\n    competitor_profiles:competitor_profiles.length,\n    market_angles:market_angles.length,\n    audience_signals:audience_activity_signals.length,\n    plans:content_positioning_plan.length,\n    confidence_rules_written:source_confidence_rules.length,\n    confidence_rules_existing:existingRules.length,\n    time_window_days:windowDays\n  }\n}}];"
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000b1",
+      "name": "Build competitor_profiles Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        100
+      ],
+      "parameters": {
+        "jsCode": "// Map aggregated competitor_profiles to sheet rows. No external calls.\nconst a=$('Aggregate Market Intelligence').first().json;\nreturn (a.competitor_profiles||[]).map(r=>({json:r}));"
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000a1",
+      "name": "Append competitor_profiles",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1400,
+        100
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "competitor_profiles",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000b2",
+      "name": "Build market_angles Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        280
+      ],
+      "parameters": {
+        "jsCode": "// Map aggregated market_angles to sheet rows. No external calls.\nconst a=$('Aggregate Market Intelligence').first().json;\nreturn (a.market_angles||[]).map(r=>({json:r}));"
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000a2",
+      "name": "Append market_angles",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1400,
+        280
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "market_angles",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000b3",
+      "name": "Build audience_activity_signals Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        460
+      ],
+      "parameters": {
+        "jsCode": "// Map aggregated audience_activity_signals to sheet rows. No external calls.\nconst a=$('Aggregate Market Intelligence').first().json;\nreturn (a.audience_activity_signals||[]).map(r=>({json:r}));"
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000a3",
+      "name": "Append audience_activity_signals",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1400,
+        460
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "audience_activity_signals",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000b4",
+      "name": "Build content_positioning_plan Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        640
+      ],
+      "parameters": {
+        "jsCode": "// Map aggregated content_positioning_plan to sheet rows. No external calls.\nconst a=$('Aggregate Market Intelligence').first().json;\nreturn (a.content_positioning_plan||[]).map(r=>({json:r}));"
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000a4",
+      "name": "Append content_positioning_plan",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1400,
+        640
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "content_positioning_plan",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000b5",
+      "name": "Build source_confidence_rules Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        820
+      ],
+      "parameters": {
+        "jsCode": "// Map aggregated source_confidence_rules to sheet rows. No external calls.\nconst a=$('Aggregate Market Intelligence').first().json;\nreturn (a.source_confidence_rules||[]).map(r=>({json:r}));"
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000a5",
+      "name": "Append source_confidence_rules",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1400,
+        820
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "source_confidence_rules",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000bq",
+      "name": "Build agent_requests Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        1000
+      ],
+      "parameters": {
+        "jsCode": "// One agent_requests row (21 columns, same schema as WF07/WF09). status=completed. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Aggregator Config').first().json;\nconst s=$('Aggregate Market Intelligence').first().json.stats;\nconst filters='niche='+str(cfg.niche_id)+'; platform='+(str(cfg.platform_filter)||'all')+'; region='+(str(cfg.region_filter)||'all')+'; service_type='+(str(cfg.service_type_filter)||'all')+'; window='+s.time_window_days+'d';\nreturn [{ json: {\n  agent_request_id:str(cfg.agent_request_id),\n  created_at:str(cfg.created_at),\n  requested_by:str(cfg.requested_by)||'operator',\n  request_text:'Market intelligence aggregation: '+filters,\n  request_type:str(cfg.request_type)||'market_intelligence_aggregation',\n  source_scope:'business_queues',\n  platforms:str(cfg.platform_filter)||'all',\n  query:filters,\n  region:str(cfg.region_filter)||'all',\n  service_focus:str(cfg.niche_id)||'credit_brokerage',\n  requested_limit:Number(cfg.time_window_days)||30,\n  status:'completed',\n  plan_summary:'WF10 v0.1 deterministic aggregation of monitor_queue/content_queue/review_queue into competitor_profiles / market_angles / audience_activity_signals / content_positioning_plan (+ confidence-rule seed). No LLM, no external API, $0.',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:0,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:'rows_considered='+s.rows_considered+'; rows_in_window='+s.rows_in_window+'; rows_after_filters='+s.rows_after_filters+'; competitor_profiles='+s.competitor_profiles+'; market_angles='+s.market_angles+'; audience_signals='+s.audience_signals+'; plans='+s.plans+'; confidence_rules_written='+s.confidence_rules_written+'.',\n  next_action:'Review competitor_profiles / market_angles / content_positioning_plan tabs. No outreach actions (DEC-098).',\n  notes:'WF10 v0.1 deterministic Competitor/Audience Intelligence Aggregator (DEC-104). Aggregate-only audience analysis per CONTACT_AND_OUTREACH_POLICY.'\n}}];"
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000aq",
+      "name": "Append agent_requests",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1400,
+        1000
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "agent_requests",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "aa100000-0000-0000-0000-0000000000fs",
+      "name": "Final Summary Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        1000
+      ],
+      "parameters": {
+        "jsCode": "// Final run summary. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Aggregator Config').first().json;\nconst s=$('Aggregate Market Intelligence').first().json.stats;\nreturn [{ json: Object.assign({\n  workflow:'10 - Competitor Audience Intelligence Aggregator',\n  agent_request_id:str(cfg.agent_request_id),\n  run_id:str(cfg.run_id),\n  niche_id:str(cfg.niche_id),\n  filters:{platform:str(cfg.platform_filter),region:str(cfg.region_filter),service_type:str(cfg.service_type_filter)},\n  next_action:(s.rows_after_filters>0?'Inspect the 4 intelligence tabs; use content_positioning_plan for the content plan. No outreach actions.':'No rows in window/filters: run source connectors (WF09) + WF08 first, or widen time_window_days/filters.')\n}, s) }];"
+      }
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Set Aggregator Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Aggregator Config": {
+      "main": [
+        [
+          {
+            "node": "Read monitor_queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read monitor_queue": {
+      "main": [
+        [
+          {
+            "node": "Read content_queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read content_queue": {
+      "main": [
+        [
+          {
+            "node": "Read review_queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read review_queue": {
+      "main": [
+        [
+          {
+            "node": "Read source_confidence_rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read source_confidence_rules": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Market Intelligence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Market Intelligence": {
+      "main": [
+        [
+          {
+            "node": "Build competitor_profiles Rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build market_angles Rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build audience_activity_signals Rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build content_positioning_plan Rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build source_confidence_rules Rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build agent_requests Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build competitor_profiles Rows": {
+      "main": [
+        [
+          {
+            "node": "Append competitor_profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build market_angles Rows": {
+      "main": [
+        [
+          {
+            "node": "Append market_angles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build audience_activity_signals Rows": {
+      "main": [
+        [
+          {
+            "node": "Append audience_activity_signals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build content_positioning_plan Rows": {
+      "main": [
+        [
+          {
+            "node": "Append content_positioning_plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build source_confidence_rules Rows": {
+      "main": [
+        [
+          {
+            "node": "Append source_confidence_rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build agent_requests Row": {
+      "main": [
+        [
+          {
+            "node": "Append agent_requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append agent_requests": {
+      "main": [
+        [
+          {
+            "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "aa100000-competitor-audience-intelligence-aggregator-v001-deterministic-20260611",
+  "meta": {
+    "instanceId": "marketing-scout-v7-competitor-audience-intelligence-aggregator"
+  }
+}

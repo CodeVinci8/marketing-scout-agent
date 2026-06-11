@@ -1,0 +1,105 @@
+# FUTURE_CAPABILITIES_BACKLOG.md — Strategic Capabilities Backlog
+
+**Status:** 📋 BACKLOG — ideas preserved so they are not lost; **nothing here is approved for build** unless its
+own entry says otherwise. Every item follows the project's gates: explicit operator approval, fixture-first,
+no external calls without per-service approval, contact policy binding.
+**Date:** 2026-06-11 · **Decision:** DEC-105 (backlog established).
+
+---
+
+## 1. Business Agent Control Kernel
+
+- **Status:** idea / design-not-started.
+- **Purpose:** a future conversational control layer — the operator (or the stakeholder) talks to the agent;
+  the kernel performs **intent detection** → **niche detection** → **workflow/tool selection** → **cost/risk
+  estimate** → **approval plan** → writes the request to `agent_requests` → runs/prepares the chosen workflows →
+  returns a report + next actions.
+- **Prerequisites:** stable WF09 (done), WF08 (done), WF10 (v0.1 built, under test); Niche Pack System (so the
+  kernel can switch niches); Telegram Control Bot transport (Stage 4); a request/approval state machine in
+  `agent_requests`.
+- **Risks:** intent misclassification triggering wrong/costly workflows; approval bypass; scope creep into
+  autonomous spending. Mitigation: kernel only *prepares* paid runs, never executes without approval.
+- **First safe implementation step:** a deterministic "request planner" doc + dry-run mode: parse a written
+  request into `{intent, niche, workflows, estimated_cost, approval_needed}` and write a `status=needs_review`
+  row to `agent_requests` — no execution.
+- **Related:** `docs/AGENT_TOOL_ARCHITECTURE.md`, `docs/BUSINESS_SCOUT_AGENT_VISION.md`, `docs/ROADMAP.md` Stage 4.
+
+## 2. Niche Pack System
+
+- **Status:** planned (DEC-100) — `docs/NICHE_PACK_SYSTEM_PLAN.md` written; no YAML built.
+- **Purpose:** move from hardcoded credit-broker terms (WF09 relevance filter, WF08 enrichment, WF10 angle
+  taxonomy) to versioned `niches/*.yaml` packs: credit brokerage, secured lending, crypto research, real estate
+  brokers, local services, B2B.
+- **Prerequisites:** Stage 3.3 closed (done); a second niche or second source connector as migration trigger;
+  pack loading mechanism decision (generated Code node vs file read).
+- **Risks:** behavior drift during extraction (mitigate: fixture-tested, behavior-preserving refactor);
+  pack sprawl without ownership.
+- **First safe implementation step:** extract the existing WF09 credit-broker term sets verbatim into
+  `niches/credit_brokerage.yaml` and prove WF09 fixture output is byte-identical with the pack-driven build.
+- **Related:** `docs/NICHE_PACK_SYSTEM_PLAN.md`, DEC-095/100.
+
+## 3. Market Graph Engine
+
+- **Status:** idea / design-not-started.
+- **Purpose:** a graph of competitors, offers, pains, sources, audience segments, and content ideas — relations
+  like "competitor X pushes angle Y on platform Z targeting pain P". Can start **in Google Sheets** via
+  `market_entities` / `market_edges` / `market_clusters` tabs long before any graph database.
+- **Prerequisites:** WF10 stable (entities already emerge as competitor_profiles/market_angles); entity-id
+  discipline (stable competitor_id/angle keys — already designed in `WF10_TABLE_SCHEMAS.md`).
+- **Risks:** premature abstraction; edge explosion; double bookkeeping vs WF10 tables. Mitigation: derive edges
+  *from* WF10 outputs, never hand-maintain.
+- **First safe implementation step:** a deterministic exporter that converts one WF10 run into
+  `market_entities` (competitors, angles, pains) + `market_edges` (competitor→angle, angle→pain) rows in Sheets.
+- **Related:** `docs/WF10_TABLE_SCHEMAS.md`, `docs/COMPETITOR_AD_INTELLIGENCE_PLAN.md`.
+
+## 4. Report & Diagram Builder
+
+- **Status:** idea / design-not-started.
+- **Purpose:** weekly summaries and competitor reports from WF10 tables — Markdown first, then CSV/Sheets
+  export, PDF later; diagrams: sources map, offer frequency, pain frequency, competitor positioning quadrant.
+- **Prerequisites:** WF10 producing real data over ≥2 windows (trend needs two points); Telegram notification
+  channel (exists in stack, workflow TBD).
+- **Risks:** chart generation dependencies on the VPS; report spam. Mitigation: operator-triggered, MD-only v1.
+- **First safe implementation step:** deterministic Markdown weekly digest generated from the latest WF10 run
+  (top competitors / top angles / plan) written to a docs/reports/ file — no external calls.
+- **Related:** `docs/WF10_TABLE_SCHEMAS.md` §"Telegram summary", `docs/ARCHITECTURE.md`.
+
+## 5. Source Strategy & Budget Planner
+
+- **Status:** idea / partially covered by Stage 3.4 strategy doc.
+- **Purpose:** given a task ("find competitor offers", "mine audience pains") and a niche, rank sources by
+  expected value, risk, cost, and contact availability — e.g. Avito high for competitor offers; Telegram
+  medium-high for audience pains; Instagram deferred. Output: ranked source plan + budget estimate before any run.
+- **Prerequisites:** Stage 3.4 source matrix (done — `STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` §2/§3 carries
+  the static ranking); measured per-source costs in `COSTS_AND_LIMITS.md`; niche packs for per-niche priorities.
+- **Risks:** stale cost data producing wrong plans. Mitigation: every live run records actual cost (existing rule).
+- **First safe implementation step:** encode the Stage 3.4 comparison table as a small deterministic scoring
+  function (doc/table first) that the future Control Kernel can call.
+- **Related:** `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md`, `docs/COSTS_AND_LIMITS.md`,
+  `docs/NICHE_PACK_SYSTEM_PLAN.md` (`platform_priorities`, `source_priorities`).
+
+## 6. WF10 Competitor/Audience Intelligence Aggregator
+
+- **Status:** ✅ **v0.1 BUILT (DEC-104), under operator test** — deterministic, $0, `active=false`.
+- **Purpose:** aggregate `monitor_queue`/`content_queue`/`review_queue` into `competitor_profiles`,
+  `market_angles`, `audience_activity_signals`, `content_positioning_plan` (+ `source_confidence_rules` seed).
+- **Prerequisites (met):** Stage 3.3 closed — one stable live source (Avito) feeding WF08-routed rows.
+- **Risks:** append-only snapshots inflating tabs over many runs (v0.2 upsert planned); hardcoded niche vocabulary
+  (migrates to niche packs).
+- **Next step:** operator first run per `docs/N8N_WORKFLOW_10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_RU.md`;
+  then v0.2: upsert competitor_profiles, optional bounded LLM synthesis (operator-approved per run).
+- **Related:** `docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md`, `docs/WF10_TABLE_SCHEMAS.md`.
+
+## 7. Contact / Manager Handoff Layer
+
+- **Status:** policy written and binding (DEC-097/098); handoff tooling not built.
+- **Purpose:** evidence-bound manager handoff of **public contacts only** (`contact_public` + mandatory
+  `contact_source_url` + `contact_use_policy=manager_allowed`); no auto-outreach by default. Future **mass
+  auto-DM** is explicitly a separate compliance/risk project — out of scope until then.
+- **Prerequisites:** a source that actually yields public contacts with evidence (review platforms/org cards are
+  the most likely first); `contact_confidence`/`contact_use_policy` columns added at the next schema revision.
+- **Risks:** policy erosion under growth pressure; contact staleness. Mitigation: policy is tighten-only via
+  niche packs; every handoff carries the source URL for re-verification.
+- **First safe implementation step:** add the three planned contact columns to the schema revision and a manual
+  "handoff sheet" view filtered to `manager_allowed` rows — no automation.
+- **Related:** `docs/CONTACT_AND_OUTREACH_POLICY.md`, `docs/LEAD_DATA_MODEL_PLAN.md`.

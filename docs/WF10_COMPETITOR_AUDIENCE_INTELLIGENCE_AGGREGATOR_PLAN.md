@@ -1,7 +1,10 @@
 # WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md — Workflow 10 Market Intelligence Aggregator (PLAN)
 
-**Status:** 📐 PLAN ONLY — **Workflow 10 is NOT built.** No workflow JSON, no new sheets are created by this
-document. Build is gated on at least one stable live source (DEC-099).
+**Status:** ✅ **v0.1 BUILT (2026-06-11, DEC-104)** — the DEC-099 gate was satisfied by Stage 3.3 closure
+(DEC-102: Avito is a stable live source). Implementation: `n8n/workflows/10_competitor_audience_intelligence_aggregator.json`
+(`active=false`, deterministic, $0); exact column specs in `docs/WF10_TABLE_SCHEMAS.md`; operator guide in
+`docs/N8N_WORKFLOW_10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_RU.md`. §4 step 4 (bounded LLM synthesis) is
+**deferred to v0.2** — v0.1 uses deterministic templates only. This document remains the design rationale.
 **Date:** 2026-06-11 · **Decisions:** DEC-099 (WF10 planned after one stable live source), DEC-101 (Competitor Ad
 Intelligence is first-class).
 **Related:** `docs/COMPETITOR_AD_INTELLIGENCE_PLAN.md`, `docs/NICHE_PACK_SYSTEM_PLAN.md`,

@@ -2,8 +2,12 @@
 
 **Workflow:** `n8n/workflows/09_avito_classifieds_listing_connector.json`
 **Имя:** `09 - Avito Classifieds Listing Connector`
-**Статус:** 🔧 ПОСТРОЕН (v005); fixture + handoff PASS; **live retest #2 — транспорт PASS (10/10 валидных), но бизнес-релевантность FAIL (2 уникальные строки — «юридический адрес», ложные срабатывания) → добавлен фильтр бизнес-релевантности (DEC-095); live retest #3 ожидается**. `active=false`. Stage 3.3 (Business Scout Agent).
-**Дата:** 2026-06-11 · **Решения:** DEC-095 (фильтр бизнес-релевантности live) · DEC-094 (валидация live + actor_limit/pipeline_limit) · DEC-093 (actor `fatihtahta~avito-russia-scraper`) · DEC-092 (ad-intel) · DEC-090 (build) · DEC-084 (выбор источника).
+**Статус:** ✅ **STAGE 3.3 ЗАКРЫТ / ОДОБРЕН (DEC-102)** — v006; fixture + handoff PASS; live retest #3
+(`avito_req_20260611_184324`) PASS: 10/10 валидных, 7 hard_skipped ложных срабатываний отфильтрованы ДО записи,
+3 релевантных брокера (2 unique + 1 duplicate), WF08 live handoff monitor_queue +2 / technical_errors=0 / Claude=0.
+**v006 (DEC-103):** канонизация URL переписана sandbox-safe (без `new URL`) — следующий рутинный live-прогон должен
+показать `source_url`/`post_url` без `?context=` (watch item). `active=false`. Stage 3.3 (Business Scout Agent).
+**Дата:** 2026-06-11 · **Решения:** DEC-103 (sandbox-safe канонический URL) · DEC-102 (Stage 3.3 закрыт) · DEC-095 (фильтр бизнес-релевантности live) · DEC-094 (валидация live + actor_limit/pipeline_limit) · DEC-093 (actor `fatihtahta~avito-russia-scraper`) · DEC-092 (ad-intel) · DEC-090 (build) · DEC-084 (выбор источника).
 **План:** `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md` · **Тест-лог:** `docs/STAGE_3_3_TEST_RESULTS.md`.
 
 > **ПЕРВЫЙ реальный коннектор-источник после ручного приёма (Workflow 07).** Превращает данные объявлений
@@ -181,8 +185,14 @@ Live retest #2 (`avito_req_20260611_001222`) показал: транспорт 
   запроса) → live: hard skip (query-only отклоняется).
 - **Порядок:** скоринг ВСЕХ структурно валидных элементов → отсев hard negatives → `pipeline_limit` применяется
   только к **принятым бизнес-релевантным** записям (ложные срабатывания не расходуют лимит).
-- **Канонический URL:** трекинг-параметры (`?context=`, utm и т.п.) срезаются с listing-URL, когда в пути есть id
-  объявления; `dedup_key` по-прежнему `avito::classified::avito_listing_<id>`.
+- **Канонический URL (правило, ужесточено в v006 / DEC-103):** `source_url`/`post_url` (и их копии в
+  `market_record_registry`) хранят канонический URL объявления **без** `?context=`, `utm_*`, `slocation` и прочих
+  трекинг-параметров — query/hash срезаются, **только когда путь содержит id объявления** (`_<6+ цифр>` или
+  `/<7+ цифр>`, безопасно); URL без id (поисковые/категорийные) не трогаются. `dedup_key` по-прежнему строится от
+  id: `avito::classified::avito_listing_<id>`. **v006:** `normUrl`/`canonUrl`/`slugText` переписаны на чистые
+  regex/string-функции без `new URL` — конструктор `URL` недоступен в sandbox Code-ноды n8n, из-за чего v005
+  молча оставлял `?context=` в live (try/catch fallback) и обнулял slug-evidence. Проверено симуляцией в
+  vm-контексте без глобального `URL`.
 - **Fixture-путь не изменён:** POS-контроль остаётся `irrelevant` → `skipped_log` и пишется (6 raw / 6 registry).
 
 `result_summary` (8 счётчиков): `actor_items_received / structurally_valid_items / invalid_items /

@@ -3,7 +3,11 @@
 One row per analyzed item. All columns populated by the pipeline.
 Claude API fills the analysis columns; n8n fills the metadata columns.
 
-**Last updated:** 2026-06-06 — production reality for the Resilient Router added: 6 tabs, 8 technical columns, test-only columns marked non-production (DEC-037).
+**Last updated:** 2026-06-11 — **WF10 intelligence tabs added (DEC-104):** 5 new tabs written by Workflow 10 v0.1 —
+`competitor_profiles` (17), `market_angles` (9), `audience_activity_signals` (14), `content_positioning_plan` (12),
+`source_confidence_rules` (5). **Authoritative column lists, keys, update strategy, and example rows:
+`docs/WF10_TABLE_SCHEMAS.md`** (kept there to avoid duplication). — (prior: 2026-06-06 — production reality for
+the Resilient Router added: 6 tabs, 8 technical columns, test-only columns marked non-production, DEC-037.)
 
 ---
 

@@ -5,6 +5,45 @@ Most recent first.
 
 ---
 
+## DEC-105 — Strategic Ideas Preserved in FUTURE_CAPABILITIES_BACKLOG.md
+
+**Date:** 2026-06-11
+**Context:** Several strategic capabilities (conversational control kernel, market graph, report builder, source/budget planner) kept surfacing in sessions without a durable home, risking loss between sessions.
+**Decision:** `docs/FUTURE_CAPABILITIES_BACKLOG.md` is the canonical backlog. Seven entries, each with status/purpose/prerequisites/risks/first-safe-step/related-docs: 1) Business Agent Control Kernel; 2) Niche Pack System; 3) Market Graph Engine (Sheets-first via market_entities/market_edges/market_clusters); 4) Report & Diagram Builder; 5) Source Strategy & Budget Planner; 6) WF10 Aggregator (v0.1 built); 7) Contact/Manager Handoff Layer. Nothing in the backlog is build-approved by the backlog itself.
+**Alternatives considered:** scattering ideas across stage docs (rejected — items were already getting lost).
+
+---
+
+## DEC-104 — Workflow 10 v0.1 Built: Deterministic Competitor/Audience Intelligence Aggregator ($0, no LLM)
+
+**Date:** 2026-06-11
+**Context:** The DEC-099 build gate (at least one stable live source) is satisfied — Stage 3.3 closed (DEC-102) with a clean live Avito run feeding WF08-routed rows.
+**Decision:** Built `n8n/workflows/10_competitor_audience_intelligence_aggregator.json` (`active=false`, 22 nodes, manual trigger). **v0.1 is fully deterministic:** no Claude, no Apify, no Firecrawl, no external API — $0 per run. Reads `monitor_queue`/`content_queue`/`review_queue` (+ `source_confidence_rules` for the seed check); filters by `time_window_days=30` and `niche_id='credit_brokerage'`/`platform_filter=''`/`region_filter='Москва/МО'`/`service_type_filter=''`; groups competitors by company_name → profile_name → normalized offer_text+platform → listing id from source_url; writes `competitor_profiles` (17 cols), `market_angles` (9, fixed 9-angle taxonomy: speed/price-anchor/no-prepayment/result-payment/after-refusals/bad-KI/business-finance/mortgage-refinance/guarantees), `audience_activity_signals` (14, **aggregate-only** per contact policy — author counts left empty for classifieds, never invented), `content_positioning_plan` (12, one row per run, deterministic templates), `source_confidence_rules` (5, 7 seed rules only when the tab is empty), plus one `agent_requests` row (21 cols, `request_type=market_intelligence_aggregation`, `status=completed`, $0). MSK `+03:00` throughout; no bare `new Date().toISOString()`. Update strategy v0.1: append-only snapshots (upsert = v0.2). Niche vocabulary is hardcoded v0.1 — migrates to niche packs (DEC-100).
+**Reason:** aggregation must start deterministic and free so its shapes/groupings are validated on real data before any LLM synthesis cost; WF08 stays the per-record brain, WF10 the market-level view.
+**Verified by simulation (vm sandbox without URL global, 19 checks PASS):** window+region filters (5 considered → 4 in window → 3 after filters); 2 competitor groups from the real live monitor rows (priced row → confidence 80); angles incl. after_refusals freq 2 with examples; aggregate-only signals; 1 plan row with no-outreach next_action; seed 7 rules on empty tab and 0 when populated; agent_requests 21 cols with full count summary; exact column counts 17/9/14/12/5; repeated run byte-identical modulo timestamps; no contacts anywhere in output.
+**Files:** `n8n/workflows/10_competitor_audience_intelligence_aggregator.json`, `docs/N8N_WORKFLOW_10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_RU.md`, `docs/WF10_TABLE_SCHEMAS.md`, `docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md`, `docs/TABLE_SCHEMA.md`.
+
+---
+
+## DEC-103 — Workflow 09 URL Helpers Made Sandbox-Safe (root cause of the live ?context= leak)
+
+**Date:** 2026-06-11
+**Context:** Live run #3 (`avito_req_20260611_184324`) passed the relevance filter, but `source_url`/`post_url` in raw and monitor rows still carried Avito `?context=` tracking params — although the v005 `canonUrl` stripped them in plain-Node tests. **Root cause found by sandbox simulation:** `normUrl`/`canonUrl`/`slugText` depended on the `new URL()` constructor; the n8n Code-node sandbox does not expose the `URL` global, so the try/catch fallbacks silently kept the query string (and blanked the decoded-slug relevance evidence — relevance still worked via title/description, which is why hard_skipped=7 was correct).
+**Decision (patch v006):** rewrote the three helpers as **pure regex/string implementations with no URL-constructor dependency**. `canonUrl` strips query+hash only when the path carries a listing id (`_<6+ digits>` or `/<7+ digits>`) — safe; non-listing URLs keep their query (start/search URL matching unchanged). `slugText` decodes the slug via string ops, so slug evidence now also works in the restricted sandbox. Dedup unchanged: `dedup_key=avito::classified::avito_listing_<id>`. Registry/raw rows copy the canonical values.
+**Verified by simulation (vm context WITHOUT the URL global, 12 checks PASS):** fixture first run 6 raw/6 registry/monitor 5/skipped 1 unchanged; fixture duplicate run unchanged; live batch modeled on run #3 with `?context=`-bearing URLs → accepted rows' source_url/post_url canonical (no `?`), registry rows canonical, hard-skip/duplicate/unique counts identical to the real run pattern (4 hard_skipped / 3 relevant / 2 unique / 1 duplicate), dedup keys stable.
+**Files:** `n8n/workflows/09_avito_classifieds_listing_connector.json` (versionId `…v006-canonical-url-sandbox-safe-20260611`), `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`, `docs/STAGE_3_3_TEST_RESULTS.md`.
+
+---
+
+## DEC-102 — Stage 3.3 CLOSED / APPROVED (Avito/Classifieds Listing Connector)
+
+**Date:** 2026-06-11
+**Context:** Live run #3 (`avito_req_20260611_184324`, actor `fatihtahta~avito-russia-scraper`): `actor_items_received=10; structurally_valid_items=10; invalid_items=0; business_relevant_items=3; hard_skipped_items=7; unique=2; duplicates=1; over_pipeline_limit=0`. All 7 hard-skipped false positives (legal-address/query-only) were filtered **before** raw/registry writes; the 3 accepted rows are genuine credit-broker listings; registry gained exactly the 2 unique keys (`avito_listing_8000151804`, `avito_listing_8011965808`). WF08 live handoff (filters set, `deterministic_first`, all LLM flags false): `monitor_queue +2`, `technical_errors=0`, Claude calls=0, business fields populated (terms «от 500 ₽» / «Цена договорная», competitor_strength 79, content_idea_score 45, quality_score 70, `parse_method=deterministic_pre_route`).
+**Decision:** **Stage 3.3 is CLOSED / APPROVED.** All closure criteria pass: fixture first run ✅, fixture duplicate run ✅, fixture WF08 handoff ✅, live Apify transport ✅, live business relevance filter ✅, hard false positives skipped pre-raw/registry ✅, raw/registry consistency ✅, WF08 live handoff ✅, technical_errors=0 ✅, Claude cost $0 ✅. One cosmetic issue found (`?context=` in stored URLs — does not affect dedup/relevance/routing) and fixed by DEC-103 (v006); verifying canonical URLs is a **watch item for the next routine live run**, not a closure blocker. Avito is the project's first stable live source; the DEC-099 gate for WF10 is satisfied.
+**Files:** `docs/STAGE_3_3_TEST_RESULTS.md`, `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`, `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`, `docs/ROADMAP.md`, `docs/NEXT_ACTIONS.md`.
+
+---
+
 ## DEC-101 — Competitor Ad Intelligence Is a First-Class Capability
 
 **Date:** 2026-06-11

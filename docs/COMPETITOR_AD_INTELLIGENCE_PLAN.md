@@ -1,7 +1,8 @@
 # COMPETITOR_AD_INTELLIGENCE_PLAN.md — Competitor Ad Intelligence (FIRST-CLASS CAPABILITY)
 
-**Status:** 📐 CAPABILITY PLAN — describes the end-to-end competitor ad intelligence pipeline. WF09/WF08 parts
-are built; WF10 aggregation is planned (`docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md`).
+**Status:** 📐 CAPABILITY PLAN — describes the end-to-end competitor ad intelligence pipeline. WF09/WF08 are
+built and live-proven (Stage 3.3 CLOSED, DEC-102); **WF10 v0.1 is built** (deterministic aggregator, DEC-104 —
+`docs/WF10_TABLE_SCHEMAS.md`), awaiting the operator's first run.
 **Date:** 2026-06-11 · **Decision:** DEC-101 (Competitor Ad Intelligence is a first-class capability of the
 Business Scout Agent, not a side effect of lead discovery).
 
