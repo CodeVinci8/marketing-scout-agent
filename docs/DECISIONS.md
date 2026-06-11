@@ -5,6 +5,79 @@ Most recent first.
 
 ---
 
+## DEC-101 — Competitor Ad Intelligence Is a First-Class Capability
+
+**Date:** 2026-06-11
+**Context:** The stakeholder's primary need is understanding how competitors advertise (headlines, price anchors, payment conditions, pain promises, objections handled, channels, repeated semantics, weak points, content opportunities) — not only lead discovery.
+**Decision:** Competitor Ad Intelligence is treated as a first-class capability of the Business Scout Agent with its own end-to-end pipeline documentation: source connectors (WF09 + future) → `raw_market_records` → WF08 one-record analysis → WF10 aggregation → `competitor_profiles` / `market_angles` / `content_positioning_plan`. See `docs/COMPETITOR_AD_INTELLIGENCE_PLAN.md`.
+**Alternatives considered:** keep it an implicit by-product of lead routing (rejected — it is the stakeholder's stated core value and needs its own design target).
+
+---
+
+## DEC-100 — Niche Pack System Planned to Replace Hardcoded Niche Rules
+
+**Date:** 2026-06-11
+**Context:** The DEC-095 relevance filter and WF08's deterministic enrichment hardcode credit-broker vocabulary. A second niche or second source would duplicate and drift these lists.
+**Decision:** Plan a versioned **Niche Pack System** (`niches/*.yaml`: `niche_id`, keywords, strong phrases, hard negatives, intent/offer/pain patterns, platform priorities, scoring weights, tighten-only contact-policy overrides, risk rules, source priorities). WF09/WF08/WF10 will consume packs instead of inline lists. Migration happens when the second source connector or second niche appears; nothing is refactored now. See `docs/NICHE_PACK_SYSTEM_PLAN.md`.
+**Alternatives considered:** refactor WF09/WF08 to packs immediately (rejected — premature for one niche/one source; Stage 3.3 closes on hardcoded rules).
+
+---
+
+## DEC-099 — WF10 Market Intelligence Aggregator Planned, Build Gated on One Stable Live Source
+
+**Date:** 2026-06-11
+**Context:** WF08 answers "what is this one record?"; the stakeholder also needs "what is happening in the market overall?" (competitor profiles, recurring angles, audience activity, content positioning).
+**Decision:** Workflow 10 (Market Intelligence Aggregator) is **planned, not built**. Inputs: `monitor_queue`/`content_queue`/`review_queue` (+ optional `raw_market_records`), 7/14/30-day windows, niche/platform/region/service_type filters. Future output tables: `competitor_profiles`, `market_angles`, `audience_activity_signals`, `content_positioning_plan`, `source_confidence_rules` (field lists in the plan). Build starts only after at least one live source is stable (Avito with the DEC-095 filter passing live runs). See `docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md`.
+**Alternatives considered:** build WF10 now on fixture data (rejected — aggregation over unstable/false-positive-polluted input would lock in wrong shapes).
+
+---
+
+## DEC-098 — No Automatic Outreach by Default
+
+**Date:** 2026-06-11
+**Context:** The business wants actionable contacts for manager handoff; automation pressure could drift toward auto-DM/auto-email.
+**Decision:** **No automatic outreach by default** — no auto-DM, auto-email, or auto-call anywhere in the system. Outreach is a manual manager action on records with `contact_use_policy=manager_allowed` and source evidence. Mass auto-DM may be considered much later only as a separate, explicitly approved project with its own legal review. Enforced in `docs/CONTACT_AND_OUTREACH_POLICY.md` §4.
+**Alternatives considered:** opt-in auto-DM for hot leads (rejected — legal/platform risk, brand risk, out of scope).
+
+---
+
+## DEC-097 — Public Contacts Only, With Explicit Source Evidence (Contact & Outreach Policy)
+
+**Date:** 2026-06-11
+**Context:** Managers need real public contacts (phone/email/telegram/profile/form) for handoff; at the same time hidden-phone extraction, private-chat scraping, and "just in case" harvesting are explicitly forbidden by the operator.
+**Decision:** Adopt `docs/CONTACT_AND_OUTREACH_POLICY.md` as binding policy: contact fields are `contact_public` (verbatim, never reconstructed), `contact_channel` (phone/email/telegram/profile/form/unknown), `contact_source_url` (**mandatory evidence** when a contact is present), `contact_confidence`, `contact_use_policy` (manager_allowed / manual_review / no_outreach / aggregate_only). Public contacts only; no platform-protection bypass; no private accounts without explicit public contact; leads without public contact route to `review_queue`/`lead_signal` (never `results`/contact); audience analysis is aggregate-only; manager handoff requires source evidence.
+**Alternatives considered:** per-source ad-hoc rules (rejected — one binding policy enforced at connector, analyzer, and aggregator layers).
+
+---
+
+## DEC-096 — One-Source-at-a-Time Connector Pattern (Do NOT Build All Social Parsers at Once)
+
+**Date:** 2026-06-11
+**Context:** Stage 3.4 evaluates Telegram, VK, Instagram, Dzen, review platforms/maps, and competitor websites as future sources. Building several parsers in parallel multiplies risk, cost, and unvalidated code.
+**Decision:** Every source follows the proven connector pattern (source connector → `raw_market_records` → WF08 → aggregator/report), added **one at a time** and stabilized on live data before the next starts. Recommended order: 1) stabilize Avito live; 2) Telegram public-channel feasibility (preview parsing, no MTProto without separate risk review); 3) VK public groups/posts via official API; 4) review platforms/maps; 5) Dzen; 6) Instagram only after a separate risk review. See `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md`.
+**Alternatives considered:** parallel multi-source build (rejected — each source has distinct access/legal/quality risks needing individual validation).
+
+---
+
+## DEC-095 — Workflow 09 Live Business Relevance Filter (Stage 3.3 cannot close without it)
+
+**Date:** 2026-06-11
+**Context:** Live Apify retest #2 (`agent_request_id=avito_req_20260611_001222`, actor `fatihtahta~avito-russia-scraper`) proved the transport works: `actor_items_received=10; valid_items=10; invalid_items=0; unique=2; duplicates=1; over_pipeline_limit=7`. But **both unique rows were business false positives** — legal-address services (`yuridicheskiy_adres_dlya_ooo_ot_sobstvennika`, `ne_massovyy_yuridicheskiy_adres_ot_sobstvennika`), not credit-broker offers — while a relevant credit-broker row was a duplicate. Pre-patch WF09 classified by generic service words and let the search query imply relevance; `pipeline_limit` also applied to arbitrary first actor rows, so junk consumed the write budget.
+**Decision (patch v005):**
+- **Relevance evidence = title + description + decoded URL slug + category only.** The search query **never** makes a listing relevant (query-only relevance → rejected). Term sets include Cyrillic + transliterated forms (slugs are translit).
+- **Strong positive phrases** (кредитный брокер, помощь в получении кредита, кредит после отказов, ипотечный брокер, рефинансирование ипотеки, кредит для бизнеса, банковские гарантии, …) → `competitor_activity`/`competitor_listing`.
+- **Hard negatives** (юридический адрес, адрес для ООО, немассовый/массовый адрес, регистрация ООО/ИП, бухгалтерия, эквайринг, POS-терминал, касса, печать, штамп, ЭЦП, аренда офиса, коворкинг, юридические услуги, оборудование, …) without strong credit/broker evidence → live `irrelevant_live_false_positive`, `dedup_status=hard_skipped`: **not written to `raw_market_records` (by default) or `market_record_registry`**, counted in `hard_skipped_items`. Optional `hard_skip_debug_audit=false` config flag can write them to raw for debugging (registry never).
+- **Weak finance evidence** (кредит/займ/ипотека/рефинансирование/просрочки… in listing evidence) → `market_signal`/`source-candidate-style` content routing; no evidence at all → hard skip (query-only rejection).
+- **Pipeline order:** score ALL structurally valid actor items first → filter hard negatives → apply `pipeline_limit` to **accepted business-relevant records only** (hard negatives never consume the cap). `pipeline_limit=10` for the next live smoke (`actor_limit=10` unchanged).
+- **Summary counts:** `result_summary`/Final Summary now report `actor_items_received / structurally_valid_items / invalid_items / business_relevant_items / hard_skipped_items / unique / duplicates / over_pipeline_limit`.
+- **Canonical Avito URL:** tracking query/context params stripped from `source_url`/`post_url` when the path carries a listing id (safe); `dedup_key` unchanged (`avito::classified::avito_listing_<id>`).
+- **Fixture path preserved:** `fixture_mode=true`/`live_mode=false` defaults, `max_items=6` (5 competitor + 1 POS-terminal control), control still written as `irrelevant` → `skipped_log` prediction, duplicate behavior unchanged.
+**Reason:** Apify transport works, but Stage 3.3 cannot close while live runs register non-broker listings as competitors; relevance must come from listing evidence, never from the query that found it.
+**Verified by simulation (Node harness, 31 checks PASS):** fixture first run 6 raw/6 registry/monitor 5/skipped 1 unchanged; fixture duplicate run unchanged; modeled live batch with the two real legal-address items + POS terminal + query-only cleaning listing + legal-services listing → all 5 `hard_skipped` (0 raw/0 registry), known broker → `duplicate_in_registry`, 2 strong brokers unique, weak-finance consultation → `market_signal` accepted, search-URL item → `invalid`; counts `10/9/1/4/5/3/1/0`; pipeline_limit=3 with 4 leading hard negatives → 3 brokers written + 2 over_pipeline_limit (cap not consumed by junk); debug audit writes hard-skips to raw only.
+**Files:** `n8n/workflows/09_avito_classifieds_listing_connector.json`, `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`, `docs/STAGE_3_3_TEST_RESULTS.md`, `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`, `docs/NEXT_ACTIONS.md`, `docs/DECISIONS.md`, `docs/AGENT_LOG.md`, `core/hot/recent.md`.
+
+---
+
 ## DEC-094 — Workflow 09 Live Apify Mode: Strict Valid-Listing Guard, actor_limit vs pipeline_limit Split, and Invalid-Item Counting (after a failed first live smoke)
 
 **Date:** 2026-06-11

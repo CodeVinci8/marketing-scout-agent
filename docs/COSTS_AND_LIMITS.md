@@ -171,7 +171,8 @@ Three cost axes with different drivers and spend gates — tracked **separately*
   the live call executed (`avito_req_20260610_234404`) but returned only an empty/search item (no valid listing). **A real
   Apify actor cost was incurred — record it** (consult the actor's Apify page / account usage; per-run / per-result).
   Default mode stays $0 (`fixture_mode=true`/`live_mode=false` → Apify node does not execute). Live smoke uses
-  `actor_limit=10` (sent to Apify — actor min ~10) and `pipeline_limit=3` (valid rows written). 0 Firecrawl / 0 Claude;
+  `actor_limit=10` (sent to Apify — actor min ~10) and `pipeline_limit=10` (accepted business-relevant rows written,
+  DEC-095). 0 Firecrawl / 0 Claude;
   analysis cost $0 in WF09. **Note:** a bad actor response still costs the Apify call even though `valid_items=0` and
   nothing is written — inspect the actor first on retest; consider an alternative actor if it keeps returning empty/search
   items.
@@ -180,6 +181,15 @@ Three cost axes with different drivers and spend gates — tracked **separately*
   The competitor ad-intelligence enrichment happens in `deterministic_first` (Claude calls=0). **Fixture + handoff
   tests cost $0; real Avito scrape (live Apify) remains untested** — its cost depends on the chosen actor and is
   recorded only when an approved live run happens.
+- **Live retest #2 (2026-06-11, `avito_req_20260611_001222`) — second real Apify call incurred:** the actor
+  returned 10 valid items (transport PASS); **record the actual actor cost** (operator: Apify account usage —
+  TODO_OPERATOR_FILL). Business outcome: 2 written rows were false positives (legal-address) → **DEC-095 relevance
+  filter** means future runs spend the same Apify cost but write only relevant rows; hard-skipped false positives
+  cost nothing extra (filtering is Code-node logic, $0). Live retest #3 will be the third real Apify call —
+  approve + record cost before running.
+- **Planned (docs only, $0 until built/approved):** WF10 aggregator (DEC-099 — future LLM synthesis cost bounded
+  and approved per run), Stage 3.4 social sources (DEC-096 — each source's cost assessed in
+  `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` before any build), niche packs (DEC-100 — $0, config files).
 
 ---
 

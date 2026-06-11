@@ -22,6 +22,13 @@ external API call, no credential, no actor run.
 > competitors/offers/semantics; lead value **medium/low** unless direct demand appears; risk **medium** (scraping /
 > marketplace ToS / anti-bot) — mitigated by Apify-actor pattern + fixture-first + explicit approval for live.
 
+> **Stage 3.4 STRATEGY WRITTEN (2026-06-11, DEC-096):** the operational parsing strategy that supersedes this
+> matrix for build-order decisions is **`docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md`** — per-source access
+> methods (official API / Apify actor / Firecrawl-web / public preview / manual list / high-risk session
+> scraping), risks, costs, data quality, lead vs competitor-intel value, contact availability, and priorities.
+> **Decision: one source at a time** (Avito stabilize → Telegram public feasibility → VK API → reviews/maps →
+> Dzen → Instagram after a separate risk review). Contacts: `docs/CONTACT_AND_OUTREACH_POLICY.md` is binding.
+
 > **REFRAME (2026-06-08, DEC-078):** sources are evaluated for **touchpoints** (hot leads, warm touchpoints,
 > competitor audiences, comments, semantic/ad signals), not hot leads alone — the first domain of the
 > **Business Scout Agent**. Added: **Yandex Dzen** and **Competitor audience / public commenters** (public data

@@ -20,6 +20,17 @@
 > `docs/SOCIAL_CLASSIFIED_SOURCE_MATRIX.md`. Recommended order: **Manual Intake → Avito → Telegram (parser) →
 > VK → Yandex (discovery aid); Instagram deferred.**
 
+> **Stage 3.3/3.4 update (2026-06-11, DEC-095…101):** live Avito retest #2 proved the Apify transport but
+> exposed business-relevance false positives → WF09 v005 adds a **source-level relevance filter** (DEC-095):
+> connectors now score relevance from listing evidence only (never the search query) and hard-skip false
+> positives before they reach `raw_market_records`. The discovery layer is extended by a documented
+> intelligence layer: **WF10 Market Intelligence Aggregator** (planned, DEC-099 —
+> `docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md`), the **one-source-at-a-time** rollout
+> strategy for social sources (DEC-096 — `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md`), the binding
+> **Contact & Outreach Policy** (DEC-097/098 — `docs/CONTACT_AND_OUTREACH_POLICY.md`), the **Niche Pack System**
+> plan (DEC-100 — `docs/NICHE_PACK_SYSTEM_PLAN.md`), and **Competitor Ad Intelligence** as a first-class
+> capability (DEC-101 — `docs/COMPETITOR_AD_INTELLIGENCE_PLAN.md`).
+
 > **Stage 3.3 — first real connector BUILT (2026-06-10, DEC-090):** the **Avito/Classifieds Listing Connector**
 > (`Workflow 09`, `active=false`, fixture mode default, $0) is the first concrete instance of this architecture
 > after manual intake. Live flow:

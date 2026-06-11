@@ -4,7 +4,47 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-11) — Stage 3.3 fixture + handoff PASS; live smoke #1 PARTIAL FAIL (empty actor item) → validation guard added (DEC-094) → re-import + LIVE RETEST; valid live extraction not yet achieved
+## CURRENT PRIORITY (2026-06-11, session 2) — Live transport PASS but business relevance FAILED (2 legal-address false positives) → DEC-095 relevance filter built → re-import WF09 v005 + LIVE RETEST #3; Stage 3.4 architecture pack created
+
+**Live retest #2 (`avito_req_20260611_001222`, actor `fatihtahta~avito-russia-scraper`) results:**
+`actor_items_received=10; valid_items=10; invalid_items=0; unique=2; duplicates=1; over_pipeline_limit=7` — the
+Apify transport **works**, but **both unique rows were false positives** (legal-address services:
+`yuridicheskiy_adres_dlya_ooo_ot_sobstvennika`, `ne_massovyy_yuridicheskiy_adres_ot_sobstvennika`); the one
+relevant credit-broker row was a duplicate. **DEC-095 patch (WF09 v005):** business relevance from
+title/description/decoded-URL-slug/category only (the query NEVER makes a listing relevant); hard negatives
+(юр. адрес / регистрация ООО / POS-терминал / касса / бухгалтерия / эквайринг / печать / ЭЦП / аренда офиса …)
+without strong credit evidence → `hard_skipped` — not written to raw/registry, filtered **before**
+`pipeline_limit` (now **10**); 8-count `result_summary`; canonical listing URLs. Fixture path unchanged
+(simulation: 31 checks PASS, incl. both real false positives hard-skipped).
+
+**Architecture pack created (Stage 3.4 + beyond, docs only, nothing built):**
+`docs/CONTACT_AND_OUTREACH_POLICY.md` (DEC-097/098), `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md`
+(DEC-096: one source at a time — Avito → Telegram → VK → reviews/maps → Dzen → Instagram-after-risk-review),
+`docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md` (DEC-099: build gated on a stable live source),
+`docs/NICHE_PACK_SYSTEM_PLAN.md` (DEC-100), `docs/COMPETITOR_AD_INTELLIGENCE_PLAN.md` (DEC-101).
+
+**Next, in order:**
+1. [ ] **Commit this session** (WF09 v005 + docs).
+2. [ ] **Re-import WF09 v005** (do NOT activate); rebind Google Sheets credential + real Spreadsheet ID; bind
+   the Apify HTTP Header credential.
+3. [ ] **(Optional, recommended) registry cleanup:** delete/mark the 2 false-positive rows from attempt #2 in
+   `market_record_registry` (+ raw audit note) — operator decision.
+4. [ ] **LIVE RETEST #3 (after explicit approval):** `fixture_mode=false`, `live_mode=true`,
+   `include_irrelevant_control_fixture=false`; keep `actor_limit=10`, `pipeline_limit=10`. Execute once, record
+   Apify cost. Expect: legal-address/POS/registration listings → `hard_skipped` (0 written), relevant brokers →
+   unique/duplicate, 8-count summary. Fill `docs/STAGE_3_3_TEST_RESULTS.md` Test 3b.
+5. [ ] **If `unique>0`:** WF08 handoff with `agent_request_id_filter=<run id>` (clear filters after). If all
+   relevant rows are duplicates — correct outcome, no WF08 run.
+6. [ ] **Close Stage 3.3** when a live run produces only relevant rows; then start Stage 3.4 step 1
+   (Telegram public-channel feasibility — strategy already written, no build yet).
+
+> Still NOT built/approved: WF10 aggregator, niche packs (YAML), Telegram/Instagram/VK/Dzen parsers,
+> Telegram Control Bot, outreach/autocall (auto-DM forbidden by default — DEC-098), scheduled scraping,
+> auto-handoff WF09→WF08.
+
+---
+
+## PRIOR PRIORITY (2026-06-11) — Stage 3.3 fixture + handoff PASS; live smoke #1 PARTIAL FAIL (empty actor item) → validation guard added (DEC-094) → re-import + LIVE RETEST; valid live extraction not yet achieved
 
 `Workflow 09 — Avito Classifieds Listing Connector` (`active=false`, DEC-090) + the Workflow 08 deterministic handoff
 **passed fixture tests** (Test 1 raw+6/registry+6/agent_requests+1; Test 2 duplicate registry+0; handoff

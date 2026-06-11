@@ -2,8 +2,8 @@
 
 **Workflow:** `n8n/workflows/09_avito_classifieds_listing_connector.json`
 **Имя:** `09 - Avito Classifieds Listing Connector`
-**Статус:** 🔧 ПОСТРОЕН; fixture + handoff PASS; **live-smoke #1 (actor `fatihtahta~avito-russia-scraper`) запущен → PARTIAL FAIL (actor вернул пустой/поисковый элемент); добавлена строгая валидация (DEC-094); валидная live-выгрузка ещё не достигнута**. `active=false`. Stage 3.3 (Business Scout Agent).
-**Дата:** 2026-06-11 · **Решения:** DEC-094 (валидация live + actor_limit/pipeline_limit) · DEC-093 (actor `fatihtahta~avito-russia-scraper`) · DEC-092 (ad-intel) · DEC-090 (build) · DEC-084 (выбор источника).
+**Статус:** 🔧 ПОСТРОЕН (v005); fixture + handoff PASS; **live retest #2 — транспорт PASS (10/10 валидных), но бизнес-релевантность FAIL (2 уникальные строки — «юридический адрес», ложные срабатывания) → добавлен фильтр бизнес-релевантности (DEC-095); live retest #3 ожидается**. `active=false`. Stage 3.3 (Business Scout Agent).
+**Дата:** 2026-06-11 · **Решения:** DEC-095 (фильтр бизнес-релевантности live) · DEC-094 (валидация live + actor_limit/pipeline_limit) · DEC-093 (actor `fatihtahta~avito-russia-scraper`) · DEC-092 (ad-intel) · DEC-090 (build) · DEC-084 (выбор источника).
 **План:** `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md` · **Тест-лог:** `docs/STAGE_3_3_TEST_RESULTS.md`.
 
 > **ПЕРВЫЙ реальный коннектор-источник после ручного приёма (Workflow 07).** Превращает данные объявлений
@@ -64,8 +64,9 @@ Manual Start
 | `write_duplicate_audit` | `true` | писать дубликаты в raw (аудит) |
 | `duplicate_next_action` | `monitor_duplicate` | next_action для дубликата-конкурента |
 | `actor_limit` | **`10`** | отправляется в Apify как `limit` (у actor `fatihtahta~avito-russia-scraper` минимум ~10) |
-| `pipeline_limit` | **`3`** | сколько **валидных** нормализованных объявлений WF09 пишет (live-smoke) |
-| `live_max_items` | `3` | legacy-алиас `pipeline_limit` (совместимость) |
+| `pipeline_limit` | **`10`** | сколько **принятых бизнес-релевантных** объявлений WF09 пишет в live-режиме (DEC-095: hard-negative ложные срабатывания НЕ расходуют лимит) |
+| `live_max_items` | `10` | legacy-алиас `pipeline_limit` (совместимость) |
+| `hard_skip_debug_audit` | **`false`** | (DEC-095) опционально: писать hard-skipped live false positives в raw для отладки (реестр — никогда). По умолчанию выкл. — без загрязнения raw |
 | `start_urls` | 1 URL поиска «кредитный брокер» (Москва) | `startUrls` для actor (live) |
 | `apify_actor_id` | **`fatihtahta~avito-russia-scraper`** | REST-id выбранного actor (формат с `~`, не `/`) |
 | `apify_token_placeholder` | `PASTE_APIFY_TOKEN_OR_USE_CREDENTIAL` | плейсхолдер токена |
@@ -157,6 +158,36 @@ and actor schema.» + `raw_response_preview` (≤300 символов; полн�
 > проверьте JSON-выход ноды Apify и схему actor; если actor продолжает возвращать пустые/поисковые элементы — оцените
 > альтернативный Avito-actor. Пример провальной попытки: `actor_items_received=1; valid_items=0; invalid_items=1;
 > unique=0; duplicates=0; skipped=0` — это **корректное** поведение (ничего не записано, реестр не засорён).
+
+### Фильтр бизнес-релевантности (DEC-095 — после live retest #2 с ложными срабатываниями)
+
+Live retest #2 (`avito_req_20260611_001222`) показал: транспорт работает (10/10 валидных), но 2 уникальные строки
+оказались **ложными срабатываниями** — услуги «юридический адрес для ООО», не кредитный брокеридж. Теперь действует
+**фильтр бизнес-релевантности**:
+
+- **Evidence релевантности = title + description + декодированный slug URL + category.** Поисковый запрос
+  используется только как слабый контекст и **НИКОГДА сам по себе не делает объявление релевантным**.
+- **Сильные позитивные фразы** (кредитный брокер, помощь в получении кредита, кредит после отказов, ипотечный
+  брокер, рефинансирование ипотеки, кредит для бизнеса, банковские гарантии; + транслит-формы для slug) →
+  `competitor_activity`/`competitor_listing` → `monitor_queue`.
+- **Hard-negative термины** (юридический адрес, адрес для ООО, немассовый/массовый адрес, регистрация ООО/ИП,
+  бухгалтерия, эквайринг, POS-терминал, терминал, касса/онлайн-касса, печать, штамп, ЭЦП, аренда офиса,
+  коворкинг, юридические услуги, оборудование; + транслит) **без** сильного кредитного evidence → live:
+  `record_type_hint=irrelevant_live_false_positive`, `dedup_status=hard_skipped` — **НЕ пишется** ни в
+  `raw_market_records` (по умолчанию; `hard_skip_debug_audit=true` — только для отладки), ни в
+  `market_record_registry`; считается в `hard_skipped_items`.
+- **Слабый финансовый evidence** (кредит/займ/ипотека/рефинансирование/просрочки… в title/description/slug/category)
+  → `market_signal`/`classified_offer` → `content_queue`. **Нет evidence вообще** (релевантность только от
+  запроса) → live: hard skip (query-only отклоняется).
+- **Порядок:** скоринг ВСЕХ структурно валидных элементов → отсев hard negatives → `pipeline_limit` применяется
+  только к **принятым бизнес-релевантным** записям (ложные срабатывания не расходуют лимит).
+- **Канонический URL:** трекинг-параметры (`?context=`, utm и т.п.) срезаются с listing-URL, когда в пути есть id
+  объявления; `dedup_key` по-прежнему `avito::classified::avito_listing_<id>`.
+- **Fixture-путь не изменён:** POS-контроль остаётся `irrelevant` → `skipped_log` и пишется (6 raw / 6 registry).
+
+`result_summary` (8 счётчиков): `actor_items_received / structurally_valid_items / invalid_items /
+business_relevant_items / hard_skipped_items / unique / duplicates / over_pipeline_limit`. При hard-skip в `notes`
+добавляются `hard_skipped_items=N` + `first_hard_skip` (title + причина, ≤160 символов).
 
 ### Маппинг полей actor `fatihtahta~avito-russia-scraper` (Task D)
 `Normalize Avito Listings` принимает поля и из fixture, и из ответа actor (псевдонимы, без выдумывания

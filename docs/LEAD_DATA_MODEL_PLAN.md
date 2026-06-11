@@ -10,6 +10,14 @@ the **why**; `TABLE_SCHEMA.md` holds the canonical column tables.
 > comments, messages, profiles, forum threads, or manually pasted snippets — often with **no stable URL**.
 > They get their own schema and their own non-URL dedup ledger. `url_candidates`/`url_registry` are **unchanged**.
 
+> **CONTACT POLICY (2026-06-11, DEC-097/098):** all contact-bearing fields in this data model
+> (`contact_public`, `contact_channel`) are governed by **`docs/CONTACT_AND_OUTREACH_POLICY.md`**: public
+> contacts only, verbatim, never reconstructed; `contact_channel` ∈ phone/email/telegram/profile/form/unknown;
+> a non-empty contact requires `contact_source_url` evidence and a `contact_confidence` + `contact_use_policy`
+> (manager_allowed / manual_review / no_outreach / aggregate_only — the latter three fields are planned schema
+> additions, to be added alongside the next schema revision, not retrofitted now). Leads without a public
+> contact route to `review_queue`/`lead_signal`, never to `results`/contact. No automatic outreach by default.
+
 > **REFRAME (2026-06-08, DEC-078):** under the Business Scout Agent, the request ledger is generalized from
 > `lead_discovery_requests` to **`agent_requests`** (a `request_type` field selects the tool — touchpoint
 > discovery, comment mining, semantic/ads, etc.). We keep **one** request table, not two. `raw_market_records`

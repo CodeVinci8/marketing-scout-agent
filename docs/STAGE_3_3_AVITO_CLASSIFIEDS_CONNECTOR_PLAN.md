@@ -1,6 +1,21 @@
 # STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md — Stage 3.3 Plan
 
-**Status:** 🔧 BUILT + AD-INTELLIGENCE QUALITY PATCH (DEC-092); fixture + WF08 handoff PASS, **live Avito scrape NOT tested** — `n8n/workflows/09_avito_classifieds_listing_connector.json`, `active=false`.
+**Status:** 🔧 BUILT + LIVE RELEVANCE FILTER (DEC-095, v005); fixture + WF08 handoff PASS; **live transport PASS (retest #2), live business relevance FAILED → filter added, retest #3 pending** — `n8n/workflows/09_avito_classifieds_listing_connector.json`, `active=false`.
+
+> **Live retest #2 + business relevance filter (DEC-095, 2026-06-11):** retest #2
+> (`avito_req_20260611_001222`) proved the Apify transport works (`actor_items_received=10; valid_items=10;
+> invalid_items=0; unique=2; duplicates=1; over_pipeline_limit=7`) — **but both unique rows were legal-address
+> false positives** (`yuridicheskiy_adres_dlya_ooo_ot_sobstvennika`, `ne_massovyy_yuridicheskiy_adres_ot_sobstvennika`);
+> the relevant credit-broker row was a duplicate. **v005 patch:** relevance is scored from **listing evidence only**
+> (title + description + decoded URL slug + category — the search query NEVER makes a listing relevant); strong
+> credit/broker phrases → `competitor_activity`; hard negatives (юр. адрес, регистрация ООО/ИП, бухгалтерия,
+> эквайринг, POS-терминал, касса, печать, ЭЦП, аренда офиса, коворкинг…) without strong credit evidence →
+> `hard_skipped` (live false positives are **not written** to raw/registry and are filtered **before**
+> `pipeline_limit`, which now applies only to accepted business-relevant records; `pipeline_limit=10` for the next
+> smoke); 8-count `result_summary` (`actor_items_received / structurally_valid_items / invalid_items /
+> business_relevant_items / hard_skipped_items / unique / duplicates / over_pipeline_limit`); canonical listing
+> URLs (tracking params stripped when safe; dedup_key still `avito::classified::avito_listing_<id>`). Fixture path
+> unchanged. Simulation: 31 checks PASS. **Stage 3.3 closes only after a clean live run (Test 3b).**
 
 > **Quality patch (DEC-092, 2026-06-10):** WF09 — `max_items=6` (= total fixture records incl. the irrelevant
 > control; `requested_limit` matches actual output), richer `service_hint`
