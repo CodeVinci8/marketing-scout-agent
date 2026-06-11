@@ -8,7 +8,7 @@
 
 ---
 
-## RESULTS SO FAR (recorded 2026-06-10) — fixture + handoff PASS; live scrape NOT tested
+## RESULTS SO FAR (updated 2026-06-11) — fixture + handoff PASS; live transport PASS; live business relevance FAILED → DEC-095 filter added, retest pending
 
 > **Fixture-mode only — no real Avito scrape happened.** `fixture_mode=true`, `live_mode=false`, source cost $0, the
 > Apify HTTP node did not run. These runs prove the **pipeline shape** (Avito-like listing → `raw_market_records` →
@@ -32,6 +32,22 @@
   (valid writes), and reports `actor_items_received/valid_items/invalid_items`. **Valid live extraction still not
   achieved** — ready for retest (see Test 3). Status: **fixture + handoff approved; live valid-listing extraction not
   yet achieved.**
+
+### LIVE RETEST #2 (2026-06-11) — ✅ TRANSPORT PASS / ❌ BUSINESS RELEVANCE FAIL → DEC-095 filter
+`agent_request_id=avito_req_20260611_001222`, actor `fatihtahta~avito-russia-scraper`. **The Apify transport now
+works:** `actor_items_received=10; valid_items=10; invalid_items=0; unique=2; duplicates=1; over_pipeline_limit=7`.
+**But both unique rows were live FALSE POSITIVES** — legal-address services, not credit-broker offers:
+1. `yuridicheskiy_adres_dlya_ooo_ot_sobstvennika` («Юридический адрес для ООО от собственника»)
+2. `ne_massovyy_yuridicheskiy_adres_ot_sobstvennika` («Не массовый юридический адрес от собственника»)
+One genuinely relevant credit-broker row was a duplicate (already in the registry). **Diagnosis:** transport +
+structural validation OK; **business relevance filtering insufficient** — generic service words + the search query
+implied relevance, and `pipeline_limit` consumed budget on arbitrary first rows. **Fixed by DEC-095** (v005 patch):
+relevance from title/description/decoded-slug/category only (query NEVER makes a listing relevant); hard negatives
+(юридический адрес / регистрация ООО / POS-терминал / касса / …) without strong credit evidence → `hard_skipped`,
+**not written to raw or registry**, counted in `hard_skipped_items`, and filtered **before** `pipeline_limit`
+(now 10) so junk never consumes the write budget. New `result_summary` counts:
+`actor_items_received / structurally_valid_items / invalid_items / business_relevant_items / hard_skipped_items /
+unique / duplicates / over_pipeline_limit`. **Live retest #3 with the relevance filter pending — see Test 3b.**
 
 ### RETEST TARGET (post-DEC-092) — WF08 handoff still 5/1, now with rich ad intelligence
 Re-run the handoff (same filter, `max_records=6`) and confirm routing is unchanged **and** the business fields improved:
@@ -177,6 +193,57 @@ scraping; respect platform ToS.
 
 > After Test 3 (only if `valid_items>0`), run **Test 4 (WF08 handoff)** with
 > `agent_request_id_filter=<this live run's agent_request_id>`.
+
+---
+
+## TEST 3b — LIVE retest #3 with the DEC-095 business relevance filter — ⏳ AWAITING OPERATOR RUN
+
+> Attempt #2 (`avito_req_20260611_001222`) passed transport (10/10 valid) but wrote 2 legal-address false
+> positives. The v005 patch must be re-imported before this retest.
+
+### How to run
+1. **Re-import WF09 (v005)**, rebind Google Sheets credential + real Spreadsheet ID, bind the Apify HTTP Header
+   Auth credential. Do NOT activate.
+2. `Set Avito Connector Config`: `fixture_mode=false`, `live_mode=true`, `include_irrelevant_control_fixture=false`.
+   Keep `actor_limit=10`, **`pipeline_limit=10`**, `write_duplicate_audit=true`, `hard_skip_debug_audit=false`.
+3. Record Apify credits before → **Execute once** → after. Inspect the Apify node JSON output and the
+   `Final Summary Output` counts.
+
+### Acceptance (Test 3b target)
+- `result_summary` carries all 8 counts: `actor_items_received / structurally_valid_items / invalid_items /
+  business_relevant_items / hard_skipped_items / unique / duplicates / over_pipeline_limit`.
+- **Legal-address / POS-terminal / registration / accounting listings → `hard_skipped`** (counted, **not** in
+  `raw_market_records`, **not** in `market_record_registry`).
+- Query-only items (no finance evidence in title/description/slug/category) → `hard_skipped`.
+- Strong credit/broker listings → `competitor_activity`, unique → raw + registry; already-seen → `duplicate_in_registry`.
+- `source_url`/`post_url` are canonical (no `?context=`/tracking params on listing URLs); `dedup_key` =
+  `avito::classified::avito_listing_<id>`.
+- 0 Firecrawl / 0 Claude; record the Apify actor cost.
+- **If `unique>0`:** run Test 4 (WF08 handoff) with `agent_request_id_filter=<this run id>` and verify
+  monitor_queue rows carry offer_text/terms/service_type. **If all relevant rows are duplicates:** correct
+  outcome, no WF08 run needed. **If `hard_skipped_items` is high and `business_relevant_items=0`:** inspect which
+  terms fired (notes carry `first_hard_skip` + reason) — tune term lists only with operator approval.
+
+### Observed (operator fills)
+| metric | attempt #2 (pre-DEC-095) | retest target | observed |
+|--------|--------------------------|---------------|----------|
+| actor_items_received | 10 | record | |
+| structurally_valid_items | 10 | record | |
+| invalid_items | 0 | record | |
+| business_relevant_items | n/a (no filter) | record | |
+| hard_skipped_items | n/a (2 false positives WRITTEN) | ≥2 expected, 0 written | |
+| unique | 2 (both false positives) | relevant only | |
+| duplicates | 1 | record | |
+| over_pipeline_limit | 7 | record | |
+| false positives in raw/registry | 2 (WRONG) | **0** | |
+| Apify cost / Firecrawl / Claude | incurred / 0 / 0 | record / 0 / 0 | |
+
+- [ ] **PASS / FAIL:** ____
+
+> **Registry cleanup (operator, optional):** the 2 false-positive rows written by attempt #2
+> (`yuridicheskiy_adres_dlya_ooo…`, `ne_massovyy_yuridicheskiy_adres…`) remain in `raw_market_records` /
+> `market_record_registry`. Recommend deleting their registry rows (so the listings can be re-evaluated by the
+> filter) or marking them `irrelevant` — operator decision; WF09 never deletes rows.
 
 ---
 

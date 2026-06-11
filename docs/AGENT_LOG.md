@@ -5,6 +5,30 @@ Most recent first.
 
 ---
 
+## 2026-06-11 (session 2) — WF09 live business relevance filter (DEC-095) + Stage 3.4 architecture pack (DEC-096…101)
+
+**Agent role:** project-engineer
+**Session goal:** after live retest #2 wrote 2 legal-address false positives, add a business relevance filter to WF09; create the Stage 3.4 / WF10 / Contact Policy / Niche Pack / Competitor Ad Intelligence documentation pack. **No external API call this session.**
+
+**Live retest #2 diagnosis (recorded):** `avito_req_20260611_001222`, actor `fatihtahta~avito-russia-scraper` — transport PASS (`actor_items_received=10; valid_items=10; invalid_items=0; unique=2; duplicates=1; over_pipeline_limit=7`), but both unique rows were **false positives**: `yuridicheskiy_adres_dlya_ooo_ot_sobstvennika` and `ne_massovyy_yuridicheskiy_adres_ot_sobstvennika` (legal-address services, not credit brokerage); the relevant credit-broker row was a duplicate. → **Apify transport works; business relevance filtering was insufficient.**
+
+**WF09 patch (`09_…json`, JSON valid, active=false, versionId `…v005-live-relevance-filter-20260611`, DEC-095):**
+- **Relevance evidence = title + description + decoded URL slug + category only** — the search query NEVER makes a listing relevant. Cyrillic + transliterated term sets (slugs are translit).
+- Strong positive phrases → `competitor_activity`; weak finance evidence → `market_signal`; **hard negatives** (юр. адрес, адрес для ООО, регистрация ООО/ИП, бухгалтерия, эквайринг, POS-терминал, касса, печать, штамп, ЭЦП, аренда офиса, коворкинг, юридические услуги, оборудование + translit) without strong credit evidence → live `irrelevant_live_false_positive` / `dedup_status=hard_skipped` — **not written to raw (default; `hard_skip_debug_audit=false` opt-in) or registry**, counted in `hard_skipped_items`; query-only items also hard-skipped.
+- **Order:** score all structurally valid items → filter hard negatives → `pipeline_limit` (now **10**) applies only to accepted business-relevant records (junk never consumes the cap).
+- 8-count `result_summary`: `actor_items_received / structurally_valid_items / invalid_items / business_relevant_items / hard_skipped_items / unique / duplicates / over_pipeline_limit` + `first_hard_skip` debug note.
+- **Canonical Avito URLs:** tracking query/context stripped when the path carries a listing id; `dedup_key` unchanged (`avito::classified::avito_listing_<id>`). Fixture path unchanged (max_items=6, POS control → skipped_log, duplicates preserved).
+
+**Verified (Node simulation harness, 31 checks PASS):** fixture first run 6 raw / 6 registry / monitor 5 / skipped 1; fixture duplicate run registry +0; modeled live batch incl. the two real legal-address items + POS terminal + query-only cleaning listing + legal-services listing → all 5 hard_skipped (0 raw / 0 registry), known broker → duplicate_in_registry, 2 strong brokers unique, weak-finance consultation accepted as market_signal, search URL → invalid; counts 10/9/1/4/5/3/1/0; pipeline_limit=3 with 4 leading hard negatives → 3 brokers + 2 over_pipeline_limit; debug audit → raw only. JSON valid; active=false; no real keys/Spreadsheet ID; MSK preserved (no bare toISOString); fixture_mode=true/live_mode=false defaults; actor_limit=10/pipeline_limit=10; no tool_use/KEY=VALUE. WF04/05/06/07/08 untouched.
+
+**New docs (architecture pack, nothing built):** `CONTACT_AND_OUTREACH_POLICY.md` (DEC-097/098 — public contacts only with `contact_source_url` evidence; contact_use_policy manager_allowed/manual_review/no_outreach/aggregate_only; no auto-outreach by default; lead without public contact → review_queue), `STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` (DEC-096 — one source at a time: Avito → Telegram public → VK API → reviews/maps → Dzen → Instagram after risk review), `WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md` (DEC-099 — table designs: competitor_profiles, market_angles, audience_activity_signals, content_positioning_plan, source_confidence_rules; build gated on a stable live source), `NICHE_PACK_SYSTEM_PLAN.md` (DEC-100 — niches/*.yaml fields; WF09/08/10 to consume packs instead of hardcoded credit-broker rules), `COMPETITOR_AD_INTELLIGENCE_PLAN.md` (DEC-101 — first-class capability pipeline).
+
+**Decisions:** DEC-095…DEC-101. Docs updated: STAGE_3_3_TEST_RESULTS (live retest #2 + Test 3b), STAGE_3_3 plan, STAGE_3_3_SOURCE_DECISION_PLAN, WF09 RU, LEAD_DISCOVERY_ARCHITECTURE, LEAD_DATA_MODEL_PLAN, SOCIAL_CLASSIFIED_SOURCE_MATRIX, DECISIONS, NEXT_ACTIONS, COSTS_AND_LIMITS, AGENT_CAPABILITIES, ROADMAP, AGENT_LOG, core/hot/recent.
+
+**Next operator action:** commit → re-import WF09 v005 → (optional) clean the 2 false-positive registry rows from attempt #2 → approved LIVE retest #3 (`fixture_mode=false`, `live_mode=true`; expect legal-address/POS listings hard_skipped, 0 written) → if `unique>0`, WF08 handoff with `agent_request_id_filter=<run id>`. Stage 3.3 closes on a clean live run.
+
+---
+
 ## 2026-06-11 — Workflow 09 live mode: valid-listing guard after failed live smoke #1 (DEC-093/094)
 
 **Agent role:** project-engineer

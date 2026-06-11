@@ -22,6 +22,16 @@
 > operator approval and a per-source feasibility/compliance check. No Telegram/Instagram/VK/Dzen parser or Telegram
 > bot is built.
 
+> **Status update (DEC-095, 2026-06-11):** live retest #2 (`avito_req_20260611_001222`) proved the **Apify
+> transport works** (10/10 valid items), but **live business relevance failed** — the 2 unique rows were
+> legal-address services, not credit-broker offers. WF09 v005 adds a business relevance filter (listing evidence
+> only — title/description/decoded-slug/category; the query never makes a listing relevant; hard negatives →
+> `hard_skipped`, never written). **Decision: Stage 3.3 does not close until a live run produces only relevant
+> rows.** The wider social strategy is now written: `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` (DEC-096:
+> one source at a time — Avito stabilized first, then Telegram public feasibility, then VK, reviews/maps, Dzen;
+> Instagram only after a separate risk review). Contact handling is governed by
+> `docs/CONTACT_AND_OUTREACH_POLICY.md` (DEC-097/098).
+
 > **Status update (DEC-092, 2026-06-10):** WF09 fixture tests + the WF08 deterministic handoff **passed** (monitor 5 /
 > skipped 1 / technical_errors 0 / Claude 0), and the Competitor Ad / Semantic Intelligence fields were upgraded
 > (offer/title, price/terms, specific service themes, richer keywords). **This is fixture-mode only — real Avito
