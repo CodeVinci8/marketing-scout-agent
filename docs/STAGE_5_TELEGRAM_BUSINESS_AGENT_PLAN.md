@@ -31,6 +31,11 @@ Telegram command → command parser → agent_requests row (+ approval gate)
 
 Future: `/niche <pack>` — niche selection once the Niche Pack System (DEC-100) exists.
 
+Session-4 note (2026-06-12): the command surface stays `commands → agent_requests → workflow selection →
+report delivery`, now over the expanded roster — `/scan` covers WF09 (live), WF11 (Telegram live-ready),
+WF13 (VK live-ready); new candidates `/triage` (WF14) and `/runs` (live_source_runs digest) join v1.1;
+`/report` delivers the WF12 v0.3 stakeholder digest (executive digest bullets render directly).
+
 ## 3. Approval gates
 
 - Every command that can spend money or touch a live source creates a **pending** `agent_requests` row

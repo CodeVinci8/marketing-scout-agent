@@ -4,7 +4,53 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-12, session 3) — WF08 cost-control patch (DEC-119) · WF11 v0.2 live path (DEC-120) · WF13 VK foundation BUILT (DEC-121) · WF12 v0.2 report + Claude branch (DEC-122) · Stage 3/4/5 defined (DEC-123)
+## CURRENT PRIORITY (2026-06-12, session 4) — Live-source readiness (WF11/WF13) · Public Lead Signal Layer (WF14) · Run ledger (WF15 + live_source_runs) · WF10 v0.3 objections · WF12 v0.3 stakeholder report + budget-gated Claude path · Stage 2 website reintegration (DEC-124–130)
+
+**Built this session ($0, no external calls, no Claude calls, no Apify, no live scraping):**
+- **WF13 v0.2:** guarded live VK path (token `I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION` + allowlist + DISABLED
+  official-API wall.get HTTP node + inert parser); phone `#ERROR!` fixed (Sheets-safe apostrophe, DEC-124);
+  VK comments → `touchpoint_type=public_comment`; stage label → `stage_3_source_foundation_vk_public_discussion`;
+  per-run `live_source_runs` logging.
+- **WF11 v0.3:** per-run `live_source_runs` logging + Sheets-safe contacts (live path of DEC-120 unchanged).
+- **WF14 NEW:** Public Lead Signal Triage — deterministic pains/intents/scores → `public_lead_signals` (28 cols);
+  evidence-not-permission policy; dedup post_url+text_hash.
+- **WF15 NEW:** manual live-source run logger with enum validation (rejects token values in rows).
+- **WF10 v0.3:** objection_count now real (review_queue-scoped distrust vocabulary); pains merged
+  («просрочки / плохая КИ», «страх предоплаты / мошенников»); comment_text in blob.
+- **WF12 v0.3:** stakeholder report (executive digest 5–7 bullets, clean names, short offers, website block,
+  lead/audience block, action blocks; 25-col schema) + **budget-gated test-ready Claude branch**
+  (token + cost guard BEFORE HTTP + JSON sections + quality flags + token/cost recording).
+- **Tabs to create:** `competitor_site_snapshots` (22) · `live_source_runs` (23) · `public_lead_signals` (28);
+  `market_intelligence_reports` headers → 25 cols (v0.3).
+
+**Operator tests next, in order (all $0 unless stated):**
+1. [ ] Commit this session (commands in the session report).
+2. [ ] Create/extend the 4 tabs above (headers from TABLE_SCHEMA.md §E–G + report schema v0.3).
+3. [ ] Re-import WF13 v0.2 (do NOT activate; rebind credential, paste Spreadsheet ID on 5 sheet nodes).
+   Fixture Test 1: counters unchanged (6/5/1/4/1, raw +5, registry +4) **plus** `live_source_runs` +1
+   (mode=fixture, external_calls=0); contact `+7 999 000-11-22` renders as text (no `#ERROR!`);
+   Anna's comments have `touchpoint_type=public_comment`; notes carry the new stage label.
+   Test 2 repeat: unique=0/dups=5, runlog +1. Test 3: fixture_mode=false, empty token → LIVE VK Approval
+   Gate error; HTTP node stays DISABLED.
+4. [ ] Re-import WF11 v0.3; fixture retest (6/5/1/4/1) + `live_source_runs` +1; live gate test unchanged.
+5. [ ] WF13→WF08 handoff (llm_enabled=false), then **WF10 v0.3**: vk audience row must show
+   question_count≥2, objection_count≥1, buying_intent_count≥1, top_pains ⊇ {отказы банков,
+   просрочки / плохая КИ, страх предоплаты / мошенников}.
+6. [ ] Import **WF14**; Test 1: ≥2 public_lead_signals rows from VK comments (buying_intent + objection,
+   correct pains, contact_use_policy, NO outreach recommendations); Test 2 repeat: signals_written=0.
+7. [ ] Re-import **WF12 v0.3**; deterministic run ($0): 25-col row, executive digest, no `(unnamed)` names,
+   website/lead blocks render (empty-tab fallbacks OK), `live_source_runs` +1 (mode=deterministic).
+   Guard tests: enable_llm_summary=true without token → gate error; with token but
+   llm_max_estimated_cost_usd=0.0001 → budget-guard error BEFORE HTTP.
+8. [ ] Import **WF15**; log one historical WF09 live run manually → live_source_runs +1; enum-validation
+   error test (mode='bogus' → clear error).
+9. [ ] **Separate approvals later (each its own gate + cost note):** WF11 live Telegram preview ·
+   WF13 live VK wall.get (bind VK credential) · WF12 Claude summary (bind Anthropic credential, enable HTTP,
+   record cost in COSTS_AND_LIMITS.md) · WF04 Phase B snapshot-append · Telegram delivery (Stage 5).
+
+---
+
+## PREVIOUS PRIORITY (2026-06-12, session 3) — WF08 cost-control patch (DEC-119) · WF11 v0.2 live path (DEC-120) · WF13 VK foundation BUILT (DEC-121) · WF12 v0.2 report + Claude branch (DEC-122) · Stage 3/4/5 defined (DEC-123)
 
 **Built this session ($0, no external calls, no Claude calls, no live scraping):**
 - **WF08 v10:** `llm_enabled=false` master kill switch — uncertain records → `review_queue` with

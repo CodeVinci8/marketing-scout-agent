@@ -5,6 +5,44 @@ Most recent first.
 
 ---
 
+## 2026-06-12 (session 4) — Live-source readiness (WF11 v0.3 / WF13 v0.2) · Public Lead Signal Layer (WF14) · Run ledger (live_source_runs + WF15) · WF10 v0.3 · WF12 v0.3 stakeholder report + budget-gated Claude path · Stage 2 website reintegration (DEC-124–130)
+
+**Agent role:** project-engineer
+
+**What was done ($0, no external calls, no Claude calls, no Apify, no live scraping; WF04/05/06/07/08/09 untouched):**
+- **DEC-124 sheets-safe fix:** `contact_public` values starting with `+`/`=` get an apostrophe prefix in
+  WF11/WF13/WF14 — fixes `#ERROR!` for `+7` phones.
+- **WF13 v0.2 (DEC-125):** real guarded live VK path (approval gate → DISABLED official-API `wall.get`
+  HTTP placeholder → inert parser that throws without an API response); business-relevant comments →
+  `touchpoint_type=public_comment`; stage labels → `stage_3_source_foundation_vk_public_discussion`;
+  fixture counters unchanged.
+- **live_source_runs ledger (DEC-126):** 23-col tab; WF11/WF12/WF13 append one row per run; new WF15
+  manual logger (enum validation; rejects approval-token values in rows).
+- **WF10 v0.3 (DEC-127):** objection_count real (was hardcoded 0) via review_queue-scoped distrust
+  vocabulary; pain labels merged; comment_text included in the analysis blob.
+- **WF14 NEW (DEC-130):** deterministic Public Lead Signal Triage → `public_lead_signals` (28 cols);
+  9 pain types, 5 intent types, 0–100 scores; evidence-not-permission policy; post_url+text_hash dedup.
+- **WF12 v0.3 (DEC-128):** stakeholder report (executive digest, clean competitor names, shortened offers,
+  competitor-website block from `competitor_site_snapshots`, public lead/audience aggregate block,
+  manager/content/source action blocks); 25-col report schema (llm_status/model/tokens/cost/summary_ru/
+  recommendations_ru/quality_flags); Claude branch now operator-test-ready: budget guard BEFORE HTTP
+  (input-char cap + estimated-cost cap), evidence-bound JSON prompt (6 RU sections), quality flags,
+  usage-based cost recording into the row + agent_requests + live_source_runs.
+- **Stage 2 reintegration (DEC-129):** `competitor_site_snapshots` (22 cols) + WF12 website block;
+  WF04 Phase B append planned (own approval); WF06→WF04 auto-handoff deliberately stays deferred.
+- **Validation:** all 6 workflow JSONs pass `python3 -m json.tool`; structural checks pass (active=false,
+  no real keys/IDs, all HTTP nodes disabled, all connection targets exist); every embedded jsCode block
+  passes `node --check`.
+- **Docs:** TABLE_SCHEMA §E–G (3 new tabs), report schema v0.3, STAGE_2_WEB_COMPETITOR_PIPELINE_REVIEW (new),
+  PUBLIC_LEAD_SIGNAL_LAYER (new), WF14 RU doc (new), STAGE_3/4/5 updates, ROADMAP, NEXT_ACTIONS,
+  COSTS_AND_LIMITS, AGENT_CAPABILITIES, CONTACT policy addendum, Sheets validation addendum,
+  DECISIONS DEC-124–130, RU doc patches for WF11/12/13.
+
+**Next:** operator test sequence in NEXT_ACTIONS (commit → tabs → WF13/WF11 retests → WF08 handoff →
+WF10 v0.3 check → WF14 → WF12 v0.3 + guard/budget tests → WF15). Live/Claude arming = separate approvals.
+
+---
+
 ## 2026-06-12 (session 3) — WF08 cost-control kill switch (DEC-119) · WF11 v0.2 guarded live path (DEC-120) · WF13 VK foundation (DEC-121) · WF12 v0.2 report + Claude branch (DEC-122) · Stage 3/4/5 definitions (DEC-123)
 
 **Agent role:** project-engineer

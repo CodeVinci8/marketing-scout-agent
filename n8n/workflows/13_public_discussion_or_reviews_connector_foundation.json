@@ -3,8 +3,8 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## WF13 — Public Discussion Connector Foundation (VK, public groups/posts/comments) · v0.1 (DEC-121)\n\n**Назначение:** третий источник после Avito (WF09) и Telegram (WF11) — ПУБЛИЧНЫЕ обсуждения VK:\nпосты и комментарии групп из allowlist. Главная ценность — сигналы АУДИТОРИИ (вопросы, возражения,\nболи, buying intent) + агрегаты авторов (active/repeat author count) для WF10 audience_activity_signals,\nкоторые Avito/Telegram (конкурентная реклама) не покрывают.\n\n**Жёсткие правила:** fixture-first ($0, БЕЗ HTTP-нод); live_mode=false (guard бросает ошибку);\nтолько публичные группы/посты/комментарии — НИКАКИХ приватных чатов/сообщений, выгрузки участников,\nскрытых контактов, авто-аутрича (CONTACT_AND_OUTREACH_POLICY). Контакт пишется ТОЛЬКО если он дословно\nвиден в публичном тексте; profile_url автора — только если профиль публичный. Без Claude. Без\nавто-handoff в WF08. Пишет только: agent_requests / raw_market_records (40 колонок) /\nmarket_record_registry (15 колонок). Время MSK (+03:00). Дедуп и hard-negative фильтр — как в WF09/WF11.\n\nДок: docs/N8N_WORKFLOW_13_PUBLIC_DISCUSSION_OR_REVIEWS_CONNECTOR_RU.md",
-        "height": 520,
+        "content": "## WF13 — Public Discussion Connector Foundation (VK, public groups/posts/comments) · v0.1 (DEC-121)\n\n**Назначение:** третий источник после Avito (WF09) и Telegram (WF11) — ПУБЛИЧНЫЕ обсуждения VK:\nпосты и комментарии групп из allowlist. Главная ценность — сигналы АУДИТОРИИ (вопросы, возражения,\nболи, buying intent) + агрегаты авторов (active/repeat author count) для WF10 audience_activity_signals,\nкоторые Avito/Telegram (конкурентная реклама) не покрывают.\n\n**Жёсткие правила:** fixture-first ($0, БЕЗ HTTP-нод); live_mode=false (guard бросает ошибку);\nтолько публичные группы/посты/комментарии — НИКАКИХ приватных чатов/сообщений, выгрузки участников,\nскрытых контактов, авто-аутрича (CONTACT_AND_OUTREACH_POLICY). Контакт пишется ТОЛЬКО если он дословно\nвиден в публичном тексте; profile_url автора — только если профиль публичный. Без Claude. Без\nавто-handoff в WF08. Пишет только: agent_requests / raw_market_records (40 колонок) /\nmarket_record_registry (15 колонок). Время MSK (+03:00). Дедуп и hard-negative фильтр — как в WF09/WF11.\n\nДок: docs/N8N_WORKFLOW_13_PUBLIC_DISCUSSION_OR_REVIEWS_CONNECTOR_RU.md\n\n**v0.2 (DEC-124/125/126):** 1) телефонные контакты пишутся Sheets-safe (апостроф перед +/= — фикс #ERROR!); 2) бизнес-релевантные КОММЕНТАРИИ получают touchpoint_type=public_comment; 3) метка этапа = stage_3_source_foundation_vk_public_discussion; 4) добавлен ОХРАНЯЕМЫЙ live-путь: гейт (token=I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION + allowlist) -> ОТКЛЮЧЁННЫЙ HTTP (VK official API wall.get, токен ТОЛЬКО как n8n-креденшл) -> инертный парсер (бросает ошибку без ответа API); 5) каждый прогон пишет 1 строку в live_source_runs (23 колонки). По умолчанию всё инертно: fixture_mode=true, live_mode=false, token пуст, allowlist пуст, HTTP disabled.",
+        "height": 760,
         "width": 620
       },
       "id": "wf13-note-1",
@@ -18,8 +18,8 @@
     },
     {
       "parameters": {
-        "content": "## Setup & Test (fixture)\n\n1. Вставить SPREADSHEET_ID в 4 Google Sheets ноды (Read registry + 3 Append).\n2. Запуск вручную (workflow остаётся active=false).\n3. Ожидаемые счётчики fixture-прогона #1: items_received=6, business_relevant=5, hard_skipped=1,\n   unique=4, duplicates=1 (in-batch дубль поста 201), raw +5, registry +4,\n   active_author_count=3, repeat_author_count=1 (Анна: 2 комментария), question_objection_unique=2.\n4. Повторный прогон: unique=0, duplicates=5, registry +0.\n5. Guard-тест: live_mode=true -> ошибка (live не реализован).\n6. Handoff в WF08 (после одобрения): первый wf13_req_* id, platform=vk, llm_enabled=false ($0):\n   ожидаются monitor_queue (конкурентный пост), review_queue (вопрос/возражение), content_queue (market signal).",
-        "height": 520,
+        "content": "## Setup & Test (fixture)\n\n1. Вставить SPREADSHEET_ID в 4 Google Sheets ноды (Read registry + 3 Append).\n2. Запуск вручную (workflow остаётся active=false).\n3. Ожидаемые счётчики fixture-прогона #1: items_received=6, business_relevant=5, hard_skipped=1,\n   unique=4, duplicates=1 (in-batch дубль поста 201), raw +5, registry +4,\n   active_author_count=3, repeat_author_count=1 (Анна: 2 комментария), question_objection_unique=2.\n4. Повторный прогон: unique=0, duplicates=5, registry +0.\n5. Guard-тест: live_mode=true -> ошибка (live не реализован).\n6. Handoff в WF08 (после одобрения): первый wf13_req_* id, platform=vk, llm_enabled=false ($0):\n   ожидаются monitor_queue (конкурентный пост), review_queue (вопрос/возражение), content_queue (market signal).\n7. v0.2: live_source_runs +1 на каждый прогон (mode=fixture, external_calls=0, cost=0); contact_public для +7-телефонов отображается текстом (без #ERROR!); комментарии VK имеют touchpoint_type=public_comment.\n8. Guard-тест v0.2: fixture_mode=false без токена -> ошибка на LIVE VK Approval Gate (токен/allowlist/HTTP-нода требуются). Вернуть fixture_mode=true.",
+        "height": 640,
         "width": 620
       },
       "id": "wf13-note-2",
@@ -44,7 +44,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// WF13 Public Discussion Connector Foundation config — VK PUBLIC groups/posts/comments (DEC-121).\n// Source decision (Stage 3.4 matrix order: Avito -> Telegram -> VK): VK public discussions fill the\n// audience_activity_signals gap (questions/objections/buying intent + author aggregates) that the two\n// competitor-ad-heavy sources (Avito, Telegram) do not cover. Fixture-first, $0, NO external calls,\n// no Claude, no auto-handoff to WF08. PUBLIC groups/posts/comments ONLY: no private chats/messages,\n// no member extraction, no hidden contacts, no auto-outreach (CONTACT_AND_OUTREACH_POLICY).\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nreturn [{ json: {\n  fixture_mode:true,\n  live_mode:false,\n  // --- live v0.2 PLACEHOLDERS: live fetch is NOT implemented (no HTTP node in this workflow).\n  // Enabling live requires explicit operator approval + transport decision (VK official API community/\n  // wall methods with an n8n-bound token, or an Apify VK actor) + cost estimate. Guard fires regardless.\n  live_transport:'none_not_implemented',\n  live_group_allowlist:[],\n  live_max_items_per_group:10,\n  live_requires_operator_approval:true,\n  platform:'vk',\n  source_type_post:'social_post',\n  source_type_comment:'social_comment',\n  requested_by:'operator',\n  request_type:'social_source_discovery',\n  region:'Москва/МО',\n  service_focus:'credit_broker',\n  group_allowlist:[\n    'kredity_msk_fixture',\n    'biznes_finansy_fixture',\n    'uslugi_msk_fixture'\n  ],\n  pipeline_limit:10,\n  approval_status_for_unique:'new',\n  write_duplicate_audit:true,\n  hard_skip_debug_audit:false,\n  duplicate_next_action:'monitor_duplicate',\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  agent_request_id:'wf13_req_'+stamp,\n  run_id:'wf13_'+stamp,\n  created_at:now\n}}];"
+        "jsCode": "// WF13 Public Discussion Connector Foundation config — VK PUBLIC groups/posts/comments (DEC-121).\n// Source decision (Stage 3.4 matrix order: Avito -> Telegram -> VK): VK public discussions fill the\n// audience_activity_signals gap (questions/objections/buying intent + author aggregates) that the two\n// competitor-ad-heavy sources (Avito, Telegram) do not cover. Fixture-first, $0, NO external calls,\n// no Claude, no auto-handoff to WF08. PUBLIC groups/posts/comments ONLY: no private chats/messages,\n// no member extraction, no hidden contacts, no auto-outreach (CONTACT_AND_OUTREACH_POLICY).\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nreturn [{ json: {\n  fixture_mode:true,\n  live_mode:false,\n  // --- live v0.2 GUARDED PATH (DEC-125): live VK public wall/comments fetch path exists but is INERT\n  // by default — live_mode=false, approval token empty, allowlist empty, and the HTTP node is DISABLED.\n  // Preferred transport: VK official API (wall.get / wall.getComments) with an operator-bound n8n\n  // credential (access token NEVER in this file). Enabling live requires ALL of: explicit operator\n  // approval (token below), non-empty allowlist, enabling the disabled HTTP node + binding a credential.\n  // Hard scope: PUBLIC groups/posts/comments ONLY — no private messages, no closed groups, no member\n  // extraction, no hidden contacts, no auto-outreach, no mass people lists (aggregate author counts only).\n  live_transport:'vk_api_wall_get',\n  live_approval_token:'',\n  live_group_allowlist:[],\n  live_max_items_per_group:10,\n  live_requires_operator_approval:true,\n  platform:'vk',\n  source_type_post:'social_post',\n  source_type_comment:'social_comment',\n  requested_by:'operator',\n  request_type:'social_source_discovery',\n  region:'Москва/МО',\n  service_focus:'credit_broker',\n  group_allowlist:[\n    'kredity_msk_fixture',\n    'biznes_finansy_fixture',\n    'uslugi_msk_fixture'\n  ],\n  pipeline_limit:10,\n  approval_status_for_unique:'new',\n  write_duplicate_audit:true,\n  hard_skip_debug_audit:false,\n  duplicate_next_action:'monitor_duplicate',\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  agent_request_id:'wf13_req_'+stamp,\n  run_id:'wf13_'+stamp,\n  created_at:now\n}}];"
       },
       "id": "wf13-config",
       "name": "Set Connector Config",
@@ -101,10 +101,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// LIVE MODE GUARD — live VK fetch is NOT implemented in the WF13 foundation (DEC-121).\n// This workflow contains NO HTTP node. Enabling live requires, in order: explicit operator approval,\n// a chosen transport (VK official API community/wall/comments methods with an n8n-bound token, or an\n// Apify VK actor), a bound credential, and a recorded cost estimate.\n// PUBLIC groups/posts/comments only — no private chats/messages, no member extraction, no hidden\n// contacts, no auto-outreach. The live_* config fields are PLACEHOLDERS; this guard fires regardless.\nthrow new Error('WF13 live_mode is not implemented in the foundation build. Fixture mode only (fixture_mode=true). Live VK public group/post/comment fetch requires explicit operator approval + transport + credential (see docs/N8N_WORKFLOW_13_PUBLIC_DISCUSSION_OR_REVIEWS_CONNECTOR_RU.md).');"
+        "jsCode": "// LIVE VK APPROVAL GATE (DEC-125) — fires on fixture_mode=false. INERT BY DEFAULT: it throws unless\n// the operator has explicitly armed the run. Even when armed, the downstream HTTP node ships DISABLED\n// with no credential, so no network call can happen without a second deliberate operator action.\n// Hard scope (CONTACT_AND_OUTREACH_POLICY): PUBLIC VK groups/posts/comments ONLY — no private messages,\n// no closed groups, no member extraction, no hidden contacts, no auto-outreach, no mass people lists.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Connector Config').first().json;\nconst token=str(cfg.live_approval_token);\nconst allow=Array.isArray(cfg.live_group_allowlist)?cfg.live_group_allowlist.map(g=>str(g)).filter(Boolean):[];\nconst maxItems=Math.min(Number(cfg.live_max_items_per_group)||10,10);\nif(token!=='I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION'){\n  throw new Error('WF13 live gate: operator approval token missing. Live VK public discussion fetch requires explicit operator approval: set live_approval_token=I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION, fill live_group_allowlist (public group/post URLs or screen names), bind a VK API credential in n8n, then ENABLE the disabled HTTP node. Default run stays fixture-only ($0). See docs/N8N_WORKFLOW_13_PUBLIC_DISCUSSION_OR_REVIEWS_CONNECTOR_RU.md.');\n}\nif(!allow.length){ throw new Error('WF13 live gate: live_group_allowlist is empty — allowlist-only operation, no discovery crawling.'); }\n// reject anything that is not a public group/post reference: invite links, private/closed markers, phone-like ids\nconst bad=allow.filter(g=>/join|invite|im\\?sel|write\\d|@|\\s/i.test(g)||g.charAt(0)==='+');\nif(bad.length){ throw new Error('WF13 live gate: rejected non-public-group entries (invite links / private chats are forbidden): '+bad.join(', ')); }\n// one item per allowlisted public group; the (disabled) HTTP node would call VK official API wall.get only.\nreturn allow.map(g=>{const screen=g.replace(/^https?:\\/\\/(www\\.)?vk\\.com\\//i,'').replace(/[\\/?#].*$/,'');\n  return { json: { group:screen, fetch_url:'https://api.vk.com/method/wall.get', screen_name:screen, max_items:maxItems, api_version:'5.199', live_transport:str(cfg.live_transport) } };});"
       },
       "id": "wf13-guard",
-      "name": "LIVE Mode Guard (not implemented)",
+      "name": "LIVE VK Approval Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -114,7 +114,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Normalize VK public posts/comments into the WF09/WF11-compatible record shape. Deterministic, $0.\n// Audience focus (DEC-121): questions/objections from public discussions become question_objection\n// records feeding WF08 -> WF10 audience_activity_signals. Contact policy (DEC-097/098/114): contact_public\n// ONLY when visible verbatim in the public text; author profile_url ONLY when the profile is public;\n// nothing reconstructed; no outreach — default manual_review.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nfunction hashText(s){s=str(s);let h=5381;for(let i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))>>>0;}return ('00000000'+h.toString(16)).slice(-8);}\nfunction canonUrl(u){u=str(u);return u.replace(/[?#].*$/,'').replace(/\\/+$/,'');}\nconst cfg=$('Set Connector Config').first().json;\nconst items=$input.all().map(i=>i.json);\n// niche vocabulary v0.1 hardcoded (credit_brokerage) — migrates to niche packs (DEC-100)\nconst STRONG=['кредитный брокер','ипотечный брокер','помощь в получении кредита','помощь с кредитом','кредит после отказов','после отказов','плохой кредитной историей','плохая кредитная история','кредит для бизнеса','оборотные','тендерные займ','банковские гарантии','рефинансирование','снижение ставки','одобрение кредита','подбор банка'];\nconst WEAK=['кредит','займ','банк','отказ','скоринг','ставк','заёмщик','ипотек','финанс','брокер','предоплат','просрочк'];\nconst HARD_NEG=['юридический адрес','регистрация ооо','регистрация ип','бухгалтер','эквайринг','pos-терминал','касса','печать и штамп','эцп','аренда офиса','коворкинг'];\nconst QUESTION=['подскажите','посоветуйте','кто брал','кто обращался','к кому обращаться','сколько это стоит','как получить','что делать','?'];\nconst OBJECTION=['мошенник','обман','кидал','предоплату и пропада','не верю','развод','боюсь'];\nconst KW=[['кредитный брокер','кредитный брокер'],['после отказов','после отказов'],['плох','плохая кредитная история'],['без предоплаты','без предоплаты'],['оплата за результат','оплата за результат'],['для бизнеса','бизнес-кредит'],['рефинансир','рефинансирование'],['просрочк','просрочки'],['предоплат','предоплата (доверие)'],['мошенник','недоверие к брокерам'],['отказ','отказы банков']];\nconst out=[];\nfor(const p of items){\n  const isComment=(low(p.item_type)==='comment');\n  const text=str(p.text);\n  const blob=low(text)+' '+low(p.group_title);\n  const valid=!!(str(p.group)&&str(p.item_id)&&text.length>=30);\n  const strongHit=STRONG.filter(t=>blob.indexOf(t)>=0);\n  const weakHit=WEAK.filter(t=>blob.indexOf(t)>=0);\n  const negHit=HARD_NEG.filter(t=>blob.indexOf(t)>=0);\n  const qHit=QUESTION.filter(t=>blob.indexOf(t)>=0);\n  const objHit=OBJECTION.filter(t=>blob.indexOf(t)>=0);\n  let record_type_hint='irrelevant';let touchpoint_type='irrelevant_source';let predicted_entity_type='irrelevant';let predicted_route='skipped_log';\n  let lead_intent='none';let confidence=10;let hard_skip=false;let relevance_reason='';\n  const looksAd=/тел[:.]|\\+7|без предоплаты|оплата за результат|под ключ/i.test(text)&&!isComment;\n  if(!valid){ relevance_reason='invalid: missing group/item_id or text<30'; }\n  else if(negHit.length&&!strongHit.length){ hard_skip=true; relevance_reason='hard negative: '+negHit.join(', '); }\n  else if(strongHit.length&&looksAd){ record_type_hint='competitor_activity';touchpoint_type='competitor_content_post';predicted_entity_type='competitor';predicted_route='monitor_queue';confidence=70;relevance_reason='strong competitor ad: '+strongHit.slice(0,4).join(', '); }\n  else if((qHit.length||objHit.length)&&(strongHit.length||weakHit.length>=2)){ record_type_hint='question_objection';touchpoint_type='forum_discussion';predicted_entity_type='lead_signal';predicted_route='review_queue';lead_intent=objHit.length&&!qHit.length?'low':'medium';confidence=objHit.length&&!qHit.length?50:60;relevance_reason=(qHit.length?('question: '+qHit.slice(0,3).join(', ')):'')+(objHit.length?((qHit.length?'; ':'')+'objection: '+objHit.slice(0,3).join(', ')):''); }\n  else if(strongHit.length){ record_type_hint='market_signal';predicted_entity_type='market_signal';touchpoint_type='forum_discussion';predicted_route='content_queue';confidence=50;relevance_reason='strong niche terms, no ad/question shape: '+strongHit.slice(0,4).join(', '); }\n  else if(weakHit.length>=2){ record_type_hint='market_signal';predicted_entity_type='market_signal';touchpoint_type='forum_discussion';predicted_route='content_queue';confidence=45;relevance_reason='weak finance: '+weakHit.slice(0,4).join(', '); }\n  else { hard_skip=true; relevance_reason='no niche evidence'; }\n  // public contact: verbatim phone/@handle in the PUBLIC text only — never reconstructed (DEC-114 channel category).\n  let contact='';let contactChannel='';let contactFormat='';\n  const ph=text.match(/(?:\\+7|8)[\\s\\-(]*\\d{3}[\\s\\-)]*\\d{3}[\\s\\-]*\\d{2}[\\s\\-]*\\d{2}/);\n  const h=text.match(/@[a-zA-Z0-9_]{5,32}/);\n  if(ph){contact=ph[0];contactChannel='phone';contactFormat='phone';}\n  else if(h){contact=h[0];contactChannel='telegram';contactFormat='handle';}\n  const kws=[];const seen={};for(const k of KW){if(blob.indexOf(k[0])>=0&&!seen[k[1]]){seen[k[1]]=1;kws.push(k[1]);}}\n  let service='unknown';\n  if(blob.indexOf('ипотек')>=0||blob.indexOf('рефинансир')>=0)service='mortgage_refinance';\n  else if(blob.indexOf('для бизнеса')>=0||blob.indexOf('оборотные')>=0)service='business_credit';\n  else if(blob.indexOf('после отказов')>=0||blob.indexOf('отказ')>=0)service='credit_after_refusals';\n  if(blob.indexOf('кредитный брокер')>=0)service='credit_broker';\n  const canon=canonUrl(p.item_url)+(isComment?('#reply'+str(p.comment_id)):'');\n  const publicProfile=(p.author_profile_public===true);\n  out.push({ json: {\n    is_valid_listing:valid,\n    hard_skip:hard_skip,\n    relevance_reason:relevance_reason,\n    source_type:isComment?(str(cfg.source_type_comment)||'social_comment'):(str(cfg.source_type_post)||'social_post'),\n    platform:str(cfg.platform)||'vk',\n    source_url:'https://vk.com/'+str(p.group),\n    post_url:canon,\n    profile_url:publicProfile?('https://vk.com/'+str(p.author_handle)):'',\n    profile_name:str(p.author_name),\n    author_handle:str(p.author_handle),\n    author_key:str(p.author_handle)||str(p.author_name),\n    published_at:str(p.published_at),\n    region_hint:(blob.indexOf('москв')>=0||blob.indexOf(' мо')>=0?'Москва/МО':''),\n    service_hint:service,\n    query:'allowlist:'+str(p.group),\n    text_context:isComment?('Обсуждение в публичной группе VK '+str(p.group_title)+', пост '+canonUrl(p.item_url)):cut(text,3500),\n    comment_text:isComment?cut(text,3500):'',\n    contact_public:contact,\n    contact_channel:contactChannel,\n    contact_format:contactFormat,\n    dedup_key:'vk::'+(isComment?'social_comment':'social_post')+'::'+canon,\n    text_hash:hashText(low(text)),\n    record_type_hint:record_type_hint,\n    touchpoint_type:touchpoint_type,\n    lead_intent_hint:lead_intent,\n    urgency_hint:'none',\n    interest_topic:(record_type_hint==='competitor_activity')?'competitor VK ad copy':(record_type_hint==='question_objection'?'audience pain / question':(record_type_hint==='market_signal'?'market context':'')),\n    probable_need:(record_type_hint==='question_objection'&&qHit.length)?'помощь с кредитом после отказов':'',\n    competitor_related:(record_type_hint==='competitor_activity'),\n    competitor_name:(record_type_hint==='competitor_activity')?str(p.author_name):'',\n    semantic_keywords:kws.join(', '),\n    ad_channel_hint:'vk',\n    confidence_score:confidence,\n    lead_temperature:(record_type_hint==='question_objection'&&lead_intent==='medium')?'warm':'none',\n    next_action:(record_type_hint==='question_objection')?'investigate':'monitor',\n    responsible:'operator',\n    estimated_analysis_cost_usd:0,\n    manager_note:'',\n    predicted_route:predicted_route,\n    predicted_entity_type:predicted_entity_type,\n    contact_evidence_url:contact?canon:'',\n    notes:''\n  }});\n}\nreturn out;"
+        "jsCode": "// Normalize VK public posts/comments into the WF09/WF11-compatible record shape. Deterministic, $0.\n// Audience focus (DEC-121): questions/objections from public discussions become question_objection\n// records feeding WF08 -> WF10 audience_activity_signals. Contact policy (DEC-097/098/114): contact_public\n// ONLY when visible verbatim in the public text; author profile_url ONLY when the profile is public;\n// nothing reconstructed; no outreach — default manual_review.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nfunction hashText(s){s=str(s);let h=5381;for(let i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))>>>0;}return ('00000000'+h.toString(16)).slice(-8);}\nfunction canonUrl(u){u=str(u);return u.replace(/[?#].*$/,'').replace(/\\/+$/,'');}\nconst cfg=$('Set Connector Config').first().json;\nconst items=$input.all().map(i=>i.json);\n// niche vocabulary v0.1 hardcoded (credit_brokerage) — migrates to niche packs (DEC-100)\nconst STRONG=['кредитный брокер','ипотечный брокер','помощь в получении кредита','помощь с кредитом','кредит после отказов','после отказов','плохой кредитной историей','плохая кредитная история','кредит для бизнеса','оборотные','тендерные займ','банковские гарантии','рефинансирование','снижение ставки','одобрение кредита','подбор банка'];\nconst WEAK=['кредит','займ','банк','отказ','скоринг','ставк','заёмщик','ипотек','финанс','брокер','предоплат','просрочк'];\nconst HARD_NEG=['юридический адрес','регистрация ооо','регистрация ип','бухгалтер','эквайринг','pos-терминал','касса','печать и штамп','эцп','аренда офиса','коворкинг'];\nconst QUESTION=['подскажите','посоветуйте','кто брал','кто обращался','к кому обращаться','сколько это стоит','как получить','что делать','?'];\nconst OBJECTION=['мошенник','обман','кидал','предоплату и пропада','не верю','развод','боюсь'];\nconst KW=[['кредитный брокер','кредитный брокер'],['после отказов','после отказов'],['плох','плохая кредитная история'],['без предоплаты','без предоплаты'],['оплата за результат','оплата за результат'],['для бизнеса','бизнес-кредит'],['рефинансир','рефинансирование'],['просрочк','просрочки'],['предоплат','предоплата (доверие)'],['мошенник','недоверие к брокерам'],['отказ','отказы банков']];\nconst out=[];\nfor(const p of items){\n  const isComment=(low(p.item_type)==='comment');\n  const text=str(p.text);\n  const blob=low(text)+' '+low(p.group_title);\n  const valid=!!(str(p.group)&&str(p.item_id)&&text.length>=30);\n  const strongHit=STRONG.filter(t=>blob.indexOf(t)>=0);\n  const weakHit=WEAK.filter(t=>blob.indexOf(t)>=0);\n  const negHit=HARD_NEG.filter(t=>blob.indexOf(t)>=0);\n  const qHit=QUESTION.filter(t=>blob.indexOf(t)>=0);\n  const objHit=OBJECTION.filter(t=>blob.indexOf(t)>=0);\n  let record_type_hint='irrelevant';let touchpoint_type='irrelevant_source';let predicted_entity_type='irrelevant';let predicted_route='skipped_log';\n  let lead_intent='none';let confidence=10;let hard_skip=false;let relevance_reason='';\n  const looksAd=/тел[:.]|\\+7|без предоплаты|оплата за результат|под ключ/i.test(text)&&!isComment;\n  if(!valid){ relevance_reason='invalid: missing group/item_id or text<30'; }\n  else if(negHit.length&&!strongHit.length){ hard_skip=true; relevance_reason='hard negative: '+negHit.join(', '); }\n  else if(strongHit.length&&looksAd){ record_type_hint='competitor_activity';touchpoint_type='competitor_content_post';predicted_entity_type='competitor';predicted_route='monitor_queue';confidence=70;relevance_reason='strong competitor ad: '+strongHit.slice(0,4).join(', '); }\n  else if((qHit.length||objHit.length)&&(strongHit.length||weakHit.length>=2)){ record_type_hint='question_objection';touchpoint_type='forum_discussion';predicted_entity_type='lead_signal';predicted_route='review_queue';lead_intent=objHit.length&&!qHit.length?'low':'medium';confidence=objHit.length&&!qHit.length?50:60;relevance_reason=(qHit.length?('question: '+qHit.slice(0,3).join(', ')):'')+(objHit.length?((qHit.length?'; ':'')+'objection: '+objHit.slice(0,3).join(', ')):''); }\n  else if(strongHit.length){ record_type_hint='market_signal';predicted_entity_type='market_signal';touchpoint_type='forum_discussion';predicted_route='content_queue';confidence=50;relevance_reason='strong niche terms, no ad/question shape: '+strongHit.slice(0,4).join(', '); }\n  else if(weakHit.length>=2){ record_type_hint='market_signal';predicted_entity_type='market_signal';touchpoint_type='forum_discussion';predicted_route='content_queue';confidence=45;relevance_reason='weak finance: '+weakHit.slice(0,4).join(', '); }\n  else { hard_skip=true; relevance_reason='no niche evidence'; }\n  // VK comments are their own public touchpoint class (DEC-125): any business-relevant COMMENT row\n  // carries touchpoint_type=public_comment (posts keep competitor_content_post / forum_discussion).\n  if(isComment&&!hard_skip&&record_type_hint!=='irrelevant'){ touchpoint_type='public_comment'; }\n  // public contact: verbatim phone/@handle in the PUBLIC text only — never reconstructed (DEC-114 channel category).\n  let contact='';let contactChannel='';let contactFormat='';\n  const ph=text.match(/(?:\\+7|8)[\\s\\-(]*\\d{3}[\\s\\-)]*\\d{3}[\\s\\-]*\\d{2}[\\s\\-]*\\d{2}/);\n  const h=text.match(/@[a-zA-Z0-9_]{5,32}/);\n  if(ph){contact=ph[0];contactChannel='phone';contactFormat='phone';}\n  else if(h){contact=h[0];contactChannel='telegram';contactFormat='handle';}\n  const kws=[];const seen={};for(const k of KW){if(blob.indexOf(k[0])>=0&&!seen[k[1]]){seen[k[1]]=1;kws.push(k[1]);}}\n  let service='unknown';\n  if(blob.indexOf('ипотек')>=0||blob.indexOf('рефинансир')>=0)service='mortgage_refinance';\n  else if(blob.indexOf('для бизнеса')>=0||blob.indexOf('оборотные')>=0)service='business_credit';\n  else if(blob.indexOf('после отказов')>=0||blob.indexOf('отказ')>=0)service='credit_after_refusals';\n  if(blob.indexOf('кредитный брокер')>=0)service='credit_broker';\n  const canon=canonUrl(p.item_url)+(isComment?('#reply'+str(p.comment_id)):'');\n  const publicProfile=(p.author_profile_public===true);\n  out.push({ json: {\n    is_valid_listing:valid,\n    hard_skip:hard_skip,\n    relevance_reason:relevance_reason,\n    source_type:isComment?(str(cfg.source_type_comment)||'social_comment'):(str(cfg.source_type_post)||'social_post'),\n    platform:str(cfg.platform)||'vk',\n    source_url:'https://vk.com/'+str(p.group),\n    post_url:canon,\n    profile_url:publicProfile?('https://vk.com/'+str(p.author_handle)):'',\n    profile_name:str(p.author_name),\n    author_handle:str(p.author_handle),\n    author_key:str(p.author_handle)||str(p.author_name),\n    published_at:str(p.published_at),\n    region_hint:(blob.indexOf('москв')>=0||blob.indexOf(' мо')>=0?'Москва/МО':''),\n    service_hint:service,\n    query:'allowlist:'+str(p.group),\n    text_context:isComment?('Обсуждение в публичной группе VK '+str(p.group_title)+', пост '+canonUrl(p.item_url)):cut(text,3500),\n    comment_text:isComment?cut(text,3500):'',\n    contact_public:contact,\n    contact_channel:contactChannel,\n    contact_format:contactFormat,\n    dedup_key:'vk::'+(isComment?'social_comment':'social_post')+'::'+canon,\n    text_hash:hashText(low(text)),\n    record_type_hint:record_type_hint,\n    touchpoint_type:touchpoint_type,\n    lead_intent_hint:lead_intent,\n    urgency_hint:'none',\n    interest_topic:(record_type_hint==='competitor_activity')?'competitor VK ad copy':(record_type_hint==='question_objection'?'audience pain / question':(record_type_hint==='market_signal'?'market context':'')),\n    probable_need:(record_type_hint==='question_objection'&&qHit.length)?'помощь с кредитом после отказов':'',\n    competitor_related:(record_type_hint==='competitor_activity'),\n    competitor_name:(record_type_hint==='competitor_activity')?str(p.author_name):'',\n    semantic_keywords:kws.join(', '),\n    ad_channel_hint:'vk',\n    confidence_score:confidence,\n    lead_temperature:(record_type_hint==='question_objection'&&lead_intent==='medium')?'warm':'none',\n    next_action:(record_type_hint==='question_objection')?'investigate':'monitor',\n    responsible:'operator',\n    estimated_analysis_cost_usd:0,\n    manager_note:'',\n    predicted_route:predicted_route,\n    predicted_entity_type:predicted_entity_type,\n    contact_evidence_url:contact?canon:'',\n    notes:''\n  }});\n}\nreturn out;"
       },
       "id": "wf13-normalize",
       "name": "Normalize VK Items",
@@ -164,7 +164,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build raw_market_records rows (exactly 40 columns, matching WF07/WF09/WF11 schema). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst cfg=$('Set Connector Config').first().json;\nconst reqId=str(cfg.agent_request_id);\nconst created=str(cfg.created_at);\nconst stamp=str(cfg.run_id).replace(/^wf13_/,'')||moscowStamp();\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst hardDebug=(cfg.hard_skip_debug_audit===true||str(cfg.hard_skip_debug_audit).toLowerCase()==='true');\nconst recs=$('Deduplicate Items').all().map(i=>i.json);\nconst out=[];let idx=0;\nfor(const r of recs){\n  idx++;\n  const ds0=str(r.dedup_status);\n  if(ds0==='invalid'||ds0==='over_pipeline_limit')continue;\n  if(ds0==='hard_skipped'&&!hardDebug)continue;\n  if(!writeDupAudit && ds0!=='unique')continue;\n  let notes='stage_3_5_vk_public_discussion_connector_foundation';\n  if(str(r.contact_public)){ notes+='; contact_format='+(str(r.contact_format)||'unknown')+'; contact_source_url='+str(r.contact_evidence_url)+'; contact_use_policy=manual_review (CONTACT_AND_OUTREACH_POLICY)'; }\n  out.push({ json: {\n    record_id:'wf13_rec_'+stamp+'_'+idx,\n    agent_request_id:reqId,\n    created_at:created,\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    profile_name:str(r.profile_name),\n    author_handle:str(r.author_handle),\n    published_at:str(r.published_at),\n    region_hint:str(r.region_hint),\n    service_hint:str(r.service_hint),\n    query:str(r.query),\n    text_context:str(r.text_context),\n    comment_text:str(r.comment_text),\n    contact_public:str(r.contact_public),\n    contact_channel:str(r.contact_channel),\n    dedup_key:str(r.dedup_key),\n    record_type_hint:str(r.record_type_hint),\n    touchpoint_type:str(r.touchpoint_type),\n    lead_intent_hint:str(r.lead_intent_hint),\n    urgency_hint:str(r.urgency_hint),\n    interest_topic:str(r.interest_topic),\n    probable_need:str(r.probable_need),\n    competitor_related:(r.competitor_related===true||str(r.competitor_related).toLowerCase()==='true'),\n    competitor_name:str(r.competitor_name),\n    semantic_keywords:str(r.semantic_keywords),\n    ad_channel_hint:str(r.ad_channel_hint),\n    confidence_score:Number(r.confidence_score)||0,\n    lead_temperature:str(r.lead_temperature),\n    next_action:str(r.next_action),\n    responsible:str(r.responsible),\n    dedup_status:str(r.dedup_status),\n    approval_status:str(r.approval_status),\n    approved_by:'',\n    approved_at:'',\n    estimated_analysis_cost_usd:Number(r.estimated_analysis_cost_usd)||0,\n    manager_note:str(r.manager_note),\n    notes:notes\n  }});\n}\nreturn out;"
+        "jsCode": "// Build raw_market_records rows (exactly 40 columns, matching WF07/WF09/WF11 schema). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\n// Sheets formula-injection / #ERROR! fix (DEC-124): values starting with + or = are parsed as formulas\n// by Google Sheets (USER_ENTERED) — '+7 ...' phones become #ERROR!. A leading apostrophe forces text.\nfunction sheetsSafeText(v){v=str(v);return /^[+=]/.test(v)?(\"'\"+v):v;}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst cfg=$('Set Connector Config').first().json;\nconst reqId=str(cfg.agent_request_id);\nconst created=str(cfg.created_at);\nconst stamp=str(cfg.run_id).replace(/^wf13_/,'')||moscowStamp();\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst hardDebug=(cfg.hard_skip_debug_audit===true||str(cfg.hard_skip_debug_audit).toLowerCase()==='true');\nconst recs=$('Deduplicate Items').all().map(i=>i.json);\nconst out=[];let idx=0;\nfor(const r of recs){\n  idx++;\n  const ds0=str(r.dedup_status);\n  if(ds0==='invalid'||ds0==='over_pipeline_limit')continue;\n  if(ds0==='hard_skipped'&&!hardDebug)continue;\n  if(!writeDupAudit && ds0!=='unique')continue;\n  let notes='stage_3_source_foundation_vk_public_discussion';\n  if(str(r.contact_public)){ notes+='; contact_format='+(str(r.contact_format)||'unknown')+'; contact_source_url='+str(r.contact_evidence_url)+'; contact_use_policy=manual_review (CONTACT_AND_OUTREACH_POLICY)'; }\n  out.push({ json: {\n    record_id:'wf13_rec_'+stamp+'_'+idx,\n    agent_request_id:reqId,\n    created_at:created,\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    profile_name:str(r.profile_name),\n    author_handle:str(r.author_handle),\n    published_at:str(r.published_at),\n    region_hint:str(r.region_hint),\n    service_hint:str(r.service_hint),\n    query:str(r.query),\n    text_context:str(r.text_context),\n    comment_text:str(r.comment_text),\n    contact_public:sheetsSafeText(r.contact_public),\n    contact_channel:str(r.contact_channel),\n    dedup_key:str(r.dedup_key),\n    record_type_hint:str(r.record_type_hint),\n    touchpoint_type:str(r.touchpoint_type),\n    lead_intent_hint:str(r.lead_intent_hint),\n    urgency_hint:str(r.urgency_hint),\n    interest_topic:str(r.interest_topic),\n    probable_need:str(r.probable_need),\n    competitor_related:(r.competitor_related===true||str(r.competitor_related).toLowerCase()==='true'),\n    competitor_name:str(r.competitor_name),\n    semantic_keywords:str(r.semantic_keywords),\n    ad_channel_hint:str(r.ad_channel_hint),\n    confidence_score:Number(r.confidence_score)||0,\n    lead_temperature:str(r.lead_temperature),\n    next_action:str(r.next_action),\n    responsible:str(r.responsible),\n    dedup_status:str(r.dedup_status),\n    approval_status:str(r.approval_status),\n    approved_by:'',\n    approved_at:'',\n    estimated_analysis_cost_usd:Number(r.estimated_analysis_cost_usd)||0,\n    manager_note:str(r.manager_note),\n    notes:notes\n  }});\n}\nreturn out;"
       },
       "id": "wf13-raw",
       "name": "Build raw_market_records Rows",
@@ -207,7 +207,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build market_record_registry rows for UNIQUE records only (exactly 15 columns). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nconst now=moscowIsoNow();\nconst recs=$('Deduplicate Items').all().map(i=>i.json);\nconst out=[];\nfor(const r of recs){\n  if(str(r.dedup_status)!=='unique')continue;\n  out.push({ json: {\n    dedup_key:str(r.dedup_key),\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    author_handle:str(r.author_handle),\n    text_hash:str(r.text_hash),\n    first_seen_at:now,\n    last_seen_at:now,\n    last_route:str(r.predicted_route),\n    last_processing_status:'raw_collected',\n    last_entity_type:str(r.predicted_entity_type),\n    agent_request_id:str($('Set Connector Config').first().json.agent_request_id),\n    note:'vk_public_discussion_connector_foundation_stage_3_5'\n  }});\n}\nreturn out;"
+        "jsCode": "// Build market_record_registry rows for UNIQUE records only (exactly 15 columns). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nconst now=moscowIsoNow();\nconst recs=$('Deduplicate Items').all().map(i=>i.json);\nconst out=[];\nfor(const r of recs){\n  if(str(r.dedup_status)!=='unique')continue;\n  out.push({ json: {\n    dedup_key:str(r.dedup_key),\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    author_handle:str(r.author_handle),\n    text_hash:str(r.text_hash),\n    first_seen_at:now,\n    last_seen_at:now,\n    last_route:str(r.predicted_route),\n    last_processing_status:'raw_collected',\n    last_entity_type:str(r.predicted_entity_type),\n    agent_request_id:str($('Set Connector Config').first().json.agent_request_id),\n    note:'stage_3_source_foundation_vk_public_discussion'\n  }});\n}\nreturn out;"
       },
       "id": "wf13-regrows",
       "name": "Build market_record_registry Rows",
@@ -303,6 +303,101 @@
         2000,
         440
       ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.fetch_url }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "domain",
+              "value": "={{ $json.screen_name }}"
+            },
+            {
+              "name": "count",
+              "value": "={{ $json.max_items }}"
+            },
+            {
+              "name": "v",
+              "value": "={{ $json.api_version }}"
+            },
+            {
+              "name": "access_token",
+              "value": "BIND_N8N_VK_CREDENTIAL_NEVER_PASTE_TOKEN"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "wf13-live-http-placeholder",
+      "name": "Fetch VK Public Wall (DISABLED placeholder)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        820
+      ],
+      "disabled": true,
+      "notes": "INERT (DEC-125): stays disabled until explicit operator approval. VK OFFICIAL API wall.get on PUBLIC groups from the allowlist only — access_token value is a placeholder string; replace with an n8n credential. No private messages, no closed groups, no member extraction."
+    },
+    {
+      "parameters": {
+        "jsCode": "// PARSE LIVE VK ITEMS (inert until the HTTP placeholder is enabled by the operator).\n// With the HTTP node disabled, items pass through WITHOUT a VK API response body — this node then\n// throws, guaranteeing no fabricated posts/comments can enter the pipeline.\n// Maps VK API wall.get items to the fixture item shape consumed by Normalize VK Items.\n// PUBLIC data only: profile_url is derivable only for user authors (from_id>0) of public-wall items;\n// no member extraction, no hidden contacts, aggregate author counts happen downstream.\nfunction str(v){return v==null?'':String(v).trim();}\nconst out=[];\nfor(const it of $input.all()){\n  const j=it.json;\n  const resp=j.response||((j.body||{}).response);\n  if(!resp||!Array.isArray(resp.items)){\n    throw new Error('WF13 live parse: no VK API response received — the HTTP placeholder node is DISABLED (inert by design, DEC-125). Enable it with a bound credential only after operator approval; default runs use fixture mode.');\n  }\n  const group=str(j.screen_name)||'unknown';\n  const maxItems=Math.min(Number(j.max_items)||10,10);\n  let count=0;\n  for(const p of resp.items){\n    if(count>=maxItems)break;\n    const text=str(p.text);\n    if(!text)continue;\n    count++;\n    const ownerId=String(p.owner_id||'');\n    const fromId=Number(p.from_id)||0;\n    function msk(ts){var m=new Date(ts*1000+10800000);return m.toISOString().replace('Z','+03:00');}\n    out.push({ json: {\n      group:group, group_title:group, item_type:'post', item_id:String(p.id||''), comment_id:'',\n      item_url:'https://vk.com/wall'+ownerId+'_'+String(p.id||''),\n      author_handle:(fromId>0?('id'+fromId):('club'+Math.abs(fromId))),\n      author_name:'', author_profile_public:(fromId>0),\n      published_at:(p.date?msk(Number(p.date)):''), text:text } });\n  }\n}\nif(!out.length){ throw new Error('WF13 live parse: 0 usable wall items parsed — check group allowlist / API response before retrying.'); }\nreturn out;"
+      },
+      "id": "wf13-live-parse-placeholder",
+      "name": "Parse Live VK Items (inert)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        820
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build ONE live_source_runs row (23 columns, docs/TABLE_SCHEMA.md) — run observability (DEC-126).\n// Logs what ran, which source, counters, cost and what the operator should do next. Never logs the\n// approval token value itself — only whether one was used.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Connector Config').first().json;\nconst recs=$('Deduplicate Items').all().map(i=>i.json);\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\nconst invalid=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst hard=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst dup=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst allow=fixtureMode?(Array.isArray(cfg.group_allowlist)?cfg.group_allowlist:[]):(Array.isArray(cfg.live_group_allowlist)?cfg.live_group_allowlist:[]);\nreturn [{ json: {\n  run_id:str(cfg.run_id),\n  created_at:str(cfg.created_at),\n  workflow:'WF13 - Public Discussion Connector (VK)',\n  source_family:'public_discussion',\n  platform:'vk',\n  mode:fixtureMode?'fixture':'live',\n  approval_token_used:fixtureMode?'no':(str(cfg.live_approval_token)?'yes':'no'),\n  source_allowlist:allow.join(', '),\n  max_items:Number(fixtureMode?cfg.pipeline_limit:cfg.live_max_items_per_group)||10,\n  items_received:recs.length,\n  items_relevant:recs.length-invalid-hard,\n  items_written_raw:writeDupAudit?(unique+dup):unique,\n  items_unique:unique,\n  items_duplicate:dup,\n  hard_skipped:hard,\n  external_calls:fixtureMode?0:allow.length,\n  estimated_source_cost_usd:0,\n  llm_calls:0,\n  estimated_llm_cost_usd:0,\n  status:'completed',\n  error_summary:'',\n  operator_next_action:(unique>0?'Inspect raw_market_records, then run WF08 manually with agent_request_id_filter ('+str(cfg.agent_request_id)+'). Then WF14 lead triage.':'No unique items; review allowlist/fixtures; do NOT run WF08.'),\n  notes:'stage_3_source_foundation_vk_public_discussion; public groups/posts/comments only; aggregate author counts only; no member lists; no outreach.'\n}}];"
+      },
+      "id": "wf13-runlog-build",
+      "name": "Build live_source_runs Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "live_source_runs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "wf13-app-runlog",
+      "name": "Append live_source_runs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2220,
+        640
+      ]
     }
   ],
   "connections": {
@@ -339,7 +434,7 @@
         ],
         [
           {
-            "node": "LIVE Mode Guard (not implemented)",
+            "node": "LIVE VK Approval Gate",
             "type": "main",
             "index": 0
           }
@@ -443,6 +538,61 @@
       "main": [
         [
           {
+            "node": "Build live_source_runs Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LIVE VK Approval Gate": {
+      "main": [
+        [
+          {
+            "node": "Fetch VK Public Wall (DISABLED placeholder)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch VK Public Wall (DISABLED placeholder)": {
+      "main": [
+        [
+          {
+            "node": "Parse Live VK Items (inert)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Live VK Items (inert)": {
+      "main": [
+        [
+          {
+            "node": "Normalize VK Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build live_source_runs Row": {
+      "main": [
+        [
+          {
+            "node": "Append live_source_runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append live_source_runs": {
+      "main": [
+        [
+          {
             "node": "Final Summary Output",
             "type": "main",
             "index": 0
@@ -455,5 +605,6 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "pinData": {}
+  "pinData": {},
+  "versionId": "wf13-v002-vk-live-ready-public-comment-sheets-safe-runlog-20260612"
 }

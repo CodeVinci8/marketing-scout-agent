@@ -11,8 +11,8 @@
         -340
       ],
       "parameters": {
-        "content": "## 11 — Social Source Connector Foundation v0.1 — Telegram PUBLIC channel preview (DEC-109/110)\n\nПервый non-Avito коннектор по Stage 3.4 (DEC-096: один источник за раз). Выбран **Telegram public-channel preview** (`t.me/s/<channel>`): максимум конкурентной рекламной ценности на единицу риска — публичные страницы, без логина/сессий, без member-данных.\n\nЧто делает (ДЕТЕРМИНИРОВАННО, $0, fixture-first):\n1. Ручной старт → Set Connector Config (`fixture_mode=true`, `live_mode=false`, allowlist каналов).\n2. fixture_mode=true → Build Fixture Telegram Channel Posts (6 постов: 3 конкурентные рекламы + 1 слабый финансовый сигнал + 1 hard-negative контроль + 1 дубль в батче). Каналы помечены `_fixture` — НЕ реальные.\n3. Normalize: валидность → business relevance (strong/weak/hard-negative, словарь v0.1 как в WF09) → публичные контакты ТОЛЬКО дословно из текста поста (evidence = post_url, политика DEC-097/098; contact_channel = категория: telegram/phone, формат — в notes, DEC-114) → dedup_key=`telegram::social_channel::<canonical post_url>`.\n4. Дедуп против market_record_registry + внутри батча (паттерн WF09).\n5. Пишет ТОЛЬКО: raw_market_records (40) — unique + duplicate-audit, market_record_registry (15) — только unique, agent_requests (21) — 1 строка completed.\n\nЧЕГО НЕ ДЕЛАЕТ: НЕ ходит в сеть (HTTP-ноды нет вообще; live-ветка = guard с ошибкой); НЕ вызывает Claude/Apify/Firecrawl; НЕ читает группы/приватные чаты/MTProto; НЕ выдумывает контакты; НЕ рекомендует outreach; НЕТ авто-handoff в WF08; НЕ пишет бизнес-вкладки. active=false.\n\n**v0.2 (DEC-120):** добавлен ОХРАНЯЕМЫЙ live-путь: гейт одобрения (token) -> ОТКЛЮЧЁННЫЙ HTTP-плейсхолдер (t.me/s/<channel> public preview only) -> парсер (бросает ошибку без HTML). По умолчанию всё инертно: live_mode=false, token пуст, allowlist пуст, HTTP disabled. Никаких групп/приватных чатов/MTProto/скрытых контактов/auto-outreach.",
-        "height": 720,
+        "content": "## 11 — Social Source Connector Foundation v0.1 — Telegram PUBLIC channel preview (DEC-109/110)\n\nПервый non-Avito коннектор по Stage 3.4 (DEC-096: один источник за раз). Выбран **Telegram public-channel preview** (`t.me/s/<channel>`): максимум конкурентной рекламной ценности на единицу риска — публичные страницы, без логина/сессий, без member-данных.\n\nЧто делает (ДЕТЕРМИНИРОВАННО, $0, fixture-first):\n1. Ручной старт → Set Connector Config (`fixture_mode=true`, `live_mode=false`, allowlist каналов).\n2. fixture_mode=true → Build Fixture Telegram Channel Posts (6 постов: 3 конкурентные рекламы + 1 слабый финансовый сигнал + 1 hard-negative контроль + 1 дубль в батче). Каналы помечены `_fixture` — НЕ реальные.\n3. Normalize: валидность → business relevance (strong/weak/hard-negative, словарь v0.1 как в WF09) → публичные контакты ТОЛЬКО дословно из текста поста (evidence = post_url, политика DEC-097/098; contact_channel = категория: telegram/phone, формат — в notes, DEC-114) → dedup_key=`telegram::social_channel::<canonical post_url>`.\n4. Дедуп против market_record_registry + внутри батча (паттерн WF09).\n5. Пишет ТОЛЬКО: raw_market_records (40) — unique + duplicate-audit, market_record_registry (15) — только unique, agent_requests (21) — 1 строка completed.\n\nЧЕГО НЕ ДЕЛАЕТ: НЕ ходит в сеть (HTTP-ноды нет вообще; live-ветка = guard с ошибкой); НЕ вызывает Claude/Apify/Firecrawl; НЕ читает группы/приватные чаты/MTProto; НЕ выдумывает контакты; НЕ рекомендует outreach; НЕТ авто-handoff в WF08; НЕ пишет бизнес-вкладки. active=false.\n\n**v0.2 (DEC-120):** добавлен ОХРАНЯЕМЫЙ live-путь: гейт одобрения (token) -> ОТКЛЮЧЁННЫЙ HTTP-плейсхолдер (t.me/s/<channel> public preview only) -> парсер (бросает ошибку без HTML). По умолчанию всё инертно: live_mode=false, token пуст, allowlist пуст, HTTP disabled. Никаких групп/приватных чатов/MTProto/скрытых контактов/auto-outreach.\n\n**v0.3 (DEC-124/126):** каждый прогон пишет 1 строку в live_source_runs (23 колонки: режим, allowlist, счётчики, external_calls, стоимость, next action). contact_public пишется Sheets-safe (апостроф перед +/= — фикс #ERROR! для телефонов). Live-путь (DEC-120) без изменений: token=I_APPROVE_LIVE_TELEGRAM_PREVIEW + непустой allowlist + ВКЛЮЧЕНИЕ disabled HTTP-ноды; max_posts<=10; только t.me/s/<channel>.",
+        "height": 780,
         "width": 640,
         "color": 4
       }
@@ -27,8 +27,8 @@
         -340
       ],
       "parameters": {
-        "content": "## Настройка и тест\n\n1. НЕ активировать (active=false). Вкладки уже существуют (agent_requests 21 / raw_market_records 40 / market_record_registry 15 — как у WF07/WF09).\n2. После импорта перепривязать креденшл Google Sheets на 4 sheet-нодах (1 read + 3 append) и заменить PASTE_SPREADSHEET_ID_HERE на реальный ID.\n3. Тест 1 (fixture, первый прогон, $0): Execute once → ожидаемо: posts_received=6, structurally_valid=6, hard_skipped=1 (юр. адрес контроль), business_relevant=5, unique=4, duplicates=1 (дубль поста 101 в батче), raw_market_records +5 (4 unique + 1 duplicate audit), registry +4, agent_requests +1 (completed). Контакт только у поста 101 (@kredit_broker_msk_fixture, дословно из текста; `contact_channel=telegram` — категория канала, НЕ формат (DEC-114); `contact_format=handle` + `contact_source_url` + `contact_use_policy=manual_review` в notes).\n4. Тест 2 (fixture, повтор): все 4 ключа уже в registry → unique=0, duplicates=5, registry +0, raw +5 (duplicate audit), summary next_action: НЕ запускать WF08.\n5. Тест 3 (live guard): fixture_mode=false → воркфлоу падает на ноде LIVE Mode Guard с понятной ошибкой (live не реализован; нужны одобрение + транспорт + креденшл). Вернуть fixture_mode=true.\n6. WF08 handoff (вручную, после одобрения): agent_request_id_filter=<wf11_req_…>, deterministic_first. Ожидаемо: 3 компетиторных поста → monitor_queue, 1 market_signal → content/review.\n\nLive-режим (будущее, отдельное одобрение): транспорт Firecrawl/HTTP GET страницы t.me/s/<channel>; только каналы из allowlist; никакого MTProto. Стоимость fixture-прогона: $0 всегда.",
-        "height": 720,
+        "content": "## Настройка и тест\n\n1. НЕ активировать (active=false). Вкладки уже существуют (agent_requests 21 / raw_market_records 40 / market_record_registry 15 — как у WF07/WF09).\n2. После импорта перепривязать креденшл Google Sheets на 4 sheet-нодах (1 read + 3 append) и заменить PASTE_SPREADSHEET_ID_HERE на реальный ID.\n3. Тест 1 (fixture, первый прогон, $0): Execute once → ожидаемо: posts_received=6, structurally_valid=6, hard_skipped=1 (юр. адрес контроль), business_relevant=5, unique=4, duplicates=1 (дубль поста 101 в батче), raw_market_records +5 (4 unique + 1 duplicate audit), registry +4, agent_requests +1 (completed). Контакт только у поста 101 (@kredit_broker_msk_fixture, дословно из текста; `contact_channel=telegram` — категория канала, НЕ формат (DEC-114); `contact_format=handle` + `contact_source_url` + `contact_use_policy=manual_review` в notes).\n4. Тест 2 (fixture, повтор): все 4 ключа уже в registry → unique=0, duplicates=5, registry +0, raw +5 (duplicate audit), summary next_action: НЕ запускать WF08.\n5. Тест 3 (live guard): fixture_mode=false → воркфлоу падает на ноде LIVE Mode Guard с понятной ошибкой (live не реализован; нужны одобрение + транспорт + креденшл). Вернуть fixture_mode=true.\n6. WF08 handoff (вручную, после одобрения): agent_request_id_filter=<wf11_req_…>, deterministic_first. Ожидаемо: 3 компетиторных поста → monitor_queue, 1 market_signal → content/review.\n\nLive-режим (будущее, отдельное одобрение): транспорт Firecrawl/HTTP GET страницы t.me/s/<channel>; только каналы из allowlist; никакого MTProto. Стоимость fixture-прогона: $0 всегда.\n7. v0.3: live_source_runs +1 на каждый прогон (mode=fixture, external_calls=0, cost=0). Перед первым прогоном создать вкладку live_source_runs (23 колонки из docs/TABLE_SCHEMA.md).",
+        "height": 780,
         "width": 600,
         "color": 5
       }
@@ -183,7 +183,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// Build raw_market_records rows (exactly 40 columns, matching WF07/WF09 schema). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst cfg=$('Set Connector Config').first().json;\nconst reqId=str(cfg.agent_request_id);\nconst created=str(cfg.created_at);\nconst stamp=str(cfg.run_id).replace(/^wf11_/,'')||moscowStamp();\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst hardDebug=(cfg.hard_skip_debug_audit===true||str(cfg.hard_skip_debug_audit).toLowerCase()==='true');\nconst recs=$('Deduplicate Posts').all().map(i=>i.json);\nconst out=[];let idx=0;\nfor(const r of recs){\n  idx++;\n  const ds0=str(r.dedup_status);\n  if(ds0==='invalid'||ds0==='over_pipeline_limit')continue;\n  if(ds0==='hard_skipped'&&!hardDebug)continue;\n  if(!writeDupAudit && ds0!=='unique')continue;\n  // contact policy: contact format + evidence URL are recorded in notes (no dedicated columns in the 40-col schema yet)\n  let notes='stage_3_4_telegram_public_channel_preview_connector_foundation';\n  if(str(r.contact_public)){ notes+='; contact_format='+(str(r.contact_format)||'unknown')+'; contact_source_url='+str(r.contact_evidence_url)+'; contact_use_policy=manual_review (CONTACT_AND_OUTREACH_POLICY)'; }\n  out.push({ json: {\n    record_id:'wf11_rec_'+stamp+'_'+idx,\n    agent_request_id:reqId,\n    created_at:created,\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    profile_name:str(r.profile_name),\n    author_handle:str(r.author_handle),\n    published_at:str(r.published_at),\n    region_hint:str(r.region_hint),\n    service_hint:str(r.service_hint),\n    query:str(r.query),\n    text_context:str(r.text_context),\n    comment_text:str(r.comment_text),\n    contact_public:str(r.contact_public),\n    contact_channel:str(r.contact_channel),\n    dedup_key:str(r.dedup_key),\n    record_type_hint:str(r.record_type_hint),\n    touchpoint_type:str(r.touchpoint_type),\n    lead_intent_hint:str(r.lead_intent_hint),\n    urgency_hint:str(r.urgency_hint),\n    interest_topic:str(r.interest_topic),\n    probable_need:str(r.probable_need),\n    competitor_related:(r.competitor_related===true||str(r.competitor_related).toLowerCase()==='true'),\n    competitor_name:str(r.competitor_name),\n    semantic_keywords:str(r.semantic_keywords),\n    ad_channel_hint:str(r.ad_channel_hint),\n    confidence_score:Number(r.confidence_score)||0,\n    lead_temperature:str(r.lead_temperature),\n    next_action:str(r.next_action),\n    responsible:str(r.responsible),\n    dedup_status:str(r.dedup_status),\n    approval_status:str(r.approval_status),\n    approved_by:'',\n    approved_at:'',\n    estimated_analysis_cost_usd:Number(r.estimated_analysis_cost_usd)||0,\n    manager_note:str(r.manager_note),\n    notes:notes\n  }});\n}\nreturn out;"
+        "jsCode": "// Build raw_market_records rows (exactly 40 columns, matching WF07/WF09 schema). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\n// Sheets formula-injection / #ERROR! fix (DEC-124): leading + or = is parsed as a formula by Google\n// Sheets (USER_ENTERED) — '+7 ...' phones become #ERROR!. A leading apostrophe forces text.\nfunction sheetsSafeText(v){v=str(v);return /^[+=]/.test(v)?(\"'\"+v):v;}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst cfg=$('Set Connector Config').first().json;\nconst reqId=str(cfg.agent_request_id);\nconst created=str(cfg.created_at);\nconst stamp=str(cfg.run_id).replace(/^wf11_/,'')||moscowStamp();\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst hardDebug=(cfg.hard_skip_debug_audit===true||str(cfg.hard_skip_debug_audit).toLowerCase()==='true');\nconst recs=$('Deduplicate Posts').all().map(i=>i.json);\nconst out=[];let idx=0;\nfor(const r of recs){\n  idx++;\n  const ds0=str(r.dedup_status);\n  if(ds0==='invalid'||ds0==='over_pipeline_limit')continue;\n  if(ds0==='hard_skipped'&&!hardDebug)continue;\n  if(!writeDupAudit && ds0!=='unique')continue;\n  // contact policy: contact format + evidence URL are recorded in notes (no dedicated columns in the 40-col schema yet)\n  let notes='stage_3_4_telegram_public_channel_preview_connector_foundation';\n  if(str(r.contact_public)){ notes+='; contact_format='+(str(r.contact_format)||'unknown')+'; contact_source_url='+str(r.contact_evidence_url)+'; contact_use_policy=manual_review (CONTACT_AND_OUTREACH_POLICY)'; }\n  out.push({ json: {\n    record_id:'wf11_rec_'+stamp+'_'+idx,\n    agent_request_id:reqId,\n    created_at:created,\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    profile_name:str(r.profile_name),\n    author_handle:str(r.author_handle),\n    published_at:str(r.published_at),\n    region_hint:str(r.region_hint),\n    service_hint:str(r.service_hint),\n    query:str(r.query),\n    text_context:str(r.text_context),\n    comment_text:str(r.comment_text),\n    contact_public:sheetsSafeText(r.contact_public),\n    contact_channel:str(r.contact_channel),\n    dedup_key:str(r.dedup_key),\n    record_type_hint:str(r.record_type_hint),\n    touchpoint_type:str(r.touchpoint_type),\n    lead_intent_hint:str(r.lead_intent_hint),\n    urgency_hint:str(r.urgency_hint),\n    interest_topic:str(r.interest_topic),\n    probable_need:str(r.probable_need),\n    competitor_related:(r.competitor_related===true||str(r.competitor_related).toLowerCase()==='true'),\n    competitor_name:str(r.competitor_name),\n    semantic_keywords:str(r.semantic_keywords),\n    ad_channel_hint:str(r.ad_channel_hint),\n    confidence_score:Number(r.confidence_score)||0,\n    lead_temperature:str(r.lead_temperature),\n    next_action:str(r.next_action),\n    responsible:str(r.responsible),\n    dedup_status:str(r.dedup_status),\n    approval_status:str(r.approval_status),\n    approved_by:'',\n    approved_at:'',\n    estimated_analysis_cost_usd:Number(r.estimated_analysis_cost_usd)||0,\n    manager_note:str(r.manager_note),\n    notes:notes\n  }});\n}\nreturn out;"
       }
     },
     {
@@ -368,6 +368,55 @@
         680,
         820
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build ONE live_source_runs row (23 columns, docs/TABLE_SCHEMA.md) — run observability (DEC-126).\n// Logs what ran, which source, counters, cost and what to do next. Never logs the approval token value\n// itself — only whether one was used.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Connector Config').first().json;\nconst recs=$('Deduplicate Posts').all().map(i=>i.json);\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\nconst invalid=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst hard=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst dup=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst allow=fixtureMode?(Array.isArray(cfg.channel_allowlist)?cfg.channel_allowlist:[]):(Array.isArray(cfg.live_channel_allowlist)?cfg.live_channel_allowlist:[]);\nreturn [{ json: {\n  run_id:str(cfg.run_id),\n  created_at:str(cfg.created_at),\n  workflow:'WF11 - Social Source Connector (Telegram Preview)',\n  source_family:'social_channel',\n  platform:'telegram',\n  mode:fixtureMode?'fixture':'live',\n  approval_token_used:fixtureMode?'no':(str(cfg.live_approval_token)?'yes':'no'),\n  source_allowlist:allow.join(', '),\n  max_items:Number(fixtureMode?cfg.pipeline_limit:cfg.live_max_posts_per_channel)||10,\n  items_received:recs.length,\n  items_relevant:recs.length-invalid-hard,\n  items_written_raw:writeDupAudit?(unique+dup):unique,\n  items_unique:unique,\n  items_duplicate:dup,\n  hard_skipped:hard,\n  external_calls:fixtureMode?0:allow.length,\n  estimated_source_cost_usd:0,\n  llm_calls:0,\n  estimated_llm_cost_usd:0,\n  status:'completed',\n  error_summary:'',\n  operator_next_action:(unique>0?'Inspect raw_market_records, then run WF08 manually with agent_request_id_filter ('+str(cfg.agent_request_id)+').':'No unique posts; review allowlist/fixtures; do NOT run WF08.'),\n  notes:'stage_3_source_foundation_telegram_public_preview; t.me/s public preview pages only; no MTProto/groups/private chats; no member extraction; no outreach.'\n}}];"
+      },
+      "id": "wf11-runlog-build",
+      "name": "Build live_source_runs Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "live_source_runs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
+      "id": "wf11-app-runlog",
+      "name": "Append live_source_runs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2440,
+        640
+      ]
     }
   ],
   "connections": {
@@ -508,7 +557,7 @@
       "main": [
         [
           {
-            "node": "Final Summary Output",
+            "node": "Build live_source_runs Row",
             "type": "main",
             "index": 0
           }
@@ -547,13 +596,35 @@
           }
         ]
       ]
+    },
+    "Build live_source_runs Row": {
+      "main": [
+        [
+          {
+            "node": "Append live_source_runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append live_source_runs": {
+      "main": [
+        [
+          {
+            "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "bb110000-social-source-connector-foundation-v001-telegram-preview-fixture-20260612",
+  "versionId": "bb110000-social-source-connector-v003-live-ready-runlog-sheets-safe-20260612",
   "meta": {
     "instanceId": "marketing-scout-v7-social-source-connector-foundation"
   }

@@ -5,6 +5,22 @@ Updated after each session that incurs or measures real costs.
 
 ---
 
+## Session 2026-06-12 (session 4) — live-readiness + report v0.3: $0 incurred
+
+No external calls, no Claude calls, no Apify, no Firecrawl, no live scraping. All builds fixture/deterministic.
+
+**Cost controls added this session:**
+- **WF12 Claude budget guard (DEC-128):** `llm_max_input_chars=8000`, `llm_max_estimated_cost_usd=0.10`
+  (defaults) — the guard throws **before** the HTTP node when the estimate (input chars/4 × $3/MTok +
+  `llm_max_tokens` × $15/MTok) exceeds the cap. Worst-case approved summary at defaults ≈ $0.025/run.
+- **Per-run cost ledger:** every WF11/WF12/WF13 run (and WF15-logged run) writes `estimated_source_cost_usd`
+  + `llm_calls`/`estimated_llm_cost_usd` to `live_source_runs` — month-to-date spend becomes a tab query.
+- **Live transports remain $0 until armed:** WF11 (HTTP GET t.me/s — free) and WF13 (VK official API —
+  free tier for public wall.get) cost no per-call fees; cost exposure is operational (rate limits), not USD.
+  Each live arming still requires its own operator approval.
+
+---
+
 ## Session 2026-06-12 — WF10 v0.2 + WF11 foundation: $0 incurred
 
 - **WF10 v0.2 (DEC-106/107/108)** stays fully deterministic — **$0 per run, always** (no LLM/external calls);

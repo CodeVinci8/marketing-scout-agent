@@ -98,3 +98,40 @@ Manual Start
 - НЕ пишет в WF10-вкладки/raw/registry/бизнес-вкладки — только `market_intelligence_reports` + `agent_requests`.
 - НЕ выдумывает факты, числа, конкурентов, тренды; НЕ показывает контакты; НЕ рекомендует outreach.
 - НЕ запускается по расписанию (только ручной триггер).
+
+---
+
+## v0.3 (2026-06-12, DEC-128/129/130) — stakeholder-отчёт + рабочий (но выключенный) Claude-путь
+
+**Детерминированная часть (по умолчанию, $0):**
+- Дайджест руководителя: 5–7 чистых пунктов (конкуренты, главный угол, аудитория, лид-сигналы, сайты,
+  достоверность, фокус контента).
+- Чистые имена конкурентов: вместо «(unnamed) <длинный оффер>» — «<Platform> offer: <короткий оффер>»;
+  офферы укорочены (`max_offer_chars=90`).
+- Блок «Сайты конкурентов»: последний снапшот на домен из `competitor_site_snapshots`
+  (офферы/цены/гарантии/CTA/изменения); вкладка может отсутствовать — отчёт не падает.
+- Блок «Аудитория и публичные лид-сигналы»: агрегаты `audience_activity_signals` + `public_lead_signals`
+  (счётчики по intent/pain; БЕЗ имён/контактов/профилей).
+- Блоки действий: менеджер / контент / источники; ограничения + обязательный source_mix.
+- Схема строки — 25 колонок (MARKET_INTELLIGENCE_REPORT_SCHEMA.md v0.3): llm-блок разбит на
+  `llm_status/llm_model/llm_input_tokens/llm_output_tokens/llm_cost_usd/llm_summary_ru/llm_recommendations_ru/llm_quality_flags`.
+- Каждый прогон пишет 1 строку в `live_source_runs` (mode=deterministic или llm_summary).
+
+**Claude-путь (operator-test-ready; в репозитории ВЫКЛЮЧЕН и без ключей):**
+1. Подготовка (по явному одобрению): создать Anthropic-креденшл в n8n (header `x-api-key`), привязать к
+   HTTP-ноде «Claude Summary API Request», ВКЛЮЧИТЬ её.
+2. В Set Report Config: `enable_llm_summary=true`, `llm_approval_token=I_APPROVE_CLAUDE_REPORT_SUMMARY`;
+   бюджет: `llm_max_input_chars=8000`, `llm_max_tokens=1200`, `llm_max_estimated_cost_usd=0.10`.
+3. Execute once → промпт получает ТОЛЬКО поля детерминированного отчёта + агрегаты; Claude обязан вернуть
+   JSON: executive_summary_ru / key_findings / market_risks / recommended_next_actions /
+   content_recommendations / source_limitations; запрещено выдумывать конкурентов/контакты/цены/разрешения
+   на аутрич.
+4. Проверки после прогона: `llm_status=ok` (или ok_with_flags — разобрать флаги), llm_input_tokens /
+   llm_output_tokens / llm_cost_usd заполнены; agent_requests.result_summary содержит стоимость;
+   live_source_runs (mode=llm_summary, llm_calls=1); summary не содержит фактов вне отчёта;
+   записать стоимость в COSTS_AND_LIMITS.md.
+
+**Guard-тесты (без затрат):**
+- enable_llm_summary=true без токена → ошибка на Claude Summary Approval Gate.
+- с токеном, но `llm_max_estimated_cost_usd=0.0001` → ошибка budget guard ДО HTTP-ноды.
+- HTTP-нода disabled → merge-нода бросает ошибку (фиктивное резюме невозможно).

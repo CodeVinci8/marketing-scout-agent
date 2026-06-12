@@ -88,3 +88,12 @@ Details: `docs/TELEGRAM_CONTROL_AGENT_PLAN.md`.
 - No public bot; operator chat-id allowlist only.
 - No report distribution outside the operator/stakeholder.
 - No LLM inside WF10/WF08 routing (WF08 enrichment stays as separately approved).
+
+---
+
+## Addendum (2026-06-12, DEC-128)
+
+WF12 v0.3 implements the report side of this plan: 25-col `market_intelligence_reports` row, executive
+digest bullets (ready for direct Telegram digest rendering in Stage 5), и controlled Claude summary path
+(approval token + budget guard + JSON sections + quality flags + cost recording). Telegram delivery itself
+remains Stage 5 (`delivered_to=none` until then).

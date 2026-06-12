@@ -1,6 +1,6 @@
 # STAGE_3_SOURCE_AND_INTELLIGENCE_FOUNDATION.md — Stage 3 Definition
 
-**Status:** ACTIVE (2026-06-12) · **Decisions:** DEC-113 (MVP shape), DEC-119 (WF08 cost-control), DEC-120 (WF11 live path), DEC-121 (WF13 VK), DEC-123 (stage boundaries)
+**Status:** ACTIVE (2026-06-12, session 4 update) · **Decisions:** DEC-113, DEC-119, DEC-120, DEC-121, DEC-123, **DEC-124–127, DEC-129–130 (live readiness · run ledger · lead-signal layer · website reintegration)**
 
 ## 1. What Stage 3 is
 
@@ -46,8 +46,13 @@ and hardened scoring/confidence rules. Everything downstream (reports, Claude, T
 | WF | Source | Value | Status |
 |----|--------|-------|--------|
 | 09 | Avito / classifieds | competitor ads, offers, prices, semantics | ✅ CLOSED / APPROVED (live) |
-| 11 | Telegram public channels (t.me/s preview) | competitor ad copy, market signals | ✅ fixture PASS; live path guarded & inert (DEC-120) |
-| 13 | VK public groups/posts/comments | **audience signals**: questions, objections, pains, author aggregates | 🔧 fixture foundation built (DEC-121) |
+| 11 | Telegram public channels (t.me/s preview) | competitor ad copy, market signals | ✅ **LIVE-READY** (DEC-120/126): token gate `I_APPROVE_LIVE_TELEGRAM_PREVIEW` + allowlist + disabled HTTP node; run logging built in |
+| 13 | VK public groups/posts/comments | **audience signals**: questions, objections, pains, author aggregates | ✅ fixture PASS; **LIVE-READY** (DEC-125/126): token gate `I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION` + allowlist + disabled official-API HTTP node; phone `#ERROR!` fixed; comments = `public_comment` |
+| 14 | Public lead signal triage (layer over 09/11/13 output) | manager-readable lead signals: pains, intents, scores | ✅ BUILT deterministic v0.1 (DEC-130) |
+| 02–06 | Competitor websites (Firecrawl pipeline) | offers, prices, guarantees, CTA, page changes | 🔁 **REINTEGRATED** (DEC-129): `competitor_site_snapshots` tab + WF12 block; WF04 snapshot-append = Phase B |
+
+**Run observability (DEC-126):** every live-capable run writes one `live_source_runs` row
+(WF11/WF12/WF13 automatically; WF15 manual logger for WF09/WF04/blocked attempts).
 
 WF13 was chosen over reviews/maps and Dzen because the pipeline's weakest WF10 input is
 `audience_activity_signals` — Avito and Telegram both feed competitor data; VK public discussions feed
@@ -67,3 +72,12 @@ No private chats/groups/MTProto/login scraping · no member extraction · no hid
 contacts only verbatim from public text with evidence URL, default `manual_review` · no auto-outreach ·
 no auto-handoff to WF08 · `active=false`, manual trigger, fixture-first, $0 by default ·
 each live transport and each external API call requires its own explicit operator approval.
+
+## 7. Session-4 additions (2026-06-12)
+
+Stage 3 now explicitly includes: **Avito live (approved)** · **Telegram live-ready** (WF11 gated path) ·
+**VK live-ready** (WF13 gated official-API path) · **public lead signal layer** (WF14 →
+`public_lead_signals`) · **website source reintegration** (`competitor_site_snapshots`, DEC-129) ·
+**run ledger** (`live_source_runs`, WF15). Exit criteria extended:
+5. WF14 triage produces expected VK lead signals (see N8N_WORKFLOW_14 RU doc) and repeat-run dedup holds.
+6. First approved live runs (WF11 Telegram, WF13 VK) each log a `live_source_runs` row with real counters/cost.

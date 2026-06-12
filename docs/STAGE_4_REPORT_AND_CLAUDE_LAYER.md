@@ -1,6 +1,6 @@
 # STAGE_4_REPORT_AND_CLAUDE_LAYER.md — Stage 4 Definition
 
-**Status:** PREPARED (2026-06-12) · **Decisions:** DEC-112 (Claude in report layer), DEC-118 (WF12 skeleton), DEC-122 (WF12 v0.2 + guarded Claude branch), DEC-123 (stage boundaries)
+**Status:** PREPARED (2026-06-12, session 4: WF12 v0.3 built) · **Decisions:** DEC-112, DEC-118, DEC-122, DEC-123, **DEC-128 (v0.3 stakeholder report + budget-gated test-ready Claude branch, 25-col schema)**
 
 ## 1. What Stage 4 is
 
@@ -53,3 +53,16 @@ clearly marked `no_data_notice` report. No invented facts, no contacts, no outre
 2. `no_data` and guard tests PASS (`enable_llm_summary=true` without token → error).
 3. First approved Claude summary run: cost recorded, summary contains no facts absent from the report.
 4. Report judged useful by the stakeholder (readability check) — then Stage 5 delivery.
+
+## 5. WF12 v0.3 (built 2026-06-12, DEC-128)
+
+Stage 4 now contains two concrete deliverables:
+1. **Deterministic report v0.3 ($0 default):** executive digest (5–7 bullets), clean competitor names
+   (no `(unnamed)` — `<Platform> offer: <short offer>` fallback), shortened offers, competitor-website
+   block (`competitor_site_snapshots`), public lead/audience signal block (aggregates from
+   `public_lead_signals` + `audience_activity_signals`), manager/content/source action blocks,
+   limitations + mandatory source_mix. Schema = 25 columns (MARKET_INTELLIGENCE_REPORT_SCHEMA.md v0.3).
+2. **Controlled Claude summary test path:** approval token + **budget guard before the HTTP node**
+   (`llm_max_input_chars`, `llm_max_estimated_cost_usd`) + evidence-bound JSON prompt (six required RU
+   sections) + disabled HTTP placeholder (credential bound in n8n only) + merge with usage-based cost and
+   quality flags. Operator test steps in N8N_WORKFLOW_12 RU doc §v0.3. Every run logs to `live_source_runs`.
