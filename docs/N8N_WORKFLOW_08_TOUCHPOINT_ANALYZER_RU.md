@@ -5,6 +5,26 @@
 **Статус:** ✅ **STAGE 3.2 ЗАКРЫТ (DEC-089).** DETERMINISTIC-FIRST BASELINE ОДОБРЕН (Test 3 PASS); **компактный LLM enrichment ОДОБРЕН С WATCH ITEM для опционального / тестового использования (Test C4 PASS — `primary_json=3/4`, fallback 1/4 безопасный).** Дефолт остаётся `deterministic_first`, пока оператор явно не включит `llm_enrichment`. `active=false`. Stage 3.2 (Business Scout Agent).
 **Дата:** 2026-06-10 (v9 — детерминированное обогащение Avito/classified — DEC-092; v8 source-handoff фильтры — DEC-091; Test C4 PASS — DEC-089; ранее DEC-088/087/085/086/082/083)
 
+> **ПАТЧ v10 (DEC-119) — COST-CONTROL РЕЖИМ: `llm_enabled=false` (master kill switch).**
+> Найденный дефект: при handoff WF11→WF08 неоднозначная Telegram-запись получила `parse_method=primary_json`
+> при `llm_enrichment=false` — `call_claude` включался для записей с `deterministic_needs_llm=true`.
+> Исправление: в `Set Analyzer Config` добавлен **`llm_enabled:false`** — при false НИ ОДНА запись не
+> попадает в Claude-ноды (независимо от `llm_enrichment` / `llm_enrichment_test_mode`):
+> - очевидные записи — по-прежнему детерминированно (`deterministic_pre_route` / `deterministic_irrelevant_skip`;
+>   Avito-поведение не тронуто);
+> - неоднозначные — в `review_queue` с **`parse_method=deterministic_uncertain_no_llm`**,
+>   `needs_manual_review=true`, reason: «Claude отключён, ручная проверка», стоимость анализа $0;
+> - защита в глубину: `Build Primary Claude Request` бросает ошибку, если `llm_enabled!==true`;
+> - в Final Summary: `llm_enabled`, счётчик `deterministic_uncertain_no_llm`, `claude_calls`,
+>   `estimated_analysis_cost_usd=0` и **диагностика нулевого прогона** (`zero_record_diagnostics` при
+>   `selected_count=0`: (1) duplicate-run request id даёт 0 записей by design — `approval_status=duplicate`
+>   vs дефолтные `analyze_statuses=['approved','new']`, использовать ПЕРВЫЙ id прогона коннектора (DEC-117);
+>   (2) опечатки в `platform_filter`/`source_type_filter`; (3) нужен `dedup_status=unique`;
+>   (4) `test_mode=false` исключает `new` и irrelevant; (5) `max_records>0`).
+> **Корректный handoff из WF11/WF13:** `agent_request_id_filter=<первый wf11_req_*/wf13_req_* id>`,
+> `platform_filter=telegram|vk`, `max_records=10`, `llm_enabled=false`, `llm_enrichment=false` → Claude=0, $0.
+> Прежний LLM-путь возвращается ровно установкой `llm_enabled=true` (только с явного одобрения оператора).
+
 > **ПАТЧ v9 (DEC-092) — Competitor Ad Intelligence для Avito/classified.** Для записей Workflow 09
 > (`source_type=classified` + `platform=avito`, text_context начинается с `Avito объявление:`) детерминированная
 > ветка competitor теперь извлекает из объявления `offer_text`=заголовок, `terms`=цена+условия, сохраняет

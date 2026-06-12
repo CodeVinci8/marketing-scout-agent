@@ -5,6 +5,43 @@ Most recent first.
 
 ---
 
+## 2026-06-12 (session 3) — WF08 cost-control kill switch (DEC-119) · WF11 v0.2 guarded live path (DEC-120) · WF13 VK foundation (DEC-121) · WF12 v0.2 report + Claude branch (DEC-122) · Stage 3/4/5 definitions (DEC-123)
+
+**Agent role:** project-engineer
+
+**What was done ($0, no external calls, no Claude calls, no live scraping, no Apify):**
+- **WF08 v10 (DEC-119):** root cause of the WF11-handoff `primary_json` anomaly found — `call_claude`
+  fired for `deterministic_needs_llm=true` records even with `llm_enrichment=false`. Added
+  `llm_enabled:false` master kill switch (no record reaches Claude when false; uncertain →
+  `review_queue` `parse_method=deterministic_uncertain_no_llm`, $0), hard throw-guard in
+  `Build Primary Claude Request`, summary fields (`llm_enabled`, `deterministic_uncertain_no_llm`,
+  `claude_calls`, `estimated_analysis_cost_usd=0`) and `zero_record_diagnostics`. Sim PASS
+  (uncertain blocked / Avito pre-route unchanged / irrelevant skip unchanged / guard throws /
+  `llm_enabled=true` restores the old path).
+- **WF11 v0.2 (DEC-120):** live branch = approval-token gate (rejects groups/invites; allowlist required)
+  → **DISABLED** HTTP placeholder (t.me/s public preview only) → inert parser (throws without HTML).
+  Normalize reads `$input` (shared by both branches). Fixture sim re-verified: 6/5/1/4/1, raw +5,
+  registry +4, repeat 0/5, contact policy intact (no `contact_channel=handle`).
+- **WF13 BUILT (DEC-121):** `13_public_discussion_or_reviews_connector_foundation.json` — VK public
+  groups/posts/comments (chosen over reviews/maps and Dzen to feed the empty
+  `audience_activity_signals`). Fixture-first, `active=false`, no HTTP node, live guard throws;
+  40/15/21-column outputs; hard-negative + dedup per WF09/WF11; aggregate-only author counts
+  (active=3 / repeat=1 over unique items); question/objection classification. Sim PASS.
+- **WF12 v0.2 (DEC-122):** full deterministic report sections + gated disabled Claude branch
+  (claude-sonnet-4-6 placeholder, evidence-bound prompt, cost math $3/$15 per MTok verified at 0.012 USD
+  for 2000/400 tokens, merge throws without a response). Sim PASS incl. no_data.
+- **Docs:** STAGE_3/4/5 definition docs (new), WF13 RU guide (new), patch notes in WF08/11/12 RU guides,
+  STAGE_3_4 §5.7 update, ROADMAP Stage 3/4/5 block, NEXT_ACTIONS, AGENT_CAPABILITIES, BACKLOG
+  preservation note, DECISIONS DEC-119…123, recent.md.
+
+**Validation:** all 4 workflow JSONs pass `python3 -m json.tool`; all `active=false`; no real keys /
+Spreadsheet IDs; only disabled HTTP placeholders added; node JS simulated end-to-end in a vm sandbox.
+
+**Next:** operator re-imports + tests per NEXT_ACTIONS (WF08 cost-control test, WF11 v0.2 retest,
+WF13 fixture tests, WF12 v0.2 run), then WF10 → WF12 two-run trend report.
+
+---
+
 ## 2026-06-12 (session 2) — WF11 fixture PASS + v0.1.1 contact patch (DEC-114) · validation_lists v1.1 (DEC-115) · live preview plan (DEC-116) · WF08 handoff diagnostics (DEC-117) · WF12 Report Builder skeleton (DEC-118)
 
 **Agent role:** project-engineer

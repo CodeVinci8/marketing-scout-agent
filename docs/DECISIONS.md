@@ -5,6 +5,51 @@ Most recent first.
 
 ---
 
+## DEC-123 — Stage 3/4/5 Boundaries Defined (source foundation · report/Claude layer · Telegram Business Agent)
+
+**Date:** 2026-06-12
+**Context:** The MVP direction (DEC-113) needed explicit stage boundaries so work stops drifting into "one more parser".
+**Decision:** Three stage-definition docs are canonical: `STAGE_3_SOURCE_AND_INTELLIGENCE_FOUNDATION.md` (connectors WF09/11/13 → raw/registry → WF08 → WF10; scoring/source hardening; explicitly NOT infinite parser collection), `STAGE_4_REPORT_AND_CLAUDE_LAYER.md` (WF12 → market_intelligence_reports; optional gated Claude summary with cost tracking; quality checks; stakeholder-ready output), `STAGE_5_TELEGRAM_BUSINESS_AGENT_PLAN.md` (commands → agent_requests → approval gates → workflow selection → report delivery; no parser logic inside Telegram). Strategic ideas stay preserved in `FUTURE_CAPABILITIES_BACKLOG.md` (Control Kernel, Niche Packs, Market Graph, Report & Diagram Builder, Source/Budget Planner, Contact Handoff, Competitor Ad Intelligence).
+**Alternatives considered:** keeping stage scope only in ROADMAP (rejected — too coarse; scope creep showed it needs binding per-stage docs).
+
+---
+
+## DEC-122 — WF12 v0.2: Full Report Sections + Guarded Claude Branch (disabled, cost-tracked, claude-sonnet-4-6)
+
+**Date:** 2026-06-12
+**Context:** The WF12 v0.1 skeleton proved the schema but was not operator/stakeholder-ready, and the Claude layer needed a concrete (still inert) shape.
+**Decision:** WF12 v0.2 renders all required sections deterministically from WF10 rows only: executive_summary, competitor_snapshot, top_offers_and_prices (offers/prices_terms from competitor_profiles), market_angles_summary (with trends), audience_signals_summary, content_plan, source_confidence (avg/min/max of source_confidence_score), limitations/source_mix (DEC-108), next_actions. Claude branch replaced the throw-only guard with: Approval Gate (throws unless `llm_approval_token=I_APPROVE_CLAUDE_REPORT_SUMMARY`) → evidence-bound prompt builder (deterministic report fields only — never raw records or contacts; hard no-invention/no-contacts/no-outreach rules; max_tokens cap 1200) → **DISABLED** HTTP placeholder (`claude-sonnet-4-6`, header placeholder string, no real key, no live call made) → merge node that throws without a response and otherwise computes `llm_cost_usd` from usage tokens ($3/$15 per MTok). WF10 stays the deterministic fact core; Claude is the business-interpretation brain on top (DEC-112). Sim: deterministic sections, no_data, gate/merge throws, and a 0.012-USD cost calc all PASS.
+**Alternatives considered:** keeping the throw-only guard (rejected — Stage 4 needs the request shape and cost math proven now, while remaining inert); claude-opus tier (rejected — project stack pins claude-sonnet; summary is a bounded summarization task).
+
+---
+
+## DEC-121 — Third Source Foundation = VK Public Groups/Posts/Comments (WF13; reviews/maps deferred to 4th)
+
+**Date:** 2026-06-12
+**Context:** Stage 3 needed a third source after Avito (WF09) and Telegram (WF11). Candidates: VK public discussions, reviews/maps (Zoon/Яндекс/2GIS), Dzen.
+**Decision:** Built `13_public_discussion_or_reviews_connector_foundation.json` for **VK public groups/posts/comments** (fixture-first, `active=false`, no HTTP node, live guard throws). Rationale: Avito and Telegram both feed competitor-ad data; the weakest WF10 input is `audience_activity_signals` — VK public discussions supply audience pains, questions/objections, buying intent and **aggregate-only** author counts (`active_author_count`/`repeat_author_count`, computed over unique items, never member lists). Classification: competitor ad → monitor_queue; question/objection → `question_objection`/`forum_discussion`/review_queue; weak finance → market_signal/content_queue; hard negatives skipped before registry (WF09/WF11 pattern). Contact policy enforced (verbatim public contacts only; author profile_url only if public; DEC-114 channel categories). Fixture sim: 6 items → 5 relevant / 1 hard-skip / 4 unique / 1 dup; raw +5 / registry +4; repeat run 0/5; 40/15/21 column counts exact. Reviews/maps = recommended 4th source (trust/reputation evidence); Dzen later.
+**Alternatives considered:** reviews/maps first (rejected for now — reputation evidence is valuable but doesn't feed the empty audience-signals tab); building all three (rejected — DEC-096 one source at a time).
+
+---
+
+## DEC-120 — WF11 v0.2: Guarded Live Telegram Preview Path (approval token + DISABLED HTTP placeholder; inert by default)
+
+**Date:** 2026-06-12
+**Context:** DEC-116 left live preview as a plan with placeholder config only; Stage 3 needed the actual guarded path without executing anything live.
+**Decision:** WF11 live branch is now: `LIVE Preview Approval Gate` (throws unless `live_approval_token=I_APPROVE_LIVE_TELEGRAM_PREVIEW` AND non-empty `live_channel_allowlist`; rejects group/invite/private-style entries) → **DISABLED** HTTP placeholder (GET `https://t.me/s/<channel>` public preview only, no credentials) → `Parse Live Preview Posts (inert)` (throws if no HTML — fabricated posts impossible; parses tgme_widget_message blocks when real HTML arrives, capped at `live_max_posts_per_channel<=10`). `Normalize Telegram Posts` now reads `$input` so fixture and live branches share normalization (fixture counters unchanged: 6/5/1/4/1, repeat 0/5 — re-verified). Scope unchanged: allowlist-only public channels, no groups/private chats/MTProto/member extraction/hidden contacts/auto-outreach; outputs only agent_requests/raw/registry. Going live still requires explicit operator approval (token) **plus** manually enabling the HTTP node.
+**Alternatives considered:** keeping the throw-only guard (rejected — the transport shape and parser need to exist and be reviewable before any approval is meaningful); enabling HTTP behind the token alone (rejected — two deliberate operator actions are required: token + node enable).
+
+---
+
+## DEC-119 — WF08 Cost-Control Mode: `llm_enabled=false` Master Kill Switch (uncertain records never escalate to Claude)
+
+**Date:** 2026-06-12
+**Context:** During the WF11 → WF08 handoff, the uncertain Telegram market signal produced `parse_method=primary_json` despite `llm_enrichment=false` — root cause: `Prepare Record` computed `call_claude = !irrelevant && (llm_enrichment || deterministic_needs_llm)`, so *uncertain* records always called Claude.
+**Decision:** Added `llm_enabled:false` to `Set Analyzer Config` as the master kill switch. When false: NO record may reach Claude nodes regardless of `llm_enrichment`/`llm_enrichment_test_mode`/`deterministic_needs_llm`; obvious records still route deterministically (`deterministic_pre_route`/`deterministic_irrelevant_skip` — Avito behavior unchanged); uncertain records go to `review_queue` with **`parse_method=deterministic_uncertain_no_llm`**, `needs_manual_review=true`, reason explicitly states Claude disabled / manual review / $0. Defense in depth: `Build Primary Claude Request` now throws if `llm_enabled!==true` even if `call_claude` were miscomputed. Summary adds `llm_enabled`, `deterministic_uncertain_no_llm` count, `claude_calls`, `estimated_analysis_cost_usd=0`, and **zero-record diagnostics** (duplicate-run ids / filters / dedup_status / test_mode checklist when `selected_count=0` — extends DEC-117). The existing LLM path is restored exactly by setting `llm_enabled=true` (explicit operator approval). Sim: uncertain blocked + routed, Avito pre-route unchanged, irrelevant skip unchanged, guard throws, `llm_enabled=true` restores `call_claude=true` — all PASS.
+**Alternatives considered:** redefining `llm_enrichment=false` to also block uncertain records (rejected — silently changes Stage 3.2-approved semantics where `deterministic_needs_llm` was the designed escalation; a separate master switch keeps both modes explicit).
+
+---
+
 ## DEC-118 — WF12 Report Builder Built as a Deterministic Skeleton (Claude/Telegram = guarded, not implemented)
 
 **Date:** 2026-06-12

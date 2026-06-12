@@ -13,7 +13,7 @@
       "parameters": {
         "height": 520,
         "width": 640,
-        "content": "## 12 — Market Intelligence Report Builder v0.1 — ДЕТЕРМИНИРОВАННЫЙ скелет (DEC-112/118)\n\nОтчётный слой НАД фактическим ядром WF10 (DEC-112: Claude — в report/control-слое, НЕ в WF10).\n\nЧто делает (ДЕТЕРМИНИРОВАННО, $0):\n1. Ручной старт → Set Report Config (`enable_llm_summary=false`, `telegram_send=false`).\n2. Читает 4 вкладки WF10: competitor_profiles / market_angles / audience_activity_signals / content_positioning_plan.\n3. Выбирает ПОСЛЕДНИЙ снапшот WF10 по `plan_id` (один план на прогон); предыдущий план = база для трендов углов (↑/↓/=/NEW).\n4. Считает топ конкурентов (evidence_count/confidence), топ углов (frequency+тренд), агрегаты аудитории; рендерит Markdown.\n5. Пишет ТОЛЬКО: market_intelligence_reports (20 колонок, схема в MARKET_INTELLIGENCE_REPORT_SCHEMA.md) + agent_requests (21, completed, $0).\n6. no_data-прогон WF10 → report_type=no_data_notice, фиксированная рекомендация, без шаблонного контента.\n7. **source_mix обязателен в каждом отчёте** (DEC-108): отчёт никогда не подразумевает, что все данные собраны live.\n\nЧЕГО НЕ ДЕЛАЕТ: НЕ вызывает Claude (ветка = guard с ошибкой; включение — отдельное одобрение: bounded facts-only prompt, токен-кэп, запись стоимости); НЕ шлёт в Telegram (delivered_to=none); НЕ ходит в сеть (HTTP-нод нет); НЕ выдумывает факты/контакты; НЕ рекомендует outreach. active=false."
+        "content": "## 12 — Market Intelligence Report Builder v0.1 — ДЕТЕРМИНИРОВАННЫЙ скелет (DEC-112/118)\n\nОтчётный слой НАД фактическим ядром WF10 (DEC-112: Claude — в report/control-слое, НЕ в WF10).\n\nЧто делает (ДЕТЕРМИНИРОВАННО, $0):\n1. Ручной старт → Set Report Config (`enable_llm_summary=false`, `telegram_send=false`).\n2. Читает 4 вкладки WF10: competitor_profiles / market_angles / audience_activity_signals / content_positioning_plan.\n3. Выбирает ПОСЛЕДНИЙ снапшот WF10 по `plan_id` (один план на прогон); предыдущий план = база для трендов углов (↑/↓/=/NEW).\n4. Считает топ конкурентов (evidence_count/confidence), топ углов (frequency+тренд), агрегаты аудитории; рендерит Markdown.\n5. Пишет ТОЛЬКО: market_intelligence_reports (20 колонок, схема в MARKET_INTELLIGENCE_REPORT_SCHEMA.md) + agent_requests (21, completed, $0).\n6. no_data-прогон WF10 → report_type=no_data_notice, фиксированная рекомендация, без шаблонного контента.\n7. **source_mix обязателен в каждом отчёте** (DEC-108): отчёт никогда не подразумевает, что все данные собраны live.\n\nЧЕГО НЕ ДЕЛАЕТ: НЕ вызывает Claude (ветка = guard с ошибкой; включение — отдельное одобрение: bounded facts-only prompt, токен-кэп, запись стоимости); НЕ шлёт в Telegram (delivered_to=none); НЕ ходит в сеть (HTTP-нод нет); НЕ выдумывает факты/контакты; НЕ рекомендует outreach. active=false.\n\n**v0.2 (DEC-122):** отчёт расширен секциями executive_summary / competitor_snapshot / top_offers_and_prices / source_confidence / limitations / next_actions (детерминированно, $0). Добавлена ОХРАНЯЕМАЯ Claude-ветка: гейт одобрения (token) -> evidence-bound промпт (только поля отчёта) -> ОТКЛЮЧЁННЫЙ HTTP-плейсхолдер (claude-sonnet-4-6, без ключа) -> merge с учётом стоимости ($3/$15 за MTok). WF10 = детерминированное фактовое ядро; Claude = слой бизнес-интерпретации (DEC-112). Никаких выдуманных фактов/контактов/аутрича."
       }
     },
     {
@@ -52,7 +52,7 @@
         320
       ],
       "parameters": {
-        "jsCode": "// WF12 Market Intelligence Report Builder config — DETERMINISTIC v0.1 skeleton (DEC-112/118).\n// $0 by default: no Claude, no Telegram send, no external API. Reads WF10 output tabs, writes ONE\n// market_intelligence_reports row (schema: docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md) + ONE agent_requests row.\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst stamp=moscowStamp();\nreturn [{ json: {\n  // --- hard-off defaults (DEC-112): the deterministic report is complete without any of these.\n  enable_llm_summary:false,          // optional Claude summary — NOT implemented; guard node throws if true\n  telegram_send:false,               // Telegram delivery — NOT implemented in v0.1 (delivered_to stays 'none')\n  report_type:'on_demand',           // on_demand / weekly_digest / no_data_notice (auto-set on no_data)\n  niche_id:'credit_brokerage',\n  region:'Москва/МО',\n  top_n:3,\n  requested_by:'operator',\n  report_id:'report_'+stamp,\n  run_id:'wf12_'+stamp,\n  agent_request_id:'wf12_req_'+stamp,\n  created_at:moscowIsoNow()\n}}];"
+        "jsCode": "// WF12 Market Intelligence Report Builder config — DETERMINISTIC v0.1 skeleton (DEC-112/118).\n// $0 by default: no Claude, no Telegram send, no external API. Reads WF10 output tabs, writes ONE\n// market_intelligence_reports row (schema: docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md) + ONE agent_requests row.\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst stamp=moscowStamp();\nreturn [{ json: {\n  // --- hard-off defaults (DEC-112): the deterministic report is complete without any of these.\n  enable_llm_summary:false,          // optional Claude summary branch (v0.2, DEC-122) — guarded, HTTP node DISABLED\n  llm_approval_token:'',             // must equal 'I_APPROVE_CLAUDE_REPORT_SUMMARY' (explicit operator approval)\n  llm_model:'claude-sonnet-4-6',     // project stack model (CLAUDE.md); pricing for cost tracking below\n  llm_max_tokens:1200,               // hard output cap for the summary\n  llm_input_price_per_mtok:3.0,      // USD per 1M input tokens (claude-sonnet-4-6)\n  llm_output_price_per_mtok:15.0,    // USD per 1M output tokens (claude-sonnet-4-6)\n  telegram_send:false,               // Telegram delivery — NOT implemented (delivered_to stays 'none')\n  report_type:'on_demand',           // on_demand / weekly_digest / no_data_notice (auto-set on no_data)\n  niche_id:'credit_brokerage',\n  region:'Москва/МО',\n  top_n:3,\n  requested_by:'operator',\n  report_id:'report_'+stamp,\n  run_id:'wf12_'+stamp,\n  agent_request_id:'wf12_req_'+stamp,\n  created_at:moscowIsoNow()\n}}];"
       }
     },
     {
@@ -193,7 +193,7 @@
         320
       ],
       "parameters": {
-        "jsCode": "// Deterministic Report Builder core (DEC-112/118): latest WF10 snapshot -> 20-col report row + Markdown.\n// Facts only — every number/name comes from the WF10 tabs; nothing is invented; no contacts are surfaced.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction num(v){var n=Number(v);return isFinite(n)?n:0;}\nfunction rowsOf(name){try{return $(name).all().map(i=>i.json).filter(r=>r&&Object.keys(r).length);}catch(e){return [];}}\nconst cfg=$('Set Report Config').first().json;\nconst topN=Number(cfg.top_n)||3;\nconst profiles=rowsOf('Read competitor_profiles');\nconst angles=rowsOf('Read market_angles');\nconst signals=rowsOf('Read audience_activity_signals');\nconst plans=rowsOf('Read content_positioning_plan').filter(p=>str(p.plan_id));\n// --- run selection: plan_id carries the WF10 run stamp (plan_<stamp> or plan_<stamp>_no_data; one plan per run)\nfunction planStamp(p){return str(p.plan_id).replace(/^plan_/,'').replace(/_no_data$/,'');}\nplans.sort((a,b)=>planStamp(a)<planStamp(b)?-1:1);\nif(!plans.length){throw new Error('WF12: content_positioning_plan is empty — run WF10 at least once before building a report.');}\nconst latest=plans[plans.length-1];\nconst stamp=planStamp(latest);\nconst prev=plans.filter(p=>planStamp(p)!==stamp).pop()||null;\nconst prevStamp=prev?planStamp(prev):'';\nconst isNoData=/_no_data$/.test(str(latest.plan_id))||/rows=0/.test(str(latest.source_evidence));\nconst rowsAfter=(function(){const m=str(latest.source_evidence).match(/rows=(\\d+)/);return m?Number(m[1]):(isNoData?0:0);})();\n// --- snapshot filters: WF10 ids/notes carry the run stamp\nconst profNow=profiles.filter(p=>str(p.notes).indexOf('wf10_'+stamp)>=0||str(p.notes).indexOf(stamp)>=0);\nconst angNow=angles.filter(a=>str(a.angle_id).endsWith(stamp));\nconst angPrev=prevStamp?angles.filter(a=>str(a.angle_id).endsWith(prevStamp)):[];\nconst sigNow=signals.filter(s=>str(s.signal_id).endsWith(stamp));\n// --- deterministic top lists\nconst topComp=profNow.slice().sort((a,b)=>(num(b.evidence_count)-num(a.evidence_count))||(num(b.source_confidence_score)-num(a.source_confidence_score))).slice(0,topN)\n  .map(p=>str(p.competitor_name)+' (evidence '+num(p.evidence_count)+', conf '+num(p.source_confidence_score)+')');\nfunction angleKey(a){return str(a.angle_id).replace(/^angle_/,'').replace(/_\\d{8}_\\d{6}$/,'');} // strip the trailing run stamp -> stable angle key across runs\nconst prevFreq={};for(const a of angPrev){prevFreq[angleKey(a)]=num(a.frequency);}\nconst topAng=angNow.slice().sort((a,b)=>num(b.frequency)-num(a.frequency)).slice(0,topN)\n  .map(a=>{const k=angleKey(a);const f=num(a.frequency);let trend='·';\n    if(prevStamp){const pf=prevFreq[k];trend=(pf===undefined)?'NEW':(f>pf?'↑':(f<pf?'↓':'='));}\n    return str(a.angle_text)+' (x'+f+(prevStamp?(' '+trend):'')+')';});\nconst audSummary=sigNow.map(s=>str(s.platform)+': questions='+num(s.question_count)+', objections='+num(s.objection_count)+', complaints='+num(s.complaint_count)+', buying_intent='+num(s.buying_intent_count)+(str(s.top_pains)?(', pains: '+str(s.top_pains)):'')).join(' | ');\n// --- mandatory source-mix label (DEC-108): never imply all data was collected live in this run\nconst SOURCE_MIX='mixed: live + historical/manual + web pipeline';\nconst reportType=isNoData?'no_data_notice':str(cfg.report_type);\nconst NO_DATA_TEXT='no_data; broaden filters or source scope';\n// --- deterministic Markdown render (the full report; v0.1 keeps it inline in result/notes, no file write)\nconst md=[\n'# Market intelligence report '+str(cfg.report_id),\n'',\n'- niche: '+str(cfg.niche_id)+' · region: '+str(cfg.region)+' · WF10 run: wf10_'+stamp+(prevStamp?(' · prev: wf10_'+prevStamp):' · prev: (none — first report, no trends)'),\n'- **Источники: '+SOURCE_MIX+'** · rows_after_filters='+rowsAfter,\n'',\nisNoData?('**NO DATA:** '+NO_DATA_TEXT):[\n'## Топ конкурентов',topComp.length?topComp.map((c,i)=>(i+1)+'. '+c).join('\\n'):'(none in snapshot)',\n'','## Топ углов',topAng.length?topAng.map((a,i)=>(i+1)+'. '+a).join('\\n'):'(none in snapshot)',\n'','## Активность аудитории (aggregate-only)',audSummary||'(no signals in snapshot)',\n'','## План контента','plan: '+str(latest.plan_id)+' — '+str(latest.top_angles)\n].join('\\n'),\n'',\n'_Deterministic report (DEC-112): no LLM, no contacts, no outreach. $0._'\n].join('\\n');\n// --- 20-column market_intelligence_reports row (docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md)\nreturn [{ json: {\n  report_id:str(cfg.report_id),\n  created_at:str(cfg.created_at),\n  report_type:reportType,\n  niche_id:str(cfg.niche_id),\n  region:str(cfg.region),\n  time_window_days:30,\n  wf10_run_id:'wf10_'+stamp,\n  prev_wf10_run_id:prevStamp?('wf10_'+prevStamp):'',\n  source_mix:SOURCE_MIX,\n  rows_after_filters:rowsAfter,\n  top_competitors:isNoData?'':topComp.join(' | '),\n  top_angles:isNoData?'':topAng.join(' | '),\n  audience_summary:isNoData?'':audSummary,\n  content_plan_ref:str(latest.plan_id),\n  report_markdown_path:'',\n  llm_summary:'',\n  llm_recommendations:'',\n  llm_cost_usd:0,\n  delivered_to:'none',\n  notes:(isNoData?('no_data_notice; recommendation: '+NO_DATA_TEXT+'; '):'')+'wf12 v0.1 deterministic skeleton (DEC-118); llm disabled (DEC-112); markdown inline below || '+md\n}}];"
+        "jsCode": "// Deterministic Report Builder core (DEC-112/118): latest WF10 snapshot -> 20-col report row + Markdown.\n// Facts only — every number/name comes from the WF10 tabs; nothing is invented; no contacts are surfaced.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction num(v){var n=Number(v);return isFinite(n)?n:0;}\nfunction rowsOf(name){try{return $(name).all().map(i=>i.json).filter(r=>r&&Object.keys(r).length);}catch(e){return [];}}\nconst cfg=$('Set Report Config').first().json;\nconst topN=Number(cfg.top_n)||3;\nconst profiles=rowsOf('Read competitor_profiles');\nconst angles=rowsOf('Read market_angles');\nconst signals=rowsOf('Read audience_activity_signals');\nconst plans=rowsOf('Read content_positioning_plan').filter(p=>str(p.plan_id));\n// --- run selection: plan_id carries the WF10 run stamp (plan_<stamp> or plan_<stamp>_no_data; one plan per run)\nfunction planStamp(p){return str(p.plan_id).replace(/^plan_/,'').replace(/_no_data$/,'');}\nplans.sort((a,b)=>planStamp(a)<planStamp(b)?-1:1);\nif(!plans.length){throw new Error('WF12: content_positioning_plan is empty — run WF10 at least once before building a report.');}\nconst latest=plans[plans.length-1];\nconst stamp=planStamp(latest);\nconst prev=plans.filter(p=>planStamp(p)!==stamp).pop()||null;\nconst prevStamp=prev?planStamp(prev):'';\nconst isNoData=/_no_data$/.test(str(latest.plan_id))||/rows=0/.test(str(latest.source_evidence));\nconst rowsAfter=(function(){const m=str(latest.source_evidence).match(/rows=(\\d+)/);return m?Number(m[1]):(isNoData?0:0);})();\n// --- snapshot filters: WF10 ids/notes carry the run stamp\nconst profNow=profiles.filter(p=>str(p.notes).indexOf('wf10_'+stamp)>=0||str(p.notes).indexOf(stamp)>=0);\nconst angNow=angles.filter(a=>str(a.angle_id).endsWith(stamp));\nconst angPrev=prevStamp?angles.filter(a=>str(a.angle_id).endsWith(prevStamp)):[];\nconst sigNow=signals.filter(s=>str(s.signal_id).endsWith(stamp));\n// --- deterministic top lists\nconst topComp=profNow.slice().sort((a,b)=>(num(b.evidence_count)-num(a.evidence_count))||(num(b.source_confidence_score)-num(a.source_confidence_score))).slice(0,topN)\n  .map(p=>str(p.competitor_name)+' (evidence '+num(p.evidence_count)+', conf '+num(p.source_confidence_score)+')');\nfunction angleKey(a){return str(a.angle_id).replace(/^angle_/,'').replace(/_\\d{8}_\\d{6}$/,'');} // strip the trailing run stamp -> stable angle key across runs\nconst prevFreq={};for(const a of angPrev){prevFreq[angleKey(a)]=num(a.frequency);}\nconst topAng=angNow.slice().sort((a,b)=>num(b.frequency)-num(a.frequency)).slice(0,topN)\n  .map(a=>{const k=angleKey(a);const f=num(a.frequency);let trend='·';\n    if(prevStamp){const pf=prevFreq[k];trend=(pf===undefined)?'NEW':(f>pf?'↑':(f<pf?'↓':'='));}\n    return str(a.angle_text)+' (x'+f+(prevStamp?(' '+trend):'')+')';});\nconst audSummary=sigNow.map(s=>str(s.platform)+': questions='+num(s.question_count)+', objections='+num(s.objection_count)+', complaints='+num(s.complaint_count)+', buying_intent='+num(s.buying_intent_count)+(str(s.top_pains)?(', pains: '+str(s.top_pains)):'')).join(' | ');\nconst NO_DATA_TEXT='no_data; broaden filters or source scope';\n// --- v0.2 (DEC-122) extra deterministic sections — every value comes from WF10 rows; nothing invented.\nconst offersPrices=profNow.filter(p=>str(p.offers)||str(p.prices_terms)).slice(0,5)\n  .map(p=>str(p.competitor_name)+': '+(str(p.offers)||'(оффер не извлечён)')+(str(p.prices_terms)?(' — '+str(p.prices_terms)):''));\nconst confScores=profNow.map(p=>num(p.source_confidence_score)).filter(n=>n>0);\nconst confAvg=confScores.length?Math.round(confScores.reduce((a,b)=>a+b,0)/confScores.length):0;\nconst confLine=confScores.length?('avg='+confAvg+', min='+Math.min.apply(null,confScores)+', max='+Math.max.apply(null,confScores)+' (по '+confScores.length+' профилям; правила: source_confidence_rules)'):'(нет профилей в снапшоте)';\nconst platformsSeen={};profNow.forEach(p=>str(p.platforms).split(/\\s*,\\s*/).forEach(x=>{if(x)platformsSeen[x]=(platformsSeen[x]||0)+1;}));\nconst platLine=Object.keys(platformsSeen).map(k=>k+' ('+platformsSeen[k]+')').join(', ')||'(none)';\nconst execSummary=isNoData\n  ?'NO DATA: за окно отчёта нет строк после фильтров — расширить фильтры или источники.'\n  :('За окно отчёта: '+profNow.length+' конкурентных профилей, '+angNow.length+' рыночных углов, '+sigNow.length+' агрегатов активности аудитории. Топ-конкурент: '+(topComp[0]||'(none)')+'. Топ-угол: '+(topAng[0]||'(none)')+'. Достоверность источников: '+confLine+'.');\nconst nextActions=isNoData\n  ?'1. '+NO_DATA_TEXT+'\\n2. Перезапустить WF10, затем WF12.'\n  :'1. Проверить топ-конкурентов и углы в Google Sheets (competitor_profiles / market_angles).\\n2. Утвердить план контента (content_positioning_plan).\\n3. Отдельные шаги по одобрению: Claude-резюме (enable_llm_summary) и Telegram-доставка. Никакого аутрича: контакты в отчёт не выводятся (CONTACT_AND_OUTREACH_POLICY).';\n// --- mandatory source-mix label (DEC-108): never imply all data was collected live in this run\nconst SOURCE_MIX='mixed: live + historical/manual + web pipeline';\nconst reportType=isNoData?'no_data_notice':str(cfg.report_type);\n// --- deterministic Markdown render (the full report; v0.1 keeps it inline in result/notes, no file write)\nconst md=[\n'# Market intelligence report '+str(cfg.report_id),\n'',\n'- niche: '+str(cfg.niche_id)+' · region: '+str(cfg.region)+' · WF10 run: wf10_'+stamp+(prevStamp?(' · prev: wf10_'+prevStamp):' · prev: (none — first report, no trends)'),\n'- **Источники: '+SOURCE_MIX+'** · rows_after_filters='+rowsAfter,\n'',\n'## Executive summary',execSummary,\n'',\nisNoData?('**NO DATA:** '+NO_DATA_TEXT):[\n'## Снапшот конкурентов (competitor_snapshot)','профилей в снапшоте: '+profNow.length+' · площадки: '+platLine,\n'','### Топ конкурентов',topComp.length?topComp.map((c,i)=>(i+1)+'. '+c).join('\\n'):'(none in snapshot)',\n'','## Топ офферов и цен (top_offers_and_prices)',offersPrices.length?offersPrices.map((o,i)=>(i+1)+'. '+o).join('\\n'):'(офферы/цены не извлечены в этом снапшоте)',\n'','## Топ углов (market_angles_summary)',topAng.length?topAng.map((a,i)=>(i+1)+'. '+a).join('\\n'):'(none in snapshot)',\n'','## Активность аудитории (aggregate-only)',audSummary||'(no signals in snapshot)',\n'','## План контента','plan: '+str(latest.plan_id)+' — '+str(latest.top_angles),\n'','## Достоверность источников (source_confidence)',confLine\n].join('\\n'),\n'',\n'## Ограничения и source mix (limitations)',\n'- '+SOURCE_MIX+' — агрегаты включают исторические/ручные записи, не только живой сбор последнего прогона.',\n'- Тренды доступны только при >=2 прогонах WF10'+(prevStamp?'':' (этот отчёт — первый, трендов нет)')+'.',\n'- Контакты и рекомендации по аутричу в отчёт не включаются (CONTACT_AND_OUTREACH_POLICY).',\n'',\n'## Следующие действия (next_actions)',nextActions,\n'',\n'_Deterministic report (DEC-112/122): факты только из WF10; no LLM by default, no contacts, no outreach. $0._'\n].join('\\n');\n// --- 20-column market_intelligence_reports row (docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md)\nreturn [{ json: {\n  report_id:str(cfg.report_id),\n  created_at:str(cfg.created_at),\n  report_type:reportType,\n  niche_id:str(cfg.niche_id),\n  region:str(cfg.region),\n  time_window_days:30,\n  wf10_run_id:'wf10_'+stamp,\n  prev_wf10_run_id:prevStamp?('wf10_'+prevStamp):'',\n  source_mix:SOURCE_MIX,\n  rows_after_filters:rowsAfter,\n  top_competitors:isNoData?'':topComp.join(' | '),\n  top_angles:isNoData?'':topAng.join(' | '),\n  audience_summary:isNoData?'':audSummary,\n  content_plan_ref:str(latest.plan_id),\n  report_markdown_path:'',\n  llm_summary:'',\n  llm_recommendations:'',\n  llm_cost_usd:0,\n  delivered_to:'none',\n  notes:(isNoData?('no_data_notice; recommendation: '+NO_DATA_TEXT+'; '):'')+'wf12 v0.1 deterministic skeleton (DEC-118); llm disabled (DEC-112); markdown inline below || '+md\n}}];"
       }
     },
     {
@@ -230,7 +230,7 @@
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000g1",
-      "name": "LLM Summary Guard (not implemented)",
+      "name": "Claude Summary Approval Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -238,7 +238,7 @@
         180
       ],
       "parameters": {
-        "jsCode": "// LLM SUMMARY GUARD — the optional Claude branch is NOT implemented in the WF12 v0.1 skeleton (DEC-112/118).\n// This workflow contains NO HTTP node. Enabling enable_llm_summary requires, in order: explicit operator\n// approval, a bounded facts-only prompt (WF10 table rows + run stats ONLY — never raw contact fields),\n// a token cap, and cost recording in agent_requests + COSTS_AND_LIMITS.md.\n// Claude summarizes deterministic facts only: no invented facts/competitors/trends, no contacts, no outreach.\nthrow new Error('WF12 enable_llm_summary is not implemented in the v0.1 skeleton. Deterministic report only (enable_llm_summary=false). The optional Claude summary requires explicit operator approval + bounded prompt + cost recording (see docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md §3).');"
+        "jsCode": "// CLAUDE SUMMARY APPROVAL GATE (DEC-112/122) — fires on enable_llm_summary=true. INERT BY DEFAULT:\n// throws unless the operator explicitly armed the run, and even then the downstream HTTP node ships\n// DISABLED with no credential — enabling it is a second deliberate operator action in the n8n editor.\n// Claude is the business-interpretation layer ON TOP of the deterministic WF10 fact core (DEC-112):\n// it may only summarize the deterministic report — no invented facts, no contacts, no outreach.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Report Config').first().json;\nif(str(cfg.llm_approval_token)!=='I_APPROVE_CLAUDE_REPORT_SUMMARY'){\n  throw new Error('WF12 Claude gate: operator approval token missing. The optional Claude summary requires: llm_approval_token=I_APPROVE_CLAUDE_REPORT_SUMMARY in Set Report Config, an Anthropic credential bound in n8n (never in this file), and ENABLING the disabled HTTP node. Deterministic report stays $0 by default (DEC-112). Cost must be recorded in agent_requests + docs/COSTS_AND_LIMITS.md.');\n}\nreturn $input.all();"
       }
     },
     {
@@ -336,6 +336,71 @@
       "parameters": {
         "jsCode": "// Final run summary. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Report Config').first().json;\nconst rep=$('Build Deterministic Report').first().json;\nreturn [{ json: {\n  workflow:'12 - Market Intelligence Report Builder (deterministic skeleton)',\n  report_id:str(rep.report_id),\n  report_type:str(rep.report_type),\n  wf10_run_id:str(rep.wf10_run_id),\n  prev_wf10_run_id:str(rep.prev_wf10_run_id)||'(none)',\n  rows_after_filters:rep.rows_after_filters,\n  top_competitors:str(rep.top_competitors),\n  top_angles:str(rep.top_angles),\n  source_mix:str(rep.source_mix),\n  enable_llm_summary:false,\n  llm_cost_usd:0,\n  telegram_send:false,\n  delivered_to:'none',\n  next_action:(str(rep.report_type)==='no_data_notice')?'no_data report written; broaden filters/source scope before the next WF10 run.':'Inspect market_intelligence_reports + agent_requests rows. Trends need >=2 WF10 runs. Claude summary / Telegram delivery = separate gated steps.'\n}}];"
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the evidence-bound Claude summary prompt (DEC-122). FACTS ONLY: the prompt contains the\n// deterministic report fields — never raw_market_records text, never contact fields. Hard rules in the\n// system prompt forbid invented facts/competitors/numbers, contacts, and outreach recommendations.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nconst cfg=$('Set Report Config').first().json;\nconst rep=$('Build Deterministic Report').first().json;\nconst sys='Ты — аналитик рынка. Тебе дан ДЕТЕРМИНИРОВАННЫЙ отчёт (факты, собранные пайплайном). Твоя задача: краткое бизнес-резюме и интерпретация ТОЛЬКО на основе этих фактов. ЖЁСТКИЕ ПРАВИЛА: (1) не выдумывай факты, конкурентов, цифры, тренды; (2) не упоминай и не выводи контакты; (3) не рекомендуй аутрич/рассылки/обзвоны; (4) если данных мало — так и скажи; (5) ответ на русском, до 250 слов, секции: Итог, Интерпретация, Риски/пробелы данных.';\nconst facts={ report_id:str(rep.report_id), niche:str(rep.niche_id), region:str(rep.region), wf10_run_id:str(rep.wf10_run_id), prev_wf10_run_id:str(rep.prev_wf10_run_id), rows_after_filters:rep.rows_after_filters, source_mix:str(rep.source_mix), top_competitors:str(rep.top_competitors), top_angles:str(rep.top_angles), audience_summary:str(rep.audience_summary), content_plan_ref:str(rep.content_plan_ref) };\nconst body={ model:str(cfg.llm_model)||'claude-sonnet-4-6', max_tokens:Number(cfg.llm_max_tokens)||1200, system:sys, messages:[{ role:'user', content:'Детерминированный отчёт (JSON, единственный источник фактов):\\n'+cut(JSON.stringify(facts),6000) }] };\nreturn [{ json: Object.assign({}, rep, { llm_request_body: body }) }];"
+      },
+      "id": "wf12-llm-prompt",
+      "name": "Build Claude Summary Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "BIND_N8N_ANTHROPIC_CREDENTIAL_NEVER_PASTE_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.llm_request_body) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "wf12-llm-http-placeholder",
+      "name": "Claude Summary API Request (DISABLED placeholder)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        180
+      ],
+      "disabled": true,
+      "notes": "INERT (DEC-122): disabled, no real key. x-api-key value is a placeholder string — replace with an n8n credential (header auth) ONLY after operator approval. No live call was made when building this workflow."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge the Claude summary into the report row + track cost (DEC-122). If the HTTP placeholder is\n// still DISABLED, items pass through WITHOUT a Claude response body — this node then throws, so no\n// fabricated summary can ever be written. With a real response: extract text + usage, compute cost\n// (claude-sonnet-4-6: $3/MTok in, $15/MTok out), and fill llm_summary / llm_cost_usd on the 20-col row.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Report Config').first().json;\nconst rep=$('Build Deterministic Report').first().json;\nconst resp=$input.first().json;\nconst content=resp&&Array.isArray(resp.content)?resp.content:null;\nif(!content){\n  throw new Error('WF12 Claude merge: no API response — the Claude HTTP placeholder node is DISABLED (inert by design, DEC-122). Enable it with a bound n8n credential only after operator approval; default runs write the deterministic report ($0).');\n}\nlet text='';for(const b of content){ if(b&&b.type==='text'&&str(b.text))text+=b.text; }\nif(resp.stop_reason==='refusal'||!str(text)){ throw new Error('WF12 Claude merge: empty or refused summary (stop_reason='+str(resp.stop_reason)+') — keep the deterministic report; investigate before retrying.'); }\nconst u=resp.usage||{};\nconst inTok=Number(u.input_tokens)||0, outTok=Number(u.output_tokens)||0;\nconst cost=Math.round(((inTok*(Number(cfg.llm_input_price_per_mtok)||3.0)+outTok*(Number(cfg.llm_output_price_per_mtok)||15.0))/1000000)*10000)/10000;\nreturn [{ json: Object.assign({}, rep, {\n  llm_summary:str(text).slice(0,4000),\n  llm_recommendations:'',\n  llm_cost_usd:cost,\n  notes:str(rep.notes)+' || llm_summary added (model='+(str(cfg.llm_model)||'claude-sonnet-4-6')+', input_tokens='+inTok+', output_tokens='+outTok+', cost_usd='+cost+'); evidence-bound prompt, no invented facts/contacts/outreach (DEC-122).'\n}) }];"
+      },
+      "id": "wf12-llm-merge",
+      "name": "Merge Claude Summary Into Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        180
+      ]
     }
   ],
   "connections": {
@@ -420,7 +485,7 @@
       "main": [
         [
           {
-            "node": "LLM Summary Guard (not implemented)",
+            "node": "Claude Summary Approval Gate",
             "type": "main",
             "index": 0
           }
@@ -461,6 +526,50 @@
         [
           {
             "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Summary Approval Gate": {
+      "main": [
+        [
+          {
+            "node": "Build Claude Summary Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Claude Summary Prompt": {
+      "main": [
+        [
+          {
+            "node": "Claude Summary API Request (DISABLED placeholder)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Summary API Request (DISABLED placeholder)": {
+      "main": [
+        [
+          {
+            "node": "Merge Claude Summary Into Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Claude Summary Into Report": {
+      "main": [
+        [
+          {
+            "node": "Append market_intelligence_reports",
             "type": "main",
             "index": 0
           }

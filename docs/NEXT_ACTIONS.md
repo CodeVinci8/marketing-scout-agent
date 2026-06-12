@@ -4,6 +4,43 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
+## CURRENT PRIORITY (2026-06-12, session 3) — WF08 cost-control patch (DEC-119) · WF11 v0.2 live path (DEC-120) · WF13 VK foundation BUILT (DEC-121) · WF12 v0.2 report + Claude branch (DEC-122) · Stage 3/4/5 defined (DEC-123)
+
+**Built this session ($0, no external calls, no Claude calls, no live scraping):**
+- **WF08 v10:** `llm_enabled=false` master kill switch — uncertain records → `review_queue` with
+  `parse_method=deterministic_uncertain_no_llm` ($0); hard guard in the Claude request node; zero-record
+  diagnostics in the summary. Avito deterministic behavior untouched.
+- **WF11 v0.2:** guarded live path — approval-token gate + DISABLED HTTP placeholder (t.me/s public preview
+  only) + inert parser; fixture counters unchanged (sim re-verified 6/5/1/4/1, repeat 0/5).
+- **WF13 BUILT:** VK public groups/posts/comments foundation (fixture-first, no HTTP node, live guard);
+  audience-signal source with aggregate-only author counts.
+- **WF12 v0.2:** full report sections (executive_summary … next_actions) + gated/disabled Claude branch
+  (claude-sonnet-4-6 placeholder, cost math $3/$15 per MTok, merge throws without a response).
+- Stage docs: STAGE_3 / STAGE_4 / STAGE_5 definitions; DEC-119…123.
+
+**Operator tests next, in order (all $0 unless stated):**
+1. [ ] **Commit this session** (see commit commands in the session report).
+2. [ ] **Re-import WF08 v10** (do NOT activate). Test A — cost-control: run the WF11 first-run handoff
+   (`agent_request_id_filter='wf11_req_20260612_033442'`, `platform_filter='telegram'`, `llm_enabled=false`)
+   → the uncertain Telegram market signal lands in `review_queue` with
+   `parse_method=deterministic_uncertain_no_llm`, summary shows `claude_calls=0`,
+   `estimated_analysis_cost_usd=0`. Test B — zero-record diagnostics: use the duplicate-run id
+   `wf11_req_20260612_033756` → `selected_count=0` + populated `zero_record_diagnostics`. Clear filters after.
+3. [ ] **Re-import WF11 v0.2**; retest fixture Test 1 (same counters 6/5/1/4/1, raw +5 / registry +4) and
+   the live gate (`fixture_mode=false`, empty token → gate error; HTTP node stays DISABLED).
+4. [ ] **Import WF13** (do NOT activate; bind Sheets credential + Spreadsheet ID on 4 sheet nodes).
+   Fixture Test 1: items=6 / relevant=5 / hard_skipped=1 / unique=4 / dup=1 → raw +5 / registry +4 /
+   agent_requests +1; `active_author_count=3`, `repeat_author_count=1`, `question_objection_unique=2`;
+   post-201 contact `phone`, non-public author has empty profile_url. Test 2 repeat: unique=0/dups=5.
+   Test 3: live guard error. Then WF08 handoff on the first `wf13_req_*` id (`platform_filter='vk'`).
+5. [ ] **Re-import WF12 v0.2**; deterministic run → report row with all sections in notes markdown ($0);
+   guard test: `enable_llm_summary=true` without token → gate error.
+6. [ ] After 2–5 pass: run WF10, then WF12 again for a 2-run trend report.
+7. [ ] Separate approvals later (each its own gate): WF11 live transport · WF12 Claude summary ·
+   Telegram delivery (Stage 5).
+
+---
+
 ## CURRENT PRIORITY (2026-06-12, session 2) — ✅ WF11 fixture PASS → 🔧 v0.1.1 contact patch (DEC-114) re-import + retest; WF08 handoff on first-run id (DEC-117); validation_lists v1.1 (DEC-115); 🔧 WF12 Report Builder skeleton BUILT (DEC-118)
 
 **WF11 fixture tests (operator, $0) ALL PASS:** Test 1 (`wf11_req_20260612_033442`): 6 posts → 5 relevant /

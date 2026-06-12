@@ -10,6 +10,22 @@ DEC-108 (обязательный source_mix), DEC-097/098 (контакты/out
 **Схема выходной вкладки:** `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md` (20 колонок).
 **Архитектура слоя:** `docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`.
 
+> **ПАТЧ v0.2 (DEC-122) — операторский отчёт + охраняемая Claude-ветка.**
+> Детерминированный отчёт расширен секциями (всё только из строк WF10, $0): executive_summary,
+> competitor_snapshot (кол-во профилей + площадки), top_offers_and_prices (offers/prices_terms из
+> competitor_profiles), market_angles_summary (с трендами), audience_signals_summary (aggregate-only),
+> content_plan, source_confidence (avg/min/max source_confidence_score + ссылка на source_confidence_rules),
+> limitations/source_mix (DEC-108), next_actions. `no_data` → `no_data_notice` без выдуманных секций.
+> **Claude-ветка (выключена по умолчанию):** `Claude Summary Approval Gate` (ошибка без
+> `llm_approval_token=I_APPROVE_CLAUDE_REPORT_SUMMARY`) → `Build Claude Summary Prompt` (evidence-bound:
+> только поля детерминированного отчёта, без raw-записей и контактов; запрет выдумывать факты/контакты/
+> аутрич; max_tokens=1200) → **ОТКЛЮЧЁННАЯ** HTTP-нода (`claude-sonnet-4-6`, ключ = плейсхолдер-строка,
+> заменить на n8n credential только после одобрения; live-вызовов в этой сессии НЕ было) →
+> `Merge Claude Summary Into Report` (ошибка без ответа API; при ответе считает `llm_cost_usd` из usage:
+> $3/MTok input + $15/MTok output, пишет токены в notes). WF10 = детерминированное фактовое ядро;
+> Claude = слой бизнес-интерпретации поверх (DEC-112). Стоимость фиксировать в agent_requests +
+> COSTS_AND_LIMITS.md.
+
 > Первый воркфлоу отчётного слоя. WF10 остаётся детерминированным фактическим ядром; WF12 читает его
 > выходные вкладки и собирает один отчётный ряд. Claude и Telegram — отдельные gated-шаги поверх.
 

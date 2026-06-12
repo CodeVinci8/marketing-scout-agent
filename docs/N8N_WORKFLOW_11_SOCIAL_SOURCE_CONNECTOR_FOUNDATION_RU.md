@@ -11,6 +11,18 @@ DEC-114 (contact_channel — категория канала, не формат)
 DEC-096 (один источник за раз), DEC-097/098 (политика контактов).
 **Стратегия:** `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` §5.
 
+> **ПАТЧ v0.2 (DEC-120) — ОХРАНЯЕМЫЙ live-путь (инертен по умолчанию).** Live-ветка теперь:
+> `LIVE Preview Approval Gate` (бросает ошибку, если `live_approval_token!=='I_APPROVE_LIVE_TELEGRAM_PREVIEW'`
+> или пустой `live_channel_allowlist`; отвергает группы/инвайт-ссылки/приватные записи) →
+> **ОТКЛЮЧЁННАЯ** HTTP-нода (GET `https://t.me/s/<channel>` — только публичные preview-страницы, без
+> credentials) → `Parse Live Preview Posts (inert)` (бросает ошибку без HTML — сфабрикованные посты
+> невозможны; при реальном HTML парсит tgme_widget_message, cap `live_max_posts_per_channel<=10`).
+> `Normalize Telegram Posts` читает `$input` — fixture и live ветки используют одну нормализацию;
+> fixture-счётчики НЕ изменились (6/5/1/4/1; повтор 0/5 — перепроверено симуляцией).
+> Запуск live требует ДВУХ осознанных действий оператора: токен в конфиге + включение HTTP-ноды.
+> Скоуп прежний: allowlist-only публичные каналы; никаких групп/приватных чатов/MTProto/выгрузки
+> участников/скрытых контактов/auto-outreach. Live в этой сессии НЕ выполнялся.
+
 > **Результаты операторских fixture-тестов (2026-06-12) — ВСЕ PASS, $0, без внешних вызовов и Claude:**
 > - **Тест 1** (`agent_request_id=wf11_req_20260612_033442`): posts_received=6, structurally_valid=6,
 >   invalid=0, business_relevant=5, hard_skipped=1, unique=4, duplicates=1, over_pipeline_limit=0 →
