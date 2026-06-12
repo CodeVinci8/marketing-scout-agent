@@ -5,6 +5,44 @@ Most recent first.
 
 ---
 
+## DEC-118 — WF12 Report Builder Built as a Deterministic Skeleton (Claude/Telegram = guarded, not implemented)
+
+**Date:** 2026-06-12
+**Context:** DEC-112 placed Claude in the report/control layer above the WF10 fact core; the layer needed its first concrete artifact without authorizing any external call.
+**Decision:** Built `n8n/workflows/12_market_intelligence_report_builder.json` (`active=false`, 15 nodes, manual trigger, **no HTTP node, $0**). It reads the 4 WF10 output tabs, selects the latest WF10 snapshot by `plan_id` stamp (previous plan = trend base: angle frequency ↑/↓/=/NEW by stable angle key), computes top competitors/angles/audience aggregates, renders a Markdown report (inline in `notes` v0.1), and writes one `market_intelligence_reports` row (20 cols per `MARKET_INTELLIGENCE_REPORT_SCHEMA.md`) + one `agent_requests` row (`request_type=report_summary`, completed, $0). `enable_llm_summary=false` routes to a **guard node that throws** — the Claude branch is not implemented; enabling it later requires explicit approval, a bounded facts-only prompt (never raw contact fields), a token cap, and cost recording. `telegram_send=false`/`delivered_to=none` — delivery not implemented. A `no_data` WF10 run produces a `no_data_notice` report with empty top lists. Verified: vm-sandbox simulation, 20 checks PASS.
+**Alternatives considered:** plan-only without a skeleton (rejected — the schema contract is best proven by a deterministic writer); including the Claude HTTP branch disabled-by-flag (rejected — a guard with no HTTP node is strictly safer and matches the WF11 live-guard pattern).
+
+---
+
+## DEC-117 — WF08 Handoff Uses First-Run Request Ids; Duplicate-Run Ids Correctly Yield Zero Records
+
+**Date:** 2026-06-12
+**Context:** A WF08 handoff attempted with the WF11 *duplicate-run* id (`wf11_req_20260612_033756`) returned zero records and looked like a failure.
+**Decision:** Documented as correct-by-design, not a bug: repeat connector runs write only duplicate-audit rows with `approval_status=duplicate`, and WF08's default `analyze_statuses=['approved','new']` ignores them. The operator handbook now mandates first-run ids for handoff (verified config: `agent_request_id_filter=wf11_req_20260612_033442`, `platform_filter=telegram`, `source_type_filter=''`, `max_records=10`, `deterministic_first`, `llm_enrichment=false`, `llm_enrichment_test_mode=false`). Analyzing duplicates requires explicitly adding `duplicate` to `analyze_statuses` — not recommended for normal handoff (audit rows would create repeat business-tab entries). A diagnostics sticky note was added to WF08 (documentation-only; no behavior change) and a diagnostics section to the WF08/WF11 RU guides.
+**Alternatives considered:** changing WF08 defaults to include `duplicate` (rejected — would re-analyze audit rows on every handoff); silently warning in the summary (insufficient — the handbook is where operators look first).
+
+---
+
+## DEC-116 — WF11 Fixture Foundation PASS; Live Telegram Preview Is a Gated v0.2 Plan with Inert Placeholders
+
+**Date:** 2026-06-12
+**Context:** Operator ran the three WF11 fixture tests; Stage 3.4 needed an explicit live-mode plan without enabling anything.
+**Decision:** WF11 fixture foundation is **working** (Test 1: 6 posts → 5 relevant / 1 hard-skip / 4 unique / 1 duplicate, raw +5 / registry +4 / agent_requests +1; Test 2 repeat: unique=0 / duplicates=5 / registry +0; Test 3: live guard stops correctly; $0, no external/Claude calls). Live Telegram public-channel preview is **pending and requires explicit operator approval**: allowlist-only public channels, `t.me/s/<channel>` preview pages only, no groups/private chats/MTProto/login-session scraping/member extraction/hidden contacts/auto-outreach, `max_posts` default 10 per channel, `live_mode=false` default, same connector pipeline (WF11 → raw/registry/requests → WF08 → WF10 → report). WF11 carries **inert placeholder config fields** (`live_transport='none_not_implemented'`, `live_channel_allowlist=[]`, `live_max_posts_per_channel=10`, `live_requires_operator_approval=true`) — the guard fires regardless of their values; no HTTP node was added. Plan: strategy §5.7.
+**Alternatives considered:** adding a disabled HTTP node now (rejected — a credential-bearing node "just flipped off" weakens the guard guarantee); leaving the live plan undocumented (rejected — the boundaries must be fixed before any transport discussion).
+
+---
+
+## DEC-114 — `contact_channel` Is a Channel Category, Never a Contact Format (`handle` banned; v0.1.1 patch) · DEC-115 — validation_lists v1.1 (26 legacy-compatible lists; warning/reject modes)
+
+**Date:** 2026-06-12
+**Context (114):** WF11 fixture Test 1 wrote Telegram handle contacts as `contact_channel=handle`. `handle` describes the *format* of the contact string, not the channel it reaches.
+**Decision (114):** `contact_channel` holds only channel categories: `phone`, `email`, `telegram`, `profile`, `form`, `unknown` (empty = no contact). Telegram @handles → `contact_channel=telegram`; the format is recorded in the row `notes` as `contact_format=handle` together with `contact_source_url=<post_url>` and `contact_use_policy=manual_review`. WF11 patched (v0.1.1); the no-contact default also changed from the non-enum `none` to empty. Fixture counts unchanged (patch simulation: 24 checks PASS). No contacts invented, no hidden contacts collected, no outreach actions created.
+**Context (115):** The operator created `validation_lists` with 26 lists (incl. `angle_category`) and applied dropdowns; v1.0 lists missed legitimate legacy/system values.
+**Decision (115):** v1.1 makes every list compatible with current historical data (e.g. `web`, `social_content`, `social_search`, `review_platform`, `forum_discussion`; full `dedup_status` set incl. `hard_skipped`/`invalid`/`over_pipeline_limit`/`duplicate_in_batch`). Validation modes are fixed policy: **system-written columns → "Show warning"** (strict validation on n8n-written fields can break appends when a new enum value appears), **human-only/manual columns → "Reject input"**. `handle` is NOT added to `contact_channel` — workflows are patched instead (see 114).
+**Alternatives considered (114):** adding `handle` to the enum (rejected — collapses two dimensions into one column and breaks channel-based filtering); a new `contact_format` column (deferred to the next schema revision; notes carry it until then).
+
+---
+
 ## DEC-113 — MVP Is a Market Intelligence Foundation, Not Avito-Only Output
 
 **Date:** 2026-06-12

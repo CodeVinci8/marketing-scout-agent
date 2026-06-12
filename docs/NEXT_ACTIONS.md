@@ -4,7 +4,56 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-12) — 🔧 WF10 v0.2 patch (DEC-106/107/108) → re-import + retests; 🔧 WF11 Telegram-preview foundation BUILT (DEC-109/110); validation/report/Telegram plans written (DEC-111/112/113)
+## CURRENT PRIORITY (2026-06-12, session 2) — ✅ WF11 fixture PASS → 🔧 v0.1.1 contact patch (DEC-114) re-import + retest; WF08 handoff on first-run id (DEC-117); validation_lists v1.1 (DEC-115); 🔧 WF12 Report Builder skeleton BUILT (DEC-118)
+
+**WF11 fixture tests (operator, $0) ALL PASS:** Test 1 (`wf11_req_20260612_033442`): 6 posts → 5 relevant /
+1 hard-skip / 4 unique / 1 dup → raw +5 / registry +4 / agent_requests +1. Test 2 repeat
+(`wf11_req_20260612_033756`): unique=0 / duplicates=5 / registry +0. Test 3: live guard stops correctly.
+**Stage 3.4 foundation works in fixture mode.** One defect fixed post-test — **v0.1.1 (DEC-114):** Telegram
+handles were written as `contact_channel=handle` (a format, not a channel) → now `contact_channel=telegram` +
+`contact_format=handle; contact_source_url=…; contact_use_policy=manual_review` in notes; no-contact rows write
+empty `contact_channel` (was non-enum `none`). Counts unchanged (24-check sim PASS).
+
+**WF12 (DEC-118)** — Report Builder v0.1 deterministic skeleton (`active=false`, no HTTP node, $0): WF10 tabs →
+latest snapshot by `plan_id` → top competitors/angles (+trends vs prev run) → one `market_intelligence_reports`
+row (20 cols) + one `agent_requests` row; Claude branch = guard (throws), `telegram_send` not implemented;
+`no_data` WF10 run → `no_data_notice` report. 20-check sim PASS.
+
+**validation_lists v1.1 (DEC-115):** 26 lists (operator already applied them, incl. `angle_category`);
+legacy-compatible values added (`web`, `social_content`, `social_search`, `review_platform`,
+`forum_discussion`, full `dedup_status` set…); modes fixed: system-written columns = "Show warning"
+(appends never blocked), human-only = "Reject input". `handle` NOT added to `contact_channel`.
+
+**Next, in order:**
+1. [ ] **Commit this session** (WF11 v0.1.1 + WF12 + WF08 sticky + docs).
+2. [ ] **Re-import WF11 v0.1.1** (do NOT activate; rebind Sheets credential on 4 sheet nodes + real
+   Spreadsheet ID). **Retest fixture Test 1:** same counts (6/5/1/4/1; raw +5 / registry +4) AND the post-101
+   row now has `contact_channel=telegram` with `contact_format=handle` in notes; no row carries
+   `contact_channel=handle` or `none`.
+3. [ ] **WF08 handoff on the WF11 FIRST-run id (DEC-117):** `agent_request_id_filter='wf11_req_20260612_033442'`,
+   `platform_filter='telegram'`, `source_type_filter=''`, `max_records=10`,
+   `analysis_mode='deterministic_first'`, `llm_enrichment=false`, `llm_enrichment_test_mode=false` →
+   expect: unique/new Telegram competitor posts → monitor_queue, the Telegram market signal →
+   content_queue/review_queue, duplicate audit rows ignored, `technical_errors=0`, Claude=0. Clear filters
+   after. (Duplicate-run id `wf11_req_20260612_033756` yields 0 records — by design, see WF08 RU diagnostics.)
+4. [ ] **Sync `validation_lists` to v1.1** in Sheets (operator, $0): extend lists per
+   `docs/GOOGLE_SHEETS_VALIDATION_PLAN.md` §2 (legacy values + full dedup_status set; `angle_category` already
+   exists); confirm modes (warning on system-written, reject on human-only).
+5. [ ] **(Optional) WF12 first run:** create the `market_intelligence_reports` tab (20 headers per
+   `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md`), import WF12 (do NOT activate; rebind credential on 6 sheet
+   nodes + Spreadsheet ID) → Execute once → reports +1 (`on_demand`, `llm_*` empty, $0, `delivered_to=none`),
+   agent_requests +1. Guard test: `enable_llm_summary=true` → expected error; restore false.
+6. [ ] **Then (each behind explicit approval):** WF11 live preview transport v0.2 (strategy §5.7: allowlist-only
+   `t.me/s/` pages, ≤10 posts/channel, Firecrawl preferred, cost recorded) → Telegram delivery v1 →
+   optional Claude report summary (bounded, cost-recorded — DEC-112).
+
+> Still NOT built/approved: WF11 live transport, Claude report summaries (guarded off — DEC-112/118), Telegram
+> delivery/Control Bot, `market_intelligence_reports` tab creation, niche packs (YAML), VK/Dzen/Instagram/
+> reviews parsers, outreach/auto-DM (forbidden by default — DEC-098), scheduled runs.
+
+---
+
+## PRIOR PRIORITY (2026-06-12) — 🔧 WF10 v0.2 patch (DEC-106/107/108) → re-import + retests; 🔧 WF11 Telegram-preview foundation BUILT (DEC-109/110); validation/report/Telegram plans written (DEC-111/112/113)
 
 **WF10 v0.2 (DEC-106/107/108)** patched after the v0.1 operator tests (Test 1: 82 rows → 21 profiles / 9 angles /
 8 signals / 1 plan / 7 rules, $0; repeat +0 rules; Avito filter PASS; **no-data test FOUND BUG** — generic plan

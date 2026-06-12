@@ -50,7 +50,8 @@ Free-text conversational control (intent detection, niche switching, multi-step 
 
 ## 4. Prerequisites before build
 
-1. Report Builder v1 + `market_intelligence_reports` tab exist (otherwise the bot has nothing to report).
+1. Report Builder v1 + `market_intelligence_reports` tab exist (otherwise the bot has nothing to report) —
+   🔧 the WF12 deterministic skeleton is built (DEC-118); the tab + operator validation runs are still pending.
 2. WF10 validated by operator runs (v0.2 patch tested).
 3. Bot token created via BotFather; webhook or polling decision (VPS currently has no public ingress —
    polling or SSH-tunneled webhook decision needed at build time).

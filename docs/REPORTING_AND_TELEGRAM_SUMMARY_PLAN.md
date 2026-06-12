@@ -1,9 +1,12 @@
 # REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md — Report / Claude / Telegram Layer Plan
 
-**Status:** 📐 PLAN — nothing here is built; no Telegram bot, no Claude report call, no schedule is authorized
-by this document.
+**Status:** 🔧 PLAN + **Report Builder v0.1 SKELETON BUILT (2026-06-12, DEC-118):**
+`n8n/workflows/12_market_intelligence_report_builder.json` (`active=false`, deterministic, $0 — no Claude,
+no Telegram send, no HTTP node; guide: `docs/N8N_WORKFLOW_12_MARKET_INTELLIGENCE_REPORT_BUILDER_RU.md`).
+No Telegram bot, no Claude report call, no schedule is authorized by this document.
 **Date:** 2026-06-12 · **Decisions:** DEC-112 (Claude belongs in the report/control layer, not the
-deterministic fact core), DEC-113 (MVP = market intelligence foundation, not Avito-only output).
+deterministic fact core), DEC-113 (MVP = market intelligence foundation, not Avito-only output),
+DEC-118 (WF12 deterministic skeleton).
 **Related:** `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md`, `docs/TELEGRAM_CONTROL_AGENT_PLAN.md`,
 `docs/WF10_TABLE_SCHEMAS.md`, `docs/FUTURE_CAPABILITIES_BACKLOG.md` (items 1/4), `docs/CONTACT_AND_OUTREACH_POLICY.md`.
 
@@ -66,8 +69,11 @@ Details: `docs/TELEGRAM_CONTROL_AGENT_PLAN.md`.
 
 ## 5. Build order (each step gated on operator approval)
 
-1. **Report Builder v1 (deterministic, $0):** n8n workflow or script — read WF10 tabs → latest run → Markdown
-   report → append one `market_intelligence_reports` row. No Claude, no Telegram. Needs ≥2 WF10 runs for trends.
+1. **Report Builder v1 (deterministic, $0):** 🔧 **skeleton built (WF12, DEC-118)** — reads the 4 WF10 tabs →
+   latest run by `plan_id` stamp → angle trends vs the previous run (↑/↓/=/NEW) → Markdown (inline in `notes`
+   v0.1) → appends one `market_intelligence_reports` row + one `agent_requests` row. The Claude branch is a
+   guard node (throws if `enable_llm_summary=true`); `telegram_send` not implemented. Operator must create the
+   `market_intelligence_reports` tab (20 cols) before the first run. Needs ≥2 WF10 runs for trends.
 2. **Telegram delivery v1:** send the digest of an existing report row to the operator chat (bot token in n8n
    credentials only; manual trigger).
 3. **Optional Claude summary:** `enable_llm_summary=true` per run; bounded prompt + token cap; cost recorded

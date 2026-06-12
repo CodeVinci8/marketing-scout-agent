@@ -1,0 +1,480 @@
+{
+  "name": "12 - Market Intelligence Report Builder (Deterministic Skeleton)",
+  "nodes": [
+    {
+      "id": "cc120000-0000-0000-0000-0000000000n1",
+      "name": "Overview Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        -360
+      ],
+      "parameters": {
+        "height": 520,
+        "width": 640,
+        "content": "## 12 — Market Intelligence Report Builder v0.1 — ДЕТЕРМИНИРОВАННЫЙ скелет (DEC-112/118)\n\nОтчётный слой НАД фактическим ядром WF10 (DEC-112: Claude — в report/control-слое, НЕ в WF10).\n\nЧто делает (ДЕТЕРМИНИРОВАННО, $0):\n1. Ручной старт → Set Report Config (`enable_llm_summary=false`, `telegram_send=false`).\n2. Читает 4 вкладки WF10: competitor_profiles / market_angles / audience_activity_signals / content_positioning_plan.\n3. Выбирает ПОСЛЕДНИЙ снапшот WF10 по `plan_id` (один план на прогон); предыдущий план = база для трендов углов (↑/↓/=/NEW).\n4. Считает топ конкурентов (evidence_count/confidence), топ углов (frequency+тренд), агрегаты аудитории; рендерит Markdown.\n5. Пишет ТОЛЬКО: market_intelligence_reports (20 колонок, схема в MARKET_INTELLIGENCE_REPORT_SCHEMA.md) + agent_requests (21, completed, $0).\n6. no_data-прогон WF10 → report_type=no_data_notice, фиксированная рекомендация, без шаблонного контента.\n7. **source_mix обязателен в каждом отчёте** (DEC-108): отчёт никогда не подразумевает, что все данные собраны live.\n\nЧЕГО НЕ ДЕЛАЕТ: НЕ вызывает Claude (ветка = guard с ошибкой; включение — отдельное одобрение: bounded facts-only prompt, токен-кэп, запись стоимости); НЕ шлёт в Telegram (delivered_to=none); НЕ ходит в сеть (HTTP-нод нет); НЕ выдумывает факты/контакты; НЕ рекомендует outreach. active=false."
+      }
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000n2",
+      "name": "Setup and Test Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        120,
+        -360
+      ],
+      "parameters": {
+        "height": 520,
+        "width": 620,
+        "content": "## Настройка и тест\n\n1. НЕ активировать (active=false). Сначала создать вкладку `market_intelligence_reports` (20 колонок — заголовки из docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md).\n2. После импорта перепривязать креденшл Google Sheets на 6 sheet-нодах (4 read + 2 append) и заменить PASTE_SPREADSHEET_ID_HERE на реальный ID.\n3. Требование: ≥1 прогон WF10 (иначе понятная ошибка «content_positioning_plan is empty»). Тренды углов появляются при ≥2 прогонах WF10.\n4. Тест 1 ($0): Execute once → ожидаемо: market_intelligence_reports +1 (report_type=on_demand; top_competitors/top_angles из последнего снапшота WF10; llm_* пустые; llm_cost_usd=0; delivered_to=none; source_mix заполнен), agent_requests +1 (request_type=report_summary, completed, $0).\n5. Тест 2 (no-data): если последний прогон WF10 был no_data → report_type=no_data_notice, топ-списки пустые, рекомендация «no_data; broaden filters or source scope».\n6. Тест 3 (LLM guard): enable_llm_summary=true → ожидаемая ошибка на ноде LLM Summary Guard. Вернуть false.\n\nTelegram-доставка и Claude-summary — отдельные шаги за отдельным одобрением (REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md §5)."
+      }
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000m1",
+      "name": "Manual Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -440,
+        320
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000c1",
+      "name": "Set Report Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        320
+      ],
+      "parameters": {
+        "jsCode": "// WF12 Market Intelligence Report Builder config — DETERMINISTIC v0.1 skeleton (DEC-112/118).\n// $0 by default: no Claude, no Telegram send, no external API. Reads WF10 output tabs, writes ONE\n// market_intelligence_reports row (schema: docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md) + ONE agent_requests row.\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst stamp=moscowStamp();\nreturn [{ json: {\n  // --- hard-off defaults (DEC-112): the deterministic report is complete without any of these.\n  enable_llm_summary:false,          // optional Claude summary — NOT implemented; guard node throws if true\n  telegram_send:false,               // Telegram delivery — NOT implemented in v0.1 (delivered_to stays 'none')\n  report_type:'on_demand',           // on_demand / weekly_digest / no_data_notice (auto-set on no_data)\n  niche_id:'credit_brokerage',\n  region:'Москва/МО',\n  top_n:3,\n  requested_by:'operator',\n  report_id:'report_'+stamp,\n  run_id:'wf12_'+stamp,\n  agent_request_id:'wf12_req_'+stamp,\n  created_at:moscowIsoNow()\n}}];"
+      }
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000r1",
+      "name": "Read competitor_profiles",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        0,
+        320
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "competitor_profiles",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000r2",
+      "name": "Read market_angles",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        220,
+        320
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "market_angles",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000r3",
+      "name": "Read audience_activity_signals",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        440,
+        320
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "audience_activity_signals",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000r4",
+      "name": "Read content_positioning_plan",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        660,
+        320
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "content_positioning_plan",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000b1",
+      "name": "Build Deterministic Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        320
+      ],
+      "parameters": {
+        "jsCode": "// Deterministic Report Builder core (DEC-112/118): latest WF10 snapshot -> 20-col report row + Markdown.\n// Facts only — every number/name comes from the WF10 tabs; nothing is invented; no contacts are surfaced.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction num(v){var n=Number(v);return isFinite(n)?n:0;}\nfunction rowsOf(name){try{return $(name).all().map(i=>i.json).filter(r=>r&&Object.keys(r).length);}catch(e){return [];}}\nconst cfg=$('Set Report Config').first().json;\nconst topN=Number(cfg.top_n)||3;\nconst profiles=rowsOf('Read competitor_profiles');\nconst angles=rowsOf('Read market_angles');\nconst signals=rowsOf('Read audience_activity_signals');\nconst plans=rowsOf('Read content_positioning_plan').filter(p=>str(p.plan_id));\n// --- run selection: plan_id carries the WF10 run stamp (plan_<stamp> or plan_<stamp>_no_data; one plan per run)\nfunction planStamp(p){return str(p.plan_id).replace(/^plan_/,'').replace(/_no_data$/,'');}\nplans.sort((a,b)=>planStamp(a)<planStamp(b)?-1:1);\nif(!plans.length){throw new Error('WF12: content_positioning_plan is empty — run WF10 at least once before building a report.');}\nconst latest=plans[plans.length-1];\nconst stamp=planStamp(latest);\nconst prev=plans.filter(p=>planStamp(p)!==stamp).pop()||null;\nconst prevStamp=prev?planStamp(prev):'';\nconst isNoData=/_no_data$/.test(str(latest.plan_id))||/rows=0/.test(str(latest.source_evidence));\nconst rowsAfter=(function(){const m=str(latest.source_evidence).match(/rows=(\\d+)/);return m?Number(m[1]):(isNoData?0:0);})();\n// --- snapshot filters: WF10 ids/notes carry the run stamp\nconst profNow=profiles.filter(p=>str(p.notes).indexOf('wf10_'+stamp)>=0||str(p.notes).indexOf(stamp)>=0);\nconst angNow=angles.filter(a=>str(a.angle_id).endsWith(stamp));\nconst angPrev=prevStamp?angles.filter(a=>str(a.angle_id).endsWith(prevStamp)):[];\nconst sigNow=signals.filter(s=>str(s.signal_id).endsWith(stamp));\n// --- deterministic top lists\nconst topComp=profNow.slice().sort((a,b)=>(num(b.evidence_count)-num(a.evidence_count))||(num(b.source_confidence_score)-num(a.source_confidence_score))).slice(0,topN)\n  .map(p=>str(p.competitor_name)+' (evidence '+num(p.evidence_count)+', conf '+num(p.source_confidence_score)+')');\nfunction angleKey(a){return str(a.angle_id).replace(/^angle_/,'').replace(/_\\d{8}_\\d{6}$/,'');} // strip the trailing run stamp -> stable angle key across runs\nconst prevFreq={};for(const a of angPrev){prevFreq[angleKey(a)]=num(a.frequency);}\nconst topAng=angNow.slice().sort((a,b)=>num(b.frequency)-num(a.frequency)).slice(0,topN)\n  .map(a=>{const k=angleKey(a);const f=num(a.frequency);let trend='·';\n    if(prevStamp){const pf=prevFreq[k];trend=(pf===undefined)?'NEW':(f>pf?'↑':(f<pf?'↓':'='));}\n    return str(a.angle_text)+' (x'+f+(prevStamp?(' '+trend):'')+')';});\nconst audSummary=sigNow.map(s=>str(s.platform)+': questions='+num(s.question_count)+', objections='+num(s.objection_count)+', complaints='+num(s.complaint_count)+', buying_intent='+num(s.buying_intent_count)+(str(s.top_pains)?(', pains: '+str(s.top_pains)):'')).join(' | ');\n// --- mandatory source-mix label (DEC-108): never imply all data was collected live in this run\nconst SOURCE_MIX='mixed: live + historical/manual + web pipeline';\nconst reportType=isNoData?'no_data_notice':str(cfg.report_type);\nconst NO_DATA_TEXT='no_data; broaden filters or source scope';\n// --- deterministic Markdown render (the full report; v0.1 keeps it inline in result/notes, no file write)\nconst md=[\n'# Market intelligence report '+str(cfg.report_id),\n'',\n'- niche: '+str(cfg.niche_id)+' · region: '+str(cfg.region)+' · WF10 run: wf10_'+stamp+(prevStamp?(' · prev: wf10_'+prevStamp):' · prev: (none — first report, no trends)'),\n'- **Источники: '+SOURCE_MIX+'** · rows_after_filters='+rowsAfter,\n'',\nisNoData?('**NO DATA:** '+NO_DATA_TEXT):[\n'## Топ конкурентов',topComp.length?topComp.map((c,i)=>(i+1)+'. '+c).join('\\n'):'(none in snapshot)',\n'','## Топ углов',topAng.length?topAng.map((a,i)=>(i+1)+'. '+a).join('\\n'):'(none in snapshot)',\n'','## Активность аудитории (aggregate-only)',audSummary||'(no signals in snapshot)',\n'','## План контента','plan: '+str(latest.plan_id)+' — '+str(latest.top_angles)\n].join('\\n'),\n'',\n'_Deterministic report (DEC-112): no LLM, no contacts, no outreach. $0._'\n].join('\\n');\n// --- 20-column market_intelligence_reports row (docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md)\nreturn [{ json: {\n  report_id:str(cfg.report_id),\n  created_at:str(cfg.created_at),\n  report_type:reportType,\n  niche_id:str(cfg.niche_id),\n  region:str(cfg.region),\n  time_window_days:30,\n  wf10_run_id:'wf10_'+stamp,\n  prev_wf10_run_id:prevStamp?('wf10_'+prevStamp):'',\n  source_mix:SOURCE_MIX,\n  rows_after_filters:rowsAfter,\n  top_competitors:isNoData?'':topComp.join(' | '),\n  top_angles:isNoData?'':topAng.join(' | '),\n  audience_summary:isNoData?'':audSummary,\n  content_plan_ref:str(latest.plan_id),\n  report_markdown_path:'',\n  llm_summary:'',\n  llm_recommendations:'',\n  llm_cost_usd:0,\n  delivered_to:'none',\n  notes:(isNoData?('no_data_notice; recommendation: '+NO_DATA_TEXT+'; '):'')+'wf12 v0.1 deterministic skeleton (DEC-118); llm disabled (DEC-112); markdown inline below || '+md\n}}];"
+      }
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000i1",
+      "name": "IF enable_llm_summary?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        320
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "llm-flag",
+              "leftValue": "={{ $('Set Report Config').first().json.enable_llm_summary }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000g1",
+      "name": "LLM Summary Guard (not implemented)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        180
+      ],
+      "parameters": {
+        "jsCode": "// LLM SUMMARY GUARD — the optional Claude branch is NOT implemented in the WF12 v0.1 skeleton (DEC-112/118).\n// This workflow contains NO HTTP node. Enabling enable_llm_summary requires, in order: explicit operator\n// approval, a bounded facts-only prompt (WF10 table rows + run stats ONLY — never raw contact fields),\n// a token cap, and cost recording in agent_requests + COSTS_AND_LIMITS.md.\n// Claude summarizes deterministic facts only: no invented facts/competitors/trends, no contacts, no outreach.\nthrow new Error('WF12 enable_llm_summary is not implemented in the v0.1 skeleton. Deterministic report only (enable_llm_summary=false). The optional Claude summary requires explicit operator approval + bounded prompt + cost recording (see docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md §3).');"
+      }
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000a1",
+      "name": "Append market_intelligence_reports",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1320,
+        440
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "market_intelligence_reports",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000q1",
+      "name": "Build agent_requests Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        440
+      ],
+      "parameters": {
+        "jsCode": "// One agent_requests row (exactly 21 columns). status=completed. Deterministic, $0, no external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Report Config').first().json;\nconst rep=$('Build Deterministic Report').first().json;\nreturn [{ json: {\n  agent_request_id:str(cfg.agent_request_id),\n  created_at:str(cfg.created_at),\n  requested_by:str(cfg.requested_by)||'operator',\n  request_text:'Build deterministic market intelligence report from WF10 output tabs',\n  request_type:'report_summary',\n  source_scope:'business_queues',\n  platforms:'',\n  query:'wf10_run='+str(rep.wf10_run_id),\n  region:str(cfg.region),\n  service_focus:str(cfg.niche_id),\n  requested_limit:0,\n  status:'completed',\n  plan_summary:'WF12 Report Builder v0.1 (deterministic skeleton, DEC-118): WF10 tabs -> one market_intelligence_reports row. LLM summary and Telegram delivery are disabled/not implemented (DEC-112).',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:0,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:'report_id='+str(rep.report_id)+'; report_type='+str(rep.report_type)+'; wf10_run_id='+str(rep.wf10_run_id)+'; prev='+(str(rep.prev_wf10_run_id)||'none')+'; rows_after_filters='+rep.rows_after_filters+'; llm_cost_usd=0; delivered_to=none.',\n  next_action:(str(rep.report_type)==='no_data_notice')?'no_data; broaden filters or source scope, then re-run WF10 and WF12.':'Review the market_intelligence_reports row; Telegram delivery and optional Claude summary are separate gated steps (DEC-112).',\n  notes:'WF12 v0.1 deterministic Report Builder skeleton; source_mix='+str(rep.source_mix)+'; no LLM, no Telegram send, no external API in this run.'\n}}];"
+      }
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000a2",
+      "name": "Append agent_requests",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1760,
+        440
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "agent_requests",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "cc120000-0000-0000-0000-0000000000s1",
+      "name": "Final Summary Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        440
+      ],
+      "parameters": {
+        "jsCode": "// Final run summary. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Report Config').first().json;\nconst rep=$('Build Deterministic Report').first().json;\nreturn [{ json: {\n  workflow:'12 - Market Intelligence Report Builder (deterministic skeleton)',\n  report_id:str(rep.report_id),\n  report_type:str(rep.report_type),\n  wf10_run_id:str(rep.wf10_run_id),\n  prev_wf10_run_id:str(rep.prev_wf10_run_id)||'(none)',\n  rows_after_filters:rep.rows_after_filters,\n  top_competitors:str(rep.top_competitors),\n  top_angles:str(rep.top_angles),\n  source_mix:str(rep.source_mix),\n  enable_llm_summary:false,\n  llm_cost_usd:0,\n  telegram_send:false,\n  delivered_to:'none',\n  next_action:(str(rep.report_type)==='no_data_notice')?'no_data report written; broaden filters/source scope before the next WF10 run.':'Inspect market_intelligence_reports + agent_requests rows. Trends need >=2 WF10 runs. Claude summary / Telegram delivery = separate gated steps.'\n}}];"
+      }
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Set Report Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Report Config": {
+      "main": [
+        [
+          {
+            "node": "Read competitor_profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read competitor_profiles": {
+      "main": [
+        [
+          {
+            "node": "Read market_angles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read market_angles": {
+      "main": [
+        [
+          {
+            "node": "Read audience_activity_signals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read audience_activity_signals": {
+      "main": [
+        [
+          {
+            "node": "Read content_positioning_plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read content_positioning_plan": {
+      "main": [
+        [
+          {
+            "node": "Build Deterministic Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Deterministic Report": {
+      "main": [
+        [
+          {
+            "node": "IF enable_llm_summary?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF enable_llm_summary?": {
+      "main": [
+        [
+          {
+            "node": "LLM Summary Guard (not implemented)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append market_intelligence_reports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append market_intelligence_reports": {
+      "main": [
+        [
+          {
+            "node": "Build agent_requests Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build agent_requests Row": {
+      "main": [
+        [
+          {
+            "node": "Append agent_requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append agent_requests": {
+      "main": [
+        [
+          {
+            "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "wf12-v001-deterministic-report-skeleton-20260612",
+  "meta": {
+    "instanceId": "PLACEHOLDER"
+  },
+  "tags": []
+}

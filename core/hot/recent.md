@@ -4,6 +4,41 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-12 (session 2) — WF11 fixture PASS + патч контактов v0.1.1 (DEC-114) · validation_lists v1.1 (DEC-115) · live-preview план (DEC-116) · WF08 handoff диагностика (DEC-117) · WF12 Report Builder skeleton (DEC-118)
+
+**What was done ($0, без внешних вызовов и Claude; WF04–WF10 поведение не тронуто):**
+- **WF11 операторские fixture-тесты — ВСЕ PASS:** Тест 1 (`wf11_req_20260612_033442`): 6 постов → 5 relevant /
+  1 hard-skip / 4 unique / 1 dup → raw +5 / registry +4 / agent_requests +1. Тест 2 повтор
+  (`wf11_req_20260612_033756`): unique=0 / duplicates=5 / registry +0. Тест 3: live guard корректно
+  останавливает. **Stage 3.4 foundation работает в fixture-режиме.**
+- **WF11 v0.1.1 (DEC-114):** найден дефект — `contact_channel=handle` (формат, не канал) → исправлено:
+  @handle → `contact_channel=telegram`; в notes: `contact_format=handle; contact_source_url=<post_url>;
+  contact_use_policy=manual_review`; пустой `contact_channel` вместо `none`. Добавлены **инертные**
+  live_* placeholder-поля (guard срабатывает независимо). Сим: **24 PASS** (счётчики не изменились).
+- **validation_lists v1.1 (DEC-115):** 26 списков (оператор применил, incl. `angle_category`);
+  legacy-совместимые значения (`web`, `social_content`, `review_platform`, полный dedup_status set…);
+  режимы: system-written = Show warning, human-only = Reject input. `handle` в `contact_channel` НЕ добавлен.
+- **WF08 handoff (DEC-117):** 0 записей на duplicate-run id — by design (`approval_status=duplicate` vs
+  дефолт `analyze_statuses=['approved','new']`). Правильный handoff: **первый** id
+  `wf11_req_20260612_033442`, platform=telegram, max_records=10, deterministic_first, LLM off.
+  Диагностика — в WF08/WF11 RU + sticky note в WF08 (только документация).
+- **WF12 BUILT (DEC-118):** `12_market_intelligence_report_builder.json` (`active=false`, 15 нод, без HTTP):
+  4 WF10-вкладки → последний снапшот по `plan_id` → топ конкурентов/углов (+тренды ↑/↓/NEW vs прошлый прогон)
+  → 1 строка `market_intelligence_reports` (20) + 1 agent_requests; Claude-ветка = guard (throw);
+  telegram_send не реализован; no_data → `no_data_notice`; source_mix обязателен. Сим: **20 PASS**.
+- Decisions: DEC-114…118. Docs: GOOGLE_SHEETS_VALIDATION_PLAN v1.1, TABLE_SCHEMA, STAGE_3_4 (§5.6/5.7 live
+  план), WF11/WF08/WF12 RU, SOCIAL_MATRIX, REPORTING plan, REPORT schema, TELEGRAM plan, BACKLOG, ROADMAP,
+  DECISIONS, NEXT_ACTIONS, AGENT_LOG, recent.
+
+**Next operator action:** commit → re-import WF11 v0.1.1 (retest Тест 1: те же счётчики + у поста 101
+`contact_channel=telegram`, `contact_format=handle` в notes) → WF08 handoff по `wf11_req_20260612_033442`
+(очистить фильтры после) → синхронизировать validation_lists до v1.1 → (опционально) создать вкладку
+`market_intelligence_reports` (20 колонок) + первый прогон WF12 (`llm_*` пустые, $0; guard-тест
+`enable_llm_summary=true` → ошибка) → дальше (каждое за отдельным одобрением): WF11 live transport (§5.7) /
+Telegram delivery / Claude summary.
+
+---
+
 ## Session: 2026-06-12 — WF10 v0.2 patch (DEC-106/107/108) · WF11 Telegram-preview foundation (DEC-109/110) · validation/report/Telegram architecture (DEC-111/112/113)
 
 **What was done ($0, no external calls; WF04–09 untouched):**
@@ -30,10 +65,8 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 - Decisions: DEC-106…113. Docs: STAGE_3_4 (§5), SOCIAL_MATRIX, WF10 plan/schemas/RU, WF11 RU, TABLE_SCHEMA,
   DECISIONS, ROADMAP, NEXT_ACTIONS, COSTS, CAPABILITIES, BACKLOG, AGENT_LOG, recent.
 
-**Next operator action:** commit → re-import WF10 v0.2 (retest: обычный прогон — профилей меньше 21, source_mix
-в summary; no-data прогон — помеченный план, `no_data;` префикс; вернуть фильтр) → импорт WF11 (Тест 1:
-6/1/4/1 → raw +5/registry +4; Тест 2 повтор: unique=0; Тест 3: live guard) → опционально WF08 handoff по
-wf11_req_… → применить validation_lists → дальше (по одобрению) WF11 live transport / Report Builder v1.
+**Resolution (2026-06-12, session 2):** WF10 v0.2 и WF11 операторские тесты пройдены; WF11 контакт-дефект
+исправлен в v0.1.1 (DEC-114); validation_lists применён оператором (26 списков, v1.1 — DEC-115).
 
 ---
 
@@ -55,17 +88,3 @@ wf11_req_… → применить validation_lists → дальше (по од
   strategy polished. Decisions: DEC-102…105.
 
 **Resolution (2026-06-12):** WF10 операторские тесты пройдены, no-data баг найден и исправлен в v0.2 (DEC-106).
-
----
-
-## Session: 2026-06-11 (session 2) — WF09 live business relevance filter (DEC-095) + Stage 3.4 architecture pack (DEC-096…101)
-
-**What was done (relevance filter after live false positives; fixture/baseline preserved; docs pack; no external calls):**
-- **Live retest #2 diagnosis:** `avito_req_20260611_001222` — transport PASS (10/10 valid), но обе unique-строки
-  были false positives (юр. адреса); релевантный брокер — дубликат.
-- **WF09 patch (v005, DEC-095):** relevance evidence = title + description + decoded URL slug + category only;
-  hard negatives без сильного кредитного evidence → `hard_skipped` (не пишутся в raw/registry, не тратят
-  `pipeline_limit`); 8-count `result_summary`; канонические listing-URL. Fixture-путь не изменён (31 checks PASS).
-- **New docs (DEC-096…101):** CONTACT_AND_OUTREACH_POLICY, STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY (one source
-  at a time), WF10 plan (gate), NICHE_PACK_SYSTEM_PLAN, COMPETITOR_AD_INTELLIGENCE_PLAN.
-- **Resolution (session 3):** live retest #3 PASSED → Stage 3.3 closed (DEC-102); `?context=` исправлен в v006.

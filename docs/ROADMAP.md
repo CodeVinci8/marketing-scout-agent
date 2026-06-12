@@ -190,8 +190,20 @@ the approved path until Stage 2.4 is built and live-validated.
   40/15/21-column outputs match WF07. Plan: `docs/STAGE_3_3_AVITO_CLASSIFIEDS_CONNECTOR_PLAN.md`; guide:
   `docs/N8N_WORKFLOW_09_AVITO_CLASSIFIEDS_CONNECTOR_RU.md`; test log: `docs/STAGE_3_3_TEST_RESULTS.md`; source
   decision: `docs/STAGE_3_3_SOURCE_DECISION_PLAN.md`.
-- **3.4 — Social Source Parsing Strategy** 🔧 **STRATEGY WRITTEN (DEC-096) + STEP 2 FOUNDATION BUILT
-  (2026-06-12, DEC-109/110)** — first non-Avito source selected: **Telegram public-channel preview**
+- **3.4 — Social Source Parsing Strategy** ✅ **STEP 2 FOUNDATION FIXTURE PASS (2026-06-12, DEC-114/116/117)** —
+  WF11 operator fixture tests all passed: Test 1 (`wf11_req_20260612_033442`): 6 posts → 5 business-relevant /
+  1 hard-skip / 4 unique / 1 duplicate → raw +5 / registry +4 / agent_requests +1; Test 2 repeat
+  (`wf11_req_20260612_033756`): unique=0 / duplicates=5 / registry +0; Test 3: live guard stops correctly;
+  $0, no external/Claude calls. Post-test patch **v0.1.1 (DEC-114)**: Telegram handle contacts now write
+  `contact_channel=telegram` (channel category — `handle` is a format and is banned from the column) with
+  `contact_format=handle` / `contact_source_url` / `contact_use_policy=manual_review` in notes; fixture counts
+  unchanged (24-check sim PASS). **WF08 handoff rule (DEC-117):** use the FIRST-run request id — duplicate-run
+  ids correctly yield 0 records under default `analyze_statuses=['approved','new']` (diagnostics in the WF08/
+  WF11 RU guides + a WF08 sticky note). **Live Telegram public preview = pending v0.2 plan (DEC-116, strategy
+  §5.7), requires explicit operator approval**: allowlist-only public channels, `t.me/s/` preview pages only,
+  no groups/MTProto/member data/hidden contacts, ≤10 posts/channel; WF11 carries inert live_* placeholder
+  config (guard fires regardless). History: 🔧 STRATEGY WRITTEN (DEC-096) + STEP 2 FOUNDATION BUILT
+  (2026-06-12, DEC-109/110) — first non-Avito source selected: **Telegram public-channel preview**
   (`t.me/s/<channel>`; highest competitor-ad value per unit of risk; comparison vs VK/reviews-maps/Dzen in
   `STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` §5.2). `Workflow 11 — Social Source Connector Foundation`
   built **fixture-only** (`active=false`, `fixture_mode=true`, `live_mode=false`, **no HTTP node** — live
@@ -235,9 +247,14 @@ workflows; it contains **no parser/scraping logic** (Control Agent ≠ source pa
 
 ## Stage 5 — Reporting / Export / Summary (Later)
 
-**Status:** 📋 LATER — **not built; architecture written (2026-06-12, DEC-112/113):**
-`docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md` + `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md` (proposed
-`market_intelligence_reports` tab, 20 cols). Flow: WF10 tabs → deterministic Report Builder → **optional**
+**Status:** 🔧 **Report Builder v0.1 SKELETON BUILT (2026-06-12, DEC-118):** WF12
+`n8n/workflows/12_market_intelligence_report_builder.json` (`active=false`, deterministic, $0, no HTTP node;
+Claude branch = guard, Telegram send not implemented; reads the 4 WF10 tabs, writes one
+`market_intelligence_reports` row + one `agent_requests` row; angle trends vs previous WF10 run; 20-check sim
+PASS; guide `docs/N8N_WORKFLOW_12_MARKET_INTELLIGENCE_REPORT_BUILDER_RU.md`). Operator must create the
+`market_intelligence_reports` tab (20 cols) before the first run. Architecture (2026-06-12, DEC-112/113):
+`docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md` + `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md`
+(`market_intelligence_reports` tab, 20 cols). Flow: WF10 tabs → deterministic Report Builder → **optional**
 Claude summary (disabled by default; facts-only; no contacts/outreach) → `market_intelligence_reports` →
 Telegram digest → later Business Agent Control Kernel. WF10 stays the deterministic fact core; reports always
 carry the `source_mix` label. Read-only over existing sheets; no new collection.

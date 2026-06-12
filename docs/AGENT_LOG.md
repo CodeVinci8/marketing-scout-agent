@@ -5,6 +5,67 @@ Most recent first.
 
 ---
 
+## 2026-06-12 (session 2) — WF11 fixture PASS + v0.1.1 contact patch (DEC-114) · validation_lists v1.1 (DEC-115) · live preview plan (DEC-116) · WF08 handoff diagnostics (DEC-117) · WF12 Report Builder skeleton (DEC-118)
+
+**Agent role:** project-engineer
+
+**What was done ($0, no external calls, no Claude calls; WF04–WF10 behavior untouched):**
+- **WF11 operator fixture tests recorded — ALL PASS:** Test 1 (`wf11_req_20260612_033442`): posts_received=6,
+  structurally_valid=6, invalid=0, business_relevant=5, hard_skipped=1, unique=4, duplicates=1,
+  over_pipeline_limit=0 → raw_market_records +5 / market_record_registry +4 / agent_requests +1. Test 2 repeat
+  (`wf11_req_20260612_033756`): unique=0, duplicates=5, registry +0, duplicate-audit rows written. Test 3:
+  `fixture_mode=false` correctly stops on the LIVE Mode Guard. **Stage 3.4 foundation works in fixture mode.**
+- **WF11 v0.1.1 contact patch (DEC-114):** Test 1 revealed `contact_channel=handle` — wrong, because
+  `contact_channel` is a channel CATEGORY (phone/email/telegram/profile/form/unknown), not a format. Patched:
+  Telegram @handle → `contact_channel=telegram`; notes carry `contact_format=handle`,
+  `contact_source_url=<post_url>`, `contact_use_policy=manual_review`; no-contact rows write empty
+  `contact_channel` (was non-enum `none`). Live-v0.2 **inert placeholder** config fields added
+  (`live_transport='none_not_implemented'`, `live_channel_allowlist=[]`, `live_max_posts_per_channel=10`,
+  `live_requires_operator_approval=true`) — the guard fires regardless. **Verified:** vm-sandbox simulation
+  **24 checks PASS** (fixture counts 6/6/0/5/1/4/1 unchanged; repeat 0/5/+0; contact normalization; 40/15/21
+  column widths).
+- **validation_lists v1.1 (DEC-115):** plan updated to the operator-created reality — **26 lists** incl.
+  `angle_category`; legacy-compatible values added (source_type: `web`/`social_content`/`social_search`/
+  `review_platform`…; platform: `web`; record_type_hint: `question_objection`; touchpoint_type:
+  `competitor_content_channel`/`competitor_content_post`/`forum_discussion`/`review_source`; dedup_status:
+  full WF09/WF11 set). Modes fixed as policy: system-written columns = "Show warning" (appends never blocked),
+  human-only = "Reject input". **`handle` NOT added to `contact_channel`** — workflows patched instead.
+  `TABLE_SCHEMA.md` contact_channel row corrected (DEC-114).
+- **WF08 handoff diagnostics (DEC-117):** the zero-record handoff on `wf11_req_20260612_033756` was
+  correct-by-design (duplicate-run rows have `approval_status=duplicate`; default
+  `analyze_statuses=['approved','new']` ignores them) — documented in the WF08/WF11 RU guides with the verified
+  first-run config (`wf11_req_20260612_033442`, platform=telegram, max_records=10, deterministic_first, LLM
+  off) + a **diagnostics sticky note added to WF08** (documentation-only node; no behavior change).
+- **WF12 Report Builder v0.1 skeleton BUILT (DEC-118):** `12_market_intelligence_report_builder.json`
+  (`active=false`, 15 nodes, no HTTP node, $0) — reads competitor_profiles/market_angles/
+  audience_activity_signals/content_positioning_plan, selects the latest WF10 snapshot by `plan_id` stamp,
+  computes top competitors/angles with trends vs the previous run (↑/↓/=/NEW by stable angle key), renders
+  Markdown (inline in notes v0.1), writes one `market_intelligence_reports` row (20 cols) + one
+  `agent_requests` row (report_summary, completed). Claude branch = guard node (throws on
+  `enable_llm_summary=true`); `telegram_send` not implemented (`delivered_to=none`); `no_data` WF10 run →
+  `no_data_notice` report; mandatory `source_mix`. **Verified:** vm-sandbox simulation **20 checks PASS**.
+- **Stage 3.4 live plan (DEC-116):** strategy §5.7 — allowlist-only public channels, `t.me/s/` preview pages
+  only, no groups/MTProto/member data/hidden contacts/auto-outreach, ≤10 posts/channel, transport requires
+  explicit approval; pipeline unchanged (WF11 → raw/registry/requests → WF08 → WF10 → report).
+
+**Files changed:** `n8n/workflows/11_social_source_connector_foundation.json` (v0.1.1),
+`n8n/workflows/08_touchpoint_analyzer.json` (sticky note only),
+`n8n/workflows/12_market_intelligence_report_builder.json` (NEW),
+`docs/N8N_WORKFLOW_12_MARKET_INTELLIGENCE_REPORT_BUILDER_RU.md` (NEW),
+`docs/GOOGLE_SHEETS_VALIDATION_PLAN.md` (v1.1), `docs/TABLE_SCHEMA.md`,
+`docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` (§5.5–5.7),
+`docs/N8N_WORKFLOW_11_SOCIAL_SOURCE_CONNECTOR_FOUNDATION_RU.md`,
+`docs/N8N_WORKFLOW_08_TOUCHPOINT_ANALYZER_RU.md`, `docs/SOCIAL_CLASSIFIED_SOURCE_MATRIX.md`,
+`docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`, `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md`,
+`docs/TELEGRAM_CONTROL_AGENT_PLAN.md`, `docs/FUTURE_CAPABILITIES_BACKLOG.md`, `docs/ROADMAP.md`,
+`docs/DECISIONS.md` (DEC-114…118), `docs/NEXT_ACTIONS.md`, `docs/AGENT_LOG.md`, `core/hot/recent.md`.
+
+**Next:** commit → re-import WF11 v0.1.1 (retest Test 1 + contact_channel=telegram check) → WF08 handoff on
+`wf11_req_20260612_033442` → sync validation_lists to v1.1 → (optional) create reports tab + WF12 first run →
+live preview transport / Telegram delivery / Claude summary each behind explicit approval.
+
+---
+
 ## 2026-06-12 — WF10 v0.2 quality patch (DEC-106/107/108) · WF11 Telegram-preview foundation built (DEC-109/110) · validation/report/Telegram architecture (DEC-111/112/113)
 
 **Agent role:** project-engineer
