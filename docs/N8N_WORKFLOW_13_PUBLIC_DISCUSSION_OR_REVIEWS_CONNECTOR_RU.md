@@ -75,3 +75,32 @@ Manual Start → Set Connector Config → IF fixture_mode?
 community/wall/comments-методы с токеном в n8n credential, или Apify VK actor) → привязка credential →
 оценка стоимости в COSTS_AND_LIMITS.md. `live_*` поля конфига — плейсхолдеры; guard срабатывает
 независимо от их значений. Allowlist-only, max_items_per_group=10.
+
+---
+
+## v0.2 (2026-06-12, DEC-124/125/126) — live-готовность VK + фиксы
+
+**Изменения:**
+1. **Фикс `#ERROR!` (DEC-124):** `contact_public` с ведущим `+`/`=` пишется с апострофом —
+   `+7 999 000-11-22` отображается текстом.
+2. **`touchpoint_type=public_comment` (DEC-125):** бизнес-релевантные КОММЕНТАРИИ VK; посты по-прежнему
+   `competitor_content_post` / `forum_discussion`.
+3. **Метка этапа:** `stage_3_source_foundation_vk_public_discussion` (в notes raw-строк и registry).
+4. **Охраняемый live-путь (DEC-125):** `LIVE VK Approval Gate` (token
+   `I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION` + непустой `live_group_allowlist`, отказ инвайтам/приватным) →
+   ОТКЛЮЧЁННАЯ HTTP-нода **официального VK API `wall.get`** (access_token ТОЛЬКО как n8n-креденшл;
+   `wall.getComments` добавится в live-сессии) → инертный парсер (ошибка без ответа API — выдуманные
+   записи невозможны). Только публичные группы/посты/комментарии; никаких приватных сообщений, закрытых
+   групп, выгрузки участников, скрытых контактов, авто-аутрича; агрегаты авторов только счётчиками.
+5. **Журнал (DEC-126):** каждый прогон пишет 1 строку в `live_source_runs`.
+
+**Тесты v0.2 (fixture, $0):**
+- Тест 1: прежние счётчики (6/5/1/4/1, raw +5, registry +4) + `live_source_runs` +1; телефон поста 201 —
+  текстом без `#ERROR!`; комментарии Анны — `public_comment`; notes — новая метка этапа.
+- Тест 2 (повтор): unique=0 / dups=5 / registry +0; runlog +1.
+- Тест 3 (guard): fixture_mode=false, токен пуст → ошибка на `LIVE VK Approval Gate`
+  (HTTP-нода остаётся DISABLED). Вернуть fixture_mode=true.
+
+**Включение live (отдельное одобрение, НЕ в этой сессии):** токен + allowlist публичных групп +
+VK-креденшл в n8n + включить HTTP-ноду; ожидаемая стоимость $0 (официальный API, публичные стены),
+лимиты — по quota VK; прогон логируется в live_source_runs.

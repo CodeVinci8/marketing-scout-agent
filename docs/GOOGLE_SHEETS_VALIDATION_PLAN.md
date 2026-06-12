@@ -161,3 +161,14 @@ system-generated append-only field (ids, timestamps, hashes, free-text evidence,
 
 **Cost: $0. No workflow re-import needed.** Validation rules survive appends — appended values that match a
 list show normally; mismatches get a warning marker, which itself is a useful data-quality signal.
+
+## Addendum (2026-06-12) — New tabs for the live-source/intelligence MVP
+
+Before re-importing WF11 v0.3 / WF12 v0.3 / WF13 v0.2 / WF14 / WF15, the operator creates (headers from
+`TABLE_SCHEMA.md` §E–G and `MARKET_INTELLIGENCE_REPORT_SCHEMA.md` v0.3):
+1. `competitor_site_snapshots` — 22 columns (may stay empty; WF12 tolerates absence).
+2. `live_source_runs` — 23 columns (required for WF11/12/13/15 appends).
+3. `public_lead_signals` — 28 columns (required for WF14; WF12 tolerates absence).
+4. `market_intelligence_reports` — extend/recreate headers to the 25-column v0.3 layout.
+Validation: append-only; `#ERROR!` check on `contact_public` cells with `+7…` values (must render as text —
+DEC-124); `approval_token_used` in `live_source_runs` must only ever contain `yes`/`no`.

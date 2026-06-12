@@ -7,6 +7,19 @@
 
 ## Stage 3 / 4 / 5 — Market Intelligence MVP (canonical definitions, 2026-06-12, DEC-123)
 
+**Session-4 update (2026-06-12, DEC-124–130):**
+- **Stage 2 web pipeline is part of the intelligence system, not forgotten** — reintegrated via
+  `competitor_site_snapshots` + WF12 website block (DEC-129; WF04 snapshot-append = Phase B, own approval).
+- **Stage 3** now includes: Avito live (approved) · Telegram **live-ready** (WF11 gated) · VK **live-ready**
+  (WF13 gated, official API path, phone `#ERROR!` fixed, comments=`public_comment`) · **public lead signal
+  layer** (WF14 → `public_lead_signals`) · website source reintegration · run ledger `live_source_runs`
+  (WF11/12/13 auto + WF15 manual logger) · WF10 v0.3 objection counting.
+- **Stage 4** now includes: deterministic stakeholder report v0.3 (executive digest, clean names, website +
+  lead-signal blocks, action blocks; 25-col schema) · **controlled Claude summary test path** (approval token
+  + budget guard before HTTP + JSON sections + quality flags + cost recording).
+- **Stage 5** remains the Telegram Business Agent: commands → agent_requests → workflow selection → report
+  delivery (see STAGE_5 doc; new `/triage`, `/runs` candidates).
+
 The MVP is **not Avito-only output** (DEC-113). Canonical pipeline:
 **source connectors → raw_market_records → WF08 analyzer → WF10 aggregator → WF12 report/Claude layer → Stage 5 Telegram Business Agent.**
 

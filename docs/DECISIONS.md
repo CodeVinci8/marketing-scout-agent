@@ -5,6 +5,69 @@ Most recent first.
 
 ---
 
+## DEC-130 — Public Lead Signal Layer (WF14 + `public_lead_signals`, deterministic, evidence-not-permission)
+
+**Date:** 2026-06-12
+**Context:** Public audience voice (VK comments, questions, reviews) sat in operator tables (`review_queue`, `raw_market_records`) where a manager cannot work with it; the product needed a manager-usable lead-signal layer without crossing into outreach.
+**Decision:** Built `14_public_lead_signal_triage.json` (active=false, manual, $0, no Claude): reads `review_queue` + audience-type `raw_market_records` rows, classifies pains (after_refusal / bad_credit_history / overdue_debt / urgent_money_need / prepayment_fear / fraud_fear / broker_price_question / mortgage_refinance_need / business_finance_need) and intents (question / objection / complaint / buying_intent / content_signal) with deterministic 0–100 scores, writes `public_lead_signals` (28 cols) + `agent_requests`. Hard policy: **a public profile URL is evidence, never permission for outreach**; `contact_use_policy` defaults `manual_review`/`aggregate_only`; recommended_action never contains outreach; dedup by post_url+text_hash; writes only the two tabs. WF12 consumes aggregates only (no names/contacts in reports).
+**Alternatives considered:** Claude-based triage (rejected for v0.1 — cost/control; deterministic vocab is auditable and $0); putting lead flags onto review_queue rows (rejected — managers need a clean dedicated table with policy fields).
+
+---
+
+## DEC-129 — Stage 2 Website Pipeline Reintegrated as First-Class Intelligence Source (`competitor_site_snapshots`)
+
+**Date:** 2026-06-12
+**Context:** The approved Stage 2 web pipeline (WF03/04/05/06) was functionally parked — its output never reached WF10/WF12, so the deepest first-party evidence (competitor sites: offers, prices, guarantees, CTA, changes) was missing from the intelligence layer.
+**Decision:** New tab `competitor_site_snapshots` (22 cols: identity + business content + contact policy fields + `content_hash`/`change_type`/`previous_snapshot_id` change tracking). WF12 v0.3 reads it (tolerant of absence) and renders a competitor-websites block + change counts in the executive digest. Population is phased: Phase A manual backfill; Phase B WF04 gets an additive snapshot-append step (own session+approval; current WF04 behavior untouched — verified untouched this session); Phase C scheduled re-scans with hash diffing (own cost approval). **WF06→WF04 auto-handoff stays deferred (DEC-075 reaffirmed)** — the approval gate before paid Firecrawl runs is a feature; the guarded plan in `WORKFLOW_06_AUTO_HANDOFF_PLAN.md` activates only with live volume, via approval-flagged agent_requests.
+**Alternatives considered:** patching WF04 immediately (rejected — 80KB approved workflow, no test budget this session; additive change deserves its own run); auto-handoff now (rejected — removes the cost gate).
+
+---
+
+## DEC-128 — WF12 v0.3 Stakeholder Report + Budget-Gated, Test-Ready Claude Branch (25-col schema)
+
+**Date:** 2026-06-12
+**Context:** The v0.2 report was operator-grade: ugly `(unnamed)` competitor names, overlong offers, no executive digest, no website/lead-signal sections; the Claude branch was guarded but not operator-test-ready and had no budget control.
+**Decision:** WF12 v0.3 deterministic ($0 default): executive digest (5–7 clean bullets), clean competitor names (`<Platform> offer: <short offer>` fallback), offers shortened (`max_offer_chars=90`), competitor-website block (from `competitor_site_snapshots` + web-derived WF10 profiles), public lead/audience block (aggregates from `public_lead_signals` + `audience_activity_signals`), manager/content/source action blocks, limitations+source_mix. Schema v0.3 = 25 columns: llm block split into `llm_status`/`llm_model`/`llm_input_tokens`/`llm_output_tokens`/`llm_cost_usd`/`llm_summary_ru`/`llm_recommendations_ru`/`llm_quality_flags`. Claude branch is now test-ready: approval gate (token `I_APPROVE_CLAUDE_REPORT_SUMMARY`) → **budget guard throws BEFORE the HTTP node** (`llm_max_input_chars=8000`, `llm_max_estimated_cost_usd=0.10`, estimate = chars/4 × $3/MTok + max_tokens × $15/MTok) → evidence-bound JSON prompt (deterministic fields + aggregates only; required sections executive_summary_ru / key_findings / market_risks / recommended_next_actions / content_recommendations / source_limitations; hard no-invention/no-contacts/no-outreach rules) → DISABLED HTTP placeholder (credential bound in n8n only) → merge with usage-based cost + quality flags (non_json / truncated / unverified_numbers / outreach_language). Every run also logs to `live_source_runs`.
+**Alternatives considered:** separate report workflow for the LLM variant (rejected — one report row contract, two paths); monthly budget ledger guard (deferred to Stage 4 backlog — per-run guard first).
+
+---
+
+## DEC-127 — WF10 v0.3: Objection Counting + Merged Pain Labels (review_queue-only objection scope)
+
+**Date:** 2026-06-12
+**Context:** `audience_activity_signals.objection_count` was hardcoded 0 — VK comment «Боюсь мошенников / предоплата» was invisible; pain labels were too granular for managers.
+**Decision:** Objection vocabulary (боюсь мошенников / мошенник / предоплат / берут деньги и пропадают / обман / кидал / развод / не верю / гарантии / договор questions) counted **only on review_queue rows** so competitor ad copy («без предоплаты», «по договору») never inflates audience objections. Pain labels merged: «просрочки / плохая КИ», «страх предоплаты / мошенников» added. Row blob now includes `comment_text`. Expected VK row after WF13→WF08: question_count≥2, objection_count≥1, buying_intent_count≥1, top_pains ⊇ {отказы банков, просрочки / плохая КИ, страх предоплаты / мошенников}. Aggregate-only policy unchanged; no Claude; no external calls.
+**Alternatives considered:** counting objections on all tabs (rejected — ad copy contamination); per-keyword objection rows (rejected — counts suffice for v0.3).
+
+---
+
+## DEC-126 — `live_source_runs` Run Ledger (23 cols) + WF15 Manual Logger; WF11/WF12/WF13 log automatically
+
+**Date:** 2026-06-12
+**Context:** Going live (Avito approved; Telegram/VK live-ready) without per-run observability makes cost and guard behavior invisible.
+**Decision:** New tab `live_source_runs` (23 cols: workflow, source_family, platform, mode, approval_token_used yes/no — never the token value, allowlist, item counters, external_calls, source/LLM cost, status, error_summary, operator_next_action). WF11/WF13 append one row per run (fixture and live); WF12 logs deterministic vs llm_summary mode with token/cost accounting. `15_live_source_run_logger.json` (active=false, manual) logs everything else (WF09 live runs, guard-blocked attempts, WF04 website runs) with enum validation that **rejects rows containing approval-token values**.
+**Alternatives considered:** logging only in agent_requests (rejected — request ledger mixes semantics; run observability needs uniform counters); a separate log per connector (rejected — one queryable ledger).
+
+---
+
+## DEC-125 — WF13 v0.2: Guarded Live VK Path (official API wall.get), `public_comment` Touchpoint, Stage Label Fix
+
+**Date:** 2026-06-12
+**Context:** WF13's live branch was a bare "not implemented" throw; VK comments mislabeled as `forum_discussion`; notes used a confusing `stage_3_5` label.
+**Decision:** Live path now mirrors WF11's guarded pattern: approval gate (token `I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION` + non-empty `live_group_allowlist`, rejects invite/private entries) → **DISABLED** HTTP placeholder calling **VK official API `wall.get`** (preferred transport; access token only as an n8n credential, never in the file; `wall.getComments` follows in the live session) → inert parser (throws without an API response; maps API items to the fixture shape; `profile_url` derivable only for public user authors). Scope hard-limited: public groups/posts/comments; no private messages/closed groups/member extraction/hidden contacts/auto-outreach; aggregate author counts only. Business-relevant VK **comments** now carry `touchpoint_type=public_comment`; stage label everywhere is `stage_3_source_foundation_vk_public_discussion`. No live calls were made.
+**Alternatives considered:** Apify VK actor transport (kept as documented fallback — official API is cheaper/cleaner for public walls); HTML scraping of vk.com (rejected — fragile, ToS-riskier than the official API).
+
+---
+
+## DEC-124 — Sheets-Safe Text Writing for `+`/`=`-Leading Values (fixes phone `#ERROR!`)
+
+**Date:** 2026-06-12
+**Context:** `contact_public` values like `+7 999 000-11-22` rendered as `#ERROR!` in Google Sheets — n8n appends use USER_ENTERED, and a leading `+` or `=` is parsed as a formula.
+**Decision:** All writers of contact-bearing columns (WF11, WF13, WF14; rule documented for future connectors in TABLE_SCHEMA.md) prepend an invisible apostrophe to values starting with `+` or `=` (`sheetsSafeText`). Registry/dedup keys are unaffected (they never carry contacts).
+**Alternatives considered:** switching the append nodes to RAW value input (rejected — changes behavior of every other column and node option support varies by node version); storing phones without `+` (rejected — mutates evidence).
+
+---
+
 ## DEC-123 — Stage 3/4/5 Boundaries Defined (source foundation · report/Claude layer · Telegram Business Agent)
 
 **Date:** 2026-06-12

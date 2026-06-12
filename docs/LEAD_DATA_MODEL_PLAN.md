@@ -187,3 +187,12 @@ unchanged (competitor → `monitor_queue`; irrelevant → `skipped_log`).
   `url_registry`. No existing sheet is modified.
 - Connectors write `raw_market_records` with `approval_status=new`; **no Claude call** before approval.
 - These are **PROPOSED** — created in Stage 3.1 only after Stage 3.0 approval. Nothing is created now.
+
+---
+
+## Addendum (2026-06-12, DEC-130)
+
+The public-signal slice of this plan is now implemented as the `public_lead_signals` tab (28 cols,
+TABLE_SCHEMA §G) written by WF14 — see `PUBLIC_LEAD_SIGNAL_LAYER.md`. Key model decisions inherited here:
+pain_type is a multi-value enum (9 values), intent_type single-value (5 values), scores deterministic
+0–100, `contact_use_policy` is a first-class column (manual_review / aggregate_only — never an outreach grant).

@@ -326,3 +326,16 @@ No connector is implemented until the Stage 3.0 evaluation is written **and appr
 - **Connectors never analyze**; the analyzer never scrapes. One responsibility each.
 - **`url_registry` semantics unchanged**; lead dedup uses the new `market_record_registry`.
 - **No auto-processing, no schedules, no bot** in the connector layer for v0.x — manual, bounded runs only.
+
+---
+
+## Addendum (2026-06-12, DEC-126/129/130) — current realized architecture slice
+
+```
+WF09 Avito (live) · WF11 Telegram (live-ready) · WF13 VK (live-ready) · [Stage 2 web: WF03/04/05/06]
+   → raw_market_records / market_record_registry / competitor_site_snapshots(web, Phase B)
+   → WF08 analyzer → business queues → WF10 aggregator → WF12 v0.3 stakeholder report
+   → WF14 public lead triage → public_lead_signals (manager layer, evidence-not-permission)
+   → live_source_runs ledger (WF11/12/13 auto + WF15 manual) — every live-capable run is logged
+```
+Discovery stays allowlist-only per source; no auto-outreach anywhere in the chain.

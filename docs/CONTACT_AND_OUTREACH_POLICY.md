@@ -82,3 +82,14 @@ Default when uncertain: `manual_review`. Default for audience/competitor-audienc
 | WF10 (aggregator, planned) | audience tables are aggregate-only; contact fields surface only with policy + evidence |
 | Niche packs (planned) | `contact_policy_overrides` may only tighten this policy, never loosen it |
 | Operator | approves any new contact-bearing source; reviews `manual_review` items |
+
+## Addendum (2026-06-12, DEC-130) — Public Lead Signal Layer
+
+The `public_lead_signals` tab (WF14) is governed by this policy in full:
+- A **public profile URL is evidence, not permission for outreach.** It exists for human verification of
+  the signal in context, never for messaging the author.
+- `contact_use_policy` on every row: `manual_review` (public contact was verbatim in the source text) or
+  `aggregate_only` (default). No workflow may emit an outreach-typed `recommended_action`.
+- Reports (WF12) consume lead signals **as aggregates only** — no names, handles, profile URLs or contacts
+  appear in any report or Telegram digest.
+- Sheets-safe writing (DEC-124) preserves contact evidence verbatim (apostrophe prefix is presentation-only).

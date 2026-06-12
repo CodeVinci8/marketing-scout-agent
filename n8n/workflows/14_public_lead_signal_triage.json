@@ -1,0 +1,390 @@
+{
+  "name": "14 - Public Lead Signal Triage (Deterministic)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## WF14 — Public Lead Signal Triage v0.1 (DEC-130)\n\n**Назначение:** «менеджерский» слой над публичными сигналами аудитории. Детерминированно ($0, БЕЗ Claude) перечитывает review_queue + raw_market_records (публичные комментарии/вопросы/отзывы), классифицирует боли и намерения и пишет по строке в public_lead_signals (28 колонок, docs/TABLE_SCHEMA.md / docs/PUBLIC_LEAD_SIGNAL_LAYER.md).\n\n**Боли (pain_type):** after_refusal · bad_credit_history · overdue_debt · urgent_money_need · prepayment_fear · fraud_fear · broker_price_question · mortgage_refinance_need · business_finance_need.\n**Намерения (intent_type):** question · objection · complaint · buying_intent · content_signal.\n\n**Жёсткие правила (CONTACT_AND_OUTREACH_POLICY):** только ПУБЛИЧНЫЕ свидетельства; публичный profile_url = evidence, НЕ разрешение на аутрич; contact_use_policy по умолчанию manual_review (есть контакт) / aggregate_only (нет); НИКАКОГО авто-аутрича; нет приватных чатов; нет скрытых контактов; нет выгрузки участников. Пишет ТОЛЬКО public_lead_signals + agent_requests. Дедуп против уже-триажированных сигналов (post_url+text_hash). active=false; запуск только вручную; MSK +03:00.",
+        "height": 620,
+        "width": 640
+      },
+      "id": "wf14-note-1",
+      "name": "Overview Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        -340
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Setup & Test\n\n1. Создать вкладку public_lead_signals (28 колонок из docs/TABLE_SCHEMA.md). НЕ активировать (active=false).\n2. Вставить SPREADSHEET_ID и перепривязать креденшл на 5 sheet-нодах (3 read + 2 append).\n3. Тест 1 (после WF13->WF08, $0): Execute once -> ожидаемо >=2 строки public_lead_signals из VK-комментариев: вопрос Анны (after_refusal+bad_credit_history+overdue_debt+broker_price_question, intent=buying_intent, contact_use_policy=aggregate_only) и возражение про предоплату (prepayment_fear+fraud_fear, intent=objection, recommended_action=content_idea); agent_requests +1 (completed).\n4. Тест 2 (повтор): дедуп по post_url+text_hash -> signals_written=0, result_summary начинается с no_signals или 0 новых.\n5. Проверить: contact_public с +7 отображается текстом (без #ERROR!); ни одна строка не рекомендует аутрич; Claude calls=0.",
+        "height": 620,
+        "width": 620
+      },
+      "id": "wf14-note-2",
+      "name": "Setup and Test Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        220,
+        -340
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "wf14-start",
+      "name": "Manual Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// WF14 triage config. Deterministic ids; MSK timestamps; NO external calls, NO Claude (DEC-130).\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst stamp=moscowStamp();\nreturn [{ json: {\n  time_window_days:30,\n  max_signals:25,\n  region_default:'Москва/МО',\n  requested_by:'operator',\n  contact_use_policy_default:'manual_review', // with public contact; aggregate_only otherwise — NEVER outreach\n  run_stamp:stamp,\n  run_id:'wf14_'+stamp,\n  agent_request_id:'wf14_req_'+stamp,\n  created_at:moscowIsoNow()\n}}];"
+      },
+      "id": "wf14-config",
+      "name": "Set Triage Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        560
+      ]
+    },
+    {
+      "id": "wf14-read-review",
+      "name": "Read review_queue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        20,
+        560
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "review_queue",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "wf14-read-raw",
+      "name": "Read raw_market_records",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        240,
+        560
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "raw_market_records",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "wf14-read-pls",
+      "name": "Read public_lead_signals",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        460,
+        560
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "public_lead_signals",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// WF14 CLASSIFY PUBLIC LEAD SIGNALS — deterministic, $0, no Claude (DEC-130).\n// Sources: review_queue rows (audience voice routed by WF08) + raw_market_records question/comment rows.\n// Only PUBLIC evidence is used. A public profile URL is EVIDENCE, never permission for outreach\n// (CONTACT_AND_OUTREACH_POLICY). No private chats, no hidden contacts, no member extraction.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction cut(s,n){s=str(s);return s.length>n?(s.slice(0,n-1)+'…'):s;}\nfunction hashText(s){s=str(s);let h=5381;for(let i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))>>>0;}return ('00000000'+h.toString(16)).slice(-8);}\nfunction rowsOf(name){try{return $(name).all().map(i=>i.json).filter(r=>r&&Object.keys(r).some(k=>str(r[k])!==''));}catch(e){return [];}}\nconst cfg=$('Set Triage Config').first().json;\nconst windowDays=Number(cfg.time_window_days)||30;\nconst cutoffMs=Date.now()-windowDays*86400000;\nconst maxSignals=Number(cfg.max_signals)||25;\nconst review=rowsOf('Read review_queue');\nconst raw=rowsOf('Read raw_market_records');\nconst existing=rowsOf('Read public_lead_signals');\n// dedup vs already-triaged signals: same evidence URL + same text hash never produces a second row\nconst existingKeys=new Set(existing.map(r=>str(r.post_url)+'::'+(str(r.notes).match(/text_hash=([0-9a-f]{8})/)||[])[1]).filter(Boolean));\n// ---- pain vocabulary (DEC-130): keyword -> pain_type enum\nconst PAIN=[\n ['после отказ','after_refusal'],['отказали','after_refusal'],['отказ банка','after_refusal'],['отказов банк','after_refusal'],\n ['плохая кредитн','bad_credit_history'],['плохой кредитн','bad_credit_history'],['кредитная истори','bad_credit_history'],\n ['просрочк','overdue_debt'],['долг','overdue_debt'],\n ['срочно нужн','urgent_money_need'],['срочно деньги','urgent_money_need'],['горит','urgent_money_need'],\n ['предоплат','prepayment_fear'],\n ['мошенник','fraud_fear'],['обман','fraud_fear'],['кидал','fraud_fear'],['пропада','fraud_fear'],['развод','fraud_fear'],\n ['сколько стоит','broker_price_question'],['сколько это стоит','broker_price_question'],['какая комиссия','broker_price_question'],['процент брокер','broker_price_question'],\n ['ипотек','mortgage_refinance_need'],['рефинансир','mortgage_refinance_need'],['снизить ставк','mortgage_refinance_need'],\n ['для бизнеса','business_finance_need'],['ип и ооо','business_finance_need'],['оборотн','business_finance_need'],['тендерн','business_finance_need']\n];\nconst QUESTION=['подскажите','посоветуйте','кто брал','кто обращался','к кому обращаться','как получить','что делать','?'];\nconst OBJECTION=['мошенник','обман','кидал','пропада','не верю','развод','боюсь','предоплат'];\nconst COMPLAINT=['жалоб','обманули','кинули','не вернули','отвратительн'];\nconst BUY=['нужен кредит','нужен займ','нужна помощь с кредит','к кому обращаться','сколько это стоит','хочу взять','помогите получить','нужен совет — к кому'];\nfunction inWindow(t){const ts=Date.parse(str(t));return !isNaN(ts)&&ts>=cutoffMs;}\n// ---- collect candidate items (public comments/questions/reviews focus)\nconst cands=[];\nfor(const r of review){\n  if(!inWindow(r.created_at))continue;\n  if(low(r.route)&&low(r.route)!=='review_queue')continue;\n  cands.push({src:'review_queue',source_type:str(r.source_type),platform:low(r.platform),source_url:str(r.source_url),post_url:str(r.source_url),\n    profile_url:str(r.profile_url),profile_name:str(r.profile_name),author_handle:'',region:str(r.region),service_need:str(r.service_type)||str(r.detected_need),\n    text:[str(r.text_context),str(r.detected_need),str(r.reason)].filter(Boolean).join(' || '),\n    contact_public:str(r.contact_public),contact_channel:'',created_at:str(r.created_at),agent_request_id:''});\n}\nfor(const r of raw){\n  if(!inWindow(r.created_at))continue;\n  const tpt=low(r.touchpoint_type);const rth=low(r.record_type_hint);\n  const isAudience=(rth==='question_objection')||['public_comment','forum_discussion','review_source'].indexOf(tpt)>=0;\n  if(!isAudience)continue;\n  if(low(r.dedup_status).indexOf('duplicate')===0||low(r.dedup_status)==='hard_skipped'||low(r.dedup_status)==='invalid')continue;\n  cands.push({src:'raw_market_records',source_type:str(r.source_type),platform:low(r.platform),source_url:str(r.source_url),post_url:str(r.post_url)||str(r.source_url),\n    profile_url:str(r.profile_url),profile_name:str(r.profile_name),author_handle:str(r.author_handle),region:str(r.region_hint),service_need:str(r.service_hint)||str(r.probable_need),\n    text:[str(r.comment_text),str(r.text_context)].filter(Boolean).join(' || '),\n    contact_public:str(r.contact_public),contact_channel:str(r.contact_channel),created_at:str(r.created_at),agent_request_id:str(r.agent_request_id)});\n}\n// ---- classify\nconst out=[];const seenBatch=new Set();let considered=0,skipped_dup=0,skipped_irrelevant=0;\nfor(const c of cands){\n  if(out.length>=maxSignals)break;\n  considered++;\n  const blob=low(c.text);\n  if(blob.length<25){skipped_irrelevant++;continue;}\n  const pains=[];for(const p of PAIN){if(blob.indexOf(p[0])>=0&&pains.indexOf(p[1])<0)pains.push(p[1]);}\n  const qHit=QUESTION.filter(t=>blob.indexOf(t)>=0).length;\n  const objHit=OBJECTION.filter(t=>blob.indexOf(t)>=0).length;\n  const compHit=COMPLAINT.filter(t=>blob.indexOf(t)>=0).length;\n  const buyHit=BUY.filter(t=>blob.indexOf(t)>=0).length;\n  if(!pains.length&&!qHit&&!objHit&&!buyHit){skipped_irrelevant++;continue;}\n  // intent_type enum: question / objection / complaint / buying_intent / content_signal\n  let intent='content_signal';\n  if(buyHit&&qHit)intent='buying_intent';\n  else if(compHit)intent='complaint';\n  else if(objHit&&!qHit)intent='objection';\n  else if(qHit)intent='question';\n  else if(buyHit)intent='buying_intent';\n  // deterministic 0-100 scores\n  const urgency=Math.min(100,(blob.indexOf('срочно')>=0?60:0)+(pains.indexOf('urgent_money_need')>=0?30:0)+(buyHit?20:10));\n  const intentScore=Math.min(100,buyHit*30+qHit*15+(pains.length?15:0));\n  const objScore=Math.min(100,objHit*25+compHit*15);\n  const key=str(c.post_url)+'::'+hashText(blob);\n  if(existingKeys.has(key)||seenBatch.has(key)){skipped_dup++;continue;}\n  seenBatch.add(key);\n  const hasContact=!!str(c.contact_public);\n  // Sheets formula/#ERROR! fix (DEC-124): leading +/= forced to text\n  const safeContact=/^[+=]/.test(str(c.contact_public))?(\"'\"+str(c.contact_public)):str(c.contact_public);\n  const painLabel=pains.join(', ')||'unclassified_pain';\n  out.push({ json:{\n    lead_signal_id:'pls_'+str(cfg.run_stamp)+'_'+(out.length+1),\n    created_at:str(cfg.created_at),\n    source_type:c.source_type||'unknown',\n    platform:c.platform||'unknown',\n    source_url:c.source_url,\n    post_url:c.post_url,\n    profile_url:c.profile_url, // public-only by upstream contract; evidence, NOT outreach permission\n    profile_name:c.profile_name,\n    author_handle:c.author_handle,\n    public_identity_label:(c.profile_name||c.author_handle)?'public_profile_visible':'no_public_identity',\n    region:c.region||str(cfg.region_default),\n    service_need:c.service_need||'unknown',\n    text_evidence:cut(c.text,300),\n    pain_type:painLabel,\n    intent_type:intent,\n    urgency_score:urgency,\n    intent_score:intentScore,\n    objection_score:objScore,\n    contact_public:safeContact,\n    contact_channel:str(c.contact_channel),\n    contact_use_policy:hasContact?'manual_review':'aggregate_only',\n    recommended_action:(intent==='buying_intent'?'manual_review':(intent==='question'?'manual_review':(intent==='objection'||intent==='complaint'?'content_idea':'monitor'))),\n    status:'new',\n    source_confidence:(c.src==='review_queue'?55:50)+(pains.length>=2?10:0),\n    evidence_note:'pains: '+painLabel+'; question_hits='+qHit+'; objection_hits='+objHit+'; buying_hits='+buyHit+'; src='+c.src,\n    agent_request_id:str(cfg.agent_request_id),\n    run_id:str(cfg.run_id),\n    notes:'wf14 deterministic triage (DEC-130); text_hash='+hashText(blob)+'; public evidence only; profile_url is evidence, NOT outreach permission; never auto-outreach.'\n  }});\n}\nif(!out.length){\n  return [{ json:{ _no_signals:true, considered:considered, skipped_dup:skipped_dup, skipped_irrelevant:skipped_irrelevant } }];\n}\nreturn out;"
+      },
+      "id": "wf14-classify",
+      "name": "Classify Public Lead Signals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "wf14-has-signals",
+              "leftValue": "={{ $json._no_signals }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "wf14-if",
+      "name": "IF signals found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        900,
+        560
+      ]
+    },
+    {
+      "id": "wf14-app-pls",
+      "name": "Append public_lead_signals",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1120,
+        440
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "public_lead_signals",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// One agent_requests row (exactly 21 columns). status=completed. $0, no external calls, no Claude.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Triage Config').first().json;\nconst items=$('Classify Public Lead Signals').all().map(i=>i.json);\nconst noSignals=items.length===1&&items[0]._no_signals===true;\nconst signals=noSignals?[]:items;\nconst byIntent={};for(const s of signals){const k=str(s.intent_type)||'unknown';byIntent[k]=(byIntent[k]||0)+1;}\nconst withContact=signals.filter(s=>str(s.contact_public)).length;\nreturn [{ json: {\n  agent_request_id:str(cfg.agent_request_id),\n  created_at:str(cfg.created_at),\n  requested_by:str(cfg.requested_by)||'operator',\n  request_type:'public_lead_signal_triage',\n  request_text:'Deterministic triage of public audience comments/questions/reviews into public_lead_signals (window '+(Number(cfg.time_window_days)||30)+'d)',\n  source_scope:'business_queues',\n  platforms:'all',\n  query:'review_queue + raw_market_records (question/comment/review rows)',\n  region:str(cfg.region_default)||'Москва/МО',\n  service_focus:'credit_brokerage',\n  requested_limit:Number(cfg.max_signals)||25,\n  status:'completed',\n  plan_summary:'WF14 Public Lead Signal Triage v0.1 (DEC-130): deterministic keyword classification of PUBLIC evidence into public_lead_signals (28 cols). No Claude, no external calls, no outreach; contact_use_policy=manual_review/aggregate_only.',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:0,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:(noSignals?'no_signals; ':'')+'signals_written='+signals.length+'; by_intent='+JSON.stringify(byIntent)+'; with_public_contact='+withContact+'; contact_use_policy=manual_review (with contact) / aggregate_only; outreach=forbidden.',\n  next_action:(signals.length?'Manager: review public_lead_signals rows with status=new; confirm/dismiss classification. NO outreach — public profile is evidence, not permission (CONTACT_AND_OUTREACH_POLICY).':'No new public lead signals; run source connectors + WF08 first or widen time_window_days.'),\n  notes:'wf14 v0.1 deterministic; reads review_queue + raw_market_records; writes public_lead_signals + agent_requests only; never auto-outreach; no private chats; no member extraction; no hidden contacts.'\n}}];"
+      },
+      "id": "wf14-ar",
+      "name": "Build agent_requests Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        560
+      ]
+    },
+    {
+      "id": "wf14-app-ar",
+      "name": "Append agent_requests",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1560,
+        560
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "agent_requests",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final run summary. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Triage Config').first().json;\nconst items=$('Classify Public Lead Signals').all().map(i=>i.json);\nconst noSignals=items.length===1&&items[0]._no_signals===true;\nconst signals=noSignals?[]:items;\nconst byIntent={};const byPain={};\nfor(const s of signals){const k=str(s.intent_type)||'unknown';byIntent[k]=(byIntent[k]||0)+1;\n  str(s.pain_type).split(/\\s*,\\s*/).forEach(p=>{if(p)byPain[p]=(byPain[p]||0)+1;});}\nreturn [{ json: {\n  workflow:'14 - Public Lead Signal Triage (Deterministic)',\n  run_id:str(cfg.run_id),\n  agent_request_id:str(cfg.agent_request_id),\n  signals_written:signals.length,\n  by_intent:byIntent,\n  by_pain:byPain,\n  with_public_contact:signals.filter(s=>str(s.contact_public)).length,\n  claude_calls:0,\n  external_calls:0,\n  cost_usd:0,\n  next_action:(signals.length?'Manager: review status=new rows in public_lead_signals; confirm/dismiss. NO outreach (CONTACT_AND_OUTREACH_POLICY).':'No new signals; run connectors + WF08 first or widen window.')\n}}];"
+      },
+      "id": "wf14-final",
+      "name": "Final Summary Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        560
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Set Triage Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Triage Config": {
+      "main": [
+        [
+          {
+            "node": "Read review_queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read review_queue": {
+      "main": [
+        [
+          {
+            "node": "Read raw_market_records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read raw_market_records": {
+      "main": [
+        [
+          {
+            "node": "Read public_lead_signals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read public_lead_signals": {
+      "main": [
+        [
+          {
+            "node": "Classify Public Lead Signals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Public Lead Signals": {
+      "main": [
+        [
+          {
+            "node": "IF signals found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF signals found?": {
+      "main": [
+        [
+          {
+            "node": "Append public_lead_signals",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build agent_requests Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append public_lead_signals": {
+      "main": [
+        [
+          {
+            "node": "Build agent_requests Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build agent_requests Row": {
+      "main": [
+        [
+          {
+            "node": "Append agent_requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append agent_requests": {
+      "main": [
+        [
+          {
+            "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "wf14-v001-public-lead-signal-triage-deterministic-20260612",
+  "pinData": {}
+}

@@ -4,6 +4,32 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-12 (session 4) — Live-ready WF11/WF13 · WF14 lead signals · live_source_runs+WF15 · WF10 v0.3 · WF12 v0.3 + Claude budget path · Stage 2 reintegration (DEC-124–130)
+
+**What was done ($0, без внешних вызовов/Claude/live; WF04–WF09 не тронуты):**
+- **DEC-124:** фикс `#ERROR!` для `+7`-телефонов — Sheets-safe апостроф в WF11/WF13/WF14.
+- **WF13 v0.2 (DEC-125):** охраняемый live-путь VK (гейт `I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION` + allowlist →
+  ОТКЛЮЧЁННЫЙ HTTP официального VK API wall.get → инертный парсер); комментарии → `public_comment`;
+  метки → `stage_3_source_foundation_vk_public_discussion`; fixture-счётчики без изменений.
+- **live_source_runs (DEC-126):** 23-колоночный журнал прогонов; WF11/WF12/WF13 пишут автоматически;
+  WF15 — ручной логгер с enum-валидацией (отклоняет значения токенов).
+- **WF10 v0.3 (DEC-127):** objection_count реальный (был 0): словарь недоверия только по review_queue;
+  боли укрупнены («просрочки / плохая КИ», «страх предоплаты / мошенников»); comment_text в blob.
+- **WF14 NEW (DEC-130):** детерминированный триаж публичных лид-сигналов → `public_lead_signals` (28);
+  9 болей / 5 намерений / скоры 0–100; публичный профиль = evidence, НЕ разрешение на аутрич.
+- **WF12 v0.3 (DEC-128):** stakeholder-отчёт (дайджест 5–7 пунктов, чистые имена, блок сайтов из
+  `competitor_site_snapshots`, блок лид-сигналов, блоки действий; схема 25 колонок) + test-ready
+  Claude-ветка: бюджетный гейт ДО HTTP + JSON-секции + quality-флаги + учёт токенов/стоимости.
+- **Stage 2 (DEC-129):** реинтеграция веб-пайплайна: вкладка `competitor_site_snapshots` + блок в отчёте;
+  WF04 Phase B — отдельной сессией; auto-handoff 06→04 осознанно остаётся отложенным.
+- Валидация: 6 JSON OK; active=false; ключей/ID нет; все HTTP disabled; все jsCode проходят node --check.
+
+**Next operator action:** см. NEXT_ACTIONS session 4: commit → создать 4 вкладки → ретесты WF13/WF11 →
+handoff WF08 → проверка WF10 v0.3 (vk: questions≥2, objections≥1, buying≥1) → WF14 (2 сигнала + дедуп) →
+WF12 v0.3 (детерминированный + guard/budget тесты) → WF15. Live/Claude — каждое за отдельным одобрением.
+
+---
+
 ## Session: 2026-06-12 (session 3) — WF08 llm_enabled kill switch (DEC-119) · WF11 v0.2 live path (DEC-120) · WF13 VK foundation (DEC-121) · WF12 v0.2 (DEC-122) · Stage 3/4/5 defined (DEC-123)
 
 **What was done ($0, без внешних вызовов/Claude/live; WF09/WF10 не тронуты):**
@@ -66,37 +92,3 @@ gate-тест) → import WF13 (3 fixture-теста + handoff `platform=vk`) �
 `market_intelligence_reports` (20 колонок) + первый прогон WF12 (`llm_*` пустые, $0; guard-тест
 `enable_llm_summary=true` → ошибка) → дальше (каждое за отдельным одобрением): WF11 live transport (§5.7) /
 Telegram delivery / Claude summary.
-
----
-
-## Session: 2026-06-12 — WF10 v0.2 patch (DEC-106/107/108) · WF11 Telegram-preview foundation (DEC-109/110) · validation/report/Telegram architecture (DEC-111/112/113)
-
-**What was done ($0, no external calls; WF04–09 untouched):**
-- **WF10 v0.2** after operator tests v0.1 (Test 1: 82 rows → 21 profiles/9 angles/8 signals/1 plan/7 rules;
-  repeat +0 rules; Avito-фильтр PASS; **no-data тест нашёл баг** — generic план при rows=0):
-  **no-data guard** (только помеченный `no_data` план: пустые списки, `source_evidence=rows=0`,
-  `next_action=no_data; broaden filters or source scope`; result_summary начинается `no_data;`),
-  **entity resolution** company_name → profile_url → canonical listing id → profile_name → offer+platform
-  (fallback) — `(unnamed)`-дубли одного объявления схлопываются, **source_mix метка**
-  `mixed: live + historical/manual + web pipeline`. Сим: **31 PASS**; схемы 17/9/14/12/5 без изменений.
-- **WF11 BUILT** (`11_social_source_connector_foundation.json`, active=false, 17 nodes): первый non-Avito
-  источник = **Telegram public-channel preview** (DEC-109, матрица сравнения в STAGE_3_4 §5). Fixture-only:
-  `fixture_mode=true`, `live_mode=false`, **HTTP-нод нет** (live-ветка = guard с ошибкой); 6 fixture-постов
-  (3 competitor ads / 1 market signal / 1 hard-negative контроль / 1 дубль); пишет ТОЛЬКО agent_requests(21)/
-  raw_market_records(40)/market_record_registry(15); политика контактов соблюдена. Сим: **31 PASS**
-  (6 received / 1 hard-skip / 4 unique / 1 dup; raw +5 / registry +4; повтор unique=0; guard throws).
-- **Новые планы:** GOOGLE_SHEETS_VALIDATION_PLAN (DEC-111: вкладка validation_lists, 25 списков, dropdowns =
-  validation-правила на ручных полях, НЕ новые колонки), REPORTING_AND_TELEGRAM_SUMMARY_PLAN +
-  MARKET_INTELLIGENCE_REPORT_SCHEMA (20 cols, proposed) + TELEGRAM_CONTROL_AGENT_PLAN (DEC-112: **Claude — в
-  report/control-слое, НЕ в WF10**; поток WF10 tabs → Report Builder → optional Claude → reports tab →
-  Telegram digest → Control Kernel; Telegram = control/report интерфейс, не парсер).
-- **DEC-113:** MVP = connectors → raw → WF08 → WF10 → report/Telegram; Avito — первый стабильный live-источник,
-  не продукт.
-- Decisions: DEC-106…113. Docs: STAGE_3_4 (§5), SOCIAL_MATRIX, WF10 plan/schemas/RU, WF11 RU, TABLE_SCHEMA,
-  DECISIONS, ROADMAP, NEXT_ACTIONS, COSTS, CAPABILITIES, BACKLOG, AGENT_LOG, recent.
-
-**Resolution (2026-06-12, session 2):** WF10 v0.2 и WF11 операторские тесты пройдены; WF11 контакт-дефект
-исправлен в v0.1.1 (DEC-114); validation_lists применён оператором (26 списков, v1.1 — DEC-115).
-
----
-

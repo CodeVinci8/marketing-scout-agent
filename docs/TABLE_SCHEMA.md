@@ -467,3 +467,102 @@ personal data minimized; no memory may drive unauthorized outreach.
 **`memory_type` values:** `business_profile`, `stakeholder_preference`, `known_competitor`, `source_quality`,
 `lead_followup`, `campaign_insight`, `decision`, `run_summary`, `constraint`.
 **`status` values:** `active`, `archived`, `needs_review`.
+
+---
+
+## Live-Source & Intelligence MVP Layer — 3 tabs CREATED by operator (2026-06-12, DEC-124/126/129/130)
+
+> Sheets-safe rule (DEC-124): any value starting with `+` or `=` (e.g. `+7…` phones) is written with a
+> leading apostrophe by all workflows — otherwise Google Sheets (USER_ENTERED) parses it as a formula and
+> shows `#ERROR!`. The apostrophe is invisible in the cell.
+> `touchpoint_type` vocabulary extended: VK/social **comments** now use `public_comment`
+> (posts keep `competitor_content_post` / `forum_discussion`); WF13 stage label is
+> `stage_3_source_foundation_vk_public_discussion` (DEC-125).
+
+### E. `competitor_site_snapshots` — 22 columns (Stage 2 website reintegration, DEC-129; read by WF12, written by WF04 Phase B / manual backfill)
+
+| # | Column | Notes |
+|---|--------|-------|
+| 1 | `snapshot_id` | `site_snap_YYYYMMDD_HHmmss_<n>` (MSK) |
+| 2 | `created_at` | ISO 8601 MSK `+03:00` |
+| 3 | `run_id` | producing run (`wf04_…` or `manual_backfill_…`) |
+| 4 | `source_url` | analyzed page URL |
+| 5 | `domain` | normalized domain (no www, lowercase) — grouping key for "latest per domain" |
+| 6 | `company_name` | from page content, empty if not stated |
+| 7 | `page_type` | `landing` / `services` / `prices` / `about` / `contact` / `other` |
+| 8 | `title` | page title |
+| 9 | `offer_summary` | short extracted offer |
+| 10 | `prices_terms` | prices/commission/terms verbatim-ish |
+| 11 | `guarantees` | guarantees / "по договору" / refund claims |
+| 12 | `service_types` | comma list (credit_broker / mortgage_refinance / business_credit / …) |
+| 13 | `detected_pains` | pains the page targets |
+| 14 | `contact_public` | ONLY verbatim public contact from the page; Sheets-safe (DEC-124) |
+| 15 | `contact_channel` | DEC-114 category: phone/email/telegram/profile/form/unknown |
+| 16 | `cta_text` | main call-to-action text |
+| 17 | `content_hash` | hash of normalized page content — change detection |
+| 18 | `change_type` | `baseline` / `unchanged` / `changed` / `new_offer` / `price_change` |
+| 19 | `previous_snapshot_id` | FK → previous snapshot of the same domain, empty for baseline |
+| 20 | `source_confidence` | 0–100 (first-party website = high, 75–85 per sc_rule_02) |
+| 21 | `agent_request_id` | FK → agent_requests |
+| 22 | `notes` | free text |
+
+### F. `live_source_runs` — 23 columns (run observability ledger, DEC-126; written by WF11/WF12/WF13 automatically, WF15 manually for everything else)
+
+| # | Column | Notes |
+|---|--------|-------|
+| 1 | `run_id` | run id of the logged execution |
+| 2 | `created_at` | ISO 8601 MSK `+03:00` |
+| 3 | `workflow` | e.g. `WF13 - Public Discussion Connector (VK)` |
+| 4 | `source_family` | `classifieds` / `social_channel` / `public_discussion` / `web_competitor` / `report_layer` / `other` |
+| 5 | `platform` | avito / telegram / vk / sheets / … |
+| 6 | `mode` | `fixture` / `live` / `deterministic` / `llm_summary` / `blocked_by_guard` |
+| 7 | `approval_token_used` | `yes`/`no` — **never the token value itself** (WF15 validator rejects token values) |
+| 8 | `source_allowlist` | channels/groups/queries/domains used |
+| 9 | `max_items` | configured cap |
+| 10 | `items_received` | raw items in |
+| 11 | `items_relevant` | after validity + hard-negative filter |
+| 12 | `items_written_raw` | rows appended to raw_market_records (incl. duplicate audit) |
+| 13 | `items_unique` | new registry entries |
+| 14 | `items_duplicate` | duplicates (registry + in-batch) |
+| 15 | `hard_skipped` | hard-negative skips |
+| 16 | `external_calls` | HTTP/API calls made (0 in fixture/deterministic) |
+| 17 | `estimated_source_cost_usd` | scraping/API cost |
+| 18 | `llm_calls` | Claude calls |
+| 19 | `estimated_llm_cost_usd` | Claude cost |
+| 20 | `status` | `completed` / `failed` / `blocked` / `partial` |
+| 21 | `error_summary` | short error text when not completed |
+| 22 | `operator_next_action` | what to do next |
+| 23 | `notes` | free text |
+
+### G. `public_lead_signals` — 28 columns (Public Lead Signal Layer, DEC-130; written by WF14, read by WF12)
+
+| # | Column | Notes |
+|---|--------|-------|
+| 1 | `lead_signal_id` | `pls_YYYYMMDD_HHmmss_<n>` (MSK) |
+| 2 | `created_at` | ISO 8601 MSK `+03:00` |
+| 3 | `source_type` | social_comment / social_post / classified / … |
+| 4 | `platform` | vk / telegram / avito / … |
+| 5 | `source_url` | group/listing page |
+| 6 | `post_url` | exact public post/comment URL (evidence anchor + dedup key with text hash) |
+| 7 | `profile_url` | ONLY if public in source. **Evidence, NOT outreach permission** |
+| 8 | `profile_name` | public display name, if any |
+| 9 | `author_handle` | public handle, if any |
+| 10 | `public_identity_label` | `public_profile_visible` / `no_public_identity` |
+| 11 | `region` | region hint |
+| 12 | `service_need` | service hint (credit_after_refusals / mortgage_refinance / …) |
+| 13 | `text_evidence` | ≤300-char excerpt of the public text |
+| 14 | `pain_type` | comma list: `after_refusal` `bad_credit_history` `overdue_debt` `urgent_money_need` `prepayment_fear` `fraud_fear` `broker_price_question` `mortgage_refinance_need` `business_finance_need` |
+| 15 | `intent_type` | `question` / `objection` / `complaint` / `buying_intent` / `content_signal` |
+| 16 | `urgency_score` | 0–100 deterministic |
+| 17 | `intent_score` | 0–100 deterministic |
+| 18 | `objection_score` | 0–100 deterministic |
+| 19 | `contact_public` | verbatim public contact only; Sheets-safe (DEC-124) |
+| 20 | `contact_channel` | DEC-114 category |
+| 21 | `contact_use_policy` | `manual_review` (contact present) / `aggregate_only` (default) — never an outreach grant |
+| 22 | `recommended_action` | `manual_review` / `content_idea` / `monitor` — outreach values are forbidden |
+| 23 | `status` | `new` / `confirmed` / `dismissed` (manager edits) |
+| 24 | `source_confidence` | 0–100 |
+| 25 | `evidence_note` | matched keywords / hit counts |
+| 26 | `agent_request_id` | FK → agent_requests |
+| 27 | `run_id` | WF14 run id |
+| 28 | `notes` | includes `text_hash=` for dedup |
