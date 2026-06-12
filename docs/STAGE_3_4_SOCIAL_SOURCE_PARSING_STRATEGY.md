@@ -244,11 +244,14 @@ telegram, profile, form, unknown). Patched: handle → `contact_channel=telegram
 `contact_format=handle; contact_source_url=<post_url>; contact_use_policy=manual_review`. Fixture counts
 unchanged (patch simulation: 24 checks PASS).
 
-### 5.7 Live Telegram public-channel preview — v0.2 plan (PENDING, explicit approval required)
+### 5.7 Live Telegram public-channel preview — v0.2 GUARDED PATH BUILT (still inert; execution requires explicit approval)
 
-Live mode stays **not implemented**; WF11 carries inert placeholder config fields only
-(`live_transport='none_not_implemented'`, `live_channel_allowlist=[]`, `live_max_posts_per_channel=10`,
-`live_requires_operator_approval=true`) — the guard fires regardless of their values.
+**Update 2026-06-12 (DEC-120):** the guarded path now exists in WF11 but is inert by default —
+`LIVE Preview Approval Gate` throws unless `live_approval_token='I_APPROVE_LIVE_TELEGRAM_PREVIEW'` and a
+non-empty `live_channel_allowlist` (group/invite/private-style entries rejected); behind it sit a
+**DISABLED** HTTP placeholder (GET `https://t.me/s/<channel>`, no credentials) and an inert preview parser
+that throws without HTML. Going live = two deliberate operator actions (token + enabling the HTTP node).
+No live execution has occurred. Fixture counters unchanged.
 
 Hard boundaries (binding for the future build):
 - **Allowlist-only public channels**; transport reads **only** `https://t.me/s/<channel>` public preview pages.

@@ -4,6 +4,36 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-12 (session 3) — WF08 llm_enabled kill switch (DEC-119) · WF11 v0.2 live path (DEC-120) · WF13 VK foundation (DEC-121) · WF12 v0.2 (DEC-122) · Stage 3/4/5 defined (DEC-123)
+
+**What was done ($0, без внешних вызовов/Claude/live; WF09/WF10 не тронуты):**
+- **WF08 v10:** причина `primary_json` при handoff найдена (uncertain → Claude при llm_enrichment=false).
+  Добавлен **`llm_enabled=false`** master switch: uncertain → review_queue с
+  `parse_method=deterministic_uncertain_no_llm` ($0); throw-guard в Claude-ноде; zero-record диагностика
+  в summary. Avito-поведение без изменений. Сим PASS.
+- **WF11 v0.2:** охраняемый live-путь: гейт (token `I_APPROVE_LIVE_TELEGRAM_PREVIEW` + allowlist, отказ
+  группам/инвайтам) → ОТКЛЮЧЁННАЯ HTTP-нода (t.me/s preview) → инертный парсер (ошибка без HTML).
+  Fixture-счётчики не изменились (6/5/1/4/1; повтор 0/5). Live НЕ выполнялся.
+- **WF13 BUILT:** VK public groups/posts/comments foundation (выбор A: закрывает разрыв
+  audience_activity_signals). Fixture-first, без HTTP-нод, guard; 40/15/21 колонок; агрегаты авторов
+  только счётчиками по unique (3 актив. / 1 повторный); вопросы/возражения → review_queue. Сим PASS:
+  6/5/1/4/1, raw +5, registry +4, повтор 0/5.
+- **WF12 v0.2:** полный отчёт (executive_summary / competitor_snapshot / top_offers_and_prices /
+  market_angles+тренды / audience / content_plan / source_confidence / limitations+source_mix /
+  next_actions) + охраняемая ОТКЛЮЧЁННАЯ Claude-ветка (claude-sonnet-4-6 плейсхолдер, evidence-bound
+  промпт, llm_cost_usd по usage $3/$15 за MTok; merge бросает ошибку без ответа). Сим PASS (вкл. no_data,
+  cost=0.012 на 2000/400 токенов).
+- Docs: STAGE_3/4/5 (новые), WF13 RU (новый), патч-ноты WF08/11/12 RU, STAGE_3_4 §5.7, ROADMAP,
+  NEXT_ACTIONS, AGENT_CAPABILITIES, BACKLOG, DECISIONS DEC-119…123, AGENT_LOG.
+
+**Next operator action:** commit → re-import WF08 v10 (тест cost-control на первом id
+`wf11_req_20260612_033442` + нулевой прогон на duplicate id) → re-import WF11 v0.2 (fixture retest +
+gate-тест) → import WF13 (3 fixture-теста + handoff `platform=vk`) → re-import WF12 v0.2
+(детерминированный прогон + guard-тест) → WF10 → WF12 (тренды по 2 прогонам). Live/Claude/Telegram —
+каждое за отдельным явным одобрением.
+
+---
+
 ## Session: 2026-06-12 (session 2) — WF11 fixture PASS + патч контактов v0.1.1 (DEC-114) · validation_lists v1.1 (DEC-115) · live-preview план (DEC-116) · WF08 handoff диагностика (DEC-117) · WF12 Report Builder skeleton (DEC-118)
 
 **What was done ($0, без внешних вызовов и Claude; WF04–WF10 поведение не тронуто):**
@@ -70,21 +100,3 @@ Telegram delivery / Claude summary.
 
 ---
 
-## Session: 2026-06-11 (session 3) — STAGE 3.3 CLOSED (DEC-102) · WF09 v006 canonical URLs (DEC-103) · WF10 v0.1 BUILT (DEC-104) · backlog (DEC-105)
-
-**What was done (closure + URL fix + first aggregator; no external calls):**
-- **Stage 3.3 CLOSED / APPROVED (DEC-102):** live run #3 `avito_req_20260611_184324` — 10/10 structurally valid,
-  **7 false positives hard-skipped BEFORE raw/registry**, 3 relevant brokers (duplicate `4379480780` + unique
-  `8000151804`/`8011965808`), registry +2 exact. WF08 live handoff (filtered, deterministic_first):
-  **monitor_queue +2 / technical_errors=0 / Claude=0**, full ad-intel fields (terms «от 500 ₽»/«Цена договорная»,
-  strength 79, content_idea 45). All 10 closure criteria pass; Avito = первый стабильный live-источник.
-- **WF09 v006 (DEC-103):** root cause of the live `?context=` leak — `normUrl`/`canonUrl`/`slugText` used
-  `new URL()`, недоступный в sandbox Code-ноды n8n → переписаны на чистые regex/string. **Verified (12 checks
-  PASS).** **Watch item:** на следующем рутинном live-прогоне проверить отсутствие `?context=`.
-- **WF10 v0.1 BUILT (DEC-104, active=false, 22 nodes, $0, детерминированный):** monitor/content/review → окно
-  30 дней + фильтры → competitor_profiles (17) / market_angles (9) / audience_activity_signals (14, агрегаты) /
-  content_positioning_plan (12) / source_confidence_rules (5, seed-once) + 1 agent_requests. 19 checks PASS.
-- **New docs:** WF10_TABLE_SCHEMAS, FUTURE_CAPABILITIES_BACKLOG (DEC-105), N8N_WORKFLOW_10_RU; Stage 3.4
-  strategy polished. Decisions: DEC-102…105.
-
-**Resolution (2026-06-12):** WF10 операторские тесты пройдены, no-data баг найден и исправлен в v0.2 (DEC-106).

@@ -1,5 +1,15 @@
 # FUTURE_CAPABILITIES_BACKLOG.md — Strategic Capabilities Backlog
 
+> **Preservation note (2026-06-12, DEC-123):** all strategic ideas below remain canonical and are now
+> mapped onto stages: WF10 outputs (competitor_profiles, market_angles, audience_activity_signals,
+> content_positioning_plan, source_confidence_rules) = Stage 3 core; Report & Diagram Builder = Stage 4
+> (WF12 v0.2 built, DEC-122); Business Agent Control Kernel = Stage 5
+> (`STAGE_5_TELEGRAM_BUSINESS_AGENT_PLAN.md`). Niche Pack System, Market Graph Engine, Source Strategy &
+> Budget Planner, Contact/Manager Handoff Layer, Competitor Ad Intelligence stay in this backlog.
+> Binding invariants across all of them: public contact policy with evidence URLs, **no hidden contacts,
+> no private chats, no auto-outreach by default** (`CONTACT_AND_OUTREACH_POLICY.md`).
+
+
 **Status:** 📋 BACKLOG — ideas preserved so they are not lost; **nothing here is approved for build** unless its
 own entry says otherwise. Every item follows the project's gates: explicit operator approval, fixture-first,
 no external calls without per-service approval, contact policy binding.

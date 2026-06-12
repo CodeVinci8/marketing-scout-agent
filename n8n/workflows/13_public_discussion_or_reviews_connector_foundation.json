@@ -1,0 +1,459 @@
+{
+  "name": "13 - Public Discussion Connector Foundation (VK Public Groups)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## WF13 — Public Discussion Connector Foundation (VK, public groups/posts/comments) · v0.1 (DEC-121)\n\n**Назначение:** третий источник после Avito (WF09) и Telegram (WF11) — ПУБЛИЧНЫЕ обсуждения VK:\nпосты и комментарии групп из allowlist. Главная ценность — сигналы АУДИТОРИИ (вопросы, возражения,\nболи, buying intent) + агрегаты авторов (active/repeat author count) для WF10 audience_activity_signals,\nкоторые Avito/Telegram (конкурентная реклама) не покрывают.\n\n**Жёсткие правила:** fixture-first ($0, БЕЗ HTTP-нод); live_mode=false (guard бросает ошибку);\nтолько публичные группы/посты/комментарии — НИКАКИХ приватных чатов/сообщений, выгрузки участников,\nскрытых контактов, авто-аутрича (CONTACT_AND_OUTREACH_POLICY). Контакт пишется ТОЛЬКО если он дословно\nвиден в публичном тексте; profile_url автора — только если профиль публичный. Без Claude. Без\nавто-handoff в WF08. Пишет только: agent_requests / raw_market_records (40 колонок) /\nmarket_record_registry (15 колонок). Время MSK (+03:00). Дедуп и hard-negative фильтр — как в WF09/WF11.\n\nДок: docs/N8N_WORKFLOW_13_PUBLIC_DISCUSSION_OR_REVIEWS_CONNECTOR_RU.md",
+        "height": 520,
+        "width": 620
+      },
+      "id": "wf13-note-1",
+      "name": "Overview Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        -340
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Setup & Test (fixture)\n\n1. Вставить SPREADSHEET_ID в 4 Google Sheets ноды (Read registry + 3 Append).\n2. Запуск вручную (workflow остаётся active=false).\n3. Ожидаемые счётчики fixture-прогона #1: items_received=6, business_relevant=5, hard_skipped=1,\n   unique=4, duplicates=1 (in-batch дубль поста 201), raw +5, registry +4,\n   active_author_count=3, repeat_author_count=1 (Анна: 2 комментария), question_objection_unique=2.\n4. Повторный прогон: unique=0, duplicates=5, registry +0.\n5. Guard-тест: live_mode=true -> ошибка (live не реализован).\n6. Handoff в WF08 (после одобрения): первый wf13_req_* id, platform=vk, llm_enabled=false ($0):\n   ожидаются monitor_queue (конкурентный пост), review_queue (вопрос/возражение), content_queue (market signal).",
+        "height": 520,
+        "width": 620
+      },
+      "id": "wf13-note-2",
+      "name": "Setup and Test Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        220,
+        -340
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "wf13-start",
+      "name": "Manual Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// WF13 Public Discussion Connector Foundation config — VK PUBLIC groups/posts/comments (DEC-121).\n// Source decision (Stage 3.4 matrix order: Avito -> Telegram -> VK): VK public discussions fill the\n// audience_activity_signals gap (questions/objections/buying intent + author aggregates) that the two\n// competitor-ad-heavy sources (Avito, Telegram) do not cover. Fixture-first, $0, NO external calls,\n// no Claude, no auto-handoff to WF08. PUBLIC groups/posts/comments ONLY: no private chats/messages,\n// no member extraction, no hidden contacts, no auto-outreach (CONTACT_AND_OUTREACH_POLICY).\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nreturn [{ json: {\n  fixture_mode:true,\n  live_mode:false,\n  // --- live v0.2 PLACEHOLDERS: live fetch is NOT implemented (no HTTP node in this workflow).\n  // Enabling live requires explicit operator approval + transport decision (VK official API community/\n  // wall methods with an n8n-bound token, or an Apify VK actor) + cost estimate. Guard fires regardless.\n  live_transport:'none_not_implemented',\n  live_group_allowlist:[],\n  live_max_items_per_group:10,\n  live_requires_operator_approval:true,\n  platform:'vk',\n  source_type_post:'social_post',\n  source_type_comment:'social_comment',\n  requested_by:'operator',\n  request_type:'social_source_discovery',\n  region:'Москва/МО',\n  service_focus:'credit_broker',\n  group_allowlist:[\n    'kredity_msk_fixture',\n    'biznes_finansy_fixture',\n    'uslugi_msk_fixture'\n  ],\n  pipeline_limit:10,\n  approval_status_for_unique:'new',\n  write_duplicate_audit:true,\n  hard_skip_debug_audit:false,\n  duplicate_next_action:'monitor_duplicate',\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  agent_request_id:'wf13_req_'+stamp,\n  run_id:'wf13_'+stamp,\n  created_at:now\n}}];"
+      },
+      "id": "wf13-config",
+      "name": "Set Connector Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "wf13-if-fixture",
+              "leftValue": "={{ $json.fixture_mode }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "wf13-if",
+      "name": "IF fixture_mode?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        20,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fixture VK PUBLIC group posts/comments (what a guarded VK API/actor fetch would yield). $0, no network.\n// Group names carry _fixture suffix on purpose — NOT real groups. Mix models the audience-signal value of\n// VK (questions/objections from real users) + one competitor ad post, one weak market post, one\n// hard-negative control, one in-batch duplicate. author_profile_public marks whether the author profile\n// URL is public — profile_url is recorded ONLY when public; never reconstructed; NEVER used for outreach.\nconst items=[\n { group:'kredity_msk_fixture', group_title:'Кредиты Москва (fixture)', item_type:'post', item_id:'201', comment_id:'',\n   item_url:'https://vk.com/wall-111222_201', author_handle:'id_broker_msk_fixture', author_name:'Кредитный Брокер МСК (fixture)', author_profile_public:true,\n   published_at:'2026-06-11T12:10:00+03:00',\n   text:'Кредитный брокер: помощь в получении кредита после отказов, с плохой кредитной историей. Без предоплаты, оплата за результат. Москва и МО. Тел: +7 999 000-11-22' },\n { group:'kredity_msk_fixture', group_title:'Кредиты Москва (fixture)', item_type:'comment', item_id:'201', comment_id:'2011',\n   item_url:'https://vk.com/wall-111222_201?reply=2011', author_handle:'id_user_anna_fixture', author_name:'Анна (fixture)', author_profile_public:true,\n   published_at:'2026-06-11T13:45:00+03:00',\n   text:'Подскажите, кто реально брал кредит после отказов банков? Мне два банка отказали из-за просрочек, нужен совет — к кому обращаться и сколько это стоит?' },\n { group:'kredity_msk_fixture', group_title:'Кредиты Москва (fixture)', item_type:'comment', item_id:'201', comment_id:'2012',\n   item_url:'https://vk.com/wall-111222_201?reply=2012', author_handle:'id_user_anna_fixture', author_name:'Анна (fixture)', author_profile_public:true,\n   published_at:'2026-06-11T14:02:00+03:00',\n   text:'И ещё вопрос: все эти брокеры просят предоплату? Боюсь мошенников — слышала, берут деньги за кредит и пропадают.' },\n { group:'biznes_finansy_fixture', group_title:'Бизнес и финансы (fixture)', item_type:'post', item_id:'88', comment_id:'',\n   item_url:'https://vk.com/wall-333444_88', author_handle:'id_fin_editor_fixture', author_name:'Редакция (fixture)', author_profile_public:false,\n   published_at:'2026-06-10T09:30:00+03:00',\n   text:'Банки ужесточили скоринг: отказов по потребительским кредитам стало больше. Заёмщики ищут обходные пути и чаще обращаются к посредникам.' },\n { group:'uslugi_msk_fixture', group_title:'Услуги Москва (fixture)', item_type:'post', item_id:'55', comment_id:'',\n   item_url:'https://vk.com/wall-555666_55', author_handle:'id_reg_firm_fixture', author_name:'РегФирма (fixture)', author_profile_public:true,\n   published_at:'2026-06-11T10:00:00+03:00',\n   text:'Юридический адрес для ООО от собственника, регистрация ООО и ИП под ключ, бухгалтерское сопровождение.' },\n { group:'kredity_msk_fixture', group_title:'Кредиты Москва (fixture)', item_type:'post', item_id:'201', comment_id:'',\n   item_url:'https://vk.com/wall-111222_201?w=wall-111222_201', author_handle:'id_broker_msk_fixture', author_name:'Кредитный Брокер МСК (fixture)', author_profile_public:true,\n   published_at:'2026-06-11T12:10:00+03:00',\n   text:'Кредитный брокер: помощь в получении кредита после отказов, с плохой кредитной историей. Без предоплаты, оплата за результат. Москва и МО. Тел: +7 999 000-11-22' }\n];\nreturn items.map(p=>({json:p}));"
+      },
+      "id": "wf13-fixture",
+      "name": "Build Fixture VK Group Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// LIVE MODE GUARD — live VK fetch is NOT implemented in the WF13 foundation (DEC-121).\n// This workflow contains NO HTTP node. Enabling live requires, in order: explicit operator approval,\n// a chosen transport (VK official API community/wall/comments methods with an n8n-bound token, or an\n// Apify VK actor), a bound credential, and a recorded cost estimate.\n// PUBLIC groups/posts/comments only — no private chats/messages, no member extraction, no hidden\n// contacts, no auto-outreach. The live_* config fields are PLACEHOLDERS; this guard fires regardless.\nthrow new Error('WF13 live_mode is not implemented in the foundation build. Fixture mode only (fixture_mode=true). Live VK public group/post/comment fetch requires explicit operator approval + transport + credential (see docs/N8N_WORKFLOW_13_PUBLIC_DISCUSSION_OR_REVIEWS_CONNECTOR_RU.md).');"
+      },
+      "id": "wf13-guard",
+      "name": "LIVE Mode Guard (not implemented)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize VK public posts/comments into the WF09/WF11-compatible record shape. Deterministic, $0.\n// Audience focus (DEC-121): questions/objections from public discussions become question_objection\n// records feeding WF08 -> WF10 audience_activity_signals. Contact policy (DEC-097/098/114): contact_public\n// ONLY when visible verbatim in the public text; author profile_url ONLY when the profile is public;\n// nothing reconstructed; no outreach — default manual_review.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nfunction hashText(s){s=str(s);let h=5381;for(let i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))>>>0;}return ('00000000'+h.toString(16)).slice(-8);}\nfunction canonUrl(u){u=str(u);return u.replace(/[?#].*$/,'').replace(/\\/+$/,'');}\nconst cfg=$('Set Connector Config').first().json;\nconst items=$input.all().map(i=>i.json);\n// niche vocabulary v0.1 hardcoded (credit_brokerage) — migrates to niche packs (DEC-100)\nconst STRONG=['кредитный брокер','ипотечный брокер','помощь в получении кредита','помощь с кредитом','кредит после отказов','после отказов','плохой кредитной историей','плохая кредитная история','кредит для бизнеса','оборотные','тендерные займ','банковские гарантии','рефинансирование','снижение ставки','одобрение кредита','подбор банка'];\nconst WEAK=['кредит','займ','банк','отказ','скоринг','ставк','заёмщик','ипотек','финанс','брокер','предоплат','просрочк'];\nconst HARD_NEG=['юридический адрес','регистрация ооо','регистрация ип','бухгалтер','эквайринг','pos-терминал','касса','печать и штамп','эцп','аренда офиса','коворкинг'];\nconst QUESTION=['подскажите','посоветуйте','кто брал','кто обращался','к кому обращаться','сколько это стоит','как получить','что делать','?'];\nconst OBJECTION=['мошенник','обман','кидал','предоплату и пропада','не верю','развод','боюсь'];\nconst KW=[['кредитный брокер','кредитный брокер'],['после отказов','после отказов'],['плох','плохая кредитная история'],['без предоплаты','без предоплаты'],['оплата за результат','оплата за результат'],['для бизнеса','бизнес-кредит'],['рефинансир','рефинансирование'],['просрочк','просрочки'],['предоплат','предоплата (доверие)'],['мошенник','недоверие к брокерам'],['отказ','отказы банков']];\nconst out=[];\nfor(const p of items){\n  const isComment=(low(p.item_type)==='comment');\n  const text=str(p.text);\n  const blob=low(text)+' '+low(p.group_title);\n  const valid=!!(str(p.group)&&str(p.item_id)&&text.length>=30);\n  const strongHit=STRONG.filter(t=>blob.indexOf(t)>=0);\n  const weakHit=WEAK.filter(t=>blob.indexOf(t)>=0);\n  const negHit=HARD_NEG.filter(t=>blob.indexOf(t)>=0);\n  const qHit=QUESTION.filter(t=>blob.indexOf(t)>=0);\n  const objHit=OBJECTION.filter(t=>blob.indexOf(t)>=0);\n  let record_type_hint='irrelevant';let touchpoint_type='irrelevant_source';let predicted_entity_type='irrelevant';let predicted_route='skipped_log';\n  let lead_intent='none';let confidence=10;let hard_skip=false;let relevance_reason='';\n  const looksAd=/тел[:.]|\\+7|без предоплаты|оплата за результат|под ключ/i.test(text)&&!isComment;\n  if(!valid){ relevance_reason='invalid: missing group/item_id or text<30'; }\n  else if(negHit.length&&!strongHit.length){ hard_skip=true; relevance_reason='hard negative: '+negHit.join(', '); }\n  else if(strongHit.length&&looksAd){ record_type_hint='competitor_activity';touchpoint_type='competitor_content_post';predicted_entity_type='competitor';predicted_route='monitor_queue';confidence=70;relevance_reason='strong competitor ad: '+strongHit.slice(0,4).join(', '); }\n  else if((qHit.length||objHit.length)&&(strongHit.length||weakHit.length>=2)){ record_type_hint='question_objection';touchpoint_type='forum_discussion';predicted_entity_type='lead_signal';predicted_route='review_queue';lead_intent=objHit.length&&!qHit.length?'low':'medium';confidence=objHit.length&&!qHit.length?50:60;relevance_reason=(qHit.length?('question: '+qHit.slice(0,3).join(', ')):'')+(objHit.length?((qHit.length?'; ':'')+'objection: '+objHit.slice(0,3).join(', ')):''); }\n  else if(strongHit.length){ record_type_hint='market_signal';predicted_entity_type='market_signal';touchpoint_type='forum_discussion';predicted_route='content_queue';confidence=50;relevance_reason='strong niche terms, no ad/question shape: '+strongHit.slice(0,4).join(', '); }\n  else if(weakHit.length>=2){ record_type_hint='market_signal';predicted_entity_type='market_signal';touchpoint_type='forum_discussion';predicted_route='content_queue';confidence=45;relevance_reason='weak finance: '+weakHit.slice(0,4).join(', '); }\n  else { hard_skip=true; relevance_reason='no niche evidence'; }\n  // public contact: verbatim phone/@handle in the PUBLIC text only — never reconstructed (DEC-114 channel category).\n  let contact='';let contactChannel='';let contactFormat='';\n  const ph=text.match(/(?:\\+7|8)[\\s\\-(]*\\d{3}[\\s\\-)]*\\d{3}[\\s\\-]*\\d{2}[\\s\\-]*\\d{2}/);\n  const h=text.match(/@[a-zA-Z0-9_]{5,32}/);\n  if(ph){contact=ph[0];contactChannel='phone';contactFormat='phone';}\n  else if(h){contact=h[0];contactChannel='telegram';contactFormat='handle';}\n  const kws=[];const seen={};for(const k of KW){if(blob.indexOf(k[0])>=0&&!seen[k[1]]){seen[k[1]]=1;kws.push(k[1]);}}\n  let service='unknown';\n  if(blob.indexOf('ипотек')>=0||blob.indexOf('рефинансир')>=0)service='mortgage_refinance';\n  else if(blob.indexOf('для бизнеса')>=0||blob.indexOf('оборотные')>=0)service='business_credit';\n  else if(blob.indexOf('после отказов')>=0||blob.indexOf('отказ')>=0)service='credit_after_refusals';\n  if(blob.indexOf('кредитный брокер')>=0)service='credit_broker';\n  const canon=canonUrl(p.item_url)+(isComment?('#reply'+str(p.comment_id)):'');\n  const publicProfile=(p.author_profile_public===true);\n  out.push({ json: {\n    is_valid_listing:valid,\n    hard_skip:hard_skip,\n    relevance_reason:relevance_reason,\n    source_type:isComment?(str(cfg.source_type_comment)||'social_comment'):(str(cfg.source_type_post)||'social_post'),\n    platform:str(cfg.platform)||'vk',\n    source_url:'https://vk.com/'+str(p.group),\n    post_url:canon,\n    profile_url:publicProfile?('https://vk.com/'+str(p.author_handle)):'',\n    profile_name:str(p.author_name),\n    author_handle:str(p.author_handle),\n    author_key:str(p.author_handle)||str(p.author_name),\n    published_at:str(p.published_at),\n    region_hint:(blob.indexOf('москв')>=0||blob.indexOf(' мо')>=0?'Москва/МО':''),\n    service_hint:service,\n    query:'allowlist:'+str(p.group),\n    text_context:isComment?('Обсуждение в публичной группе VK '+str(p.group_title)+', пост '+canonUrl(p.item_url)):cut(text,3500),\n    comment_text:isComment?cut(text,3500):'',\n    contact_public:contact,\n    contact_channel:contactChannel,\n    contact_format:contactFormat,\n    dedup_key:'vk::'+(isComment?'social_comment':'social_post')+'::'+canon,\n    text_hash:hashText(low(text)),\n    record_type_hint:record_type_hint,\n    touchpoint_type:touchpoint_type,\n    lead_intent_hint:lead_intent,\n    urgency_hint:'none',\n    interest_topic:(record_type_hint==='competitor_activity')?'competitor VK ad copy':(record_type_hint==='question_objection'?'audience pain / question':(record_type_hint==='market_signal'?'market context':'')),\n    probable_need:(record_type_hint==='question_objection'&&qHit.length)?'помощь с кредитом после отказов':'',\n    competitor_related:(record_type_hint==='competitor_activity'),\n    competitor_name:(record_type_hint==='competitor_activity')?str(p.author_name):'',\n    semantic_keywords:kws.join(', '),\n    ad_channel_hint:'vk',\n    confidence_score:confidence,\n    lead_temperature:(record_type_hint==='question_objection'&&lead_intent==='medium')?'warm':'none',\n    next_action:(record_type_hint==='question_objection')?'investigate':'monitor',\n    responsible:'operator',\n    estimated_analysis_cost_usd:0,\n    manager_note:'',\n    predicted_route:predicted_route,\n    predicted_entity_type:predicted_entity_type,\n    contact_evidence_url:contact?canon:'',\n    notes:''\n  }});\n}\nreturn out;"
+      },
+      "id": "wf13-normalize",
+      "name": "Normalize VK Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "market_record_registry",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "wf13-read-reg",
+      "name": "Read market_record_registry",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        680,
+        440
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dedup vs market_record_registry (dedup_key) + within batch. Mirrors WF09/WF11: invalid and\n// hard-skipped items never register, never count unique, never consume the pipeline cap.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Connector Config').first().json;\nconst approvalUnique=str(cfg.approval_status_for_unique)||'new';\nconst dupNext=str(cfg.duplicate_next_action)||'monitor_duplicate';\nconst pipelineLimit=Number(cfg.pipeline_limit)||10;\nconst recs=$('Normalize VK Items').all().map(i=>i.json);\nlet reg=[];\ntry{reg=$('Read market_record_registry').all().map(i=>i.json).filter(Boolean);}catch(e){reg=[];}\nconst regSet=new Set(reg.map(r=>str(r&&r.dedup_key)).filter(Boolean));\nconst seen=new Set();\nconst out=[];\nlet acceptedCount=0;\nfor(const r of recs){\n  if(r.is_valid_listing===false){ out.push({ json: Object.assign({}, r, { dedup_status:'invalid', approval_status:'invalid', next_action:'ignore' }) }); continue; }\n  if(r.hard_skip===true){ out.push({ json: Object.assign({}, r, { dedup_status:'hard_skipped', approval_status:'skipped_irrelevant', next_action:'ignore' }) }); continue; }\n  if(acceptedCount>=pipelineLimit){ out.push({ json: Object.assign({}, r, { dedup_status:'over_pipeline_limit', approval_status:'skipped', next_action:'ignore' }) }); continue; }\n  acceptedCount++;\n  const key=str(r.dedup_key);\n  let dedup_status='unique';let approval_status=approvalUnique;let next_action=str(r.next_action);\n  if(key&&regSet.has(key)){ dedup_status='duplicate_in_registry';approval_status='duplicate';next_action=dupNext; }\n  else if(key&&seen.has(key)){ dedup_status='duplicate_in_batch';approval_status='duplicate';next_action=dupNext; }\n  else { dedup_status='unique';if(key)seen.add(key); }\n  out.push({ json: Object.assign({}, r, { dedup_status:dedup_status, approval_status:approval_status, next_action:next_action }) });\n}\nreturn out;"
+      },
+      "id": "wf13-dedup",
+      "name": "Deduplicate Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build raw_market_records rows (exactly 40 columns, matching WF07/WF09/WF11 schema). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst cfg=$('Set Connector Config').first().json;\nconst reqId=str(cfg.agent_request_id);\nconst created=str(cfg.created_at);\nconst stamp=str(cfg.run_id).replace(/^wf13_/,'')||moscowStamp();\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst hardDebug=(cfg.hard_skip_debug_audit===true||str(cfg.hard_skip_debug_audit).toLowerCase()==='true');\nconst recs=$('Deduplicate Items').all().map(i=>i.json);\nconst out=[];let idx=0;\nfor(const r of recs){\n  idx++;\n  const ds0=str(r.dedup_status);\n  if(ds0==='invalid'||ds0==='over_pipeline_limit')continue;\n  if(ds0==='hard_skipped'&&!hardDebug)continue;\n  if(!writeDupAudit && ds0!=='unique')continue;\n  let notes='stage_3_5_vk_public_discussion_connector_foundation';\n  if(str(r.contact_public)){ notes+='; contact_format='+(str(r.contact_format)||'unknown')+'; contact_source_url='+str(r.contact_evidence_url)+'; contact_use_policy=manual_review (CONTACT_AND_OUTREACH_POLICY)'; }\n  out.push({ json: {\n    record_id:'wf13_rec_'+stamp+'_'+idx,\n    agent_request_id:reqId,\n    created_at:created,\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    profile_name:str(r.profile_name),\n    author_handle:str(r.author_handle),\n    published_at:str(r.published_at),\n    region_hint:str(r.region_hint),\n    service_hint:str(r.service_hint),\n    query:str(r.query),\n    text_context:str(r.text_context),\n    comment_text:str(r.comment_text),\n    contact_public:str(r.contact_public),\n    contact_channel:str(r.contact_channel),\n    dedup_key:str(r.dedup_key),\n    record_type_hint:str(r.record_type_hint),\n    touchpoint_type:str(r.touchpoint_type),\n    lead_intent_hint:str(r.lead_intent_hint),\n    urgency_hint:str(r.urgency_hint),\n    interest_topic:str(r.interest_topic),\n    probable_need:str(r.probable_need),\n    competitor_related:(r.competitor_related===true||str(r.competitor_related).toLowerCase()==='true'),\n    competitor_name:str(r.competitor_name),\n    semantic_keywords:str(r.semantic_keywords),\n    ad_channel_hint:str(r.ad_channel_hint),\n    confidence_score:Number(r.confidence_score)||0,\n    lead_temperature:str(r.lead_temperature),\n    next_action:str(r.next_action),\n    responsible:str(r.responsible),\n    dedup_status:str(r.dedup_status),\n    approval_status:str(r.approval_status),\n    approved_by:'',\n    approved_at:'',\n    estimated_analysis_cost_usd:Number(r.estimated_analysis_cost_usd)||0,\n    manager_note:str(r.manager_note),\n    notes:notes\n  }});\n}\nreturn out;"
+      },
+      "id": "wf13-raw",
+      "name": "Build raw_market_records Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "raw_market_records",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "wf13-app-raw",
+      "name": "Append raw_market_records",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build market_record_registry rows for UNIQUE records only (exactly 15 columns). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nconst now=moscowIsoNow();\nconst recs=$('Deduplicate Items').all().map(i=>i.json);\nconst out=[];\nfor(const r of recs){\n  if(str(r.dedup_status)!=='unique')continue;\n  out.push({ json: {\n    dedup_key:str(r.dedup_key),\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    author_handle:str(r.author_handle),\n    text_hash:str(r.text_hash),\n    first_seen_at:now,\n    last_seen_at:now,\n    last_route:str(r.predicted_route),\n    last_processing_status:'raw_collected',\n    last_entity_type:str(r.predicted_entity_type),\n    agent_request_id:str($('Set Connector Config').first().json.agent_request_id),\n    note:'vk_public_discussion_connector_foundation_stage_3_5'\n  }});\n}\nreturn out;"
+      },
+      "id": "wf13-regrows",
+      "name": "Build market_record_registry Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "market_record_registry",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "wf13-app-reg",
+      "name": "Append market_record_registry",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1780,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// One agent_requests row (exactly 21 columns). status=completed. No external calls.\n// Audience aggregates (DEC-121, aggregate-only): active_author_count / repeat_author_count computed over\n// business-relevant items — counts only, never a member list, never outreach targets.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nconst cfg=$('Set Connector Config').first().json;\nconst recs=$('Deduplicate Items').all().map(i=>i.json);\nconst items_received=recs.length;\nconst invalid_items=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst structurally_valid_items=items_received-invalid_items;\nconst hard_skipped_items=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst business_relevant_items=structurally_valid_items-hard_skipped_items;\nconst over_pipeline_limit=recs.filter(r=>str(r.dedup_status)==='over_pipeline_limit').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst authorCounts={};\n// authors counted over UNIQUE items only — duplicates of the same post must not inflate repeat counts\nfor(const r of recs){ if(str(r.dedup_status)!=='unique')continue; const a=str(r.author_key); if(a)authorCounts[a]=(authorCounts[a]||0)+1; }\nconst active_author_count=Object.keys(authorCounts).length;\nconst repeat_author_count=Object.keys(authorCounts).filter(a=>authorCounts[a]>=2).length;\nconst question_items=recs.filter(r=>str(r.record_type_hint)==='question_objection'&&str(r.dedup_status)==='unique').length;\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\nconst groups=Array.isArray(cfg.group_allowlist)?cfg.group_allowlist.join(', '):'';\nlet notes='WF13 foundation (DEC-121): VK PUBLIC group post/comment connector, fixture-first, no external calls, no private chats/messages, no member extraction. No auto-handoff to WF08. Source: '+(fixtureMode?'fixture':'live')+'. Audience aggregates are counts only (active_author_count='+active_author_count+', repeat_author_count='+repeat_author_count+') — no member lists, no outreach. Contact policy: public contacts verbatim from text only, author profile URL only if public, default manual_review.';\nif(hard_skipped_items>0){\n  const firstHard=recs.filter(r=>str(r.dedup_status)==='hard_skipped')[0];\n  notes+=' hard_skipped_items='+hard_skipped_items+'.';\n  if(firstHard){ notes+=' first_hard_skip: '+cut(str(firstHard.post_url),80)+' ['+cut(str(firstHard.relevance_reason),120)+']'; }\n}\nreturn [{ json: {\n  agent_request_id:str(cfg.agent_request_id),\n  created_at:str(cfg.created_at),\n  requested_by:str(cfg.requested_by)||'operator',\n  request_text:'VK public group post/comment discovery (allowlist): '+groups,\n  request_type:str(cfg.request_type)||'social_source_discovery',\n  source_scope:'social_public',\n  platforms:'vk',\n  query:'allowlist: '+groups,\n  region:str(cfg.region)||'Москва/МО',\n  service_focus:str(cfg.service_focus)||'credit_broker',\n  requested_limit:Number(cfg.pipeline_limit)||10,\n  status:'completed',\n  plan_summary:'WF13 VK public discussion connector ('+(fixtureMode?'fixture mode':'live mode')+') -> raw_market_records + market_record_registry for the Touchpoint Analyzer (Workflow 08). Audience-signal source: questions/objections feed WF10 audience_activity_signals. One source at a time (DEC-096).',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:0,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:'items_received='+items_received+'; structurally_valid_items='+structurally_valid_items+'; invalid_items='+invalid_items+'; business_relevant_items='+business_relevant_items+'; hard_skipped_items='+hard_skipped_items+'; unique='+unique+'; duplicates='+duplicate+'; over_pipeline_limit='+over_pipeline_limit+'; question_objection_unique='+question_items+'; active_author_count='+active_author_count+'; repeat_author_count='+repeat_author_count+'.',\n  next_action:(unique>0?'Inspect raw_market_records, then run Workflow 08 manually with agent_request_id_filter (llm_enabled=false, $0). No auto-handoff, no outreach (DEC-098).':'No unique business-relevant items: review fixtures/allowlist; do NOT run Workflow 08.'),\n  notes:notes\n}}];"
+      },
+      "id": "wf13-ar",
+      "name": "Build agent_requests Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "agent_requests",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "wf13-app-ar",
+      "name": "Append agent_requests",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1780,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final run summary. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Connector Config').first().json;\nconst recs=$('Deduplicate Items').all().map(i=>i.json);\nconst items_received=recs.length;\nconst invalid_items=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst structurally_valid_items=items_received-invalid_items;\nconst hard_skipped_items=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst business_relevant_items=structurally_valid_items-hard_skipped_items;\nconst over_pipeline_limit=recs.filter(r=>str(r.dedup_status)==='over_pipeline_limit').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst rawWritten=writeDupAudit?(unique+duplicate):unique;\nconst record_type_counts={};const authorCounts={};\nfor(const r of recs){\n  if(['invalid','over_pipeline_limit','hard_skipped'].indexOf(str(r.dedup_status))>=0)continue;\n  const t=str(r.record_type_hint)||'unknown';record_type_counts[t]=(record_type_counts[t]||0)+1;\n  // authors counted over UNIQUE items only — duplicates must not inflate repeat counts\n  if(str(r.dedup_status)!=='unique')continue;\n  const a=str(r.author_key);if(a)authorCounts[a]=(authorCounts[a]||0)+1;\n}\nreturn [{ json: {\n  workflow:'13 - Public Discussion Connector Foundation (VK Public Groups/Posts/Comments)',\n  agent_request_id:str(cfg.agent_request_id),\n  run_id:str(cfg.run_id),\n  fixture_mode:(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true'),\n  live_mode:(cfg.live_mode===true||str(cfg.live_mode).toLowerCase()==='true'),\n  items_received:items_received,\n  structurally_valid_items:structurally_valid_items,\n  invalid_items:invalid_items,\n  business_relevant_items:business_relevant_items,\n  hard_skipped_items:hard_skipped_items,\n  over_pipeline_limit:over_pipeline_limit,\n  unique_count:unique,\n  duplicate_count:duplicate,\n  raw_market_records_written:rawWritten,\n  registry_rows_written:unique,\n  record_type_counts:record_type_counts,\n  active_author_count:Object.keys(authorCounts).length,\n  repeat_author_count:Object.keys(authorCounts).filter(a=>authorCounts[a]>=2).length,\n  source_cost_usd:0,\n  next_action:(unique>0?'Inspect raw_market_records, then run Workflow 08 (Touchpoint Analyzer) manually with agent_request_id_filter (llm_enabled=false, $0). No auto-handoff, no outreach.':'No unique business-relevant items: review fixtures/allowlist; do NOT run Workflow 08.')\n}}];"
+      },
+      "id": "wf13-final",
+      "name": "Final Summary Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Set Connector Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Connector Config": {
+      "main": [
+        [
+          {
+            "node": "IF fixture_mode?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF fixture_mode?": {
+      "main": [
+        [
+          {
+            "node": "Build Fixture VK Group Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "LIVE Mode Guard (not implemented)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Fixture VK Group Items": {
+      "main": [
+        [
+          {
+            "node": "Normalize VK Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize VK Items": {
+      "main": [
+        [
+          {
+            "node": "Read market_record_registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read market_record_registry": {
+      "main": [
+        [
+          {
+            "node": "Deduplicate Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicate Items": {
+      "main": [
+        [
+          {
+            "node": "Build raw_market_records Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build raw_market_records Rows": {
+      "main": [
+        [
+          {
+            "node": "Append raw_market_records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append raw_market_records": {
+      "main": [
+        [
+          {
+            "node": "Build market_record_registry Rows",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build agent_requests Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build market_record_registry Rows": {
+      "main": [
+        [
+          {
+            "node": "Append market_record_registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build agent_requests Row": {
+      "main": [
+        [
+          {
+            "node": "Append agent_requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append agent_requests": {
+      "main": [
+        [
+          {
+            "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

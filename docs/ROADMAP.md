@@ -5,6 +5,24 @@
 
 ---
 
+## Stage 3 / 4 / 5 — Market Intelligence MVP (canonical definitions, 2026-06-12, DEC-123)
+
+The MVP is **not Avito-only output** (DEC-113). Canonical pipeline:
+**source connectors → raw_market_records → WF08 analyzer → WF10 aggregator → WF12 report/Claude layer → Stage 5 Telegram Business Agent.**
+
+- **Stage 3 — Source & Intelligence Foundation** (`docs/STAGE_3_SOURCE_AND_INTELLIGENCE_FOUNDATION.md`):
+  connectors WF09 (Avito ✅ live), WF11 (Telegram ✅ fixture + guarded inert live path, DEC-120),
+  WF13 (VK public discussions 🔧 built, DEC-121); WF08 with `llm_enabled=false` cost-control (DEC-119);
+  WF10 deterministic fact core. NOT an infinite parser collection.
+- **Stage 4 — Report & Claude Layer** (`docs/STAGE_4_REPORT_AND_CLAUDE_LAYER.md`): WF12 v0.2
+  (full deterministic report sections, DEC-122) → `market_intelligence_reports`; optional gated Claude
+  summary (claude-sonnet-4-6, cost-tracked, disabled by default); report quality checks.
+- **Stage 5 — Telegram Business Agent** (`docs/STAGE_5_TELEGRAM_BUSINESS_AGENT_PLAN.md`): commands →
+  agent_requests → approval gates → workflow selection → report delivery + Sheets links; future niche
+  selection; **no parser logic inside Telegram** (DEC-067).
+
+---
+
 ## Stage 1 — Marketing Scout v0.1 (Current)
 
 **Status:** In progress
