@@ -1,12 +1,14 @@
 # STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md — Social Source Parsing Strategy
 
-**Status:** 🔧 STRATEGY + IMPLEMENTATION FOUNDATION — §1–4 remain strategy; **§5 (2026-06-12, DEC-109/110)
-selects the first non-Avito source and documents the built WF11 foundation** (`active=false`, fixture-only,
-no external call). No live API call, credential, or actor run is authorized by this document.
+**Status:** ✅ **FOUNDATION WORKING IN FIXTURE MODE — WF11 operator fixture tests PASS (2026-06-12, §5.6).**
+§1–4 remain strategy; §5 documents the built WF11 foundation (`active=false`, fixture-only, no external call);
+§5.7 is the **live Telegram public-channel preview plan (v0.2) — pending, requires explicit operator
+approval**. No live API call, credential, or actor run is authorized by this document.
 **Stage:** 3.4 of the Business Scout Agent · **Date:** 2026-06-11, updated 2026-06-12
 **Decisions:** DEC-096 (one-source-at-a-time connector pattern; do NOT build all social parsers at once),
 DEC-109 (first non-Avito connector = Telegram public-channel preview), DEC-110 (WF11 foundation built,
-fixture-first, live mode guarded/not implemented).
+fixture-first, live mode guarded/not implemented), DEC-114 (contact_channel is a channel category),
+DEC-116 (WF11 fixture PASS; live v0.2 plan gated on explicit approval).
 **Related:** `docs/SOCIAL_CLASSIFIED_SOURCE_MATRIX.md` (Stage 3.0 evaluation), `docs/CONTACT_AND_OUTREACH_POLICY.md`,
 `docs/WF10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_PLAN.md`, `docs/NICHE_PACK_SYSTEM_PLAN.md`,
 `docs/COMPETITOR_AD_INTELLIGENCE_PLAN.md`.
@@ -219,8 +221,44 @@ competitor-side and benefits from WF10 maturity), Dzen #5, Instagram deferred (#
 
 ### 5.5 Next steps for this connector (in order, each gated)
 
-1. Operator fixture test 1 + repeat test (expected counts in the RU guide) — $0.
-2. WF08 manual handoff on the fixture run (`deterministic_first`, Claude=0) — verify routing.
-3. **Only after explicit approval:** live preview transport patch (real `t.me/s/` markup fixtures first,
-   then 1–2 operator-listed real channels, ≤20 posts, cost recorded).
+1. ✅ Operator fixture test 1 + repeat test — PASS (§5.6), $0.
+2. WF08 manual handoff on the fixture **first-run** request id (`deterministic_first`, Claude=0) — verify
+   routing. Use `wf11_req_20260612_033442` — NOT the duplicate-run id (see the RU guides for the 0-record
+   diagnostic).
+3. **Only after explicit approval:** live preview transport patch per §5.7 (real `t.me/s/` markup fixtures
+   first, then 1–2 operator-listed real channels, ≤10 posts per channel, cost recorded).
 4. Stabilize on live data before starting VK (#3) — one source at a time (DEC-096).
+
+### 5.6 Operator fixture test results (2026-06-12) — ALL PASS, $0
+
+| Test | Run | Result |
+|------|-----|--------|
+| 1 — first fixture run | `wf11_req_20260612_033442` | posts_received=6, structurally_valid=6, invalid=0, business_relevant=5, hard_skipped=1, unique=4, duplicates=1, over_pipeline_limit=0 → raw +5 / registry +4 / agent_requests +1. **PASS** |
+| 2 — repeat run | `wf11_req_20260612_033756` | unique=0, duplicates=5, registry +0, duplicate-audit rows written to raw. **PASS** |
+| 3 — live guard | `fixture_mode=false` | correct stop on `LIVE Mode Guard` ("WF11 live_mode is not implemented…"); no external calls. **PASS** |
+
+No external calls, no Claude calls in any test. **Stage 3.4 foundation is working in fixture mode.**
+One defect found and fixed post-test (**v0.1.1, DEC-114**): Telegram handle contacts were written as
+`contact_channel=handle` — wrong, because `contact_channel` is a channel *category* (allowed: phone, email,
+telegram, profile, form, unknown). Patched: handle → `contact_channel=telegram` + notes carry
+`contact_format=handle; contact_source_url=<post_url>; contact_use_policy=manual_review`. Fixture counts
+unchanged (patch simulation: 24 checks PASS).
+
+### 5.7 Live Telegram public-channel preview — v0.2 plan (PENDING, explicit approval required)
+
+Live mode stays **not implemented**; WF11 carries inert placeholder config fields only
+(`live_transport='none_not_implemented'`, `live_channel_allowlist=[]`, `live_max_posts_per_channel=10`,
+`live_requires_operator_approval=true`) — the guard fires regardless of their values.
+
+Hard boundaries (binding for the future build):
+- **Allowlist-only public channels**; transport reads **only** `https://t.me/s/<channel>` public preview pages.
+- **No** groups, private chats, MTProto/client sessions, login/session scraping, member extraction,
+  hidden contacts, or auto-outreach — ever (DEC-097/098 binding).
+- `max_posts` default 10 per channel; `live_mode=false` by default; ≤2 channels for the first smoke.
+- External transport (Firecrawl preferred — already in stack — or plain HTTP GET) requires **explicit operator
+  approval**; credential lives only in n8n; cost recorded in `COSTS_AND_LIMITS.md` + `agent_requests`.
+- Contacts only when verbatim in public post text (DEC-114 normalization applies).
+- Same pipeline, no shortcuts: WF11 → agent_requests / raw_market_records / market_record_registry → WF08 →
+  WF10 → report.
+- Preview limitations honestly recorded: recent posts only, no comments, no audience authors.
+- Build order: DOM-parser patch tested on real `t.me/s/` markup **fixtures** first → approval → live smoke.

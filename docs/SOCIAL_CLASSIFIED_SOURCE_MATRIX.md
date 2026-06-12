@@ -36,6 +36,14 @@ external API call, no credential, no actor run.
 > the MTProto/client route (which stays a deferred, high-risk last resort behind a separate risk review).
 > See `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` §5 and
 > `docs/N8N_WORKFLOW_11_SOCIAL_SOURCE_CONNECTOR_FOUNDATION_RU.md`.
+>
+> **Stage 3.4 step 2 FIXTURE PASS (2026-06-12, DEC-114/116):** WF11 operator fixture tests all passed
+> (Test 1: 6 posts → 5 relevant / 1 hard-skip / 4 unique / 1 duplicate; Test 2 repeat: unique=0; Test 3:
+> live guard stops correctly; $0, no external/Claude calls). Contact normalization patched (v0.1.1, DEC-114):
+> Telegram handles → `contact_channel=telegram` (category), `contact_format=handle` in notes. **The Stage 3.4
+> foundation works in fixture mode.** Next: **live `t.me/s/<channel>` public-preview v0.2 — PENDING, requires
+> explicit operator approval** (allowlist-only public channels, ≤10 posts/channel, no groups/MTProto/member
+> data/hidden contacts; plan: strategy §5.7).
 
 > **REFRAME (2026-06-08, DEC-078):** sources are evaluated for **touchpoints** (hot leads, warm touchpoints,
 > competitor audiences, comments, semantic/ad signals), not hot leads alone — the first domain of the

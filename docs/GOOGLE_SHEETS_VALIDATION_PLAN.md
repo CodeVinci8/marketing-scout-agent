@@ -1,7 +1,12 @@
 # GOOGLE_SHEETS_VALIDATION_PLAN.md — Data Validation / Dropdown Plan (Operator Safety Layer)
 
-**Status:** ✅ PLAN — operator applies manually in Google Sheets UI; no workflow change required.
-**Date:** 2026-06-12 · **Decision:** DEC-111 (validation_lists is the operator safety layer).
+**Status:** ✅ **v1.1 — APPLIED by operator (2026-06-12):** the `validation_lists` tab exists with **26 lists**
+(incl. `angle_category`); dropdowns applied in `raw_market_records`, `agent_requests`, the business tabs, and
+the WF10 tabs. v1.1 makes every list **compatible with current historical data** (legacy/current values kept
+alongside canonical ones) and fixes the `contact_channel` semantics (DEC-114).
+**Date:** 2026-06-12 (v1.0 → v1.1 same day) · **Decisions:** DEC-111 (validation_lists is the operator safety
+layer), DEC-114 (`contact_channel` is a channel category — `handle` is a contact *format*, never a channel),
+DEC-115 (v1.1: 26 legacy-compatible lists; warning vs reject modes).
 **Related:** `docs/TABLE_SCHEMA.md`, `docs/WF10_TABLE_SCHEMAS.md`, `docs/CONTACT_AND_OUTREACH_POLICY.md`.
 
 ---
@@ -14,50 +19,63 @@ Purpose: when a human (operator/manager) edits a cell, they can only pick a vali
 `aproved`, no invented statuses, no silent schema drift. System-generated append-only fields keep working
 unchanged; validation simply flags (or blocks) bad manual edits.
 
-Recommended mode: **"Show warning"** for system-written tabs (appends never get blocked),
-**"Reject input"** only on fields that are exclusively human-edited (`approval_status`, `approved_by` is free
-text — no rule, `responsible`).
+### Validation modes (v1.1 rule — DEC-115)
 
-## 2. Helper tab: `validation_lists`
+- **System-written columns → "Show warning".** n8n appends must never be blocked: when a workflow legitimately
+  emits a new enum value (e.g. a new `dedup_status` from a connector patch), strict validation would break the
+  append or silently corrupt runs. A warning marker is itself a useful data-quality signal — extend the list
+  rather than weakening it if a recurring system value warns.
+- **Human-only / manual columns → "Reject input".** Where the operator/manager is the sole writer
+  (`approval_status` curation, `responsible`), typos have no legitimate source, so hard rejection is safe.
+- `approved_by` stays free text — no rule.
 
-Create one helper tab `validation_lists`. Each column = one named list; row 1 = list name; values below.
+## 2. Helper tab: `validation_lists` (v1.1 — 26 lists, CREATED by operator)
+
+One helper tab `validation_lists`. Each column = one named list; row 1 = list name; values below.
 All dropdowns reference ranges from this tab (e.g. `=validation_lists!$A$2:$A`). Updating a list updates
 every dropdown at once. This tab is operator-owned; workflows never read or write it.
 
-### Lists (column per list)
+**v1.1 compatibility rule:** lists include both **canonical** values and **legacy/current** values already
+present in historical rows (e.g. `web` next to `website`, `social_content`/`social_search` from the web
+pipeline era) so existing data does not light up as invalid. Never delete a legacy value while rows carry it.
 
-| List | Values |
-|------|--------|
-| `source_type` | classified, website, social_channel, social_post, social_comment, review, forum, search, manual, unknown |
-| `platform` | avito, website, telegram, vk, instagram, dzen, yandex_maps, 2gis, zoon, banki_forum, google_search, yandex_search, manual, unknown |
-| `service_type` | credit_broker, business_credit, credit_after_refusals, mortgage_refinance, pts_loan, real_estate_loan, generic_lending, consumer_credit, secured_lending, unknown |
-| `entity_type` | competitor, lead_signal, market_signal, content_idea, source_candidate, audience_signal, irrelevant |
-| `record_type_hint` | competitor_activity, lead_signal, market_signal, content_idea, source_candidate, audience_signal, irrelevant, invalid_source_item, technical_error |
-| `touchpoint_type` | competitor_listing, competitor_website, competitor_review, competitor_post, classified_offer, public_channel_post, public_comment, forum_thread, review_item, source_candidate, irrelevant_source, weak_market_noise |
-| `lead_intent_hint` | none, low, medium, high, unknown |
-| `urgency_hint` | none, low, medium, high, unknown |
-| `lead_temperature` | none, cold, warm, hot |
-| `next_action` | monitor, contact, create_content, investigate, ignore, manual_review, monitor_duplicate, no_data, enrich, report |
-| `approval_status` | new, approved, rejected, duplicate, processed, needs_review, skipped |
-| `dedup_status` | unique, duplicate, duplicate_in_registry, skipped_irrelevant_live, skipped_invalid, unknown |
-| `processing_status` | raw_collected, analyzed, skipped, business_skip, parse_error, technical_error, completed, completed_no_data |
-| `route` | results, review_queue, monitor_queue, content_queue, skipped_log, technical_errors, no_route |
-| `contact_channel` | phone, email, telegram, profile, form, unknown |
-| `contact_use_policy` | manager_allowed, manual_review, no_outreach, aggregate_only |
-| `confidence_level` | high, medium, low, raises lead confidence only, lower |
-| `request_status` | pending, completed, completed_no_data, failed, needs_review, skipped, approved |
-| `request_type` | manual_touchpoint_intake, classified_competitor_discovery, market_intelligence_aggregation, social_source_discovery, report_summary, competitor_discovery, lead_search, source_discovery, niche_setup |
-| `source_scope` | classified_listings, business_queues, social_public, competitor_websites, reviews_maps, search_results, manual, all |
-| `boolean` | TRUE, FALSE |
-| `responsible` | operator, manager, agent, manual_review, unassigned |
-| `ad_channel_hint` | classifieds, website, telegram, vk, instagram, dzen, maps_reviews, forum, search, unknown |
-| `freshness_status` | fresh, stale, unknown |
-| `repair_status` | none, not_needed, repaired_json, failed, fallback |
+### Lists (26 — column per list)
 
-> Some lists are supersets of what individual workflows emit today (e.g. `dedup_status` in WF09/WF11 also uses
-> `duplicate_in_batch`, `hard_skipped`, `invalid`, `over_pipeline_limit`). Use "Show warning" mode on
-> system-written columns so legitimate system values are never blocked; extend a list rather than weakening it
-> if a recurring system value warns.
+| # | List | Values |
+|---|------|--------|
+| 1 | `source_type` | classified, website, web, social_channel, social_post, social_comment, social_content, social_search, review, review_platform, forum, search, manual, unknown *(+ legacy `scraped_web`, `manual_test` in historical business rows — warning mode covers them)* |
+| 2 | `platform` | avito, website, web, telegram, vk, instagram, dzen, yandex_maps, 2gis, zoon, banki_forum, google_search, yandex_search, manual, unknown |
+| 3 | `service_type` | credit_broker, business_credit, credit_after_refusals, mortgage_refinance, pts_loan, real_estate_loan, generic_lending, consumer_credit, secured_lending, unknown |
+| 4 | `entity_type` | competitor, lead_signal, market_signal, content_idea, source_candidate, audience_signal, irrelevant |
+| 5 | `record_type_hint` | competitor_activity, lead_signal, market_signal, content_idea, source_candidate, audience_signal, question_objection, irrelevant, invalid_source_item, technical_error |
+| 6 | `touchpoint_type` | competitor_listing, competitor_website, competitor_review, competitor_post, competitor_content_channel, competitor_content_post, classified_offer, public_channel_post, public_comment, forum_thread, forum_discussion, review_item, review_source, source_candidate, irrelevant_source, weak_market_noise |
+| 7 | `lead_temperature` | none, cold, warm, hot |
+| 8 | `next_action` | monitor, contact, create_content, investigate, ignore, manual_review, monitor_duplicate, no_data, enrich, report |
+| 9 | `approval_status` | new, approved, rejected, duplicate, processed, needs_review, skipped |
+| 10 | `dedup_status` | unique, duplicate, duplicate_in_batch, duplicate_in_registry, hard_skipped, invalid, over_pipeline_limit, skipped_irrelevant_live, skipped_invalid, unknown |
+| 11 | `processing_status` | raw_collected, analyzed, skipped, business_skip, parse_error, technical_error, completed, completed_no_data |
+| 12 | `route` | results, review_queue, monitor_queue, content_queue, skipped_log, technical_errors, no_route |
+| 13 | `contact_channel` | phone, email, telegram, profile, form, unknown — **never `handle`** (DEC-114: `handle` is a contact *format*; Telegram handles get `contact_channel=telegram`, the format goes to `notes` as `contact_format=handle`; empty cell = no contact) |
+| 14 | `contact_use_policy` | manager_allowed, manual_review, no_outreach, aggregate_only |
+| 15 | `confidence_level` | high, medium, low, raises lead confidence only, lower |
+| 16 | `lead_intent_hint` | none, low, medium, high, unknown |
+| 17 | `urgency_hint` | none, low, medium, high, unknown |
+| 18 | `request_status` | pending, completed, completed_no_data, failed, needs_review, skipped, approved |
+| 19 | `request_type` | manual_touchpoint_intake, classified_competitor_discovery, market_intelligence_aggregation, social_source_discovery, report_summary, competitor_discovery, lead_search, source_discovery, niche_setup |
+| 20 | `source_scope` | classified_listings, business_queues, social_public, competitor_websites, reviews_maps, search_results, manual, all |
+| 21 | `boolean` | TRUE, FALSE |
+| 22 | `responsible` | operator, manager, agent, manual_review, unassigned |
+| 23 | `ad_channel_hint` | classifieds, website, telegram, vk, instagram, dzen, maps_reviews, forum, search, unknown |
+| 24 | `freshness_status` | fresh, stale, unknown |
+| 25 | `repair_status` | none, not_needed, repaired_json, failed, fallback |
+| 26 | `angle_category` | speed, price, trust, pain, segment |
+
+> v1.1 changes vs v1.0: `dedup_status` now contains the full set WF09/WF11 emit (`duplicate_in_batch`,
+> `hard_skipped`, `invalid`, `over_pipeline_limit`); `source_type`/`platform` carry legacy `web` and the
+> social_* variants; `record_type_hint` adds `question_objection`; `touchpoint_type` adds
+> `competitor_content_channel`/`competitor_content_post`/`forum_discussion`/`review_source`; `angle_category`
+> added as list #26 (replaces the v1.0 "small inline list" for `market_angles.category`). Use "Show warning"
+> mode on system-written columns so legitimate system values are never blocked.
 
 ## 3. Where to apply dropdowns
 
@@ -71,7 +89,7 @@ system-generated append-only field (ids, timestamps, hashes, free-text evidence,
 | `source_type` | source_type |
 | `platform` | platform |
 | `service_hint` | service_type |
-| `contact_channel` | contact_channel |
+| `contact_channel` | contact_channel *(DEC-114: workflows write the channel category — `telegram` for handles; empty = no contact)* |
 | `record_type_hint` | record_type_hint |
 | `touchpoint_type` | touchpoint_type |
 | `lead_intent_hint` | lead_intent_hint |
@@ -117,7 +135,7 @@ system-generated append-only field (ids, timestamps, hashes, free-text evidence,
 
 | Tab | Column | List |
 |-----|--------|------|
-| `market_angles` | `category` | *(small inline list: speed, price, trust, pain, segment)* |
+| `market_angles` | `category` | angle_category *(list #26 — was an inline list in v1.0)* |
 | `market_angles` | `confidence` | confidence_level |
 | `audience_activity_signals` | `platform` | platform |
 | `audience_activity_signals` | `confidence` | confidence_level |
@@ -131,7 +149,7 @@ system-generated append-only field (ids, timestamps, hashes, free-text evidence,
 - `market_record_registry` (pure system ledger, never hand-edited);
 - `validation_lists` itself.
 
-## 4. How to apply (operator, Google Sheets UI)
+## 4. How to apply (operator, Google Sheets UI) — ✅ done 2026-06-12; kept for re-application
 
 1. Create the `validation_lists` tab; paste the lists above (one column each, name in row 1).
 2. For each target column: select the column range below the header (e.g. `D2:D`),

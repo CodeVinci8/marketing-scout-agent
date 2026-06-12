@@ -1,9 +1,13 @@
 # MARKET_INTELLIGENCE_REPORT_SCHEMA.md — `market_intelligence_reports` Tab Schema (PROPOSED)
 
-**Status:** 📐 PROPOSED SCHEMA — the tab is **not created yet**; the Report Builder that writes it is not
-built. Defined now so the report layer has a stable contract before any build.
-**Date:** 2026-06-12 · **Decisions:** DEC-112 (Claude in report/control layer), DEC-113 (MVP framing).
-**Related:** `docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`, `docs/WF10_TABLE_SCHEMAS.md`.
+**Status:** 📐 BUILD-READY SCHEMA — the tab is **not created yet** (operator creates it with these 20 headers
+before the first WF12 run). **The Report Builder that writes it is built as a deterministic skeleton:**
+`n8n/workflows/12_market_intelligence_report_builder.json` (WF12, `active=false`, DEC-118 — no Claude, no
+Telegram send; `report_markdown_path` stays empty in v0.1, the Markdown is kept inline in `notes`).
+**Date:** 2026-06-12 · **Decisions:** DEC-112 (Claude in report/control layer), DEC-113 (MVP framing),
+DEC-118 (WF12 skeleton writes this schema).
+**Related:** `docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`, `docs/WF10_TABLE_SCHEMAS.md`,
+`docs/N8N_WORKFLOW_12_MARKET_INTELLIGENCE_REPORT_BUILDER_RU.md`.
 
 ---
 

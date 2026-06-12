@@ -3,7 +3,11 @@
 One row per analyzed item. All columns populated by the pipeline.
 Claude API fills the analysis columns; n8n fills the metadata columns.
 
-**Last updated:** 2026-06-12 — **(a) Workflow 11 (Social Source Connector Foundation, Telegram public-channel
+**Last updated:** 2026-06-12 (second pass) — **(d) contact_channel semantics fixed (DEC-114):** it is a channel
+*category* (`phone`/`email`/`telegram`/`profile`/`form`/`unknown`), never a contact *format* — Telegram handles
+are written as `contact_channel=telegram` with `contact_format=handle` in `notes`. **(e) `validation_lists` is
+v1.1 — 26 lists** incl. `angle_category`, legacy-compatible values (see `docs/GOOGLE_SHEETS_VALIDATION_PLAN.md`).
+— (earlier same day:) **(a) Workflow 11 (Social Source Connector Foundation, Telegram public-channel
 preview, DEC-110)** writes the same three agent tabs as WF07/WF09 — `agent_requests` (21), `raw_market_records`
 (40), `market_record_registry` (15) — **no schema change**; `dedup_key=telegram::social_channel::<canonical
 post_url>`. **(b) `validation_lists` helper tab (DEC-111):** operator-owned tab holding named enum lists for
@@ -386,7 +390,7 @@ record.
 | 15 | `text_context` | string | normalized record text (cap ~3500) |
 | 16 | `comment_text` | string | the comment itself when the record is a comment |
 | 17 | `contact_public` | string | deterministic public contact only (WF04 sanitation rules) |
-| 18 | `contact_channel` | string | where contact is reachable: `phone`/`profile`/`messenger`/`handle`/`none` |
+| 18 | `contact_channel` | string | channel CATEGORY (DEC-114): `phone`/`email`/`telegram`/`profile`/`form`/`unknown`; empty = no contact. **Never a format** — a Telegram @handle is `contact_channel=telegram` with `contact_format=handle` recorded in `notes` (+ `contact_source_url`, `contact_use_policy`) |
 | 19 | `dedup_key` | string | composite key (see `market_record_registry`) |
 | 20 | `record_type_hint` | string | deterministic class guess — see record classes below |
 | 21 | `touchpoint_type` | string | `hot_lead`/`warm_touchpoint`/`cold_audience_candidate`/… (see classes) |

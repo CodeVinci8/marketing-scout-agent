@@ -56,9 +56,14 @@ no external calls without per-service approval, contact policy binding.
 
 ## 4. Report & Diagram Builder
 
-- **Status:** 📐 **architecture written (2026-06-12, DEC-112)** — `docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`
-  + `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md` (proposed `market_intelligence_reports` tab, 20 cols);
-  build not started. Claude is optional and disabled by default; WF10 stays the deterministic fact core.
+- **Status:** 🔧 **deterministic skeleton BUILT (2026-06-12, DEC-118)** — WF12
+  `n8n/workflows/12_market_intelligence_report_builder.json` (`active=false`, $0: no Claude — guard node;
+  no Telegram send; reads the 4 WF10 tabs, writes one `market_intelligence_reports` row (20 cols) + one
+  `agent_requests` row; angle trends vs the previous WF10 run). Architecture:
+  `docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md` + `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md`; guide:
+  `docs/N8N_WORKFLOW_12_MARKET_INTELLIGENCE_REPORT_BUILDER_RU.md`. Claude is optional and disabled by
+  default; WF10 stays the deterministic fact core. Pending: operator creates the tab + first run; diagrams/
+  file export later.
 - **Purpose:** weekly summaries and competitor reports from WF10 tables — Markdown first, then CSV/Sheets
   export, PDF later; diagrams: sources map, offer frequency, pain frequency, competitor positioning quadrant.
 - **Prerequisites:** WF10 producing real data over ≥2 windows (trend needs two points); Telegram notification

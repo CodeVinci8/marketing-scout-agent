@@ -231,6 +231,39 @@ llm_enrichment_test_mode= false
 `review_queue=0`, `technical_errors=0`; `parse_method` = `deterministic_pre_route` ×5 (конкуренты) +
 `deterministic_irrelevant_skip` ×1 (нерелевантный POS-терминал). После теста очистить фильтры (вернуть `''`).
 
+### Пример: хэндофф из Workflow 11 (Telegram public-channel preview, fixture)
+
+**Использовать `agent_request_id` ПЕРВОГО прогона WF11** (тот, что дал unique>0). Проверенная конфигурация
+(операторский handoff после WF11 fixture Test 1, 2026-06-12):
+```
+agent_request_id_filter = "wf11_req_20260612_033442"
+platform_filter         = "telegram"
+source_type_filter      = ""
+max_records             = 10
+analysis_mode           = "deterministic_first"
+llm_enrichment          = false
+llm_enrichment_test_mode= false
+```
+Ожидаемо (Claude=0, $0): unique/new Telegram competitor-посты → `monitor_queue`; Telegram `market_signal` →
+`content_queue` или `review_queue`; `technical_errors=0`. После теста очистить фильтры.
+
+### Диагностика: «Filter & Select Records вернул 0 записей» (это обычно НЕ баг)
+
+Зафиксированный случай (2026-06-12): handoff с `agent_request_id_filter=wf11_req_20260612_033756` —
+id **повторного** (duplicate) прогона WF11 — корректно дал 0 записей. Причина: повторный прогон коннектора
+пишет только duplicate-audit строки с `approval_status=duplicate`, а дефолт
+`analyze_statuses=['approved','new']` их игнорирует — **by design**.
+
+Если выборка пуста, проверьте по порядку:
+1. `agent_request_id_filter` — это id **первого** прогона коннектора (строки `approval_status=new`/`approved`)?
+2. `approval_status` строк в `raw_market_records` vs `analyze_statuses`.
+3. `platform_filter` / `source_type_filter` — не остались ли от прошлого теста.
+4. `max_records` > 0.
+
+Если оператор сознательно хочет проанализировать duplicate-строки, нужно явно добавить `duplicate` в
+`analyze_statuses` — но для нормального handoff это **не рекомендуется** (duplicate-строки — аудит дедупа,
+не новые данные; их анализ создаёт повторные записи в бизнес-вкладках).
+
 ## 4. Маппинг точек касания на 35-схему
 
 | Touchpoint класс | entity_type | route |

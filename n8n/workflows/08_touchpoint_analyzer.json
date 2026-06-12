@@ -390,6 +390,21 @@
       "parameters": {
         "jsCode": "function str(v){return v==null?'':String(v).trim();}\nlet analyzed=[];let deterministic=[];\ntry{analyzed=$('Merge LLM Enrichment With Deterministic Row').all().map(i=>i.json);}catch(e){analyzed=[];}\ntry{deterministic=$('Build Deterministic Row').all().map(i=>i.json);}catch(e){deterministic=[];}\nconst all=analyzed.concat(deterministic);\nconst cfg=$('Set Analyzer Config').first().json;\nlet selected_count=0;\ntry{selected_count=$('Filter & Select Records').all().length;}catch(e){selected_count=0;}\nconst route_counts={};const entity_counts={};const parse_method_counts={};let repair_used=0;let tech=0;let detfb=0;let preroute=0;let irrelskip=0;\nfor(const r of all){\n  const rt=str(r.route)||'unknown';route_counts[rt]=(route_counts[rt]||0)+1;\n  const en=str(r.entity_type)||'unknown';entity_counts[en]=(entity_counts[en]||0)+1;\n  const pm=str(r.parse_method)||'unknown';parse_method_counts[pm]=(parse_method_counts[pm]||0)+1;\n  if(r.repair_used===true)repair_used++;\n  if(rt==='technical_errors')tech++;\n  if(pm==='deterministic_fallback_after_llm_fail')detfb++;\n  if(pm==='deterministic_pre_route')preroute++;\n  if(pm==='deterministic_irrelevant_skip')irrelskip++;\n}\nreturn [{ json: {\n  workflow:'08 - Touchpoint Analyzer',\n  run_id:cfg.run_id||'',\n  analysis_mode:cfg.analysis_mode||'deterministic_first',\n  llm_enrichment:cfg.llm_enrichment===true,\n  test_mode:cfg.test_mode===true,\n  llm_enrichment_test_mode:cfg.llm_enrichment_test_mode===true,\n  llm_test_batch_indexes:cfg.llm_test_batch_indexes||[],\n  selected_count:selected_count,\n  total_processed:all.length,\n  claude_path_rows:analyzed.length,\n  deterministic_rows:deterministic.length,\n  deterministic_pre_route:preroute,\n  deterministic_irrelevant_skip:irrelskip,\n  deterministic_fallback_after_llm_fail:detfb,\n  route_counts:route_counts,\n  entity_counts:entity_counts,\n  parse_method_counts:parse_method_counts,\n  repair_used_count:repair_used,\n  technical_errors_count:tech,\n  technical_error_count:tech,\n  next_action:'Review the 6 business tabs and record outcomes in docs/STAGE_3_2_TEST_RESULTS.md. deterministic_first + llm_enrichment=false => Claude calls=0, repair_used=0, technical_errors=0 for the 12-record fixture.'\n}}];"
       }
+    },
+    {
+      "id": "aa080000-0000-0000-0000-00000000diag",
+      "name": "Handoff Diagnostics Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        860,
+        -320
+      ],
+      "parameters": {
+        "height": 300,
+        "width": 420,
+        "content": "## Диагностика: «Filter & Select Records вернул 0 записей»\n\nЕсли после handoff из коннектора (WF09/WF11) выборка пуста — это почти всегда НЕ баг. Проверьте по порядку:\n1. `agent_request_id_filter` — id именно ПЕРВОГО прогона коннектора. Повторные (duplicate) прогоны пишут строки с `approval_status=duplicate`, а дефолт `analyze_statuses=['approved','new']` их корректно игнорирует.\n2. `approval_status` строк в `raw_market_records` vs `analyze_statuses`.\n3. `platform_filter` / `source_type_filter` — не остались ли от прошлого теста.\n4. `max_records` > 0.\n\nАнализировать duplicate-строки можно, явно добавив `duplicate` в `analyze_statuses`, но для нормального handoff это НЕ рекомендуется (дубликаты — аудит, не новые данные)."
+      }
     }
   ],
   "connections": {
