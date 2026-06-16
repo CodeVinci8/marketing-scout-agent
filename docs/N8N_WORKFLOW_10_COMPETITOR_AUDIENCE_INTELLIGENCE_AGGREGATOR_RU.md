@@ -1,12 +1,18 @@
-# N8N_WORKFLOW_10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_RU.md — Workflow 10 (Aggregator v0.2)
+# N8N_WORKFLOW_10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_RU.md — Workflow 10 (Aggregator v0.3)
 
 **Workflow:** `n8n/workflows/10_competitor_audience_intelligence_aggregator.json`
 **Имя:** `10 - Competitor Audience Intelligence Aggregator`
-**Статус:** 🔧 v0.2 PATCH (DEC-106/107/108, 2026-06-12) поверх протестированного v0.1 (DEC-104). `active=false`.
-Детерминированный, $0. v0.1 операторские тесты: Тест 1 (87→82 строк, 21 профиль, 9 углов, 8 сигналов, 1 план,
-7 seed-правил, $0), повтор (+0 правил), Avito-фильтр — PASS; no-data тест выявил баг generic-плана → исправлен в v0.2.
-**Дата:** 2026-06-11, обновлено 2026-06-12 · **Решения:** DEC-104 (v0.1) · DEC-106/107/108 (v0.2) ·
+**Статус:** 🔧 **v0.3** (DEC-127, objection_count + укрупнённые боли) поверх v0.2 PATCH (DEC-106/107/108) и
+протестированного v0.1 (DEC-104). `active=false`. Детерминированный, $0. v0.1 операторские тесты: Тест 1
+(87→82 строк, 21 профиль, 9 углов, 8 сигналов, 1 план, 7 seed-правил, $0), повтор (+0 правил), Avito-фильтр —
+PASS; no-data тест выявил баг generic-плана → исправлен в v0.2. TEST 7 (WF10 aggregator) — PASS.
+**Дата:** 2026-06-11, обновлено 2026-06-16 · **Решения:** DEC-104 (v0.1) · DEC-106/107/108 (v0.2) ·
+DEC-127 (v0.3: objection_count по review_queue, боли «просрочки / плохая КИ», «страх предоплаты / мошенников») ·
 DEC-099 (план/гейт) · DEC-102 (Stage 3.3 закрыт — гейт выполнен) · DEC-112 (Claude — в report-слое, не в WF10).
+
+> **Сверка меток (2026-06-16):** workflow внутри — теперь `wf10 v0.3` (versionId уже был `…v003…`); метки в
+> sticky-ноте, заголовке кода, `notes`/`plan_summary` синхронизированы с v0.3. Бизнес-логика не менялась —
+> только метки. Исторические упоминания «v0.2 patch / v0.2 no-data guard» оставлены (датируют появление фич).
 
 > **v0.2 изменения:**
 > 1. **No-data guard (DEC-106):** при `rows_after_filters=0` — НЕ пишутся profiles/angles/signals; пишется ОДИН
@@ -96,7 +102,7 @@ Read-ноды: `alwaysOutputData` + `onError=continueRegularOutput` — отсу
 
 ### Повторный прогон
 - `source_confidence_rules` **+0** (seed только при пустой вкладке); остальные вкладки — новый snapshot
-  (append-only; upsert competitor_profiles — будущий v0.3).
+  (append-only; upsert competitor_profiles — будущая доработка, **v0.4** — метка v0.3 занята DEC-127).
 
 ### Тест no-data (v0.2)
 - Поставить заведомо пустой фильтр (например `region_filter='Нигдеград'`) → Execute once → profiles/angles/

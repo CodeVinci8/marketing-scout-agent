@@ -5,6 +5,20 @@ Most recent first.
 
 ---
 
+## DEC-131 — Triage/Aggregation Workflows Must Avoid Broad Sheet Reads After Multi-Item Flows (single-read + scoped/capped + capped append)
+
+**Date:** 2026-06-16
+**Context:** WF14 v0.1 failed operator TEST 8 with `The service is receiving too many requests from you`. Root cause was a structural n8n pattern, not a logic bug: Google Sheets read nodes were chained linearly, so `Read raw_market_records` / `Read public_lead_signals` re-executed **once per upstream item** (15 review rows → 1410+ raw rows → thousands of read requests) and the append fired far too many times → Google Sheets quota error. There was also no input scoping, so the whole project history was in play.
+**Decision (stable rule for all triage/aggregation workflows):**
+1. **Single-read sheets** — never place a broad Sheet read downstream of a multi-item flow. Collapse to one control item between readers (e.g. `Hold Config` nodes returning a single item) so each tab is read exactly once; consume data in a Code node via `$('Read …').all()`.
+2. **Scoped/capped candidate sets** — the config node must carry real bounds (`max_source_rows`, time window, filters, `min_signal_score`); apply the source cap **after** scoring/sorting/filtering so good older untriaged rows are not lost.
+3. **Capped/batched append** — append must receive a hard-capped item list (`max_signals_to_write ≤ 25` for WF14) in one batched write; never send hundreds/thousands of items. No-data path returns a controlled summary, never a crash.
+4. **Deterministic dedup identity** — stable hash key (`platform|post_url|norm(text)|intent`) + fallback, compared against existing rows, so repeat runs write zero duplicates.
+**Reason:** Google Sheets quota failures are driven by request **count**, which item-explosion inflates silently; bounding reads, candidate volume, and append size keeps deterministic workflows quota-safe and predictable.
+**Impact:** Applied to WF14 v0.2. This pattern is the template for any future triage/aggregation workflow that reads operator tables. WF14 retest (TEST 8/9) still pending.
+
+---
+
 ## DEC-130 — Public Lead Signal Layer (WF14 + `public_lead_signals`, deterministic, evidence-not-permission)
 
 **Date:** 2026-06-12

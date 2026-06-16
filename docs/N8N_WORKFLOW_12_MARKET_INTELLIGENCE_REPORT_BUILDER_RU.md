@@ -112,6 +112,12 @@ Manual Start
   (офферы/цены/гарантии/CTA/изменения); вкладка может отсутствовать — отчёт не падает.
 - Блок «Аудитория и публичные лид-сигналы»: агрегаты `audience_activity_signals` + `public_lead_signals`
   (счётчики по intent/pain; БЕЗ имён/контактов/профилей).
+  **Формулировка УСЛОВНАЯ (2026-06-16):** при наличии активных строк (status≠dismissed) выводится сводка
+  (кол-во / new / intents / top pains / политика manual_review|aggregate_only, БЕЗ аутрича); сообщение
+  «вкладка public_lead_signals пуста — запустить WF14 triage» показывается **только когда в `public_lead_signals`
+  реально 0 строк**; если строки есть, но все dismissed — «строк N, но активных нет (все dismissed)».
+  Пустой текст НЕ захардкожен. После прохождения ретеста WF14 и повторного прогона WF12 отчёт обязан показывать
+  лид-блок, а не «запустить WF14». Детерминированность сохранена; `llm_status=disabled`, `llm_cost_usd=0`.
 - Блоки действий: менеджер / контент / источники; ограничения + обязательный source_mix.
 - Схема строки — 25 колонок (MARKET_INTELLIGENCE_REPORT_SCHEMA.md v0.3): llm-блок разбит на
   `llm_status/llm_model/llm_input_tokens/llm_output_tokens/llm_cost_usd/llm_summary_ru/llm_recommendations_ru/llm_quality_flags`.
