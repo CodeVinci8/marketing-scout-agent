@@ -88,3 +88,22 @@ Stage 3 now explicitly includes: **Avito live (approved)** · **Telegram live-re
 **run ledger** (`live_source_runs`, WF15). Exit criteria extended:
 5. WF14 triage produces expected VK lead signals (see N8N_WORKFLOW_14 RU doc) and repeat-run dedup holds.
 6. First approved live runs (WF11 Telegram, WF13 VK) each log a `live_source_runs` row with real counters/cost.
+
+---
+
+## 2026-06-16 — First WF11 live smoke: contaminated diagnostic runs (Stage 3 NOT closed)
+
+The first gated WF11 Telegram live smoke proved transport (Firecrawl), parser (real `t.me/s` posts), dedup, and
+the cost/empty-token/private-invite guards. **Business relevance was too loose** (channel-level relevance), so
+these runs are **contaminated diagnostics, not stage-closing evidence**:
+
+| Run | What passed | Verdict |
+|-----|-------------|---------|
+| `wf11_req_20260616_054733` `brokershakurova` | transport / parser / dedup | relevance **PARTIAL FAIL** (1231/1233/1240 false positives) |
+| `wf11_req_20260616_055318` `brokershakurova` repeat | dedup (unique=0, dup=9) | false-positive relevance still present |
+| `wf11_req_20260616_055705` `ipotekapro` | transport / parser / write | holiday 4106 false positive + record_type inflation; relevance **PARTIAL FAIL** |
+| `touchpoint_20260616_060227` (WF08) | routing / queue writes | diagnostic on dirty upstream; surfaced summary accounting bug (DEC-134) |
+| `wf10_20260616_061138` (WF10) | technical pass (113→108, 22 profiles, 9 angles, 8 signals, 1 plan, 0 errors) | consumed dirty WF11/WF08 data — **not** closure evidence |
+
+**Fix applied:** WF11 v0.4.1 post-level relevance (DEC-133) + WF08 v0.10 summary accounting (DEC-134). **Stage 3
+remains open** — re-run the live smoke + WF08 handoff on clean data, and live VK + Claude summary are still gated.

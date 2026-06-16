@@ -102,3 +102,19 @@ WF12 v0.3 implements the report side of this plan: 25-col `market_intelligence_r
 digest bullets (ready for direct Telegram digest rendering in Stage 5), и controlled Claude summary path
 (approval token + budget guard + JSON sections + quality flags + cost recording). Telegram delivery itself
 remains Stage 5 (`delivered_to=none` until then).
+
+---
+
+## Claude enrichment scope + Stage 5 conversational direction (DEC-133 context; docs only)
+
+**Selective Claude enrichment (not every raw row).** Enrich only: ambiguous WF08 rows, high-value competitor ads,
+unclear `market_signal`s, public questions/objections, рекламные углы/positioning angles, semantic competitor
+analysis, offer decomposition (price/guarantee/CTA/proof/risk-reversal/trust signals), audience
+pain/intent/objection extraction, and the WF12 executive summary for the руководитель. Always approval-gated,
+budget-gated, cost/token-logged, selected-row only, no auto-outreach, no uncontrolled repair loops.
+
+**Stage 5 = conversational AI control/report layer** (not just a command menu). Natural-language request →
+agent understands niche/region/task → proposes source plan + cost/risk estimate + expected output format → asks
+approval for paid/live steps → creates `agent_requests` → triggers workflows → tracks progress → returns report →
+suggests next actions. Commands (`/status`, `/latest_report`, `/costs`, `/help`) are fallback affordances only.
+Do **not** build Stage 5 now. Cross-ref: `docs/FUTURE_CAPABILITIES_BACKLOG.md`.

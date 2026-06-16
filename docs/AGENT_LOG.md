@@ -5,6 +5,42 @@ Most recent first.
 
 ---
 
+## 2026-06-16 (session 6) — WF11 v0.4.1 post-level relevance fix + WF08 loop-summary accounting fix (DEC-133/134); first live smoke diagnosed
+
+**Agent role:** project-engineer · **Scope:** correction patch only (no new sources, no VK/groups/MTProto/Claude/Stage 5).
+
+**Live smoke diagnosis (operator TEST 4–8, contaminated diagnostic runs — Stage 3 NOT closed):**
+- `wf11_req_20260616_054733` `brokershakurova`: transport/parser/dedup **PASS**, business relevance **PARTIAL FAIL**
+  (posts 1231/1233/1240 = holiday/illness/motivation written as business-relevant).
+- `wf11_req_20260616_055318` `brokershakurova` repeat: dedup **PASS** (unique=0, duplicates=9), false-positive relevance still present.
+- `wf11_req_20260616_055705` `ipotekapro`: transport/parser/write **PASS**, holiday post 4106 false positive + record_type inflation (market→competitor); relevance **PARTIAL FAIL**.
+- `touchpoint_20260616_060227` (WF08): diagnostic run on dirty upstream; **not** stage-closing evidence. Surfaced the summary accounting bug.
+- `wf10_20260616_061138` (WF10): technical **PASS** (rows 113→108, 22 profiles, 9 angles, 8 signals, 1 plan, 0 errors) but consumed dirty WF11/WF08 data; **not** stage-closing evidence.
+
+**WF11 v0.4.1 (DEC-133; $0, no network, fixture default):**
+- `Normalize Telegram Posts` rewritten: relevance from **post text only**; channel title/username = confidence/metadata,
+  never relevance. `OFFER`→`competitor_activity`, `MARKET`/`POSITIVE`→`market_signal`, no evidence →
+  `irrelevant_live_false_positive`→hard_skip (counted, not written to raw/registry by default; `live_debug_audit=false` gates optional audit).
+  Short tokens (ип/ки/цб/ооо/бки) use Cyrillic word boundaries. No hardcoded post IDs.
+- `Build agent_requests Row`: LIVE mode now logs the **actual live allowlist** + `source=live_preview` +
+  `transport=firecrawl|http_get` (was logging the fixture allowlist); `next_action` gated on
+  `unique>0 && business_relevant>0`, suggests allowlist/relevance change when false positives dominate; no auto-handoff.
+- `Final Summary Output` / `live_source_runs`: add `irrelevant_false_positives` / `hard_negative_skips`, same next_action logic.
+
+**WF08 v0.10 (DEC-134; accounting only, routing untouched):**
+- `Final Summary Output` now aggregates over the loop **done** output (`$input.all()`) instead of last-iteration
+  `$('Build Deterministic Row').all()`/`$('Merge…').all()`. `total_processed`/`deterministic_rows`/`route_counts`
+  now reflect all processed rows; `claude_path` vs `deterministic` derived from `parse_method`; added
+  `processed_accounting_ok`. `llm_enabled=false` ⇒ `claude_calls=0`, cost=0 preserved.
+
+**Validation:** both JSON valid (`json.tool`); 7 edited Code nodes pass `node --check`; relevance sim 11/11
+(3 fixtures competitor, 1 market_signal, 1 hard-neg, 4 live false positives skipped, 1 real service post kept,
+1 market digest = market_signal); WF08 summary sim: selected=8 → total_processed=8, deterministic_rows=8,
+route_counts {monitor:6,content:2}, accounting_ok=true. `active=false`; transports DISABLED; fixture/live defaults
+preserved; no keys / Spreadsheet ID / Bot API / MTProto-usage.
+
+---
+
 ## 2026-06-16 (session 5, part 3) — Operator retests PASS + WF11 v0.4 gated Telegram live preview (DEC-132)
 
 **Agent role:** project-engineer

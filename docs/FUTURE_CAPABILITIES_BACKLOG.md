@@ -136,3 +136,29 @@ no external calls without per-service approval, contact policy binding.
 - **First safe implementation step:** add the three planned contact columns to the schema revision and a manual
   "handoff sheet" view filtered to `manager_allowed` rows — no automation.
 - **Related:** `docs/CONTACT_AND_OUTREACH_POLICY.md`, `docs/LEAD_DATA_MODEL_PLAN.md`.
+
+---
+
+## Future Telegram Discussion / Group Connector (high-risk optional, NOT current MVP)
+
+A future connector for Telegram **groups/discussions** (distinct from the WF11 public-channel `t.me/s` preview):
+
+- **Separate workflow**, not WF11 public preview.
+- **MTProto / user-session** connector as a high-risk **optional** extension, separately approved.
+- **Explicit allowlist only**; only groups/chats where the operator has **legitimate access**.
+- **Separate credential boundary**; no sharing with the public-preview path.
+- **No auto-outreach; no hidden/private data export.**
+- **Member extraction only if legally/ethically permitted and explicitly approved**; default output is
+  **aggregate signals + manual-review evidence, not contact lists.**
+- Not part of current MVP source closure. (Cross-ref: `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md` §5.9.)
+
+## Stage 5 — Telegram Business Agent = conversational AI control/report layer (NOT just a command menu)
+
+Direction for the Stage 5 operator interface (do **not** build now):
+
+- **Primary UX = natural language.** Operator describes a niche/region/task in plain Russian; the agent understands
+  intent, **proposes a source plan**, a **cost/risk estimate**, and the **expected output format**, **asks
+  approval** for any paid/live step, **creates `agent_requests`**, triggers the right workflows, tracks progress,
+  returns the report, and suggests next actions.
+- **Commands are fallback affordances only:** `/status`, `/latest_report`, `/costs`, `/help`.
+- Approval-gated and budget-gated end to end; no auto-outreach. Cross-ref: `docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`.

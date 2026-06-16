@@ -79,3 +79,23 @@ reads, candidate volume, and append size keeps deterministic workflows predictab
 
 **Impact:** Applied to WF14 v0.2; template for all future triage/aggregation workflows. Full text: DEC-131 in
 `docs/DECISIONS.md`.
+
+---
+
+## DEC-133 / DEC-134 — Live relevance & loop-summary accounting (2026-06-16)
+
+**Rule (DEC-133):** Live source relevance (Telegram public preview, and any future social connector) is
+decided by **post-level evidence only**. Channel title/username/allowlist/source context may raise
+confidence/metadata but must **never by itself** make a post business-relevant. A post with no post-level
+finance/broker evidence is `irrelevant_live_false_positive` → skipped (not written to raw/registry by
+default; counted in `hard_skipped_items`). `competitor_activity` requires post-level offering/competitor
+evidence; pure market news/digest routes as `market_signal` even on a competitor channel. No hardcoded IDs.
+
+**Rule (DEC-134):** A run summary placed on a SplitInBatches **done** output must aggregate over
+`$input.all()` (the rows that looped back), **not** `$('<in-loop node>').all()` — after the loop the latter
+returns only the **last** iteration, silently undercounting totals/routes. Derive path splits from each row's
+`parse_method`, and assert coherence (`processed == claude_path + deterministic`, `≤ selected_count`).
+
+**Reason:** loose relevance contaminates downstream WF08/WF10/WF12; channel-level relevance was the exact
+false-positive bug in the first live smoke. Loop-tail `.all()` is a recurring n8n footgun. Full text: DEC-133 /
+DEC-134 in `docs/DECISIONS.md`.

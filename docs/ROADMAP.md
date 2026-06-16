@@ -7,6 +7,14 @@
 
 ## Stage 3 / 4 / 5 — Market Intelligence MVP (canonical definitions, 2026-06-12, DEC-123)
 
+**Session-6 update (2026-06-16) — first WF11 live smoke = contaminated diagnostics; relevance + accounting patched (Stage 3 still OPEN):**
+- The first gated WF11 Telegram live smoke proved transport/parser/dedup, but **live relevance was too loose**
+  (channel-level relevance wrote holiday/personal posts as business-relevant; market news inflated to competitor).
+- Patched: **WF11 v0.4.1** post-level relevance (DEC-133) + **WF08 v0.10** loop-summary accounting (DEC-134).
+- Live runs `wf11_req_…054733/055318/055705`, `touchpoint_…060227`, `wf10_…061138` are **contaminated
+  diagnostics — NOT Stage 3 closure evidence.** Re-run WF11 live + WF08 handoff on **clean** data first.
+- **Stage 3 remains NOT closed.** Live VK + Claude summary still gated; Stage 5 bot not started.
+
 **Session-5 update (2026-06-16) — retests PASS · WF11 v0.4 gated Telegram live preview (Stage 3/4 NOT closed):**
 - **WF14 quota patch v0.2 (DEC-130/131) retests PASS:** TEST B first run (`public_lead_signals +4`,
   `signals_written=4`, `duplicates_skipped=2`, no quota error), TEST C repeat (`+0`, `duplicates_skipped=6`),

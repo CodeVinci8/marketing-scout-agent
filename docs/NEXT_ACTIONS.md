@@ -4,6 +4,30 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
+## CURRENT PRIORITY (2026-06-16, session 6) — WF11 v0.4.1 relevance fix + WF08 accounting fix → retest on CLEAN data
+
+First WF11 live smoke proved transport/parser/dedup but **live relevance was too loose** (channel-level
+relevance). Patched: **WF11 v0.4.1** post-level relevance (DEC-133) + **WF08 v0.10** loop-summary accounting
+(DEC-134). The live runs `wf11_req_…054733/055318/055705`, `touchpoint_…060227`, `wf10_…061138` are
+**contaminated diagnostics — NOT Stage 3 closure.** Stage 3 remains open.
+
+**Retest plan (operator):**
+1. Re-import `11_social_source_connector_foundation.json` + `08_touchpoint_analyzer.json`; rebind credentials +
+   Spreadsheet ID. Keep `active=false`, both WF11 transport nodes **disabled**.
+2. **WF11 fixture retest** (`fixture_mode=true`): expect unchanged `posts_received=6`, `hard_skipped_items=1`,
+   `business_relevant_items=5`, `unique=4`, `duplicates=1`, **`irrelevant_false_positives=0`**.
+3. **WF11 live retest** (arm gate; `brokershakurova`, then `ipotekapro`): expect posts 1231/1233/1240/4106
+   **skipped** as `irrelevant_live_false_positive`; real service/case/rate/CTA posts kept as `competitor_activity`;
+   market/news digests = `market_signal` (not competitor). Confirm `agent_requests` shows the **live** allowlist +
+   `transport=`. No rows written for false positives (unless `live_debug_audit=true`).
+4. **WF08 handoff on a CLEAN WF11 live run** (`agent_request_id_filter=<clean wf11 id>`): confirm
+   `total_processed` == queue rows written, `deterministic_rows` coherent, `processed_accounting_ok=true`,
+   `claude_calls=0`, cost=0.
+5. Only after clean WF11→WF08→WF10/WF12 may Stage 3 source closure be reconsidered. Live VK + Claude summary
+   remain separately gated. Stage 5 bot NOT started.
+
+---
+
 ## CURRENT PRIORITY (2026-06-16, session 5) — retests PASS · WF11 v0.4 gated Telegram live preview built → first live smoke next
 
 **All operator retests PASS — no open blocker.** WF14 v0.2 quota fix confirmed; WF12 post-WF14 report shows the

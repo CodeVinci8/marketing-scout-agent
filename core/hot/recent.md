@@ -4,6 +4,41 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-16 (session 6) — WF11 v0.4.1 post-level relevance fix + WF08 loop-summary accounting fix (DEC-133/134)
+
+**Status (exact):** first gated WF11 live smoke ran end-to-end (transport/parser/dedup PASS) but **live relevance
+was too loose** — holiday/personal posts written as business-relevant, market news inflated to competitor. This
+session is a **focused correction patch only** (no new sources, no VK/groups/MTProto/Claude/Stage 5). The live
+runs `wf11_req_…054733/055318/055705`, `touchpoint_…060227`, `wf10_…061138` are **contaminated diagnostics — NOT
+Stage 3 closure evidence.** Stage 3 is NOT closed.
+
+**WF11 v0.4.1 (DEC-133; $0, fixture default, inert live):**
+- Relevance now decided by **post text only**; channel title/username/allowlist = confidence/metadata, never
+  relevance. `OFFER`→competitor_activity, `MARKET`/`POSITIVE`→market_signal, no post-level finance evidence →
+  `irrelevant_live_false_positive`→hard_skip (counted in `hard_skipped_items`/`irrelevant_false_positives`; not
+  written to raw/registry by default; `live_debug_audit=false` gates optional audit). Short tokens use Cyrillic
+  word boundaries; no hardcoded post IDs. market/news on a competitor channel stays market_signal.
+- LIVE `agent_requests` now logs the **actual live allowlist** + `source=live_preview` + `transport=…` (was
+  fixture allowlist). next_action gated on `unique>0 && business_relevant>0`; suggests allowlist/relevance
+  change when false positives dominate; no auto-handoff.
+
+**WF08 v0.10 (DEC-134; summary accounting only — routing untouched):**
+- `Final Summary` aggregates the loop **done** output (`$input.all()`) instead of last-iteration in-loop `.all()`
+  → `total_processed`/`deterministic_rows`/`route_counts` were 1, now correct (sim: selected=8 → processed=8).
+  `processed_accounting_ok` added. `llm_enabled=false` ⇒ claude_calls=0, cost=0 preserved.
+
+**Validation:** JSON valid; 7 Code nodes pass `node --check`; relevance sim 11/11; WF08 summary sim coherent;
+active=false; transports DISABLED; fixture_mode=true/live_mode=false defaults; no keys/Spreadsheet ID/Bot
+API/MTProto-usage.
+
+**Next operator action:** (1) commit; (2) re-import WF11 + WF08; (3) **WF11 fixture retest** (expect unchanged:
+6/1/5/4/1, false_positives=0); (4) **WF11 live retest** on `brokershakurova` + `ipotekapro` — expect
+1231/1233/1240/4106 skipped as false positives, real service posts kept, market digests = market_signal; (5)
+WF08 handoff on a **clean** WF11 live run and confirm summary counters match queue rows. Live VK + Claude summary
+remain gated. Stage 3/4 NOT closed.
+
+---
+
 ## Session: 2026-06-16 (session 5) — WF14 quota patch v0.2 + RETESTS PASS · consistency pass · WF11 v0.4 gated Telegram live preview (DEC-130/131/132)
 
 **Status (exact):** all operator retests now PASS — **no open blocker.** WF14 v0.2 (single-read + scoped/capped
@@ -80,32 +115,3 @@ bot NOT started. Do NOT mark Stage 3/4 fully closed (live TG/VK + Claude summary
 handoff WF08 → проверка WF10 v0.3 (vk: questions≥2, objections≥1, buying≥1) → WF14 (2 сигнала + дедуп) →
 WF12 v0.3 (детерминированный + guard/budget тесты) → WF15. Live/Claude — каждое за отдельным одобрением.
 
----
-
-## Session: 2026-06-12 (session 3) — WF08 llm_enabled kill switch (DEC-119) · WF11 v0.2 live path (DEC-120) · WF13 VK foundation (DEC-121) · WF12 v0.2 (DEC-122) · Stage 3/4/5 defined (DEC-123)
-
-**What was done ($0, без внешних вызовов/Claude/live; WF09/WF10 не тронуты):**
-- **WF08 v10:** причина `primary_json` при handoff найдена (uncertain → Claude при llm_enrichment=false).
-  Добавлен **`llm_enabled=false`** master switch: uncertain → review_queue с
-  `parse_method=deterministic_uncertain_no_llm` ($0); throw-guard в Claude-ноде; zero-record диагностика
-  в summary. Avito-поведение без изменений. Сим PASS.
-- **WF11 v0.2:** охраняемый live-путь: гейт (token `I_APPROVE_LIVE_TELEGRAM_PREVIEW` + allowlist, отказ
-  группам/инвайтам) → ОТКЛЮЧЁННАЯ HTTP-нода (t.me/s preview) → инертный парсер (ошибка без HTML).
-  Fixture-счётчики не изменились (6/5/1/4/1; повтор 0/5). Live НЕ выполнялся.
-- **WF13 BUILT:** VK public groups/posts/comments foundation (выбор A: закрывает разрыв
-  audience_activity_signals). Fixture-first, без HTTP-нод, guard; 40/15/21 колонок; агрегаты авторов
-  только счётчиками по unique (3 актив. / 1 повторный); вопросы/возражения → review_queue. Сим PASS:
-  6/5/1/4/1, raw +5, registry +4, повтор 0/5.
-- **WF12 v0.2:** полный отчёт (executive_summary / competitor_snapshot / top_offers_and_prices /
-  market_angles+тренды / audience / content_plan / source_confidence / limitations+source_mix /
-  next_actions) + охраняемая ОТКЛЮЧЁННАЯ Claude-ветка (claude-sonnet-4-6 плейсхолдер, evidence-bound
-  промпт, llm_cost_usd по usage $3/$15 за MTok; merge бросает ошибку без ответа). Сим PASS (вкл. no_data,
-  cost=0.012 на 2000/400 токенов).
-- Docs: STAGE_3/4/5 (новые), WF13 RU (новый), патч-ноты WF08/11/12 RU, STAGE_3_4 §5.7, ROADMAP,
-  NEXT_ACTIONS, AGENT_CAPABILITIES, BACKLOG, DECISIONS DEC-119…123, AGENT_LOG.
-
-**Next operator action:** commit → re-import WF08 v10 (тест cost-control на первом id
-`wf11_req_20260612_033442` + нулевой прогон на duplicate id) → re-import WF11 v0.2 (fixture retest +
-gate-тест) → import WF13 (3 fixture-теста + handoff `platform=vk`) → re-import WF12 v0.2
-(детерминированный прогон + guard-тест) → WF10 → WF12 (тренды по 2 прогонам). Live/Claude/Telegram —
-каждое за отдельным явным одобрением.
