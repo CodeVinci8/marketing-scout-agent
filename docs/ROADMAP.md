@@ -11,10 +11,15 @@
 - Operator test pack: 12/14 PASS. **WF14 public lead signal triage FAILED** (Google Sheets quota / item
   explosion on `Append public_lead_signals`); WF14 repeat test NOT RUN (blocked).
 - WF14 **patched to v0.2** (single-read architecture + bounded candidate pool + capped append + deterministic
-  dedup). **Status = PATCH / RETEST PENDING** — re-import + rerun TEST 8/9 before any closure.
-- **Stage 3 remains OPEN** until WF14 retests pass; after that, rerun WF12 deterministic report to ingest
-  `public_lead_signals`. Stage 4 deterministic WF12 report passes, but Claude live summary not yet run.
-  Stage 5 Telegram Business Agent not started. **Do not mark Stage 3 or Stage 4 closed.**
+  dedup; DEC-131). **Status = PATCH / RETEST PENDING** — re-import + rerun TEST 8/9 before any closure.
+- **Consistency pass (same date):** WF10 identity labels synced v0.2 → **v0.3** (labels only; code already had
+  DEC-127 behavior, versionId already `v003`); WF12 lead-signal wording made fully conditional. No logic
+  change, no activation.
+- **Stage 3 — source/intelligence foundation is mostly passing but NOT closed** until WF14 TEST 8/9 pass.
+- **Stage 4 — deterministic WF12 report passes**, but a **final WF12 retest after WF14** (so it ingests
+  `public_lead_signals`) is **pending**; the Claude **live summary has not been run** (branch stays disabled).
+- **Stage 5 — Telegram Business Agent: not started.**
+- **Do not mark Stage 3 or Stage 4 closed.**
 
 **Session-4 update (2026-06-12, DEC-124–130):**
 - **Stage 2 web pipeline is part of the intelligence system, not forgotten** — reintegrated via

@@ -5,6 +5,50 @@ Updated after each session that incurs or measures real costs.
 
 ---
 
+## Session 2026-06-16 (session 5) — consistency pass: $0 incurred; historical Avito run logged with unrecovered cost
+
+No external calls, no Claude, no Apify, no Firecrawl, no live scraping this session. WF14 quota patch (v0.2),
+WF10 label sync (v0.3), WF12 lead-signal wording, and docs only.
+
+### Historical WF09 Avito live run logged via WF15 (TEST 13) — cost NOT recovered
+
+WF15 (manual live-source logger) recorded a **historical** WF09 Avito live run into `live_source_runs`:
+
+| Field | Value |
+|-------|-------|
+| logged_run_id | `manual_log_20260616_024707` |
+| workflow | `WF09 - Avito Classifieds Connector` |
+| mode | `live` · status `completed` |
+| source_family / platform | `classifieds` / `avito` |
+| source_allowlist | `query=кредитный брокер москва; actor=fatihtahta~avito-russia-scraper; actor_limit=10; pipeline_limit=10` |
+| max_items / items_received | 10 / 10 |
+| items_relevant / written_raw | 3 / 3 |
+| items_unique / duplicate | 2 / 1 |
+| hard_skipped | 7 |
+| external_calls | 1 |
+| estimated_source_cost_usd | **0 — `cost_not_recovered`** |
+| llm_calls / estimated_llm_cost_usd | 0 / 0 |
+
+**This `estimated_source_cost_usd=0` does NOT mean the Apify actor run was free.** The run executed a real
+Apify actor call (`external_calls=1`); the exact Apify usage cost was simply **not recovered** at logging time.
+The `0` is a placeholder for an unrecovered figure, not a measurement of $0 spend. (Cross-ref: the WF09 live
+runs `avito_req_20260610_234404` / `…001222` / `…184324` in the Stage 3.3 section below also carry
+`TODO_OPERATOR_FILL` actor costs — Apify charged for those calls.)
+
+### Rule for future paid/live runs (cost recording discipline)
+
+1. **Record the source cost when known** — read the Apify (or other provider) account usage for the run and
+   write the actual USD figure into `estimated_source_cost_usd` / `live_source_runs` and here.
+2. **If the cost is genuinely unknown**, set `estimated_source_cost_usd=0` **only with an explicit note**
+   `cost_not_recovered` (or equivalent wording) in the row/notes and in this file. Never leave a bare `0`.
+3. **Never imply that unknown cost equals free.** An unrecovered or pending cost is a measurement gap, not
+   evidence of zero spend. A run with `external_calls ≥ 1` to a paid provider is assumed to have cost money
+   until proven otherwise.
+4. Preserve the existing guard philosophy: source-acquisition cost and Claude analysis cost stay **separate**
+   axes; human approval remains the spend gate; bounded batches first.
+
+---
+
 ## Session 2026-06-12 (session 4) — live-readiness + report v0.3: $0 incurred
 
 No external calls, no Claude calls, no Apify, no Firecrawl, no live scraping. All builds fixture/deterministic.

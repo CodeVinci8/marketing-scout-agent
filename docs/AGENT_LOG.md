@@ -5,6 +5,53 @@ Most recent first.
 
 ---
 
+## 2026-06-16 (session 5, part 2) — Consistency/documentation pass after WF14 v0.2 (DEC-131)
+
+**Agent role:** project-engineer
+
+**Why it was needed:** the WF14 v0.2 patch was correct but narrow. A consistency sweep was required before
+operator retests so labels, report wording, decision register, and cost discipline match the actual tested
+state — no misleading mismatches going into TEST 8/9 retest.
+
+**What was done ($0; no external calls, no Claude, no live; no workflow activation; no stage closure):**
+- **WF10 label sync v0.2 → v0.3 (Option 1, labels only):** the workflow code already contained the v0.3
+  DEC-127 behavior (real `objection_count` on review_queue scope, merged pains, comment_text in blob) and its
+  `versionId` was already `...v003...`, but inline identity labels still said v0.2. Updated the overview note
+  title, the aggregator code header, the competitor-row `notes`, `plan_summary`, and the agent_requests
+  `notes` to `wf10 v0.3` / `WF10 v0.3` (DEC-104/106/107/108/127). **No business logic changed**; historical
+  "v0.2 patch / v0.2 no-data guard / v0.2 entity resolution" feature references kept (they correctly date when
+  those features landed).
+- **WF12 lead-signal wording (Task C):** the report's `leadLine` was already conditional (populated block when
+  `public_lead_signals` has active rows; "run WF14" notice only when none). Added a precision branch so the
+  "tab is empty — run WF14" message appears **only when the tab truly has zero rows**; an all-dismissed tab now
+  says "rows exist but none active (all dismissed)". Deterministic path untouched; `llm_status='disabled'`,
+  `llm_cost_usd=0`, and the DISABLED Claude HTTP node all preserved.
+- **DEC-131 recorded** in `docs/DECISIONS.md` + distilled into `core/warm/decisions.md`: triage/aggregation
+  workflows must use single-read sheets, scoped/capped candidate pools, and capped/batched appends with
+  deterministic dedup (the stable rule behind the WF14 quota fix).
+- **COSTS_AND_LIMITS (Task D):** logged the WF15-recorded historical WF09 Avito live run
+  (`manual_log_20260616_024707`, 10 received / 3 written / external_calls=1) with `estimated_source_cost_usd=0`
+  explicitly marked `cost_not_recovered`; added a forward rule — record source cost when known, mark unknown
+  costs `cost_not_recovered`, never imply unknown cost = free. Existing separate-axes guard philosophy kept.
+- **core/hot/recent.md (Task A):** trimmed to 3 sessions (5/4/3); session 2 removed (history stays in
+  AGENT_LOG); added a consistency-pass addendum to the session-5 anchor.
+- **NEXT_ACTIONS / ROADMAP:** next sequence rewritten (re-import WF14 → TEST 8 → TEST 9 → rerun WF12 → confirm
+  WF10 labels → then live/Claude/Stage-5 planning); ROADMAP kept Stage 3/4 **open** (WF14 + WF12 retests
+  pending).
+
+**Files touched:** `n8n/workflows/10_competitor_audience_intelligence_aggregator.json`,
+`n8n/workflows/12_market_intelligence_report_builder.json`,
+`docs/N8N_WORKFLOW_10_COMPETITOR_AUDIENCE_INTELLIGENCE_AGGREGATOR_RU.md`,
+`docs/N8N_WORKFLOW_12_MARKET_INTELLIGENCE_REPORT_BUILDER_RU.md`,
+`docs/N8N_WORKFLOW_14_PUBLIC_LEAD_SIGNAL_TRIAGE_RU.md`, `docs/COSTS_AND_LIMITS.md`, `docs/DECISIONS.md`,
+`docs/NEXT_ACTIONS.md`, `docs/AGENT_LOG.md`, `docs/ROADMAP.md`, `core/hot/recent.md`, `core/warm/decisions.md`.
+
+**Validation:** WF10/WF12/WF14 all `python3 -m json.tool` valid; all code nodes pass `node --check`; all three
+`active=false`; no real key/Spreadsheet ID; no external/Claude/Telegram/VK node newly enabled (WF12 Claude HTTP
+still DISABLED). **No external calls. No activation. No stage closure. WF14 TEST 8/9 + WF12 rerun still pending.**
+
+---
+
 ## 2026-06-16 (session 5) — Operator test pack + WF14 quota patch v0.2 (DEC-130 patch)
 
 **Agent role:** project-engineer

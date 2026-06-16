@@ -29,6 +29,13 @@ credential on 5 sheet nodes) → **TEST 8 retest** (≥2 rows, no quota error, s
 one read/tab) → **TEST 9 retest** (signals_written=0, duplicates_skipped>0, status=completed_no_data) →
 rerun WF12 deterministic to ingest `public_lead_signals` → only then stage-closure review. Stage 3/4 NOT closed.
 
+**Consistency pass (2026-06-16, same session):** WF10 internal identity labels synced v0.2 → **v0.3**
+(versionId was already v003; code already had DEC-127 objection/pain behavior — labels only, no logic change);
+WF12 public-lead-signal wording made fully conditional (only says "tab empty — run WF14" when zero rows; new
+branch for all-dismissed); **DEC-131** recorded (triage workflows: single-read sheets + scoped/capped pool +
+capped append to avoid Sheets quota). No external calls, no activation, no stage closure. recent.md trimmed
+to 3 sessions (session 2 archived in AGENT_LOG).
+
 ---
 
 ## Session: 2026-06-12 (session 4) — Live-ready WF11/WF13 · WF14 lead signals · live_source_runs+WF15 · WF10 v0.3 · WF12 v0.3 + Claude budget path · Stage 2 reintegration (DEC-124–130)
@@ -84,38 +91,3 @@ WF12 v0.3 (детерминированный + guard/budget тесты) → WF1
 gate-тест) → import WF13 (3 fixture-теста + handoff `platform=vk`) → re-import WF12 v0.2
 (детерминированный прогон + guard-тест) → WF10 → WF12 (тренды по 2 прогонам). Live/Claude/Telegram —
 каждое за отдельным явным одобрением.
-
----
-
-## Session: 2026-06-12 (session 2) — WF11 fixture PASS + патч контактов v0.1.1 (DEC-114) · validation_lists v1.1 (DEC-115) · live-preview план (DEC-116) · WF08 handoff диагностика (DEC-117) · WF12 Report Builder skeleton (DEC-118)
-
-**What was done ($0, без внешних вызовов и Claude; WF04–WF10 поведение не тронуто):**
-- **WF11 операторские fixture-тесты — ВСЕ PASS:** Тест 1 (`wf11_req_20260612_033442`): 6 постов → 5 relevant /
-  1 hard-skip / 4 unique / 1 dup → raw +5 / registry +4 / agent_requests +1. Тест 2 повтор
-  (`wf11_req_20260612_033756`): unique=0 / duplicates=5 / registry +0. Тест 3: live guard корректно
-  останавливает. **Stage 3.4 foundation работает в fixture-режиме.**
-- **WF11 v0.1.1 (DEC-114):** найден дефект — `contact_channel=handle` (формат, не канал) → исправлено:
-  @handle → `contact_channel=telegram`; в notes: `contact_format=handle; contact_source_url=<post_url>;
-  contact_use_policy=manual_review`; пустой `contact_channel` вместо `none`. Добавлены **инертные**
-  live_* placeholder-поля (guard срабатывает независимо). Сим: **24 PASS** (счётчики не изменились).
-- **validation_lists v1.1 (DEC-115):** 26 списков (оператор применил, incl. `angle_category`);
-  legacy-совместимые значения (`web`, `social_content`, `review_platform`, полный dedup_status set…);
-  режимы: system-written = Show warning, human-only = Reject input. `handle` в `contact_channel` НЕ добавлен.
-- **WF08 handoff (DEC-117):** 0 записей на duplicate-run id — by design (`approval_status=duplicate` vs
-  дефолт `analyze_statuses=['approved','new']`). Правильный handoff: **первый** id
-  `wf11_req_20260612_033442`, platform=telegram, max_records=10, deterministic_first, LLM off.
-  Диагностика — в WF08/WF11 RU + sticky note в WF08 (только документация).
-- **WF12 BUILT (DEC-118):** `12_market_intelligence_report_builder.json` (`active=false`, 15 нод, без HTTP):
-  4 WF10-вкладки → последний снапшот по `plan_id` → топ конкурентов/углов (+тренды ↑/↓/NEW vs прошлый прогон)
-  → 1 строка `market_intelligence_reports` (20) + 1 agent_requests; Claude-ветка = guard (throw);
-  telegram_send не реализован; no_data → `no_data_notice`; source_mix обязателен. Сим: **20 PASS**.
-- Decisions: DEC-114…118. Docs: GOOGLE_SHEETS_VALIDATION_PLAN v1.1, TABLE_SCHEMA, STAGE_3_4 (§5.6/5.7 live
-  план), WF11/WF08/WF12 RU, SOCIAL_MATRIX, REPORTING plan, REPORT schema, TELEGRAM plan, BACKLOG, ROADMAP,
-  DECISIONS, NEXT_ACTIONS, AGENT_LOG, recent.
-
-**Next operator action:** commit → re-import WF11 v0.1.1 (retest Тест 1: те же счётчики + у поста 101
-`contact_channel=telegram`, `contact_format=handle` в notes) → WF08 handoff по `wf11_req_20260612_033442`
-(очистить фильтры после) → синхронизировать validation_lists до v1.1 → (опционально) создать вкладку
-`market_intelligence_reports` (20 колонок) + первый прогон WF12 (`llm_*` пустые, $0; guard-тест
-`enable_llm_summary=true` → ошибка) → дальше (каждое за отдельным одобрением): WF11 live transport (§5.7) /
-Telegram delivery / Claude summary.

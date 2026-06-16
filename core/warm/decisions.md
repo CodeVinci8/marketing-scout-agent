@@ -59,3 +59,23 @@ Russian is permitted in informal operator notes only.
 
 **Reason:** Technical files should be readable by future collaborators or tools
 without language barriers.
+
+---
+
+## DEC-131 — Quota-Safe Triage/Aggregation Workflows (single-read + scoped/capped + capped append)
+
+**Decision:** Any n8n workflow that reads operator Google Sheets tabs and writes derived rows must:
+(1) read each tab **exactly once** — never put a broad Sheet read downstream of a multi-item flow (collapse to
+one control item between readers; consume data via `$('Read …').all()` in a Code node);
+(2) build a **scoped, capped** candidate set (real config bounds: window, filters, `max_source_rows`,
+`min_signal_score`), applying the source cap **after** scoring/sorting so good older untriaged rows survive;
+(3) **append a hard-capped, batched** item list (WF14: `max_signals_to_write ≤ 25`), with a controlled
+no-data summary instead of a crash; (4) dedup by a **deterministic hash identity** so repeat runs write zero
+duplicates.
+
+**Reason:** Google Sheets quota errors are driven by request **count**. Chaining reads after a multi-item node
+silently multiplies executions (WF14 v0.1: 15 → 1410+ → thousands of requests → quota failure). Bounding
+reads, candidate volume, and append size keeps deterministic workflows predictable and quota-safe.
+
+**Impact:** Applied to WF14 v0.2; template for all future triage/aggregation workflows. Full text: DEC-131 in
+`docs/DECISIONS.md`.

@@ -4,35 +4,43 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-16, session 5) — WF14 quota patch v0.2 → RETEST PENDING
+## CURRENT PRIORITY (2026-06-16, session 5) — WF14 quota patch v0.2 + consistency pass → RETEST PENDING
 
 **Operator test pack result (this round):** 12 PASS, **WF14 FAIL** (TEST 8 Google Sheets quota / item
 explosion), TEST 9 NOT RUN (blocked by TEST 8). All other pipeline pieces are green:
 WF13 fixture/repeat/live-guard PASS · WF11 fixture/live-guard PASS · WF13→WF08 handoff PASS · WF10 PASS ·
 WF12 deterministic + Claude guards PASS · WF15 manual logger + enum validation PASS.
 
-**Patched this session ($0, no external calls, no Claude, no live):** WF14 v0.2 only.
-- Root cause: linear chain of Google Sheets read nodes → `Read raw_market_records` / `Read public_lead_signals`
-  re-executed per upstream item (15 → 1410+ → thousands of API requests) → append quota error.
-- Fix: single-read architecture (collapse `Hold Config` nodes between readers so each tab is read ONCE);
+**Patched / cleaned this session ($0, no external calls, no Claude, no live):**
+- **WF14 v0.2** (quota fix): single-read architecture (`Hold Config` collapse nodes → each tab read ONCE);
   real `Set Triage Config` scoping (`max_source_rows=100`, `max_signals_to_write=25`, `min_signal_score=50`,
-  platform/source_type filters, only/backfill untriaged); candidate pool scored/sorted/deduped/capped BEFORE
-  append; append receives ≤25 items (one batched request); deterministic hash `lead_signal_id` dedup +
-  fallback key; controlled `completed_no_data` path. No outreach action reachable.
+  filters, only/backfill untriaged); candidate pool scored/sorted/deduped/capped BEFORE append; append ≤25
+  items (one batched request); deterministic hash dedup; controlled `completed_no_data`. No outreach reachable.
+- **WF10 label sync v0.2 → v0.3** (DEC-127 behavior was already in code; versionId already `v003`) —
+  **labels only, no logic change** (overview note, code header, row `notes`, `plan_summary`, agent_requests
+  `notes`).
+- **WF12** lead-signal wording made fully conditional (says "tab empty — run WF14" only when zero rows; added
+  all-dismissed branch). Deterministic path + `llm_status=disabled`/`llm_cost_usd=0` unchanged.
+- **DEC-131** recorded (single-read + scoped/capped + capped append rule); COSTS_AND_LIMITS logs the historical
+  WF09 Avito run with `cost_not_recovered` (unknown ≠ free).
 
 **Operator actions next, in order (all $0 unless stated):**
 1. [ ] Re-import patched **WF14 v0.2** (do NOT activate; paste Spreadsheet ID + rebind credential on the 5
    Google Sheets nodes: review_queue / raw_market_records / public_lead_signals reads + public_lead_signals /
    agent_requests appends).
-2. [ ] **TEST 8 retest:** Execute once → ≥2 `public_lead_signals` rows from VK comments, **no quota error**,
-   `signals_written≤25`, no outreach recommendations, Claude calls=0, Final Summary `status=completed`,
-   `rows_read_*` show one read per tab.
-3. [ ] **TEST 9 retest (repeat):** Execute once again → `signals_written=0`, `duplicates_skipped>0`,
+2. [ ] **TEST 8 retest (WF14 first run):** Execute once → ≥2 `public_lead_signals` rows from VK comments,
+   **no quota error**, `signals_written≤25`, no outreach recommendations, Claude calls=0, Final Summary
+   `status=completed`, `rows_read_*` show one read per tab.
+3. [ ] **TEST 9 retest (WF14 repeat/dedup):** Execute once again → `signals_written=0`, `duplicates_skipped>0`,
    `status=completed_no_data`, no quota error.
-4. [ ] After WF14 passes: **rerun WF12 v0.3 deterministic report** so it ingests `public_lead_signals`.
-5. [ ] Only after WF14 + WF12 pass: proceed to docs/stage closure review and live-mode planning.
-6. [ ] **Separate approvals later (each its own gate + cost note):** WF11 live Telegram preview ·
-   WF13 live VK wall.get · WF12 Claude summary · WF04 Phase B snapshot-append · Telegram delivery (Stage 5).
+4. [ ] After WF14 passes: **re-import + rerun WF12 v0.3 deterministic report** so it ingests
+   `public_lead_signals` — confirm the report now shows the public lead/audience block (not the "run WF14"
+   empty notice); `llm_status=disabled`, `llm_cost_usd=0`.
+5. [ ] **Re-import WF10 (label-only change)** and confirm output `notes`/`plan_summary` read `wf10 v0.3`
+   (no behavior retest needed — logic unchanged; one Execute to confirm labels is enough).
+6. [ ] Only after 1–5 pass: prepare the next project update prompt covering — stage status update ·
+   live Telegram preview (WF11) · live VK API (WF13) · controlled Claude summary (WF12) · Stage 5 Telegram
+   Business Agent. **Each remains its own approval gate + cost note** (also: WF04 Phase B snapshot-append).
 
 **Test pack summary (reference):** T1 WF13 fixture dup-path PASS · T2 WF13 repeat dedup PASS ·
 T3 WF13 live guard PASS · T4 WF11 Telegram fixture PASS · T5 WF11 live guard PASS · T6 WF13→WF08 handoff PASS ·
