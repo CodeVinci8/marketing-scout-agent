@@ -1,6 +1,13 @@
 # STAGE_4_REPORT_AND_CLAUDE_LAYER.md — Stage 4 Definition
 
-**Status:** PREPARED (2026-06-12, session 4: WF12 v0.3 built) · **Decisions:** DEC-112, DEC-118, DEC-122, DEC-123, **DEC-128 (v0.3 stakeholder report + budget-gated test-ready Claude branch, 25-col schema)**
+**Status:** **DETERMINISTIC WF12 v0.3 REPORT — OPERATOR PASS (2026-06-16, TEST D, with `public_lead_signals`
+integration); Claude live summary NOT live-tested (branch gated/disabled).** · **Decisions:** DEC-112, DEC-118, DEC-122, DEC-123, **DEC-128 (v0.3 stakeholder report + budget-gated test-ready Claude branch, 25-col schema)**
+
+> **2026-06-16 update:** after the WF14 retest, the deterministic WF12 report run (TEST D) passed:
+> `market_intelligence_reports +1`, `agent_requests +1`, `live_source_runs +1`, `llm_status=disabled`,
+> `llm_cost_usd=0`, and the report includes the public lead-signal block (`public_lead_signals: 4 (new: 4)`) —
+> it no longer reports the tab as empty. **The Claude summary branch remains disabled and has NOT been run live**
+> (own approval + budget guard + credential required). Stage 4 deterministic layer passes; Claude layer stays gated.
 
 ## 1. What Stage 4 is
 

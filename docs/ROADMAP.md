@@ -7,19 +7,25 @@
 
 ## Stage 3 / 4 / 5 — Market Intelligence MVP (canonical definitions, 2026-06-12, DEC-123)
 
-**Session-5 update (2026-06-16) — WF14 quota patch, retest pending (Stage 3 NOT closed):**
-- Operator test pack: 12/14 PASS. **WF14 public lead signal triage FAILED** (Google Sheets quota / item
-  explosion on `Append public_lead_signals`); WF14 repeat test NOT RUN (blocked).
-- WF14 **patched to v0.2** (single-read architecture + bounded candidate pool + capped append + deterministic
-  dedup; DEC-131). **Status = PATCH / RETEST PENDING** — re-import + rerun TEST 8/9 before any closure.
-- **Consistency pass (same date):** WF10 identity labels synced v0.2 → **v0.3** (labels only; code already had
-  DEC-127 behavior, versionId already `v003`); WF12 lead-signal wording made fully conditional. No logic
-  change, no activation.
-- **Stage 3 — source/intelligence foundation is mostly passing but NOT closed** until WF14 TEST 8/9 pass.
-- **Stage 4 — deterministic WF12 report passes**, but a **final WF12 retest after WF14** (so it ingests
-  `public_lead_signals`) is **pending**; the Claude **live summary has not been run** (branch stays disabled).
-- **Stage 5 — Telegram Business Agent: not started.**
-- **Do not mark Stage 3 or Stage 4 closed.**
+**Session-5 update (2026-06-16) — retests PASS · WF11 v0.4 gated Telegram live preview (Stage 3/4 NOT closed):**
+- **WF14 quota patch v0.2 (DEC-130/131) retests PASS:** TEST B first run (`public_lead_signals +4`,
+  `signals_written=4`, `duplicates_skipped=2`, no quota error), TEST C repeat (`+0`, `duplicates_skipped=6`),
+  TEST E full-history quota (no quota error). WF14 no longer blocks the deterministic chain.
+- **WF12 deterministic report PASS after public_lead_signals integration (TEST D):** `market_intelligence_reports
+  +1`, `live_source_runs +1`, `llm_status=disabled`, `llm_cost_usd=0`, report includes `public_lead_signals:
+  4 (new: 4)`. Deterministic Stage 4 report is **passing**.
+- **Consistency pass (same date):** WF10 labels synced v0.2 → **v0.3** (labels only); WF12 lead-signal wording
+  made fully conditional. No logic change.
+- **WF11 v0.4 (DEC-132):** real but **gated** Telegram public-channel live preview — Firecrawl-preferred /
+  HTTP-fallback transport, both nodes DISABLED by default; URL-aware allowlist gate rejecting private/invite/
+  group/`t.me/c`; `max_channels≤2`, `max_posts≤10`; cost recorded (`cost_not_recovered` when unknown).
+  **Live Telegram is built but NOT armed/done** — first live smoke is the next operator step.
+- **Stage 3 — source/intelligence foundation: deterministic/fixture/tested chain is OPERATIONAL (PASS) after
+  the WF14 retest.** Live Telegram (WF11) and live VK (WF13) remain **gated / not done**. Stage 3 not closed.
+- **Stage 4 — deterministic WF12 report PASSES** (with public_lead_signals). The **Claude live summary remains
+  gated / not live-tested** (branch disabled).
+- **Stage 5 — Telegram Business Agent: planned, not started.**
+- **Do not mark Stage 3 or Stage 4 closed; do not mark live Telegram/VK or Claude summary done.**
 
 **Session-4 update (2026-06-12, DEC-124–130):**
 - **Stage 2 web pipeline is part of the intelligence system, not forgotten** — reintegrated via

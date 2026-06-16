@@ -1,9 +1,14 @@
 # REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md — Report / Claude / Telegram Layer Plan
 
-**Status:** 🔧 PLAN + **Report Builder v0.1 SKELETON BUILT (2026-06-12, DEC-118):**
+**Status:** 🔧 PLAN + **Report Builder v0.3 DETERMINISTIC — OPERATOR PASS (2026-06-16, TEST D):**
 `n8n/workflows/12_market_intelligence_report_builder.json` (`active=false`, deterministic, $0 — no Claude,
-no Telegram send, no HTTP node; guide: `docs/N8N_WORKFLOW_12_MARKET_INTELLIGENCE_REPORT_BUILDER_RU.md`).
+no Telegram send; Claude HTTP node DISABLED; guide: `docs/N8N_WORKFLOW_12_MARKET_INTELLIGENCE_REPORT_BUILDER_RU.md`).
 No Telegram bot, no Claude report call, no schedule is authorized by this document.
+
+> **2026-06-16 (TEST D):** WF12 v0.3 deterministic report now **passes with the `public_lead_signals` block**
+> — after the WF14 retest the report includes `public_lead_signals: 4 (new: 4)` and no longer says the lead
+> tab is empty; `market_intelligence_reports +1`, `live_source_runs +1`, `llm_status=disabled`, `llm_cost_usd=0`.
+> The Claude summary + Telegram delivery remain **planned/gated** (own approval each); nothing live is authorized here.
 **Date:** 2026-06-12 · **Decisions:** DEC-112 (Claude belongs in the report/control layer, not the
 deterministic fact core), DEC-113 (MVP = market intelligence foundation, not Avito-only output),
 DEC-118 (WF12 deterministic skeleton).

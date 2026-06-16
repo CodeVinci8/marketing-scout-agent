@@ -8,6 +8,12 @@
 > Budget Planner, Contact/Manager Handoff Layer, Competitor Ad Intelligence stay in this backlog.
 > Binding invariants across all of them: public contact policy with evidence URLs, **no hidden contacts,
 > no private chats, no auto-outreach by default** (`CONTACT_AND_OUTREACH_POLICY.md`).
+>
+> **Progress annotation (2026-06-16):** Report & Diagram Builder is now **WF12 v0.3 deterministic — operator
+> PASS** (with `public_lead_signals` block; Claude/diagram still gated). The **public lead-signal layer**
+> (WF14 → `public_lead_signals`, DEC-130) is **built + quota-fixed (DEC-131) + retest PASS** — it covers the
+> "audience pain/lead mining → manager-reviewable rows" slice (evidence-not-permission; no outreach). Telegram
+> live preview (WF11 v0.4, DEC-132) is **built but gated**. These are annotations, not new backlog items.
 
 
 **Status:** 📋 BACKLOG — ideas preserved so they are not lost; **nothing here is approved for build** unless its
@@ -19,7 +25,9 @@ no external calls without per-service approval, contact policy binding.
 
 ## 1. Business Agent Control Kernel
 
-- **Status:** idea / design-not-started.
+- **Status:** idea / design-not-started — **= Stage 5 Telegram Business Agent; NOT started (2026-06-16).**
+  The bot is a control/report interface, not a parser: commands create `agent_requests`, paid/live actions
+  require approval, no scraping/Claude/auto-outreach inside the bot. See `STAGE_5_TELEGRAM_BUSINESS_AGENT_PLAN.md`.
 - **Purpose:** a future conversational control layer — the operator (or the stakeholder) talks to the agent;
   the kernel performs **intent detection** → **niche detection** → **workflow/tool selection** → **cost/risk
   estimate** → **approval plan** → writes the request to `agent_requests` → runs/prepares the chosen workflows →
@@ -85,7 +93,10 @@ no external calls without per-service approval, contact policy binding.
 
 ## 5. Source Strategy & Budget Planner
 
-- **Status:** idea / partially covered by Stage 3.4 strategy doc.
+- **Status:** idea / partially covered by Stage 3.4 strategy doc — **still FUTURE, but the `live_source_runs`
+  ledger (DEC-126; WF11/WF12/WF13 auto + WF15 manual) now provides the baseline run/cost history** a future
+  planner would consume (per-run mode, allowlist, counters, `external_calls`, source cost incl. `cost_not_recovered`).
+  Not started as an automated planner.
 - **Purpose:** given a task ("find competitor offers", "mine audience pains") and a niche, rank sources by
   expected value, risk, cost, and contact availability — e.g. Avito high for competitor offers; Telegram
   medium-high for audience pains; Instagram deferred. Output: ranked source plan + budget estimate before any run.

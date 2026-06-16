@@ -5,6 +5,35 @@ Most recent first.
 
 ---
 
+## DEC-132 — WF11 Telegram Live Preview = Gated Public `t.me/s` Only, Firecrawl-Preferred / HTTP-Fallback, Both Transports Disabled by Default
+
+**Date:** 2026-06-16
+**Context:** WF11 needed a real (not just placeholder) Telegram live-source path. Telegram has many unsafe
+collection routes (Bot API on private content, MTProto/user sessions, groups, member lists). The only
+compliant public surface is the channel **preview** page `https://t.me/s/<channel>`, which renders recent
+public posts as plain HTML with no login.
+**Decision:** WF11 v0.4 implements a gated live preview path with these fixed rules:
+1. **Public preview only** — fetch `https://t.me/s/<channel>` pages. No Telegram Bot API for source scraping,
+   no MTProto, no user sessions, no groups/private chats, no `t.me/+`/`joinchat`/`t.me/c`, no member extraction.
+2. **Transport: Firecrawl preferred, plain HTTP GET fallback** — selected by `live_transport`
+   (`firecrawl`|`http_get`) and routed by a `Route Live Transport` IF. **Both transport nodes ship DISABLED**;
+   arming requires token + non-empty allowlist + enabling the chosen node in the editor.
+3. **Allowlist gate normalizes + validates** — accepts a username or a `t.me/s/<channel>` / `t.me/<channel>`
+   URL, normalizes to a username, and rejects invite/private/group/numeric-id entries; caps
+   `live_max_channels≤2` (first smoke) and `max_posts≤10`.
+4. **Cost honesty** — `external_calls` and source cost are written to `agent_requests` + `live_source_runs`:
+   `http_get` has no per-call fee ($0); Firecrawl cost is unknown at log time → recorded `cost_not_recovered`
+   (never implied free; see DEC-131 cost rule).
+5. **Contact/outreach policy unchanged** — public contacts verbatim from post text only, `contact_channel=telegram`
+   for handles, default `contact_use_policy=manual_review`, no outreach. `llm_calls=0`. Fixture path untouched.
+**Reason:** keeps the live path real and operator-armable while structurally preventing every unsafe Telegram
+collection mode; the disabled-by-default transports plus the approval token make accidental live calls
+impossible.
+**Impact:** WF11 v0.4. The same gated-preview + disabled-transport + URL-normalizing-allowlist pattern is the
+template for the next live connector (VK official-API `wall.get`/`wall.getComments`).
+
+---
+
 ## DEC-131 — Triage/Aggregation Workflows Must Avoid Broad Sheet Reads After Multi-Item Flows (single-read + scoped/capped + capped append)
 
 **Date:** 2026-06-16
