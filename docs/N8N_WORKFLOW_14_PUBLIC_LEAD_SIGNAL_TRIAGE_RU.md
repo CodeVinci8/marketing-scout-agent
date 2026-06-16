@@ -1,18 +1,41 @@
 # N8N_WORKFLOW_14_PUBLIC_LEAD_SIGNAL_TRIAGE_RU.md — WF14: триаж публичных лид-сигналов
 
-**Статус:** BUILT v0.1 (2026-06-12) · детерминированный, $0, без Claude · **Решение:** DEC-130
+**Статус:** PATCHED v0.2 (2026-06-16) — **RETEST PENDING** (Тесты 8/9 не пройдены) · детерминированный, $0,
+без Claude · **Решение:** DEC-130 (+ патч квоты Google Sheets)
 **Файл:** `n8n/workflows/14_public_lead_signal_triage.json` (`active=false`, только ручной запуск)
 **Связано:** `PUBLIC_LEAD_SIGNAL_LAYER.md`, `TABLE_SCHEMA.md` (public_lead_signals, 28 колонок),
 `CONTACT_AND_OUTREACH_POLICY.md` (обязательная политика).
 
 ---
 
+## 0. v0.2 PATCH (2026-06-16) — фикс квоты Google Sheets / item explosion
+
+**Симптом (операторский тест):** нода `Append public_lead_signals` падала с
+`The service is receiving too many requests from you`. Причина — линейная цепочка sheet-ридеров:
+`Read review_queue` (15 строк) → `Read raw_market_records` исполнялась по разу на каждый входящий item,
+`Read public_lead_signals` — ещё больше, итог 1410+ строк и тысячи API-запросов перед append (item explosion).
+
+**Что изменено:**
+- **Single-read архитектура:** между ридерами добавлены collapse-ноды (`Hold Config (before raw)`,
+  `Hold Config (before pls)`), которые возвращают один control-item → каждая вкладка читается РОВНО ОДИН РАЗ.
+  Данные доступны дальше через `$('Read ...').all()`.
+- **Ограниченный пул кандидатов:** `Set Triage Config` получил реальный скоупинг — `max_source_rows=100`,
+  `max_signals_to_write=25`, `min_signal_score=50`, `platform_filter`/`source_type_filter`,
+  `only_untriaged`/`backfill_untriaged`. Кэп источника применяется ПОСЛЕ скоринга/сортировки/фильтра, чтобы
+  не терять хорошие старые непротриаженные строки.
+- **Append получает только усечённый список** (≤25 строк, один execution = один батч-запрос).
+- **Дедуп усилен:** `lead_signal_id` теперь детерминированный хэш `platform|post_url|norm(text)|intent`
+  (стабилен между прогонами) + fallback-ключ `platform|post_url|text_evidence|intent_type`.
+- **Контролируемый no-data:** при отсутствии сигналов — маркер `_no_signals` (без падения), Final Summary
+  status=`completed_no_data`.
+
 ## 1. Что делает
 
-Перечитывает `review_queue` + `raw_market_records` (только публичные комментарии/вопросы/отзывы:
+Перечитывает `review_queue` (основной источник) + `raw_market_records` (вторично, только audience-строки:
 `record_type_hint=question_objection`, `touchpoint_type` ∈ public_comment/forum_discussion/review_source),
-детерминированно классифицирует боли и намерения и пишет строки в `public_lead_signals` + одну строку в
-`agent_requests`. Дедуп против уже записанных сигналов: `post_url` + text_hash.
+строит ограниченный пул кандидатов, детерминированно классифицирует боли/намерения, дедупит и пишет ≤25 строк
+в `public_lead_signals` + одну строку в `agent_requests`. Дедуп против уже записанных сигналов:
+`lead_signal_id` + fallback `platform|post_url|text_evidence|intent_type`.
 
 - **pain_type:** after_refusal · bad_credit_history · overdue_debt · urgent_money_need · prepayment_fear ·
   fraud_fear · broker_price_question · mortgage_refinance_need · business_finance_need
@@ -34,9 +57,17 @@
 2. Импортировать воркфлоу, НЕ активировать.
 3. Вставить SPREADSHEET_ID и перепривязать креденшл Google Sheets на 5 sheet-нодах (3 read + 2 append).
 
-## 4. Операторские тесты ($0)
+## 4. Граф (v0.2)
 
-**Тест 1 (после WF13→WF08 handoff):** Execute once → ожидаемо:
+`Manual Start → Set Triage Config → Read review_queue → Hold Config (before raw) → Read raw_market_records →
+Hold Config (before pls) → Read public_lead_signals → Build Candidate Pool & Classify → IF signals found? →
+[true] Append public_lead_signals → Build agent_requests Row → Append agent_requests → Final Summary Output`
+([false] ветка IF идёт сразу в `Build agent_requests Row`). Все ноды только: code / googleSheets / if /
+manualTrigger / stickyNote. HTTP/Claude/Telegram/VK-нод нет.
+
+## 5. Операторские тесты ($0)
+
+**Тест 8 / Тест 1 (после WF13→WF08 handoff):** Execute once → ожидаемо:
 - ≥2 строки `public_lead_signals` из VK-комментариев Анны:
   - вопрос «кто брал кредит после отказов… сколько стоит» → pain: after_refusal, bad_credit_history,
     overdue_debt, broker_price_question; intent=buying_intent; recommended_action=manual_review;
@@ -46,9 +77,22 @@
 - `agent_requests` +1 (request_type=public_lead_signal_triage, status=completed, $0);
 - ни одна строка не содержит рекомендации связаться с автором; Claude calls=0.
 
-**Тест 2 (повтор):** Execute once ещё раз → signals_written=0 (дедуп по post_url+text_hash),
-agent_requests +1 с `no_signals;` или `signals_written=0` в result_summary.
+**Тест 9 / Тест 2 (повтор):** Execute once ещё раз → signals_written=0, `duplicates_skipped>0` (дедуп по
+`lead_signal_id` + fallback), Final Summary status=`completed_no_data`, БЕЗ quota-ошибки, agent_requests +1.
 
-**Тест 3 (контакт):** строка с контактом `+7…` (пост конкурента НЕ попадает — он не audience-тип;
-проверка на live-данных позже) → contact_public отображается текстом без `#ERROR!`,
-contact_use_policy=manual_review.
+**Тест 3 (контакт):** строка с контактом `+7…` → contact_public отображается текстом без `#ERROR!`,
+contact_use_policy=manual_review, recommended_action ∈ {content_idea, manual_review} (никогда не аутрич).
+
+**Проверка квоты:** в Final Summary `rows_read_review_queue` / `rows_read_raw_market_records` /
+`rows_read_existing_public_lead_signals` показывают по одному чтению каждой вкладки; ни одна нода не
+исполняется по разу на item.
+
+## 6. Локальная симуляция (2026-06-16, $0, без live)
+
+Прогон логики `Build Candidate Pool & Classify` на двух VK-фикстурах:
+- вопрос Анны → pain `after_refusal, bad_credit_history, overdue_debt, broker_price_question`,
+  intent=`buying_intent`, intent_score=100, recommended_action=`manual_review`, policy=`aggregate_only`;
+- возражение Игоря (`+7 999 000-11-22`) → pain `prepayment_fear, fraud_fear`, intent=`objection`,
+  objection_score=100, recommended_action=`content_idea`, policy=`manual_review`, контакт записан как текст
+  с апострофом (`'+7…`).
+- Повтор: signals_written=0, duplicates_skipped=2, маркер `_no_signals`. Запрещённых действий нет.

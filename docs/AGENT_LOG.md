@@ -5,6 +5,52 @@ Most recent first.
 
 ---
 
+## 2026-06-16 (session 5) — Operator test pack + WF14 quota patch v0.2 (DEC-130 patch)
+
+**Agent role:** project-engineer
+
+**Operator test pack (14 tests):** 12 PASS, 1 FAIL, 1 NOT RUN.
+- PASS: T1 WF13 fixture dup-path · T2 WF13 repeat dedup · T3 WF13 live guard · T4 WF11 Telegram fixture ·
+  T5 WF11 live guard · T6 WF13→WF08 handoff · T7 WF10 aggregator · T10 WF12 deterministic report ·
+  T11 WF12 Claude approval guard · T12 WF12 Claude disabled placeholder/guard · T13 WF15 manual logger ·
+  T14 WF15 enum validation.
+- **FAIL: T8 WF14 `Append public_lead_signals` → `The service is receiving too many requests from you`**
+  (Google Sheets quota / item explosion).
+- **NOT RUN: T9 WF14 repeat dedup** (blocked by T8).
+
+**WF14 patch v0.2 ($0, no external calls, no Claude, no live; only WF14 touched):**
+- **Diagnosis:** linear chain of Google Sheets read nodes. `Read raw_market_records` (and
+  `Read public_lead_signals`) executed once per upstream item from `Read review_queue` (15 items),
+  reading 1410+ rows and firing thousands of API requests before append → quota error.
+- **Fix A (graph):** single-read architecture — collapse nodes `Hold Config (before raw)` /
+  `Hold Config (before pls)` return one control item between readers so each tab is read EXACTLY ONCE;
+  data consumed downstream via `$('Read ...').all()`.
+- **Fix B (config):** real `Set Triage Config` scoping — `time_window_days=30`, `max_source_rows=100`,
+  `max_signals_to_write=25`, `min_signal_score=50`, `platform_filter`/`source_type_filter`,
+  `include_queue_tabs=['review_queue']`, `only_untriaged`/`backfill_untriaged`, contact-policy +
+  allowed/forbidden action enums. Deterministic ids, MSK stamps, active=false preserved.
+- **Fix C (selection):** candidate pool from review_queue (primary) + raw audience rows (secondary),
+  scored/sorted (fresh → signal score → recency), deduped, source-capped (100) AFTER filtering, write-capped
+  (≤25) — older untriaged high-score rows retained via backfill.
+- **Fix D (dedup):** deterministic `lead_signal_id = hash(platform|post_url|norm(text)|intent)` (stable across
+  runs) + fallback `platform|post_url|text_evidence|intent_type` vs existing rows.
+- **Fix F (append safety):** append receives ≤25 items in one batched request; no-data → controlled
+  `_no_signals` marker, Final Summary `status=completed_no_data`.
+- **Outreach guard:** `recommended_action` constrained to {manual_review, content_idea, monitor};
+  `contact_use_policy` ∈ {aggregate_only, manual_review}; outreach values unreachable by construction.
+- **Validation:** `python3 -m json.tool` OK; all 6 jsCode nodes pass `node --check`; active=false; no real
+  key/Spreadsheet ID; no HTTP/Claude/Telegram/VK nodes; MSK timestamps preserved. Local sim of the two VK
+  fixtures: Run 1 → 2 signals (buying_intent + objection, correct pains/scores/policies, +7 apostrophe-safe);
+  Run 2 → 0 signals, duplicates_skipped=2; no forbidden actions.
+- **Files:** `n8n/workflows/14_public_lead_signal_triage.json` (rewritten v0.2),
+  `docs/N8N_WORKFLOW_14_PUBLIC_LEAD_SIGNAL_TRIAGE_RU.md`, `docs/NEXT_ACTIONS.md`, `docs/AGENT_LOG.md`,
+  `core/hot/recent.md`, `docs/ROADMAP.md`.
+
+**Next:** re-import WF14 v0.2 → rerun T8/T9 → rerun WF12 deterministic to ingest `public_lead_signals` →
+only then stage-closure review. Stage 3/4 NOT closed.
+
+---
+
 ## 2026-06-12 (session 4) — Live-source readiness (WF11 v0.3 / WF13 v0.2) · Public Lead Signal Layer (WF14) · Run ledger (live_source_runs + WF15) · WF10 v0.3 · WF12 v0.3 stakeholder report + budget-gated Claude path · Stage 2 website reintegration (DEC-124–130)
 
 **Agent role:** project-engineer
