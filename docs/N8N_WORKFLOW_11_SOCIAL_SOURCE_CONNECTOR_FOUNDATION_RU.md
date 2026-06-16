@@ -2,10 +2,22 @@
 
 **Workflow:** `n8n/workflows/11_social_source_connector_foundation.json`
 **Имя:** `11 - Social Source Connector Foundation (Telegram Public Channel Preview)`
-**Статус:** ✅ **FIXTURE FOUNDATION PASS (операторские тесты 2026-06-12) + патч v0.1.1 контактов (DEC-114).**
-`active=false`, `fixture_mode=true`, `live_mode=false`. Детерминированный, $0, **в воркфлоу нет ни одной
-HTTP-ноды** — live-режим НЕ реализован (guard с ошибкой). Live public-preview = план v0.2 (§4), требует
-отдельного явного одобрения.
+**Статус:** ✅ **FIXTURE FOUNDATION PASS (операторские тесты 2026-06-12) + патч v0.1.1 контактов (DEC-114) +
+🔧 v0.4 GATED LIVE PREVIEW (DEC-132, 2026-06-16).** По умолчанию `active=false`, `fixture_mode=true`,
+`live_mode=false`. Fixture-режим = $0. **Live-путь реален, но ИНЕРТЕН по умолчанию:** обе транспорт-ноды
+(Firecrawl scrape и HTTP GET) ОТКЛЮЧЕНЫ; для live нужны токен одобрения + allowlist + включение одной
+транспорт-ноды. Live public-preview = §4 + блок v0.4 ниже; требует отдельного явного одобрения.
+
+> **ПАТЧ v0.4 (DEC-132) — реальный, но gated live-транспорт публичного preview `t.me/s/<channel>`.**
+> - **Транспорт:** `live_transport` = `firecrawl` (предпочтительно, если есть креденшл Firecrawl) или `http_get`
+>   (fallback, без поштучной платы). Маршрут — нода `Route Live Transport` (IF). **Обе транспорт-ноды `disabled`.**
+> - **Гейт:** принимает username ИЛИ `https://t.me/s/<channel>` / `https://t.me/<channel>`, нормализует в username;
+>   ОТКЛОНЯЕТ `t.me/+`, `joinchat`, `t.me/c`, группы, `+`-ссылки, числовые id; капы `live_max_channels<=2`, `max_posts<=10`.
+> - **Парсер:** из preview-HTML (`tgme_widget_message`) извлекает channel, post_url, дату, текст, **view_count (опц.)**,
+>   публичный контакт дословно; понимает Firecrawl (`data.html`) и HTTP (текст); нет HTML → ошибка (инертность).
+> - **Стоимость** в agent_requests + live_source_runs: `http_get`=$0, `firecrawl`=`cost_not_recovered` (записать факт после прогона).
+> - **БЕЗ:** Telegram Bot API для сбора, MTProto, user-сессий, групп/приватных чатов, выгрузки участников, авто-аутрича. `llm_calls=0`.
+> - **Парность с fixture** сохранена (6/5/1/4/1). Санитизированный sample парсера: `n8n/fixtures/wf11_tme_s_preview_sample.html`.
 **Дата:** 2026-06-12 · **Решения:** DEC-109 (выбор источника), DEC-110 (foundation, fixture-first),
 DEC-114 (contact_channel — категория канала, не формат), DEC-116 (fixture PASS + live v0.2 план),
 DEC-096 (один источник за раз), DEC-097/098 (политика контактов).

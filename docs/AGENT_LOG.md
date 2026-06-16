@@ -5,6 +5,58 @@ Most recent first.
 
 ---
 
+## 2026-06-16 (session 5, part 3) — Operator retests PASS + WF11 v0.4 gated Telegram live preview (DEC-132)
+
+**Agent role:** project-engineer
+
+**Operator retest pack — ALL PASS (no open blocker):**
+- **WF14 TEST B (first patched run):** `public_lead_signals +4`, `agent_requests +1`, `signals_written=4`,
+  `duplicates_skipped=2`, `status=completed`, **no Google Sheets quota error**, no outreach recommendations,
+  `contact_use_policy=aggregate_only/manual_review`, `raw_market_records/market_record_registry/technical_errors +0`.
+- **WF14 TEST C (repeat dedup):** `public_lead_signals +0`, `duplicates_skipped=6`, `signals_written=0`, `status=completed`.
+- **WF14 TEST E (full-history quota check):** no quota error, `+0`, `duplicates_skipped=6`, `technical_errors +0`.
+- **WF12 TEST D (deterministic after WF14):** `market_intelligence_reports +1`, `agent_requests +1`,
+  `live_source_runs +1`, `technical_errors +0`, `llm_status=disabled`, `llm_cost_usd=0`, report includes
+  `public_lead_signals: 4 (new: 4)` — no longer says the lead-signal tab is empty.
+- Static validation: `core/hot/recent.md` = 3 sessions; WF10/WF12/WF14 JSON valid.
+- → WF14 quota patch (DEC-130/131) confirmed; Stage 3 deterministic source/intelligence chain is operational
+  (still NOT closed — live TG/VK + Claude summary remain gated).
+
+**WF11 v0.4 — gated Telegram public-channel live preview (DEC-132; $0, no network, inert by default):**
+- **Goal:** real but gated live path using public `https://t.me/s/<channel>` preview pages. No Telegram Bot API
+  source scraping, no MTProto, no sessions, no groups/private chats, no member extraction, no outreach.
+- **Transport:** new `Route Live Transport` IF on `live_transport` → **Firecrawl scrape** (preferred; POST to
+  Firecrawl `/v2/scrape`, `formats:[html]`) OR **plain HTTP GET** (fallback). **Both transport nodes ship
+  DISABLED**; `live_mode=false`, token empty, allowlist empty by default → fully inert.
+- **Gate v0.4:** accepts username OR `t.me/s/<channel>` / `t.me/<channel>` URL, normalizes to username; rejects
+  `t.me/+`, `joinchat`, `t.me/c` private, groups, `+`-leading, numeric ids; caps `live_max_channels≤2` (first
+  smoke) and `max_posts≤10`. Throws clearly if token/allowlist/transport invalid.
+- **Parser v0.4:** extracts channel, post_url, post date, text, **view_count (optional)**, verbatim public
+  contact; handles both Firecrawl (`j.data.html`) and HTTP (`j.data` text) shapes; throws if no HTML (inert).
+- **Counts/cost:** preserves all WF11 counters + duplicate audit + hard-negative filter + contact policy
+  (`contact_channel=telegram`, `contact_format=handle` in notes, default `contact_use_policy=manual_review`,
+  no outreach). `live_source_runs` + `agent_requests` record `external_calls` and source cost — http_get=$0,
+  firecrawl=`cost_not_recovered` (unknown ≠ free). `llm_calls=0`. MSK timestamps preserved.
+- **Fixture parity:** fixture path untouched — local sim: 6 posts → 4 unique / 1 dup_in_batch / 1 hard_skip,
+  `manager_note` empty on fixture rows. New sanitized parser sample `n8n/fixtures/wf11_tme_s_preview_sample.html`
+  (2 fake `_fixture` posts) parses to 2 posts with views, under both transport response shapes.
+
+**Docs synced:** WF14 doc → retest PASS; STAGE_3 (WF14 unblocks chain); STAGE_4 (WF12 deterministic PASS with
+public_lead_signals, Claude not live); REPORTING plan; FUTURE_CAPABILITIES_BACKLOG annotations; COSTS_AND_LIMITS
+(WF11 live transport cost model); DEC-132; NEXT_ACTIONS (WF11 smoke + VK checklist + Stage 5 pointer); ROADMAP.
+
+**Files touched:** `n8n/workflows/11_social_source_connector_foundation.json`,
+`n8n/fixtures/wf11_tme_s_preview_sample.html`, `docs/N8N_WORKFLOW_11_…_RU.md`, `docs/N8N_WORKFLOW_14_…_RU.md`,
+`docs/STAGE_3_SOURCE_AND_INTELLIGENCE_FOUNDATION.md`, `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md`,
+`docs/STAGE_4_REPORT_AND_CLAUDE_LAYER.md`, `docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`,
+`docs/FUTURE_CAPABILITIES_BACKLOG.md`, `docs/COSTS_AND_LIMITS.md`, `docs/DECISIONS.md`, `docs/NEXT_ACTIONS.md`,
+`docs/ROADMAP.md`, `core/hot/recent.md`.
+
+**Constraints honored:** no external calls / no Firecrawl / no Telegram / no VK / no Claude / no activation;
+no real keys or Spreadsheet ID; no stage closure. WF11 live smoke + live VK remain operator-gated next steps.
+
+---
+
 ## 2026-06-16 (session 5, part 2) — Consistency/documentation pass after WF14 v0.2 (DEC-131)
 
 **Agent role:** project-engineer

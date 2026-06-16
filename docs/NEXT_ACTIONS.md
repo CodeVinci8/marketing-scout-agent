@@ -4,50 +4,54 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-16, session 5) — WF14 quota patch v0.2 + consistency pass → RETEST PENDING
+## CURRENT PRIORITY (2026-06-16, session 5) — retests PASS · WF11 v0.4 gated Telegram live preview built → first live smoke next
 
-**Operator test pack result (this round):** 12 PASS, **WF14 FAIL** (TEST 8 Google Sheets quota / item
-explosion), TEST 9 NOT RUN (blocked by TEST 8). All other pipeline pieces are green:
-WF13 fixture/repeat/live-guard PASS · WF11 fixture/live-guard PASS · WF13→WF08 handoff PASS · WF10 PASS ·
-WF12 deterministic + Claude guards PASS · WF15 manual logger + enum validation PASS.
+**All operator retests PASS — no open blocker.** WF14 v0.2 quota fix confirmed; WF12 post-WF14 report shows the
+public-lead-signal block. WF11 v0.4 (gated Telegram public-channel live preview) is built and inert by default.
 
-**Patched / cleaned this session ($0, no external calls, no Claude, no live):**
-- **WF14 v0.2** (quota fix): single-read architecture (`Hold Config` collapse nodes → each tab read ONCE);
-  real `Set Triage Config` scoping (`max_source_rows=100`, `max_signals_to_write=25`, `min_signal_score=50`,
-  filters, only/backfill untriaged); candidate pool scored/sorted/deduped/capped BEFORE append; append ≤25
-  items (one batched request); deterministic hash dedup; controlled `completed_no_data`. No outreach reachable.
-- **WF10 label sync v0.2 → v0.3** (DEC-127 behavior was already in code; versionId already `v003`) —
-  **labels only, no logic change** (overview note, code header, row `notes`, `plan_summary`, agent_requests
-  `notes`).
-- **WF12** lead-signal wording made fully conditional (says "tab empty — run WF14" only when zero rows; added
-  all-dismissed branch). Deterministic path + `llm_status=disabled`/`llm_cost_usd=0` unchanged.
-- **DEC-131** recorded (single-read + scoped/capped + capped append rule); COSTS_AND_LIMITS logs the historical
-  WF09 Avito run with `cost_not_recovered` (unknown ≠ free).
+**Retest results (reference):**
+- WF14 TEST B (first run): `public_lead_signals +4`, `agent_requests +1`, `signals_written=4`,
+  `duplicates_skipped=2`, `status=completed`, no quota error, no outreach.
+- WF14 TEST C (repeat): `+0`, `duplicates_skipped=6`, `signals_written=0`, `status=completed`.
+- WF14 TEST E (full-history quota): no quota error, `+0`, `duplicates_skipped=6`, `technical_errors +0`.
+- WF12 TEST D: `market_intelligence_reports +1`, `live_source_runs +1`, `llm_status=disabled`,
+  `llm_cost_usd=0`, report includes `public_lead_signals: 4 (new: 4)`.
 
-**Operator actions next, in order (all $0 unless stated):**
-1. [ ] Re-import patched **WF14 v0.2** (do NOT activate; paste Spreadsheet ID + rebind credential on the 5
-   Google Sheets nodes: review_queue / raw_market_records / public_lead_signals reads + public_lead_signals /
-   agent_requests appends).
-2. [ ] **TEST 8 retest (WF14 first run):** Execute once → ≥2 `public_lead_signals` rows from VK comments,
-   **no quota error**, `signals_written≤25`, no outreach recommendations, Claude calls=0, Final Summary
-   `status=completed`, `rows_read_*` show one read per tab.
-3. [ ] **TEST 9 retest (WF14 repeat/dedup):** Execute once again → `signals_written=0`, `duplicates_skipped>0`,
-   `status=completed_no_data`, no quota error.
-4. [ ] After WF14 passes: **re-import + rerun WF12 v0.3 deterministic report** so it ingests
-   `public_lead_signals` — confirm the report now shows the public lead/audience block (not the "run WF14"
-   empty notice); `llm_status=disabled`, `llm_cost_usd=0`.
-5. [ ] **Re-import WF10 (label-only change)** and confirm output `notes`/`plan_summary` read `wf10 v0.3`
-   (no behavior retest needed — logic unchanged; one Execute to confirm labels is enough).
-6. [ ] Only after 1–5 pass: prepare the next project update prompt covering — stage status update ·
-   live Telegram preview (WF11) · live VK API (WF13) · controlled Claude summary (WF12) · Stage 5 Telegram
-   Business Agent. **Each remains its own approval gate + cost note** (also: WF04 Phase B snapshot-append).
+**Built this session (WF11 v0.4, $0, no network, inert by default):** Firecrawl-preferred / HTTP-fallback gated
+live transport for public `t.me/s/<channel>` previews; both transport nodes DISABLED; gate normalizes
+username/URL allowlist and rejects `+`/joinchat/`t.me/c`/groups/private; `live_max_channels≤2`, `max_posts≤10`;
+parser adds view_count + dual response shape; cost recorded (http_get=$0, firecrawl=`cost_not_recovered`);
+fixture path unchanged; sanitized sample `n8n/fixtures/wf11_tme_s_preview_sample.html`. (DEC-132)
 
-**Test pack summary (reference):** T1 WF13 fixture dup-path PASS · T2 WF13 repeat dedup PASS ·
-T3 WF13 live guard PASS · T4 WF11 Telegram fixture PASS · T5 WF11 live guard PASS · T6 WF13→WF08 handoff PASS ·
-T7 WF10 aggregator PASS · **T8 WF14 public_lead_signals FAIL (quota/item explosion) → patched, retest pending** ·
-**T9 WF14 repeat NOT RUN (blocked by T8)** · T10 WF12 deterministic report PASS · T11 WF12 Claude approval
-guard PASS · T12 WF12 Claude disabled placeholder/guard PASS · T13 WF15 manual live-source logger PASS ·
-T14 WF15 enum validation PASS.
+**Next action — WF11 Telegram public preview LIVE smoke (its own approval + cost note):**
+1. [ ] Re-import **WF11 v0.4** (do NOT activate; paste Spreadsheet ID + rebind Google Sheets credential on the
+   5 sheet nodes). Confirm `Tест 1` fixture counters unchanged (6/5/1/4/1; `live_source_runs +1`, mode=fixture,
+   external_calls=0).
+2. [ ] **Arm live (operator):** `live_mode=true`; `live_approval_token=I_APPROVE_LIVE_TELEGRAM_PREVIEW`;
+   `live_channel_allowlist` = 1–2 PUBLIC channels (username or `https://t.me/s/<channel>`; NO `+`/joinchat/
+   groups/`t.me/c`); choose `live_transport` (`firecrawl` needs a Firecrawl credential bound; else `http_get`);
+   **enable the chosen transport node** (Firecrawl or HTTP — both ship disabled); keep `live_max_channels≤2`,
+   `live_max_posts_per_channel≤10`.
+3. [ ] **Run live smoke once:** expect `live_source_runs +1` (mode=live, external_calls=#channels, source cost
+   recorded — firecrawl→`cost_not_recovered`, http_get→$0), `raw_market_records`/`market_record_registry`
+   for unique posts, `agent_requests +1` (completed). Record the real Firecrawl cost in COSTS_AND_LIMITS.
+4. [ ] WF08 handoff (manual, `deterministic_first`, `agent_request_id_filter=<wf11_req_…>`), then WF10 → WF12.
+5. [ ] Live-guard regression: empty token / private-link allowlist → gate throws; transport stays disabled.
+
+**Next-after-Telegram — VK live v0.3 (do NOT build now; operator prerequisites):**
+- bind official **VK API credential** in n8n (no user sessions, official API only)
+- public **group/post allowlist**; `live_approval_token='I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION'`
+- methods: **`wall.get`** + **`wall.getComments`** only
+- **max 1–2 public groups** on first smoke; no private groups, no messages, no member lists, no auto-outreach
+- record VK API cost (free tier for public wall.get) in COSTS_AND_LIMITS; `cost_not_recovered` if unknown
+
+**Later (each its own approval gate + cost note):** WF12 controlled Claude summary (bind Anthropic credential,
+enable HTTP, budget guard) · Stage 5 Telegram Business Agent · WF04 Phase B snapshot-append.
+
+**Stage 5 Telegram Business Agent (planned, NOT this patch):** the bot is a **control/report interface, not a
+parser** — commands create `agent_requests`; paid/live actions require approval; first safe slice `/status`
+`/report` `/costs`, then request-creation `/scan` `/aggregate` `/build_report`; **no scraping inside the bot,
+no auto-outreach, no Claude calls inside the bot itself.**
 
 ---
 

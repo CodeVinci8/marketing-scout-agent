@@ -1,6 +1,8 @@
 # N8N_WORKFLOW_14_PUBLIC_LEAD_SIGNAL_TRIAGE_RU.md — WF14: триаж публичных лид-сигналов
 
-**Статус:** PATCHED v0.2 (2026-06-16) — **RETEST PENDING** (Тесты 8/9 не пройдены) · детерминированный, $0,
+**Статус:** v0.2 (2026-06-16) — **ОПЕРАТОРСКИЙ РЕТЕСТ PASS** (TEST B: `public_lead_signals +4`,
+`signals_written=4`, `duplicates_skipped=2`, без quota-ошибки; TEST C повтор: `+0`, `duplicates_skipped=6`;
+TEST E full-history: без quota-ошибки) · детерминированный, $0,
 без Claude · **Решение:** DEC-130 (+ **DEC-131** — патч квоты Google Sheets: single-read + scoped/capped + capped append)
 **Файл:** `n8n/workflows/14_public_lead_signal_triage.json` (`active=false`, только ручной запуск)
 **Связано:** `PUBLIC_LEAD_SIGNAL_LAYER.md`, `TABLE_SCHEMA.md` (public_lead_signals, 28 колонок),

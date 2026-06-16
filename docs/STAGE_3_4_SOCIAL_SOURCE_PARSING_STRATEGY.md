@@ -1,9 +1,19 @@
 # STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md — Social Source Parsing Strategy
 
-**Status:** ✅ **FOUNDATION WORKING IN FIXTURE MODE — WF11 operator fixture tests PASS (2026-06-12, §5.6).**
-§1–4 remain strategy; §5 documents the built WF11 foundation (`active=false`, fixture-only, no external call);
-§5.7 is the **live Telegram public-channel preview plan (v0.2) — pending, requires explicit operator
-approval**. No live API call, credential, or actor run is authorized by this document.
+**Status:** ✅ **FOUNDATION FIXTURE PASS + 🔧 WF11 v0.4 GATED LIVE PREVIEW BUILT (2026-06-16, DEC-132).**
+§1–4 remain strategy; §5 documents the built WF11 foundation; the live Telegram public-channel preview path is
+now **implemented but inert/gated** (Firecrawl-preferred / HTTP-fallback transport, both nodes DISABLED;
+URL-normalizing allowlist gate rejecting `+`/joinchat/`t.me/c`/groups; `max_channels≤2`, `max_posts≤10`).
+**No live API call, credential, or scrape is authorized by this document** — the first live smoke needs explicit
+operator approval (token + allowlist + enabling the chosen transport node).
+
+> **§5.8 — WF11 v0.4 live transport (DEC-132, 2026-06-16):** transport selected by `live_transport`
+> (`firecrawl` preferred if a Firecrawl credential exists, else `http_get`), routed by the `Route Live Transport`
+> IF; both transport nodes ship `disabled`. Gate accepts username or `t.me/s|/<channel>` URL and normalizes to a
+> username; rejects invite/private/group/`t.me/c`/numeric ids. Parser extracts channel/post_url/date/text/
+> view_count(opt.)/verbatim public contact from `tgme_widget_message` blocks and handles both Firecrawl and HTTP
+> response shapes. Cost: http_get=$0, firecrawl=`cost_not_recovered`. No MTProto/Bot-API/sessions/groups/members/
+> outreach. Sanitized parser sample: `n8n/fixtures/wf11_tme_s_preview_sample.html`.
 **Stage:** 3.4 of the Business Scout Agent · **Date:** 2026-06-11, updated 2026-06-12
 **Decisions:** DEC-096 (one-source-at-a-time connector pattern; do NOT build all social parsers at once),
 DEC-109 (first non-Avito connector = Telegram public-channel preview), DEC-110 (WF11 foundation built,

@@ -1,6 +1,13 @@
 # STAGE_3_SOURCE_AND_INTELLIGENCE_FOUNDATION.md — Stage 3 Definition
 
-**Status:** ACTIVE (2026-06-12, session 4 update) · **Decisions:** DEC-113, DEC-119, DEC-120, DEC-121, DEC-123, **DEC-124–127, DEC-129–130 (live readiness · run ledger · lead-signal layer · website reintegration)**
+**Status:** ACTIVE — **deterministic/fixture/tested chain OPERATIONAL (PASS) after the WF14 retest (2026-06-16);
+NOT closed (live Telegram WF11 + live VK WF13 remain gated).** · **Decisions:** DEC-113, DEC-119, DEC-120, DEC-121, DEC-123, **DEC-124–127, DEC-129–130 · DEC-131 (single-read/capped triage) · DEC-132 (WF11 v0.4 gated Telegram live preview)**
+
+> **2026-06-16 update:** WF14 public-lead-signal triage quota fix (DEC-130/131) **passed operator retest**
+> (TEST B `+4`, TEST C repeat `+0`/dup=6, TEST E full-history no quota error) — **WF14 no longer blocks** the
+> deterministic source/intelligence chain. WF12 deterministic report ingests `public_lead_signals` (PASS).
+> Live Telegram (WF11 v0.4, DEC-132) is **built but gated/inert** — first live smoke is the next operator step;
+> live VK (WF13) is the step after. Stage 3 stays open until live connectors are armed/tested.
 
 ## 1. What Stage 3 is
 

@@ -5,10 +5,27 @@ Updated after each session that incurs or measures real costs.
 
 ---
 
-## Session 2026-06-16 (session 5) — consistency pass: $0 incurred; historical Avito run logged with unrecovered cost
+## Session 2026-06-16 (session 5) — consistency pass + WF11 v0.4 gated live preview: $0 incurred
 
 No external calls, no Claude, no Apify, no Firecrawl, no live scraping this session. WF14 quota patch (v0.2),
-WF10 label sync (v0.3), WF12 lead-signal wording, and docs only.
+WF10 label sync (v0.3), WF12 lead-signal wording, WF11 v0.4 gated live transport (inert), and docs only.
+
+### WF11 v0.4 Telegram live-preview transport — cost model (DEC-132; nothing spent yet)
+
+WF11 live preview is built but **inert by default** ($0; both transport nodes disabled). When an operator arms
+a live smoke, source cost depends on the chosen transport:
+
+| `live_transport` | Per-call fee | How to record |
+|------------------|--------------|---------------|
+| `http_get` (fallback) | **$0** — plain GET of the public `t.me/s/<channel>` preview page, no per-call fee (bandwidth only) | `estimated_source_cost_usd=0`; note `http_get — no per-call fee` |
+| `firecrawl` (preferred) | **Firecrawl credits — unknown at log time** | `estimated_source_cost_usd=0` **with note `cost_not_recovered`**; then read Firecrawl account usage and record the real figure here |
+
+- **First smoke is bounded:** `live_max_channels≤2`, `live_max_posts_per_channel≤10` → at most 2 Firecrawl
+  scrape calls (or 2 HTTP GETs). `external_calls` is written to `live_source_runs` (= #channels fetched).
+- **`llm_calls=0`** — WF11 does no analysis; downstream WF08 deterministic_first stays $0 (Claude opt-in only).
+- **Cost honesty rule (DEC-131):** an unrecovered Firecrawl cost is logged `cost_not_recovered`, never implied
+  free. A run with `external_calls≥1` via Firecrawl is assumed to have cost credits until the usage is read.
+- **Operator action after the first Firecrawl smoke:** fill the measured Firecrawl credits/USD in this section.
 
 ### Historical WF09 Avito live run logged via WF15 (TEST 13) — cost NOT recovered
 

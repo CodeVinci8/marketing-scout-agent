@@ -4,11 +4,21 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
-## Session: 2026-06-16 (session 5) — Operator test pack (12 PASS) · WF14 quota patch v0.2 (DEC-130 patch)
+## Session: 2026-06-16 (session 5) — WF14 quota patch v0.2 + RETESTS PASS · consistency pass · WF11 v0.4 gated Telegram live preview (DEC-130/131/132)
 
-**Current blocker (exact):** WF14 TEST 8 failed in operator run — `Append public_lead_signals` →
-`The service is receiving too many requests from you` (Google Sheets quota / item explosion). TEST 9 (repeat
-dedup) NOT RUN, blocked by TEST 8. **This session patched WF14 only; retest is pending.**
+**Status (exact):** all operator retests now PASS — **no open blocker.** WF14 v0.2 (single-read + scoped/capped
++ capped append) cleared the Google Sheets quota failure; WF12 post-WF14 deterministic report now shows the
+public-lead-signal block. Next step is the first gated Telegram live smoke (WF11 v0.4), under its own approval.
+
+**Operator retest pack — PASS:**
+- **WF14 TEST B (first patched run):** `public_lead_signals +4`, `agent_requests +1`, `signals_written=4`,
+  `duplicates_skipped=2`, `status=completed`, no quota error, no outreach, `raw_market_records/registry/technical_errors +0`.
+- **WF14 TEST C (repeat dedup):** `+0`, `duplicates_skipped=6`, `signals_written=0`, `status=completed`.
+- **WF14 TEST E (full-history quota check):** no quota error, `+0`, `duplicates_skipped=6`, `technical_errors +0`.
+- **WF12 TEST D (deterministic after WF14):** `market_intelligence_reports +1`, `agent_requests +1`,
+  `live_source_runs +1`, `llm_status=disabled`, `llm_cost_usd=0`, report includes `public_lead_signals: 4 (new: 4)`
+  (no longer says the tab is empty).
+- Rest of pack still green: WF13 fixture/repeat/live-guard · WF11 fixture/live-guard · WF13→WF08 · WF10 · WF12 Claude guards · WF15 logger/enum.
 
 **Test pack result:** 12 PASS (WF13 fixture/repeat/live-guard · WF11 fixture/live-guard · WF13→WF08 handoff ·
 WF10 · WF12 deterministic + 2 Claude guards · WF15 logger + enum), **WF14 FAIL → patched**.
@@ -24,17 +34,25 @@ WF10 · WF12 deterministic + 2 Claude guards · WF15 logger + enum), **WF14 FAIL
 - Validated: JSON OK, 6 jsCode pass `node --check`, no key/Spreadsheet ID/HTTP/Claude/VK/Telegram nodes;
   local sim: 2 signals on run 1, 0 (duplicates_skipped=2) on repeat.
 
-**Next operator action:** re-import patched WF14 v0.2 (do NOT activate; paste Spreadsheet ID + rebind
-credential on 5 sheet nodes) → **TEST 8 retest** (≥2 rows, no quota error, status=completed, rows_read_* show
-one read/tab) → **TEST 9 retest** (signals_written=0, duplicates_skipped>0, status=completed_no_data) →
-rerun WF12 deterministic to ingest `public_lead_signals` → only then stage-closure review. Stage 3/4 NOT closed.
+**Consistency pass (earlier same session):** WF10 identity labels synced v0.2 → **v0.3** (labels only, code
+already had DEC-127); WF12 lead-signal wording made fully conditional; **DEC-131** recorded (single-read +
+scoped/capped + capped append). recent.md trimmed to 3 sessions (session 2 archived in AGENT_LOG).
 
-**Consistency pass (2026-06-16, same session):** WF10 internal identity labels synced v0.2 → **v0.3**
-(versionId was already v003; code already had DEC-127 objection/pain behavior — labels only, no logic change);
-WF12 public-lead-signal wording made fully conditional (only says "tab empty — run WF14" when zero rows; new
-branch for all-dismissed); **DEC-131** recorded (triage workflows: single-read sheets + scoped/capped pool +
-capped append to avoid Sheets quota). No external calls, no activation, no stage closure. recent.md trimmed
-to 3 sessions (session 2 archived in AGENT_LOG).
+**WF11 v0.4 — gated Telegram live preview built (DEC-132; $0, no network, inert by default):** added a real but
+INERT live-source path on top of the v0.3 guard. Transport selectable via `live_transport`: **firecrawl**
+(preferred, needs Firecrawl credential) or **http_get** (fallback, no per-call fee), routed by a new
+`Route Live Transport` IF; **both transport nodes ship DISABLED**. Gate now accepts username OR
+`t.me/s|/<channel>` URLs, normalizes to username, and rejects `t.me/+`/joinchat/`t.me/c`/groups/private/numeric
+ids; `live_max_channels≤2` (first smoke), `max_posts≤10`. Parser extracts channel/post_url/date/text/view_count
+(opt.)/verbatim public contact and handles both Firecrawl and HTTP response shapes. Live source cost recorded in
+agent_requests + live_source_runs: http_get=$0, firecrawl=`cost_not_recovered`. Fixture path unchanged
+(local sim: 6 posts → 4 unique / 1 dup / 1 hard-skip; manager_note empty). Sanitized parser sample:
+`n8n/fixtures/wf11_tme_s_preview_sample.html`. `active=false`; defaults `fixture_mode=true`/`live_mode=false`.
+
+**Next operator action:** (1) commit; (2) **gated WF11 live smoke** — set token + 1–2 public-channel allowlist
++ transport + enable the chosen transport node, run, verify `live_source_runs +1` (mode=live, external_calls=channels,
+cost recorded), then WF08 handoff. Live VK is the step AFTER that (see NEXT_ACTIONS checklist). Stage 5 Telegram
+bot NOT started. Do NOT mark Stage 3/4 fully closed (live TG/VK + Claude summary still gated).
 
 ---
 
