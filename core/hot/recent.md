@@ -4,6 +4,33 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-16 (session 5) — Operator test pack (12 PASS) · WF14 quota patch v0.2 (DEC-130 patch)
+
+**Current blocker (exact):** WF14 TEST 8 failed in operator run — `Append public_lead_signals` →
+`The service is receiving too many requests from you` (Google Sheets quota / item explosion). TEST 9 (repeat
+dedup) NOT RUN, blocked by TEST 8. **This session patched WF14 only; retest is pending.**
+
+**Test pack result:** 12 PASS (WF13 fixture/repeat/live-guard · WF11 fixture/live-guard · WF13→WF08 handoff ·
+WF10 · WF12 deterministic + 2 Claude guards · WF15 logger + enum), **WF14 FAIL → patched**.
+
+**WF14 v0.2 patch ($0, no external/Claude/live; ONLY WF14 touched):**
+- Root cause: linear sheet-reader chain → `Read raw_market_records` / `Read public_lead_signals` ran once per
+  upstream item (15 → 1410+ → thousands of API requests) before append.
+- Fix: single-read architecture (collapse `Hold Config` nodes → each tab read ONCE); real `Set Triage Config`
+  scoping (`max_source_rows=100`, `max_signals_to_write=25`, `min_signal_score=50`, platform/source filters,
+  only/backfill untriaged); candidate pool scored/sorted/deduped/capped BEFORE append; append ≤25 items (one
+  batch); deterministic hash `lead_signal_id` dedup + fallback key; controlled `completed_no_data`.
+- No outreach action reachable; MSK timestamps + active=false preserved.
+- Validated: JSON OK, 6 jsCode pass `node --check`, no key/Spreadsheet ID/HTTP/Claude/VK/Telegram nodes;
+  local sim: 2 signals on run 1, 0 (duplicates_skipped=2) on repeat.
+
+**Next operator action:** re-import patched WF14 v0.2 (do NOT activate; paste Spreadsheet ID + rebind
+credential on 5 sheet nodes) → **TEST 8 retest** (≥2 rows, no quota error, status=completed, rows_read_* show
+one read/tab) → **TEST 9 retest** (signals_written=0, duplicates_skipped>0, status=completed_no_data) →
+rerun WF12 deterministic to ingest `public_lead_signals` → only then stage-closure review. Stage 3/4 NOT closed.
+
+---
+
 ## Session: 2026-06-12 (session 4) — Live-ready WF11/WF13 · WF14 lead signals · live_source_runs+WF15 · WF10 v0.3 · WF12 v0.3 + Claude budget path · Stage 2 reintegration (DEC-124–130)
 
 **What was done ($0, без внешних вызовов/Claude/live; WF04–WF09 не тронуты):**

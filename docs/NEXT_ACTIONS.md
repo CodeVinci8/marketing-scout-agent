@@ -4,7 +4,46 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-12, session 4) — Live-source readiness (WF11/WF13) · Public Lead Signal Layer (WF14) · Run ledger (WF15 + live_source_runs) · WF10 v0.3 objections · WF12 v0.3 stakeholder report + budget-gated Claude path · Stage 2 website reintegration (DEC-124–130)
+## CURRENT PRIORITY (2026-06-16, session 5) — WF14 quota patch v0.2 → RETEST PENDING
+
+**Operator test pack result (this round):** 12 PASS, **WF14 FAIL** (TEST 8 Google Sheets quota / item
+explosion), TEST 9 NOT RUN (blocked by TEST 8). All other pipeline pieces are green:
+WF13 fixture/repeat/live-guard PASS · WF11 fixture/live-guard PASS · WF13→WF08 handoff PASS · WF10 PASS ·
+WF12 deterministic + Claude guards PASS · WF15 manual logger + enum validation PASS.
+
+**Patched this session ($0, no external calls, no Claude, no live):** WF14 v0.2 only.
+- Root cause: linear chain of Google Sheets read nodes → `Read raw_market_records` / `Read public_lead_signals`
+  re-executed per upstream item (15 → 1410+ → thousands of API requests) → append quota error.
+- Fix: single-read architecture (collapse `Hold Config` nodes between readers so each tab is read ONCE);
+  real `Set Triage Config` scoping (`max_source_rows=100`, `max_signals_to_write=25`, `min_signal_score=50`,
+  platform/source_type filters, only/backfill untriaged); candidate pool scored/sorted/deduped/capped BEFORE
+  append; append receives ≤25 items (one batched request); deterministic hash `lead_signal_id` dedup +
+  fallback key; controlled `completed_no_data` path. No outreach action reachable.
+
+**Operator actions next, in order (all $0 unless stated):**
+1. [ ] Re-import patched **WF14 v0.2** (do NOT activate; paste Spreadsheet ID + rebind credential on the 5
+   Google Sheets nodes: review_queue / raw_market_records / public_lead_signals reads + public_lead_signals /
+   agent_requests appends).
+2. [ ] **TEST 8 retest:** Execute once → ≥2 `public_lead_signals` rows from VK comments, **no quota error**,
+   `signals_written≤25`, no outreach recommendations, Claude calls=0, Final Summary `status=completed`,
+   `rows_read_*` show one read per tab.
+3. [ ] **TEST 9 retest (repeat):** Execute once again → `signals_written=0`, `duplicates_skipped>0`,
+   `status=completed_no_data`, no quota error.
+4. [ ] After WF14 passes: **rerun WF12 v0.3 deterministic report** so it ingests `public_lead_signals`.
+5. [ ] Only after WF14 + WF12 pass: proceed to docs/stage closure review and live-mode planning.
+6. [ ] **Separate approvals later (each its own gate + cost note):** WF11 live Telegram preview ·
+   WF13 live VK wall.get · WF12 Claude summary · WF04 Phase B snapshot-append · Telegram delivery (Stage 5).
+
+**Test pack summary (reference):** T1 WF13 fixture dup-path PASS · T2 WF13 repeat dedup PASS ·
+T3 WF13 live guard PASS · T4 WF11 Telegram fixture PASS · T5 WF11 live guard PASS · T6 WF13→WF08 handoff PASS ·
+T7 WF10 aggregator PASS · **T8 WF14 public_lead_signals FAIL (quota/item explosion) → patched, retest pending** ·
+**T9 WF14 repeat NOT RUN (blocked by T8)** · T10 WF12 deterministic report PASS · T11 WF12 Claude approval
+guard PASS · T12 WF12 Claude disabled placeholder/guard PASS · T13 WF15 manual live-source logger PASS ·
+T14 WF15 enum validation PASS.
+
+---
+
+## PREVIOUS PRIORITY (2026-06-12, session 4) — Live-source readiness (WF11/WF13) · Public Lead Signal Layer (WF14) · Run ledger (WF15 + live_source_runs) · WF10 v0.3 objections · WF12 v0.3 stakeholder report + budget-gated Claude path · Stage 2 website reintegration (DEC-124–130)
 
 **Built this session ($0, no external calls, no Claude calls, no Apify, no live scraping):**
 - **WF13 v0.2:** guarded live VK path (token `I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION` + allowlist + DISABLED
