@@ -169,3 +169,32 @@ Live НЕ входит в foundation; внешний транспорт треб
 
 **Тест v0.3:** fixture-прогон — прежние счётчики (6/5/1/4/1) + `live_source_runs` +1
 (mode=fixture, external_calls=0, cost=0).
+
+---
+
+## Патч v0.4.1 (DEC-133) — пост-уровневая бизнес-релевантность + корректный live `agent_requests`
+
+**Проблема (первый live-smoke):** транспорт/парсер/дедуп работали, но релевантность была слишком широкой —
+поздравления/личные/мотивационные посты записывались как бизнес-релевантные, рыночные новости повышались до
+`competitor_activity`. Причина: `Normalize Telegram Posts` считал релевантность по `text + channel_title`, то
+есть **название канала-конкурента само по себе** делало любой пост релевантным.
+
+**Что изменено (`Normalize Telegram Posts`):**
+- Релевантность считается **только по тексту поста**. Название/username канала и allowlist влияют **только** на
+  `confidence`/метаданные и **никогда** не создают релевантность.
+- Три набора пост-уровневых сигналов: `OFFER` (оффер/кейс/цена/CTA/комиссия/гарантия/позиционирование брокера) →
+  `competitor_activity`; `MARKET` (новости по ставкам/программам/регулированию/спросу) → `market_signal`;
+  `POSITIVE` (общие кредит/ипотека/брокер термины) → `market_signal`. Короткие токены (`ип/ки/цб/ооо/бки`) —
+  по границам слова (Cyrillic-aware), без ложных подстрок.
+- Нет пост-уровневых финансовых сигналов ⇒ `irrelevant_live_false_positive` → `hard_skip`: считается в
+  `hard_skipped_items` / `irrelevant_false_positives`, **не пишется** в `raw_market_records` /
+  `market_record_registry` по умолчанию. Опциональный аудит только при `live_debug_audit=true` (по умолчанию false).
+- `competitor_activity` требует пост-уровневых офферных сигналов; рыночный дайджест на канале-конкуренте остаётся
+  `market_signal`. **Без хардкода ID постов.**
+
+**`Build agent_requests Row` (Task B):** в LIVE-режиме title/details/notes используют **реальный live-allowlist**
++ `source=live_preview` + `transport=firecrawl|http_get` (раньше логировался fixture-allowlist). `next_action`
+требует `unique>0 && business_relevant>0`; при доминировании false positives предлагает поменять allowlist/конфиг
+релевантности; авто-handoff нет. `live_source_runs` поведение сохранено.
+
+**Fixture-счётчики не изменились:** 6 получено / 1 hard-neg / 5 релевантных / 4 unique / 1 dup; `false_positives=0`.

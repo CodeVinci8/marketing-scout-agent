@@ -524,3 +524,28 @@ Re-run the 4-fixture enrichment test against the v4 compact design **with the v5
 > `generated_at`, `first_seen_at`, `last_seen_at`) and `run_id` stamps are written in **explicit Moscow time
 > `+03:00`** (e.g. `2026-06-08T21:55:43.425+03:00`). Source-provided `published_at` is untouched, and existing
 > historical UTC-`Z` rows are left as-is.
+
+---
+
+## TEST 7 — 2026-06-16 — ⚠️ DIAGNOSTIC / CONTAMINATED (WF08 handoff on dirty `ipotekapro` WF11 data) + summary accounting fix (DEC-134)
+
+WF08 run `touchpoint_20260616_060227` consumed `ipotekapro` rows from a WF11 live run whose **relevance was too
+loose** (holiday post 4106 written as competitor; see WF11 §relevance fix / DEC-133). Routing/queue writes were
+correct, but `Final Summary Output` reported an **incoherent summary**: `selected_count=8`, `total_processed=1`,
+`deterministic_rows=1` while multiple rows were written to the queues.
+
+**Root cause (DEC-134):** `Final Summary` is on the `Loop Over Items` (SplitInBatches, batch size 1) **done**
+output and aggregated from `$('Build Deterministic Row').all()` / `$('Merge …').all()`. After a SplitInBatches
+loop those `.all()` calls return **only the last iteration**, so all counters except `selected_count` were
+undercounted.
+
+**Fix (summary/counter aggregation ONLY — routing untouched):** aggregate over `$input.all()` (the rows emitted
+on the done output, i.e. every processed row that looped back). `deterministic_rows` vs `claude_path_rows` are
+derived from each row's `parse_method`; added `processed_accounting_ok`. `llm_enabled=false` ⇒ `claude_calls=0`,
+`estimated_analysis_cost_usd=0` preserved.
+
+**Simulation (8 deterministic rows):** `selected_count=8`, `total_processed=8`, `deterministic_rows=8`,
+`route_counts={monitor_queue:6,content_queue:2}`, `processed_accounting_ok=true`, `technical_errors_count=0`.
+
+> **This run is diagnostic, NOT Stage 3 closure evidence** — it ran on contaminated upstream data. Re-run WF08
+> only on a **clean** WF11 live run (post DEC-133) before drawing stage conclusions.

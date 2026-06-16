@@ -5,6 +5,54 @@ Most recent first.
 
 ---
 
+## DEC-134 — WF08 Final Summary aggregates over the loop "done" output, not the last in-loop iteration
+
+**Date:** 2026-06-16
+**Context:** Operator TEST 7 (WF08 handoff on dirty `ipotekapro` data) wrote multiple rows to the queues, but
+`Final Summary Output` reported `selected_count=8`, `total_processed=1`, `deterministic_rows=1`. Root cause:
+`Final Summary` is on the `Loop Over Items` (SplitInBatches, batch size 1) **done** output and was computing
+totals from `$('Build Deterministic Row').all()` / `$('Merge ...').all()`. After a SplitInBatches loop those
+`.all()` calls return **only the last iteration**, so every counter except `selected_count` was undercounted.
+**Decision:** Aggregate counters over `$input.all()` — the rows emitted on the loop's done output, which carry
+**every** processed row that looped back through `Loop Over Items`. Derive `deterministic_rows` vs
+`claude_path_rows` from each row's `parse_method` (deterministic vs claude/merge methods) rather than from node
+output lengths. Added `processed_accounting_ok` (rows split exactly into claude+deterministic and never exceed
+`selected_count`). A legacy single-iteration read is kept only as a fallback if the done branch is empty.
+**Scope guard:** **summary/counter aggregation only** — no change to routing, the LLM kill switch (DEC-119),
+or the deterministic classifier. `claude_calls=0` and `estimated_analysis_cost_usd=0` remain when
+`llm_enabled=false`.
+
+---
+
+## DEC-133 — WF11 live business relevance is decided by POST-LEVEL evidence only (channel context is metadata, not relevance)
+
+**Date:** 2026-06-16
+**Context:** Operator live smoke (TEST 4–6, channels `brokershakurova` / `ipotekapro`) showed the transport,
+parser and dedup all working, but **relevance was too loose**: holiday/personal/motivation posts ("С Днём
+России", "выздоровления", "память телефона… мотивация") were written as business-relevant, and a market-news
+post was promoted to `competitor_activity`. Root cause: `Normalize Telegram Posts` built its relevance blob as
+`low(text)+' '+low(channel_title)` — so a competitor channel's title alone (e.g. "Кредитный брокер…") made
+every post in it relevant.
+**Decision (WF11 v0.4.1):**
+1. **Relevance is computed from POST TEXT ONLY.** Channel title/username/allowlist may only **raise
+   confidence/metadata** on an already-relevant post; they can never create relevance.
+2. **Three positive evidence sets, post-level:** `OFFER` (service pitch/case/price/CTA/commission/guarantee/
+   broker positioning…) → `competitor_activity`; `MARKET` (rate/program/regulatory/demand news) → `market_signal`;
+   `POSITIVE` (general credit/mortgage/broker finance terms) → `market_signal` floor. Short tokens (`ип/ки/цб/
+   ооо/бки`) use Cyrillic-aware word boundaries to avoid substring false hits.
+3. **No post-level finance/broker evidence ⇒ `irrelevant_live_false_positive`** → `hard_skip` (counted in
+   `hard_skipped_items`, surfaced as `irrelevant_false_positives`); **not** written to `raw_market_records` /
+   `market_record_registry` by default. Optional audit only when `live_debug_audit=true` (default false).
+4. **`competitor_activity` requires post-level offering evidence** — a market/news/digest post on a competitor
+   channel routes as `market_signal`, never promoted to competitor merely because the channel is a competitor.
+5. **No hardcoded post IDs** — general rules; verified against the live false positives and the fixture set
+   (fixture counters unchanged: 6 received / 1 hard-neg / 5 relevant / 4 unique / 1 dup).
+**Also (Task B):** in LIVE mode `agent_requests` title/details/notes now use the **actual live allowlist** +
+`source=live_preview` + `transport=firecrawl|http_get` (was logging the fixture allowlist). `live_source_runs`
+behavior preserved.
+
+---
+
 ## DEC-132 — WF11 Telegram Live Preview = Gated Public `t.me/s` Only, Firecrawl-Preferred / HTTP-Fallback, Both Transports Disabled by Default
 
 **Date:** 2026-06-16

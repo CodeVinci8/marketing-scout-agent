@@ -275,3 +275,33 @@ Hard boundaries (binding for the future build):
   WF10 → report.
 - Preview limitations honestly recorded: recent posts only, no comments, no audience authors.
 - Build order: DOM-parser patch tested on real `t.me/s/` markup **fixtures** first → approval → live smoke.
+
+---
+
+## §5.8 — Live relevance rule (DEC-133): post-level evidence only
+
+Hard rule for every live social connector (Telegram preview now; VK/others later):
+
+- **Relevance is decided by the POST/COMMENT text only.** Channel/group title, username, description, the
+  allowlist, and source context may raise `confidence`/metadata but **must never by themselves** make an item
+  business-relevant. A competitor channel does not make its holiday/personal posts relevant.
+- **`competitor_activity` requires post-level offering/competitor evidence** (service pitch, case/result,
+  price/rate/commission, consultation CTA, broker positioning, guarantee, product strategy). A market/news/digest
+  post routes as **`market_signal`**, never promoted to competitor merely because the channel is a competitor.
+- **Hard-skip patterns** (holiday greetings, illness/recovery, motivation/lifestyle, phone/memory tips, generic
+  family/home wishes, bare emoji/greetings) with no post-level finance/broker evidence ⇒
+  `irrelevant_live_false_positive` → skipped (counted, not written to raw/registry by default).
+- **General rules, no hardcoded IDs.** Optional debug audit only when `live_debug_audit=true` (default false).
+
+## §5.9 — Future: Telegram Discussion/Group connector (NOT in current MVP)
+
+A future Telegram **groups/discussion** connector is a **separate workflow**, not the WF11 public-channel preview.
+It is a **high-risk optional extension** and is explicitly out of current source closure. Required boundaries:
+
+- **MTProto / user-session** connector only as a deliberate, separately approved extension — never folded into WF11.
+- **Explicit allowlist only**; only groups/chats where the operator has **legitimate access**.
+- **Separate credential boundary** (own credentials, never shared with the public-preview path).
+- **No auto-outreach; no hidden/private data export.**
+- **Member extraction only if legally/ethically permitted and explicitly approved**; default output is
+  **aggregate signals + manual-review evidence, not contact lists.**
+- Not part of the current MVP. See `docs/FUTURE_CAPABILITIES_BACKLOG.md`.

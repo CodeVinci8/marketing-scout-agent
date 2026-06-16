@@ -73,3 +73,25 @@ Stage 4 now contains two concrete deliverables:
    (`llm_max_input_chars`, `llm_max_estimated_cost_usd`) + evidence-bound JSON prompt (six required RU
    sections) + disabled HTTP placeholder (credential bound in n8n only) + merge with usage-based cost and
    quality flags. Operator test steps in N8N_WORKFLOW_12 RU doc §v0.3. Every run logs to `live_source_runs`.
+
+---
+
+## Planned Claude enrichment scope (DEC-133 context) — selective, NOT every raw row
+
+Claude enrichment (still **not implemented**, docs only) must be **selective**. Claude does **not** enrich every
+raw row. Planned enrichment targets:
+
+- ambiguous WF08 rows (uncertain deterministic classification)
+- high-value competitor ads
+- unclear `market_signal` rows
+- public questions / objections
+- рекламные углы / positioning angles
+- semantic competitor analysis
+- offer decomposition: price, guarantee, CTA, proof, risk reversal, trust signals
+- audience pain / intent / objection extraction
+- the WF12 executive summary for the руководитель
+
+Claude enrichment must remain: **approval-gated**, **budget-gated**, **cost/token logged**, **no auto-outreach**,
+**no uncontrolled repair loops**, and **selected-row only** — never the whole raw dump by default. The post-level
+relevance fix (DEC-133) matters here: enrichment runs on **clean, relevant** rows, not channel-level false
+positives, so token spend is not wasted on holiday/personal posts.
