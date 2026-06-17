@@ -102,6 +102,31 @@ DEC-134 in `docs/DECISIONS.md`.
 
 ---
 
+## DEC-136 — Stage 3 MVP closure + Stage 2 scope + WF12 human wording + Stage 4 in 3 sub-stages (2026-06-17)
+
+**Rule:** Stage 3 MVP source/intelligence foundation is **CLOSED / PASS** (Telegram tracked-channel public
+preview closed on the clean two-channel run; WF08/WF10/WF12 deterministic chain PASS). VK live + Telegram
+groups/MTProto/member extraction = expansion/future, **not** MVP blockers; perfect semantic classification =
+**Stage 4.1** task. Dirty diagnostic runs are kept but **never** count as closure evidence.
+
+**WF12 wording:** operator-facing report text uses "публичный превью по отслеживаемым каналам", **no
+"allowlist"/"enable HTTP node"**; empty `competitor_site_snapshots` = "Stage 2 not yet populated, not a fault".
+Full Markdown is **never** shortened (Sheets row height is a display setting: Clip + top-align — see
+GOOGLE_SHEETS_VALIDATION_PLAN).
+
+**Stage 2:** WF06 already auto-reads candidates (no hardcoded URLs); "Mark Processed" stays disabled (manual
+WF04 handoff = no success signal) → safe pattern is a confirmation pass keyed on `url_registry` presence.
+Shallow is the MVP default; deep ≤3 pages/domain for priority competitors only. Snapshot population is a
+controlled runbook, not run now.
+
+**Stage 4:** exactly 3 sub-stages — 4.1 Claude Enrichment Core, 4.2 Intelligence Synthesis & Executive Report,
+4.3 Agent-Ready Report & Control Contract — started **after** the external audit
+(`PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md`). Project = Lead + Market Intelligence Agent
+(`LEAD_SCOUT_LAYER_PLAN.md`): public lead signals only, manual review, no auto-outreach, no member extraction.
+Full text: DEC-136 in `docs/DECISIONS.md`. Related: [[project-mvp-session4-state]].
+
+---
+
 ## DEC-135 — WF11 v0.4.2 final quality gate: 5-class post-level relevance + adjacent-RE skip + gate-based transport (2026-06-17)
 
 **Rule:** Live social-source relevance has **five post-level classes** for `credit_brokerage`, decided by **post

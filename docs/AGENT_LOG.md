@@ -5,6 +5,46 @@ Most recent first.
 
 ---
 
+## 2026-06-17 (session 8) — Stage 3 MVP CLOSED + Stage 2 scoped + WF12 wording + Stage 4/Lead Scout/audit docs (DEC-136)
+
+**Agent role:** project-engineer · **Scope:** stage-closure + cleanup + documentation patch. No Stage 4 build,
+no Stage 5 bot, no new live sources, no external API calls (no Firecrawl/Telegram/VK/Claude), no activation, no
+real keys/Spreadsheet ID, no deletions. Code touched only WF12 + WF06 (wording / operator-note; no behavior
+change).
+
+**What was done**
+- **Stage 3 closure (Task A):** `STAGE_3_SOURCE_AND_INTELLIGENCE_FOUNDATION.md` status → **CLOSED / PASS** with
+  exact framing; added the final clean two-channel acceptance evidence and the ledger of dirty diagnostic runs
+  (`wf11_req_…054733/055318/055705`, `touchpoint_…060227`, `wf10_…061138`, `wf11_req_20260617_032817`) marked
+  as diagnostics, never closure evidence; semantic debt deferred to Stage 4.1.
+- **WF12 wording (Task B):** rewrote `source_collection_actions` (Avito/Telegram/VK/Sites) + the empty-snapshot
+  notice in `Build Deterministic Report` — human wording, "tracked channels", **no "allowlist"/"enable HTTP
+  node"** in operator-facing text; VK = future expansion; empty snapshots = "Stage 2 not yet populated, not a
+  fault". Full Markdown report **not** shortened. Internal `source_allowlist` column kept.
+- **Sheets formatting (Task C):** `GOOGLE_SHEETS_VALIDATION_PLAN.md` + `MARKET_INTELLIGENCE_REPORT_SCHEMA.md` —
+  keep full Markdown; Clip / controlled Wrap + fixed row height; vertical-align Top; short summary fields;
+  optional export view; do not call Sheets formatting APIs in this patch.
+- **Stage 2 (Task D):** found WF06 already auto-reads `url_candidates`+`url_registry` (no hardcoded URLs);
+  applied one safe code change (WF06 handoff `operator_note` with idempotent mark-processed acceptance
+  criteria); "Mark Processed" stays disabled (manual WF04 handoff = no success signal). Added
+  `STAGE_2_WEB_COMPETITOR_PIPELINE_REVIEW.md` §5 cleanup checklist: observability via WF15 (native append =
+  Phase B), deep-vs-shallow policy (shallow = MVP default), `competitor_site_snapshots` runbook (not run now).
+- **Lead Scout (Task E):** created `LEAD_SCOUT_LAYER_PLAN.md` (sources, pipeline, public-contact handling,
+  scoring, safety, Stage 4/5 integration; public signals only, manual review, no auto-outreach).
+- **Stage 4 (Task F):** `STAGE_4_REPORT_AND_CLAUDE_LAYER.md` split into 4.1/4.2/4.3.
+- **External audit (Task G):** created `PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md`.
+- **Memory (Task H):** DEC-136 in `DECISIONS.md` + `core/warm/decisions.md`; `core/hot/recent.md` prepended
+  session 8 and trimmed to 3 sessions; `NEXT_ACTIONS.md` + `ROADMAP.md` updated.
+
+**Validation:** `python3 -m json.tool` PASS for WF12 + WF06; all WF12 (8) and WF06 Code nodes `node --check`
+OK; `active=false`; no real keys/Spreadsheet ID; no external-call/Bot-API/MTProto/outreach code added; report
+Markdown not shortened; operator-facing "allowlist" only as the internal `source_allowlist` column.
+
+**Next:** operator re-imports WF12+WF06, applies the Sheets display fix, hands repo + audit brief to the external
+agent, then Stage 4.1 (own approval + budget guard).
+
+---
+
 ## 2026-06-17 (session 7) — WF11 v0.4.2 FINAL Stage 3 quality gate: adjacent-RE skip + gate-based transport (DEC-135)
 
 **Agent role:** project-engineer · **Scope:** final Stage 3 closure patch — WF11 only (WF08 untouched; no new

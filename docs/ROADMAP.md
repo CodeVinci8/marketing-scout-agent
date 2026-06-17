@@ -7,6 +7,18 @@
 
 ## Stage 3 / 4 / 5 — Market Intelligence MVP (canonical definitions, 2026-06-12, DEC-123)
 
+**Session-8 update (2026-06-17, DEC-136) — STAGE 3 MVP CLOSED / PASS; next active stage = Stage 4 after external audit:**
+- **Stage 3 MVP source/intelligence foundation: CLOSED / PASS** on the clean two-channel WF11 v0.4.2 acceptance
+  run. Telegram tracked-channel public preview CLOSED; WF08 handoff/accounting, WF10 aggregation, WF12
+  deterministic report all PASS. VK live + Telegram groups/MTProto/member extraction = expansion/future (not MVP
+  blockers); perfect semantic classification = Stage 4.1 task; dirty diagnostic runs kept, never closure evidence.
+- **Stage 4 = 3 sub-stages:** 4.1 Claude Enrichment Core · 4.2 Intelligence Synthesis & Executive Report · 4.3
+  Agent-Ready Report & Control Contract — started **after** the external audit (`PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md`).
+- **Lead Scout layer** is now concrete (`LEAD_SCOUT_LAYER_PLAN.md`): public lead signals only, manual review, no
+  auto-outreach. **Stage 2** web debt scoped with a runbook (`STAGE_2_WEB_COMPETITOR_PIPELINE_REVIEW.md` §5).
+- This session: WF12 operator-facing wording de-jargoned ("tracked channels", no "allowlist"/"enable HTTP node");
+  full Markdown report kept; Sheets long-row formatting documented. **No Stage 4 build, no external calls.**
+
 **Session-7 update (2026-06-17, DEC-135) — WF11 v0.4.2 FINAL Stage 3 quality gate; closure pending one acceptance run:**
 - WF11 v0.4.2 closes the last relevance gap: **post-text-only** relevance with **5 classes**
   (`competitor_activity` · `market_signal` · `adjacent_real_estate_signal` skip · `irrelevant_live_false_positive`

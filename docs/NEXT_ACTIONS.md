@@ -4,7 +4,30 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-17, session 7) — WF11 v0.4.2 FINAL Stage 3 quality gate → ONE short acceptance run, then Stage 4
+## CURRENT PRIORITY (2026-06-17, session 8) — STAGE 3 MVP CLOSED → external audit → Stage 4.1 (DEC-136)
+
+Stage 3 MVP source/intelligence foundation is **CLOSED / PASS** on the clean two-channel WF11 v0.4.2 acceptance
+run (posts=20, business_relevant=8, hard_skipped=11, unique=0, dup=8, external_calls=2, technical_errors=0).
+WF08/WF10/WF12 deterministic chain PASS. **Do not reopen Stage 3.** This session was closure + cleanup only — no
+Stage 4 build, no external calls.
+
+**Operator next steps (in order):**
+1. Re-import the patched **WF12** + **WF06** (wording/operator-note only; no behavior change). Confirm WF12
+   deterministic report still PASS ($0, `llm_status=disabled`, no "allowlist"/"enable HTTP node" wording).
+2. Apply the Google Sheets display fix on `market_intelligence_reports` (Clip + vertical-align Top; keep full
+   Markdown) — see `GOOGLE_SHEETS_VALIDATION_PLAN.md`.
+3. Hand the repo + `docs/PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md` to the external ChatGPT-agent audit.
+4. After the audit → **Stage 4.1 Claude Enrichment Core** (its own approval + budget guard; never call Claude
+   before that). See `STAGE_4_REPORT_AND_CLAUDE_LAYER.md` (4.1/4.2/4.3) + `LEAD_SCOUT_LAYER_PLAN.md`.
+5. Optional Stage 2 (when desired, own approval): controlled `competitor_site_snapshots` runbook for 3–5 top
+   competitors — `STAGE_2_WEB_COMPETITOR_PIPELINE_REVIEW.md` §5.6.
+
+Semantic-classification debt (`brokershakurova/1237`,`/1245`, `ipotekapro/4090`) → Stage 4.1, **not** a Stage 3
+reopen. VK live + Telegram groups/MTProto = expansion/future.
+
+---
+
+## PREVIOUS PRIORITY (2026-06-17, session 7) — WF11 v0.4.2 FINAL Stage 3 quality gate → ONE short acceptance run, then Stage 4
 
 WF11 v0.4.2 (DEC-135) closes the last relevance gap: **adjacent real-estate** posts (object/lot/ЖК promos +
 agent recruitment) and holiday/personal posts no longer pollute `competitor_activity`/`market_signal`. Five

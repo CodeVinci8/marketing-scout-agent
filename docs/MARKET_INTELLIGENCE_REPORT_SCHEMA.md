@@ -69,6 +69,9 @@ Telegram digests render from this row — the row is the single source of truth 
 - **Contact policy:** reports contain no individual contacts; competitor org identification only.
   Audience sections are aggregate-only (CONTACT_AND_OUTREACH_POLICY §5).
 - Append-only; one row per generated report; regeneration writes a new row referencing the same `wf10_run_id`.
+- **Full Markdown stays inline** in `notes` — never truncated. The resulting large row height is a Sheets display
+  matter, not a bug: set long-text columns to **Clip** (or controlled Wrap + fixed row height), vertical-align
+  **Top**, keep summary columns short. Full guidance: `GOOGLE_SHEETS_VALIDATION_PLAN.md` (Long report rows).
 
 ## 4. Telegram digest rendering (from one row)
 
