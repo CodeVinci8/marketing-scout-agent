@@ -1,5 +1,10 @@
 # TELEGRAM_CONTROL_AGENT_PLAN.md — Telegram Control / Report Agent Plan
 
+> **Wording note (2026-06-17, DEC-135):** operator-facing control/report text uses **"tracked Telegram channels /
+> список отслеживаемых каналов"**, not "allowlist" (internal config names may stay for compatibility). The control
+> agent is a **conversational AI layer** (natural-language → plan/cost/approval → run → report → next actions),
+> with slash commands as fallback affordances; it never contains parser/scraping logic.
+
 **Status:** 📐 PLAN — **not built.** No bot token, no webhook, no workflow is authorized by this document.
 **Date:** 2026-06-12 · **Decisions:** DEC-067 (Control Bot ≠ source parser), DEC-112 (Claude in report/control
 layer), DEC-098 (no auto-outreach).

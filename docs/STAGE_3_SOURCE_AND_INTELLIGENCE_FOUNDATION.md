@@ -1,7 +1,10 @@
 # STAGE_3_SOURCE_AND_INTELLIGENCE_FOUNDATION.md — Stage 3 Definition
 
-**Status:** ACTIVE — **deterministic/fixture/tested chain OPERATIONAL (PASS) after the WF14 retest (2026-06-16);
-NOT closed (live Telegram WF11 + live VK WF13 remain gated).** · **Decisions:** DEC-113, DEC-119, DEC-120, DEC-121, DEC-123, **DEC-124–127, DEC-129–130 · DEC-131 (single-read/capped triage) · DEC-132 (WF11 v0.4 gated Telegram live preview)**
+**Status:** ACTIVE — **source pipeline OPERATIONAL; Telegram public-channel source CLOSURE PENDING one short
+acceptance run after WF11 v0.4.2 (DEC-135, 2026-06-17). VK live + Telegram groups/MTProto = expansion/future,
+not MVP blockers. Next active stage after acceptance = Stage 4 (Claude enrichment + report).** · **Decisions:**
+DEC-113, DEC-119–123, DEC-124–134, **DEC-135 (WF11 v0.4.2 final quality gate: 5-class post-level relevance +
+adjacent_real_estate_signal skip + gate-based transport + tracked-channel wording)**
 
 > **2026-06-16 update:** WF14 public-lead-signal triage quota fix (DEC-130/131) **passed operator retest**
 > (TEST B `+4`, TEST C repeat `+0`/dup=6, TEST E full-history no quota error) — **WF14 no longer blocks** the
@@ -107,3 +110,29 @@ these runs are **contaminated diagnostics, not stage-closing evidence**:
 
 **Fix applied:** WF11 v0.4.1 post-level relevance (DEC-133) + WF08 v0.10 summary accounting (DEC-134). **Stage 3
 remains open** — re-run the live smoke + WF08 handoff on clean data, and live VK + Claude summary are still gated.
+
+---
+
+## 2026-06-17 — WF11 v0.4.2 final quality gate → Stage 3 closure PENDING one short acceptance run (DEC-135)
+
+After v0.4.1, the diagnostic run `wf11_req_20260617_032817` (`ipotekapro`) is a **useful diagnostic, NOT closure
+evidence**: post-level relevance had fixed greetings/personal posts, but **adjacent real-estate posts** still
+leaked in — object/lot/ЖК promos and real-estate agent recruitment were written as `competitor_activity`. The
+v0.4.2 patch (DEC-135) closes this with a 5-class post-level gate (`competitor_activity` · `market_signal` ·
+`adjacent_real_estate_signal` (skip) · `irrelevant_live_false_positive` (skip) · `hard_negative` (skip)) and
+moves the transport to **gate-based safety** (nodes enabled but unreachable unless the approval gate passes).
+Local sim: 16/16 representative snippets correct; fixture regression unchanged (6/5/1/4/1, false_positives=0).
+
+**Stage 3 status after this patch:**
+- **Stage 3 source pipeline:** OPERATIONAL (deterministic/fixture chain PASS).
+- **Stage 3 Telegram public-channel source:** **closure PENDING one final acceptance run** (≤5 operator tests in
+  the WF11 RU doc) after this patch.
+- **VK live:** moved to **Stage 3 expansion**, not an MVP closure blocker (see FUTURE_CAPABILITIES_BACKLOG §VK).
+- **Telegram groups / MTProto / member extraction:** **future high-risk extension**, not an MVP blocker
+  (FUTURE_CAPABILITIES_BACKLOG §"Future Telegram Discussion/Group Connector").
+- **Stage 2 web snapshot / WF06 manual config:** backlog / Stage 2 cleanup, **not** a Stage 3 blocker.
+- **Next after the final acceptance run:** **Stage 4 — Claude enrichment + executive report** (now the next
+  active stage; see `STAGE_4_REPORT_AND_CLAUDE_LAYER.md`).
+
+> Wording: operator-facing text now uses **"tracked Telegram channels" / "список отслеживаемых каналов"**, not
+> "allowlist" (internal config name `live_channel_allowlist` kept for compatibility).

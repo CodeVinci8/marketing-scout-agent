@@ -5,6 +5,62 @@ Most recent first.
 
 ---
 
+## DEC-135 — WF11 v0.4.2 final quality gate: 5-class post-level relevance + adjacent-RE skip + gate-based transport
+
+**Date:** 2026-06-17
+**Context:** After DEC-133 (post-level relevance) fixed greeting/personal false positives, the diagnostic run
+`wf11_req_20260617_032817` (`ipotekapro`) showed a remaining class of pollution for the `credit_brokerage` MVP:
+**adjacent real-estate posts** — object/lot/ЖК promotions and real-estate **agent recruitment** — were written as
+`competitor_activity`, and a holiday post was written as `market_signal`. Channel-level membership ("it's a
+competitor channel") was still leaking into relevance via weak shared tokens (`комиссия`, `ставка`, `программа`).
+This is the final Stage 3 closure patch; the operator is fatigued by repeated manual retests, so the fix had to be
+robust and validated locally, with a short (≤5-test) acceptance plan rather than another open-ended retest loop.
+
+**Decision:**
+1. **Relevance is decided by POST TEXT ONLY.** Channel title/username, source URL, the list of tracked channels,
+   channel description, and source context may raise confidence/metadata but **never by themselves** make a post
+   relevant.
+2. **Five post-level classes** for `credit_brokerage`:
+   - `competitor_activity` — requires post-level broker/credit/mortgage **service** evidence (offer, case, CTA,
+     pricing/commission, guarantee, approval/refusal handling, refinancing, rate reduction, "подберём банк",
+     "кредит под залог", "оплата за результат", …).
+   - `market_signal` — market/program/rate/regulatory **news** affecting credit/mortgage, **not** a direct offer
+     (digests, government-program changes, demand/rate trends). A digest on a competitor channel stays
+     `market_signal`, not `competitor_activity`.
+   - `adjacent_real_estate_signal` (**new**) — real-estate object/lot promos, agent recruitment, property marketing
+     with only weak mortgage context. **Skipped by default** (not written to `raw_market_records` /
+     `market_record_registry`); counted in `adjacent_real_estate_skips`. Overridden to `competitor_activity` only on
+     strong, unambiguous broker/credit-service evidence (`STRONG_SERVICE`).
+   - `irrelevant_live_false_positive` — greetings/holidays/personal/illness/lifestyle without finance evidence.
+     Skipped; counted in `irrelevant_false_positives`.
+   - `hard_negative` — legal address, company registration, accounting, unrelated B2B. Skipped.
+   Strong service CTA wins over market context (e.g. family-mortgage rule change + "запишитесь на консультацию,
+   подберём программу" → `competitor_activity`) — chosen consistently and documented.
+3. **Gate-based transport safety (Task B).** Transport nodes renamed (`Firecrawl Scrape t.me Preview (LIVE gated
+   transport)`, `Fetch t.me Preview Page (HTTP fallback, LIVE gated)`) and **enabled**. Safety is now the
+   **approval gate + tracked-channel validation + caps**, not manual node disabling — the same pattern as the other
+   live-capable workflows. The transport is unreachable unless `live_mode=true` + exact approval token + non-empty
+   validated tracked-channel list + selected transport; `Route Live Transport` runs only the selected transport.
+   Fixture mode and empty-token both yield `external_calls=0` by graph logic. `active=false` preserved.
+4. **Operator-facing wording** uses "tracked Telegram channels / список отслеживаемых каналов", not "allowlist";
+   internal config name `live_channel_allowlist` kept for compatibility.
+
+**Scope decisions:** VK live → Stage 3 **expansion** (not MVP blocker); Telegram groups/MTProto/member extraction
+→ **future high-risk extension**; Stage 2 web snapshot / WF06 manual config → backlog. **Next active stage = Stage 4**
+(Claude enrichment + executive report) after the short acceptance run.
+
+**Validation:** JSON valid (`python3 -m json.tool`); 11 Code nodes pass `node --check`; local sim 16/16
+representative snippets correct; fixture regression unchanged (6/5/1/4/1, `irrelevant_false_positives=0`,
+`adjacent_real_estate_skips=0`, unique=4, dup=1). No real keys/Spreadsheet ID; no Telegram Bot API/MTProto/member
+code; no outreach path. WF08 untouched (DEC-134 fix verified intact, not re-edited).
+
+**Alternatives considered:** hardcoding the known bad post IDs (rejected — brittle, channel-specific, violates
+post-level-evidence principle); adding a new "adjacent" sink/tab (rejected for MVP closure — documented as optional
+future, not implemented); keeping transport nodes disabled (rejected — operator wants the gate-based pattern used
+elsewhere, and the gate already guarantees inertness).
+
+---
+
 ## DEC-134 — WF08 Final Summary aggregates over the loop "done" output, not the last in-loop iteration
 
 **Date:** 2026-06-16

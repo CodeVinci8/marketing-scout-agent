@@ -162,3 +162,27 @@ Direction for the Stage 5 operator interface (do **not** build now):
   returns the report, and suggests next actions.
 - **Commands are fallback affordances only:** `/status`, `/latest_report`, `/costs`, `/help`.
 - Approval-gated and budget-gated end to end; no auto-outreach. Cross-ref: `docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`.
+
+## VK live connector (Stage 3 EXPANSION, NOT MVP closure blocker)
+
+Moved out of the Stage 3 MVP closure path (2026-06-17, DEC-135). VK live remains a planned **expansion**, not a
+blocker for closing the Telegram source:
+
+- **Official VK API only** — bound credential in n8n; no user sessions, no unofficial clients.
+- Methods limited to **`wall.get`** + **`wall.getComments`**; **public groups only**, from an explicit **list of
+  tracked groups** (operator-provided).
+- **Approval token** `I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION` + gate (WF13 v0.2 path already built/inert, DEC-125).
+- **No messages, no member extraction, no outreach.** Max 1–2 public groups on first smoke; cost recorded
+  (free tier for public `wall.get`; `cost_not_recovered` if unknown).
+- Cross-ref: `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md`, WF13 RU doc.
+
+## Stage 2 cleanup (backlog, NOT a Stage 3 blocker)
+
+Tracked so the web pipeline is not forgotten; none of this blocks Stage 3 closure (2026-06-17):
+
+- **WF06** still uses a manual **`Set Runner Config`** node (operator edits `runner_mode` by hand).
+- **WF06 `Mark Candidates Processed`** update node ships **disabled** (operator enables after confirming
+  `monitor_queue`).
+- **deep / no-deep domain policy** needs a cleaner operator flow (currently mode-switch by hand).
+- **`competitor_site_snapshots`** tab still needs population (WF04 Phase B snapshot-append, own approval — DEC-129).
+- Cross-ref: `docs/STAGE_2_WEB_PIPELINE_REVIEW.md`, `docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md`.

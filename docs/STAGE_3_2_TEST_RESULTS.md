@@ -549,3 +549,35 @@ derived from each row's `parse_method`; added `processed_accounting_ok`. `llm_en
 
 > **This run is diagnostic, NOT Stage 3 closure evidence** — it ran on contaminated upstream data. Re-run WF08
 > only on a **clean** WF11 live run (post DEC-133) before drawing stage conclusions.
+
+---
+
+## 2026-06-17 — WF11 v0.4.2 final quality gate; diagnostic run inventory (DEC-135)
+
+This patch closes the remaining adjacency/false-positive issue. The runs below are recorded as
+**diagnostic / contaminated — NOT Stage 3 closure evidence**. No existing rows were deleted; they are
+documented here for audit only.
+
+| Run id | Workflow | Status |
+|--------|----------|--------|
+| `wf11_req_20260616_054733` | WF11 live `brokershakurova` | contaminated diagnostic (channel-level relevance) |
+| `wf11_req_20260616_055318` | WF11 live `brokershakurova` repeat | contaminated diagnostic |
+| `wf11_req_20260616_055705` | WF11 live `ipotekapro` | contaminated diagnostic |
+| `touchpoint_20260616_060227` | WF08 handoff | diagnostic on dirty upstream (surfaced DEC-134) |
+| `wf10_20260616_061138` | WF10 aggregate | consumed dirty data — not closure evidence |
+| `wf11_req_20260617_032817` | WF11 live `ipotekapro` (post v0.4.1) | **useful diagnostic** showing the remaining adjacent/false-positive issue **before** this final patch — NOT closure evidence |
+
+**TEST 6 (`ipotekapro`, pre-patch) — the problem this patch fixes:** posts_received=10,
+business_relevant_items=10, hard_skipped_items=0, competitor_activity=9, market_signal=1, unique=2, duplicates=8,
+raw written=10, registry written=2 — far too broad. Known polluting cases now handled by v0.4.2:
+- `t.me/ipotekapro/4106` "С Днём России!…" → `irrelevant_live_false_positive` (skipped).
+- `t.me/ipotekapro/4092` agent recruitment ("в поисках агентов … 30% от комиссии") → `adjacent_real_estate_signal` (skipped).
+- `t.me/ipotekapro/4098` "ЛОТ НЕДЕЛИ … ЖК … программа со сниженной ставкой" → `adjacent_real_estate_signal` (skipped).
+- `4090` / `4097` market/news digests → `market_signal` (not `competitor_activity`).
+
+**Local simulation (node, no network) — WF11 v0.4.2:** 16/16 representative snippets classified as intended
+(see WF11 RU doc); fixture regression unchanged: posts_received=6, business_relevant_items=5, hard_skipped_items=1,
+irrelevant_false_positives=0, adjacent_real_estate_skips=0, unique=4, duplicates=1, raw +5, registry +4.
+
+**Next:** the ≤5-test final acceptance plan (WF11 RU doc). After it passes, the Telegram public-channel source
+can be closed and Stage 4 (Claude enrichment + report) becomes active.

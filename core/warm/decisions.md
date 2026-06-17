@@ -99,3 +99,28 @@ returns only the **last** iteration, silently undercounting totals/routes. Deriv
 **Reason:** loose relevance contaminates downstream WF08/WF10/WF12; channel-level relevance was the exact
 false-positive bug in the first live smoke. Loop-tail `.all()` is a recurring n8n footgun. Full text: DEC-133 /
 DEC-134 in `docs/DECISIONS.md`.
+
+---
+
+## DEC-135 — WF11 v0.4.2 final quality gate: 5-class post-level relevance + adjacent-RE skip + gate-based transport (2026-06-17)
+
+**Rule:** Live social-source relevance has **five post-level classes** for `credit_brokerage`, decided by **post
+text only**: `competitor_activity` (post-level broker/credit/mortgage **service** evidence), `market_signal`
+(market/program/rate/regulatory **news**, no direct offer — digests stay market even on a competitor channel),
+`adjacent_real_estate_signal` (real-estate object/lot promos + agent recruitment — **skipped by default**;
+overridden to competitor only on strong unambiguous service evidence), `irrelevant_live_false_positive`
+(greetings/holidays/personal/lifestyle — skipped), `hard_negative` (legal/registration/accounting/B2B — skipped).
+Channel title/username, the **list of tracked channels**, channel description, source URL and source context
+**never** create relevance. Strong service CTA wins over market context (chosen consistently).
+
+**Rule (transport safety):** live transport nodes stay **enabled** but are **gate-protected** — unreachable unless
+the approval gate passes (`live_mode` + exact token + non-empty validated tracked-channel list + selected
+transport); only the selected transport runs. Safety = **approval gate + tracked-channel validation + caps**, not
+manual node disabling (same pattern as other live workflows). Fixture/empty-token → `external_calls=0` by graph.
+
+**Wording:** operator-facing text/summaries say "tracked Telegram channels / список отслеживаемых каналов";
+internal config name `live_channel_allowlist` kept for compatibility.
+
+**Scope:** VK live = Stage 3 expansion (not MVP blocker); Telegram groups/MTProto/member extraction = future
+high-risk extension; Stage 2 WF06 cleanup = backlog. Next active stage = Stage 4 (Claude enrichment + report).
+Full text: DEC-135 in `docs/DECISIONS.md`.

@@ -7,6 +7,21 @@
 
 ## Stage 3 / 4 / 5 — Market Intelligence MVP (canonical definitions, 2026-06-12, DEC-123)
 
+**Session-7 update (2026-06-17, DEC-135) — WF11 v0.4.2 FINAL Stage 3 quality gate; closure pending one acceptance run:**
+- WF11 v0.4.2 closes the last relevance gap: **post-text-only** relevance with **5 classes**
+  (`competitor_activity` · `market_signal` · `adjacent_real_estate_signal` skip · `irrelevant_live_false_positive`
+  skip · `hard_negative` skip). Real-estate object/lot promos and agent recruitment no longer pollute
+  competitor/market; holiday/personal posts are skipped. Channel title/username/tracked-channel list/description
+  never create relevance.
+- Transport is now **gate-based** (nodes enabled but unreachable unless the approval gate passes) — same pattern as
+  other live workflows; safety = gate + tracked-channel validation + caps, not manual node disabling.
+- Local sim 16/16 correct; fixture regression unchanged. **WF08 untouched.**
+- **Stage 3 source pipeline: OPERATIONAL.** **Telegram public-channel source: closure PENDING one short acceptance
+  run** (≤5 operator tests). **VK live → Stage 3 expansion** (not MVP blocker). **Telegram groups/MTProto/member
+  extraction → future high-risk extension.** **Stage 2 web snapshot / WF06 manual config → backlog.**
+- **Next active stage after acceptance = Stage 4 (Claude enrichment + executive report).** Operator-facing wording =
+  "tracked Telegram channels / список отслеживаемых каналов".
+
 **Session-6 update (2026-06-16) — first WF11 live smoke = contaminated diagnostics; relevance + accounting patched (Stage 3 still OPEN):**
 - The first gated WF11 Telegram live smoke proved transport/parser/dedup, but **live relevance was too loose**
   (channel-level relevance wrote holiday/personal posts as business-relevant; market news inflated to competitor).
