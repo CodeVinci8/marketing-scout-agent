@@ -5,6 +5,42 @@ Most recent first.
 
 ---
 
+## 2026-06-17 (session 7) — WF11 v0.4.2 FINAL Stage 3 quality gate: adjacent-RE skip + gate-based transport (DEC-135)
+
+**Agent role:** project-engineer · **Scope:** final Stage 3 closure patch — WF11 only (WF08 untouched; no new
+sources, no VK live, no Telegram groups/MTProto/member extraction, no Stage 5 bot, no Claude enrichment, no
+external calls).
+
+**Problem:** diagnostic run `wf11_req_20260617_032817` (`ipotekapro`) after v0.4.1 still leaked **adjacent
+real-estate** posts (object/lot/ЖК promos + agent recruitment) as `competitor_activity`, and a holiday post as
+`market_signal` (TEST 6: 10/10 business-relevant, far too broad).
+
+**WF11 v0.4.2 (DEC-135):**
+- `Normalize Telegram Posts`: 5-class **post-text-only** relevance — `competitor_activity` (post-level service
+  evidence) · `market_signal` (news/program/rate) · `adjacent_real_estate_signal` (object/lot/recruitment — **skip**
+  by default, override to competitor only on strong service evidence) · `irrelevant_live_false_positive`
+  (greeting/holiday/personal — skip) · `hard_negative` (skip). Cleaned the OFFER vocabulary so bare `комисси`/`ставк`
+  no longer trigger competitor; added STRONG_SERVICE / RE_OBJECT / RE_RECRUIT / GREETING term sets.
+- Counters: `adjacent_real_estate_skips` added to `Build agent_requests Row` + `Final Summary Output`.
+- Transport (Task B): nodes renamed to `… (LIVE gated transport)` / `… (HTTP fallback, LIVE gated)` and **enabled**;
+  safety moved to the **approval gate + tracked-channel validation + caps** (gate-based, like other workflows);
+  `Route Live Transport` runs only the selected transport; fixture/empty-token → `external_calls=0` by graph.
+- Wording: operator-facing strings say "tracked channels / список отслеживаемых каналов"; internal
+  `live_channel_allowlist` kept.
+
+**Validation:** `python3 -m json.tool` OK; 11 Code nodes `node --check` OK; local sim **16/16** representative
+snippets correct; fixture regression unchanged (6/5/1/4/1, false_positives=0, adjacent=0, unique=4, dup=1, raw +5,
+registry +4). `active=false`; no real keys/Spreadsheet ID; no Bot API/MTProto/member/outreach code.
+
+**Docs updated:** WF11 RU (v0.4.2 + ≤5-test acceptance plan), STAGE_3 foundation (closure pending), STAGE_3_4
+strategy (§5.10), STAGE_3_2_TEST_RESULTS (diagnostic inventory), STAGE_4 (next active stage), FUTURE backlog
+(VK live + Stage 2 cleanup), DECISIONS (DEC-135), NEXT_ACTIONS, ROADMAP, core/hot + core/warm.
+
+**Status:** Stage 3 source pipeline operational; **Telegram public-channel source closure PENDING one short
+acceptance run**; VK live + Telegram groups = expansion/future; next active stage = Stage 4 (Claude enrichment + report).
+
+---
+
 ## 2026-06-16 (session 6) — WF11 v0.4.1 post-level relevance fix + WF08 loop-summary accounting fix (DEC-133/134); first live smoke diagnosed
 
 **Agent role:** project-engineer · **Scope:** correction patch only (no new sources, no VK/groups/MTProto/Claude/Stage 5).

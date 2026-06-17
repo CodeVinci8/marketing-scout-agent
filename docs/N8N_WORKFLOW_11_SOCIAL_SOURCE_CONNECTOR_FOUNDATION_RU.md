@@ -2,11 +2,12 @@
 
 **Workflow:** `n8n/workflows/11_social_source_connector_foundation.json`
 **Имя:** `11 - Social Source Connector Foundation (Telegram Public Channel Preview)`
-**Статус:** ✅ **FIXTURE FOUNDATION PASS (операторские тесты 2026-06-12) + патч v0.1.1 контактов (DEC-114) +
-🔧 v0.4 GATED LIVE PREVIEW (DEC-132, 2026-06-16).** По умолчанию `active=false`, `fixture_mode=true`,
-`live_mode=false`. Fixture-режим = $0. **Live-путь реален, но ИНЕРТЕН по умолчанию:** обе транспорт-ноды
-(Firecrawl scrape и HTTP GET) ОТКЛЮЧЕНЫ; для live нужны токен одобрения + allowlist + включение одной
-транспорт-ноды. Live public-preview = §4 + блок v0.4 ниже; требует отдельного явного одобрения.
+**Статус:** ✅ **FIXTURE FOUNDATION PASS + v0.4.1 пост-уровневая релевантность + 🔧 v0.4.2 ФИНАЛЬНЫЙ QUALITY
+GATE Stage 3 (DEC-135, 2026-06-17): adjacent-класс по недвижимости + gate-защищённый транспорт.** По умолчанию
+`active=false`, `fixture_mode=true`, `live_mode=false`. Fixture-режим = $0. **Live-путь реален, но инертен по
+умолчанию через гейт одобрения:** транспорт-ноды включены, но недостижимы, пока гейт не пропустит (токен +
+непустой валидированный список **отслеживаемых каналов** + выбранный транспорт). Безопасность = гейт +
+валидация + капы, а не ручное отключение нод. Подробности — патч v0.4.2 и план приёмки (≤5 тестов) в конце файла.
 
 > **ПАТЧ v0.4 (DEC-132) — реальный, но gated live-транспорт публичного preview `t.me/s/<channel>`.**
 > - **Транспорт:** `live_transport` = `firecrawl` (предпочтительно, если есть креденшл Firecrawl) или `http_get`
@@ -198,3 +199,82 @@ Live НЕ входит в foundation; внешний транспорт треб
 релевантности; авто-handoff нет. `live_source_runs` поведение сохранено.
 
 **Fixture-счётчики не изменились:** 6 получено / 1 hard-neg / 5 релевантных / 4 unique / 1 dup; `false_positives=0`.
+
+---
+
+## Патч v0.4.2 (DEC-135, 2026-06-17) — финальный quality gate Stage 3 + adjacent-класс + gate-защищённый транспорт
+
+**Зачем:** диагностический live-прогон `wf11_req_20260617_032817` (`ipotekapro`) после v0.4.1 показал остаточную
+проблему: пост-уровневая релевантность стала строже к поздравлениям, но **смежные (adjacent) посты по
+недвижимости** всё ещё проходили как `competitor_activity`/`market_signal` — реклама объектов/ЖК и набор
+агентов в недвижимость. Для MVP ниши `credit_brokerage` это шум. Это финальный закрывающий патч Stage 3
+(оператор устал от ручных ретестов — см. план приёмки ниже, ≤5 тестов).
+
+**Что изменено (`Normalize Telegram Posts`) — пять пост-уровневых классов вместо трёх:**
+1. `competitor_activity` — пост-уровневые доказательства брокер/кредит/ипотека-**услуги**: оффер, кейс, CTA,
+   цена/комиссия, гарантия, «подберём банк», «кредит под залог», «рефинансирование», «одобрение», «после
+   отказов — помогли», «оплата за результат» и т.п.
+2. `market_signal` — рыночные/программные/ставочные/регуляторные **новости** без прямого оффера (дайджесты,
+   изменения программ/господдержки, тренды спроса). Дайджест на канале-конкуренте остаётся `market_signal`.
+3. `adjacent_real_estate_signal` (**НОВЫЙ**) — реклама объектов/ЛОТ/ЖК/новостроек, набор агентов/риелторов,
+   маркетинг недвижимости со **слабым** ипотечным контекстом. **По умолчанию пропускается** (не пишется в
+   `raw_market_records`/`market_record_registry`); считается в `adjacent_real_estate_skips`. Переопределяется в
+   `competitor_activity` только при **явных сильных** брокер/кредит-сигналах (`STRONG_SERVICE`).
+4. `irrelevant_live_false_positive` — поздравления, праздники, личный статус, болезнь/выздоровление,
+   мотивация/лайфстайл без финансовых доказательств. Пропускается; считается в `irrelevant_false_positives`.
+5. `hard_negative` — юр. адрес, регистрация ООО/ИП, бухгалтерия, несвязанный B2B. Пропускается.
+
+**Жёсткое правило:** релевантность — **только текст поста**. Название/username канала, URL, **список
+отслеживаемых каналов**, описание канала или контекст источника **сами по себе** не делают пост релевантным.
+`4101` (изменения семейной ипотеки + сильный CTA «запишитесь на консультацию, подберём программу») при сильном
+CTA трактуется как `competitor_activity` — выбор зафиксирован и последователен (сильный сервис-CTA > рыночный контекст).
+
+**Task B — транспорт на gate-защите (как в остальных воркфлоу):**
+- Транспорт-ноды переименованы: `Firecrawl Scrape t.me Preview (LIVE gated transport)` и
+  `Fetch t.me Preview Page (HTTP fallback, LIVE gated)`; **сняты с `disabled`** (включены).
+- Безопасность теперь = **гейт одобрения + валидация отслеживаемых каналов + капы**, а НЕ ручное отключение нод.
+  Транспорт недостижим, пока `LIVE Preview Approval Gate` не пропустит: `live_mode=true` + точный токен +
+  непустой валидированный список отслеживаемых каналов + выбранный транспорт. `Route Live Transport` гарантирует
+  выполнение **только выбранного** транспорта (firecrawl ИЛИ http_get, не оба).
+- Fixture-режим (по умолчанию) ветку гейта не трогает → `external_calls=0`. Пустой токен → гейт бросает ошибку
+  до транспорта → `external_calls=0`. Оба свойства гарантированы графом.
+
+**Терминология:** в операторских строках (`agent_requests`, `live_source_runs`, Final Summary) «allowlist»
+заменён на «tracked channels / список отслеживаемых каналов». Внутреннее имя конфига `live_channel_allowlist`
+сохранено для совместимости.
+
+**Локальная симуляция (node, без сети):** 16/16 представительных сниппетов классифицированы как нужно —
+скип: «С Днём России», «привет котятки…», «…выздоровления», «концепция двух часов», `4092` (набор агентов),
+ЛОТ НЕДЕЛИ/ЖК; competitor: `1237/1245/4091/4093/4099`; market: `1230/1234/4090/4097`; `4101`→competitor (сильный CTA).
+Fixture-регрессия без изменений: 6/6/5/1/0/0/1 → unique=4, dup=1, raw +5, registry +4, `irrelevant_false_positives=0`,
+`adjacent_real_estate_skips=0`.
+
+---
+
+## План финальной приёмки Stage 3 (оператор) — МАКСИМУМ 5 тестов
+
+> Цель: закрыть Telegram-источник Stage 3 одним коротким прогоном. Не открывать новый цикл ручных ретестов.
+
+1. **WF11 fixture (регрессия, $0):** Execute once (`fixture_mode=true`). Ожидаемо: `posts_received=6`,
+   `business_relevant_items=5`, `hard_skipped_items=1`, `irrelevant_false_positives=0`,
+   `adjacent_real_estate_skips=0`, `unique=4`, `duplicates=1`; `raw_market_records +5`, `registry +4`,
+   `live_source_runs +1` (mode=fixture, external_calls=0).
+2. **WF11 live на `ipotekapro` (точные false positives закрыты):** вооружить гейт (`live_mode=true`,
+   `live_approval_token=I_APPROVE_LIVE_TELEGRAM_PREVIEW`, список отслеживаемых каналов = `ipotekapro`,
+   `live_transport=firecrawl` либо `http_get`). Ожидаемо: `4106` (С Днём России) →
+   `irrelevant_live_false_positive`; `4092` (набор агентов) и `4098` (ЛОТ/ЖК) → `adjacent_real_estate_signal`;
+   все три **НЕ** в raw/registry. Реальные сервисные посты (`4091/4093/4099`) → `competitor_activity`;
+   дайджесты (`4090/4097`) → `market_signal`. `agent_requests` показывает live-список отслеживаемых каналов +
+   `transport=`.
+3. **WF11 live на `brokershakurova` (no-regression):** competitor-посты (`1237/1245`) и market (`1230/1234`)
+   сохраняются; `1231/1233/1240` остаются скипнутыми. Повторный прогон → `unique=0`, registry +0 (дедуп держит).
+4. **WF08 handoff на ЧИСТЫЙ live-прогон WF11** (`agent_request_id_filter=<чистый wf11_req_…>`,
+   `deterministic_first`, `llm_enabled=false`): `total_processed` == числу строк очереди, `processed_accounting_ok=true`,
+   `claude_calls=0`, `technical_errors=0`.
+5. **WF10 на чистых данных:** запустить агрегатор; убедиться, что adjacent/false-positive шум не попал в
+   `competitor_profiles`/`audience_activity_signals`. После этого **Stage 3 Telegram-источник можно закрывать**.
+
+> Ожидаемые итоги в Google Sheets: только `competitor_activity` + `market_signal` уникальные строки в
+> `raw_market_records`/`market_record_registry`; adjacent/holiday/personal/recruitment строк нет (если
+> `live_debug_audit=false`); `agent_requests` и `live_source_runs` +1 на прогон; бизнес-вкладки не трогаются
+> до ручного WF08.

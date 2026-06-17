@@ -1,11 +1,23 @@
 # STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md — Social Source Parsing Strategy
 
-**Status:** ✅ **FOUNDATION FIXTURE PASS + 🔧 WF11 v0.4 GATED LIVE PREVIEW BUILT (2026-06-16, DEC-132).**
-§1–4 remain strategy; §5 documents the built WF11 foundation; the live Telegram public-channel preview path is
-now **implemented but inert/gated** (Firecrawl-preferred / HTTP-fallback transport, both nodes DISABLED;
-URL-normalizing allowlist gate rejecting `+`/joinchat/`t.me/c`/groups; `max_channels≤2`, `max_posts≤10`).
-**No live API call, credential, or scrape is authorized by this document** — the first live smoke needs explicit
-operator approval (token + allowlist + enabling the chosen transport node).
+**Status:** ✅ **FOUNDATION FIXTURE PASS + 🔧 WF11 v0.4.2 FINAL QUALITY GATE (2026-06-17, DEC-135); Telegram
+public-channel source CLOSURE PENDING one short acceptance run.** §1–4 remain strategy; §5 documents the built
+WF11 connector; the live Telegram public-channel preview path is **implemented and gate-protected** (transport
+nodes enabled but unreachable unless the approval gate passes). **No live API call, credential, or scrape is
+authorized by this document** — the first live smoke needs explicit operator approval (token + tracked-channel
+list + selected transport).
+
+> **§5.10 — WF11 v0.4.2 final quality gate (DEC-135, 2026-06-17).** Post-level relevance now has **5 classes**:
+> `competitor_activity` (post-level broker/credit/mortgage **service** evidence), `market_signal` (market/program/
+> rate/regulatory **news**), `adjacent_real_estate_signal` (real-estate object/lot promos + agent recruitment —
+> **skipped by default** for the `credit_brokerage` MVP, overridden to competitor only on strong service evidence),
+> `irrelevant_live_false_positive` (greetings/holidays/personal/lifestyle — skipped), `hard_negative` (legal
+> address / registration / accounting — skipped). Relevance is **post-text only**: channel title/username, source
+> URL, the **list of tracked channels**, channel description, or source context never make a post relevant.
+> Transport safety is now the **approval gate + tracked-channel validation + caps** (gate-based), not manual node
+> disabling. **Telegram groups / MTProto / member extraction** and **VK live** are **future/expansion**, not part
+> of this MVP closure (see `FUTURE_CAPABILITIES_BACKLOG.md`). Operator-facing wording = "tracked Telegram channels
+> / список отслеживаемых каналов" (internal config name `live_channel_allowlist` kept for compatibility).
 
 > **§5.8 — WF11 v0.4 live transport (DEC-132, 2026-06-16):** transport selected by `live_transport`
 > (`firecrawl` preferred if a Firecrawl credential exists, else `http_get`), routed by the `Route Live Transport`

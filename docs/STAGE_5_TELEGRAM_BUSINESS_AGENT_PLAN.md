@@ -1,8 +1,15 @@
 # STAGE_5_TELEGRAM_BUSINESS_AGENT_PLAN.md — Stage 5 Definition
 
-**Status:** PLANNED (2026-06-12) · **Decisions:** DEC-067 (control interface ≠ parser), DEC-112, DEC-123
+**Status:** PLANNED (2026-06-12) · **Decisions:** DEC-067 (control interface ≠ parser), DEC-112, DEC-123, DEC-135
 **Related:** `TELEGRAM_CONTROL_AGENT_PLAN.md`, `REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`,
 `FUTURE_CAPABILITIES_BACKLOG.md` §1 (Business Agent Control Kernel)
+
+> **2026-06-17 framing + wording (DEC-135):** Stage 5 is a **conversational AI business agent**, not just a
+> command menu — natural-language request → plan / cost / source proposal → approval → workflow execution →
+> report → suggested next actions; slash commands are fallback affordances only (full direction in
+> `FUTURE_CAPABILITIES_BACKLOG.md` §"Stage 5 — Telegram Business Agent"). Operator-facing language uses **"tracked
+> Telegram channels / список отслеживаемых каналов"**, not "allowlist" (internal config names like
+> `live_channel_allowlist` may stay for compatibility).
 
 ## 1. What Stage 5 is
 

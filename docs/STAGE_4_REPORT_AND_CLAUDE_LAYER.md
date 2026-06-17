@@ -76,7 +76,21 @@ Stage 4 now contains two concrete deliverables:
 
 ---
 
-## Planned Claude enrichment scope (DEC-133 context) — selective, NOT every raw row
+## 2026-06-17 — Stage 4 is now the NEXT ACTIVE STAGE (after the WF11 v0.4.2 acceptance run, DEC-135)
+
+With the Stage 3 Telegram source closure pending only a short acceptance run, **Stage 4 (Claude enrichment +
+executive report) becomes the next active stage.** Nothing is built/called yet in this patch — Claude enrichment
+is **not** implemented and **must not** be called until its own approval. Stage 4 entry plan, in order:
+
+1. Finish the Stage 3 Telegram acceptance run (≤5 operator tests, WF11 RU doc) so enrichment runs on **clean,
+   relevant** rows only — never adjacent/holiday/personal false positives (that is the whole point of DEC-135).
+2. **Deterministic WF12 report** stays the default ($0) and is already PASS — no change required.
+3. **Then, behind its own gate:** bind the Anthropic credential **in n8n** (never in files), enable the disabled
+   Claude HTTP node, run the **budget-gated, evidence-bound** summary on the deterministic report (model
+   `claude-opus-4-8` or `claude-sonnet-4-6` per cost/quality), record token/cost in `agent_requests` +
+   `COSTS_AND_LIMITS.md`. Selective enrichment scope is below.
+
+## Planned Claude enrichment scope (DEC-133/135 context) — selective, NOT every raw row
 
 Claude enrichment (still **not implemented**, docs only) must be **selective**. Claude does **not** enrich every
 raw row. Planned enrichment targets:

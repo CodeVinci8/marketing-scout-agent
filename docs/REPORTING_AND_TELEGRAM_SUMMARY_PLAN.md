@@ -1,5 +1,10 @@
 # REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md — Report / Claude / Telegram Layer Plan
 
+> **Wording note (2026-06-17, DEC-135):** operator-facing report/summary/Telegram text uses **"tracked Telegram
+> channels / список отслеживаемых каналов"**, not "allowlist". Internal config/column names (e.g.
+> `live_channel_allowlist`, `source_allowlist`) may stay for compatibility. With the Stage 3 Telegram source
+> closure pending one acceptance run, **Stage 4 (Claude enrichment + executive report) becomes the next active stage.**
+
 **Status:** 🔧 PLAN + **Report Builder v0.3 DETERMINISTIC — OPERATOR PASS (2026-06-16, TEST D):**
 `n8n/workflows/12_market_intelligence_report_builder.json` (`active=false`, deterministic, $0 — no Claude,
 no Telegram send; Claude HTTP node DISABLED; guide: `docs/N8N_WORKFLOW_12_MARKET_INTELLIGENCE_REPORT_BUILDER_RU.md`).

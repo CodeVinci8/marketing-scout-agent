@@ -4,6 +4,39 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-17 (session 7) — WF11 v0.4.2 FINAL Stage 3 quality gate: adjacent-RE skip + gate-based transport (DEC-135)
+
+**Status (exact):** final Stage 3 closure patch — **WF11 only** (WF08 untouched; no VK live, no Telegram
+groups/MTProto/member extraction, no Stage 5, no Claude enrichment, no external calls). After v0.4.1 fixed
+greeting/personal false positives, the diagnostic `wf11_req_20260617_032817` (`ipotekapro`) still leaked
+**adjacent real-estate** posts (object/lot/ЖК promos + agent recruitment) as `competitor_activity` and a holiday
+post as `market_signal` (TEST 6: 10/10 business-relevant — too broad). That run + the 2026-06-16 runs remain
+**diagnostic/contaminated, NOT closure evidence.**
+
+**WF11 v0.4.2 (DEC-135; $0, fixture default, inert live via gate):**
+- `Normalize Telegram Posts`: **post-text-only** relevance, **5 classes** — `competitor_activity` (post-level
+  service evidence) · `market_signal` (news/program/rate) · `adjacent_real_estate_signal` (object/lot/recruitment
+  → **skip** by default; override to competitor only on STRONG_SERVICE) · `irrelevant_live_false_positive`
+  (greeting/holiday/personal → skip) · `hard_negative` (skip). Cleaned OFFER vocab so bare `комисси`/`ставк` no
+  longer trigger competitor; added STRONG_SERVICE / RE_OBJECT / RE_RECRUIT / GREETING term sets. Strong service CTA
+  wins over market context (4101 → competitor). `adjacent_real_estate_skips` counter added.
+- **Task B — gate-based transport:** nodes renamed `… (LIVE gated transport)` / `… (HTTP fallback, LIVE gated)` and
+  **enabled**; safety = approval gate + tracked-channel validation + caps (not manual disabling); `Route Live
+  Transport` runs only the selected transport; fixture/empty-token → `external_calls=0` by graph. `active=false`.
+- Wording: operator-facing strings → "tracked channels / список отслеживаемых каналов" (internal
+  `live_channel_allowlist` kept).
+
+**Validation:** JSON valid; 11 Code nodes `node --check` OK; local sim **16/16** snippets correct; fixture
+regression unchanged (6/5/1/4/1, false_positives=0, adjacent=0, unique=4, dup=1, raw +5, registry +4). No real
+keys/Spreadsheet ID; no Bot API/MTProto/member/outreach code.
+
+**Next operator action:** run the **≤5-test final acceptance plan** (WF11 RU doc / NEXT_ACTIONS): fixture →
+live `ipotekapro` (4106 skip / 4092+4098 adjacent skip / 4091/4093/4099 competitor / 4090/4097 market) → live
+`brokershakurova` no-regression → WF08 handoff on clean run → WF10 clean. Then **close the Telegram source** and
+start **Stage 4 (Claude enrichment + report)**. VK live + Telegram groups = expansion/future.
+
+---
+
 ## Session: 2026-06-16 (session 6) — WF11 v0.4.1 post-level relevance fix + WF08 loop-summary accounting fix (DEC-133/134)
 
 **Status (exact):** first gated WF11 live smoke ran end-to-end (transport/parser/dedup PASS) but **live relevance
@@ -88,30 +121,4 @@ agent_requests + live_source_runs: http_get=$0, firecrawl=`cost_not_recovered`. 
 + transport + enable the chosen transport node, run, verify `live_source_runs +1` (mode=live, external_calls=channels,
 cost recorded), then WF08 handoff. Live VK is the step AFTER that (see NEXT_ACTIONS checklist). Stage 5 Telegram
 bot NOT started. Do NOT mark Stage 3/4 fully closed (live TG/VK + Claude summary still gated).
-
----
-
-## Session: 2026-06-12 (session 4) — Live-ready WF11/WF13 · WF14 lead signals · live_source_runs+WF15 · WF10 v0.3 · WF12 v0.3 + Claude budget path · Stage 2 reintegration (DEC-124–130)
-
-**What was done ($0, без внешних вызовов/Claude/live; WF04–WF09 не тронуты):**
-- **DEC-124:** фикс `#ERROR!` для `+7`-телефонов — Sheets-safe апостроф в WF11/WF13/WF14.
-- **WF13 v0.2 (DEC-125):** охраняемый live-путь VK (гейт `I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION` + allowlist →
-  ОТКЛЮЧЁННЫЙ HTTP официального VK API wall.get → инертный парсер); комментарии → `public_comment`;
-  метки → `stage_3_source_foundation_vk_public_discussion`; fixture-счётчики без изменений.
-- **live_source_runs (DEC-126):** 23-колоночный журнал прогонов; WF11/WF12/WF13 пишут автоматически;
-  WF15 — ручной логгер с enum-валидацией (отклоняет значения токенов).
-- **WF10 v0.3 (DEC-127):** objection_count реальный (был 0): словарь недоверия только по review_queue;
-  боли укрупнены («просрочки / плохая КИ», «страх предоплаты / мошенников»); comment_text в blob.
-- **WF14 NEW (DEC-130):** детерминированный триаж публичных лид-сигналов → `public_lead_signals` (28);
-  9 болей / 5 намерений / скоры 0–100; публичный профиль = evidence, НЕ разрешение на аутрич.
-- **WF12 v0.3 (DEC-128):** stakeholder-отчёт (дайджест 5–7 пунктов, чистые имена, блок сайтов из
-  `competitor_site_snapshots`, блок лид-сигналов, блоки действий; схема 25 колонок) + test-ready
-  Claude-ветка: бюджетный гейт ДО HTTP + JSON-секции + quality-флаги + учёт токенов/стоимости.
-- **Stage 2 (DEC-129):** реинтеграция веб-пайплайна: вкладка `competitor_site_snapshots` + блок в отчёте;
-  WF04 Phase B — отдельной сессией; auto-handoff 06→04 осознанно остаётся отложенным.
-- Валидация: 6 JSON OK; active=false; ключей/ID нет; все HTTP disabled; все jsCode проходят node --check.
-
-**Next operator action:** см. NEXT_ACTIONS session 4: commit → создать 4 вкладки → ретесты WF13/WF11 →
-handoff WF08 → проверка WF10 v0.3 (vk: questions≥2, objections≥1, buying≥1) → WF14 (2 сигнала + дедуп) →
-WF12 v0.3 (детерминированный + guard/budget тесты) → WF15. Live/Claude — каждое за отдельным одобрением.
 

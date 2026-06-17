@@ -4,6 +4,39 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
+## CURRENT PRIORITY (2026-06-17, session 7) — WF11 v0.4.2 FINAL Stage 3 quality gate → ONE short acceptance run, then Stage 4
+
+WF11 v0.4.2 (DEC-135) closes the last relevance gap: **adjacent real-estate** posts (object/lot/ЖК promos +
+agent recruitment) and holiday/personal posts no longer pollute `competitor_activity`/`market_signal`. Five
+post-text-only classes; transport is now **gate-protected** (nodes enabled, unreachable unless the approval gate
+passes). Local sim 16/16 + fixture regression unchanged. **Do not open another open-ended retest loop — run the
+≤5-test acceptance plan below, then close the Telegram source and move to Stage 4.**
+
+**Final acceptance test plan (operator, ≤5 tests — full version in WF11 RU doc):**
+1. **WF11 fixture ($0):** `posts_received=6`, `business_relevant_items=5`, `hard_skipped_items=1`,
+   `irrelevant_false_positives=0`, `adjacent_real_estate_skips=0`, `unique=4`, `duplicates=1`; raw +5, registry +4,
+   `live_source_runs +1`.
+2. **WF11 live `ipotekapro`** (arm gate: `live_mode=true`, token `I_APPROVE_LIVE_TELEGRAM_PREVIEW`, tracked
+   channels=`ipotekapro`, choose transport): `4106`→`irrelevant_live_false_positive`; `4092`+`4098`→
+   `adjacent_real_estate_signal` (all skipped, not in raw/registry); `4091/4093/4099`→`competitor_activity`;
+   `4090/4097`→`market_signal`. `agent_requests` shows the live tracked-channel list + `transport=`.
+3. **WF11 live `brokershakurova`** (no-regression): `1237/1245`→competitor, `1230/1234`→market,
+   `1231/1233/1240` stay skipped; repeat run → `unique=0`, registry +0.
+4. **WF08 handoff on a CLEAN WF11 live run** (`deterministic_first`, `llm_enabled=false`):
+   `total_processed`==queue rows, `processed_accounting_ok=true`, `claude_calls=0`, `technical_errors=0`.
+5. **WF10 on clean data:** no adjacent/false-positive noise in `competitor_profiles`/`audience_activity_signals`.
+   → **Then close the Telegram public-channel source** and start **Stage 4 (Claude enrichment + executive report)**.
+
+**Expected Google Sheets outcomes:** only `competitor_activity` + `market_signal` unique rows reach
+`raw_market_records`/`market_record_registry`; no holiday/personal/recruitment/object rows (with
+`live_debug_audit=false`); `agent_requests` + `live_source_runs` +1 per run; business tabs untouched until manual WF08.
+
+**Not in this patch / future:** VK live (Stage 3 expansion), Telegram groups/MTProto/member extraction (high-risk
+future), Stage 2 WF06 cleanup (backlog), Stage 5 bot, Claude enrichment (Stage 4, own approval). Workflows stay
+`active=false`; no external calls authorized here.
+
+---
+
 ## CURRENT PRIORITY (2026-06-16, session 6) — WF11 v0.4.1 relevance fix + WF08 accounting fix → retest on CLEAN data
 
 First WF11 live smoke proved transport/parser/dedup but **live relevance was too loose** (channel-level
