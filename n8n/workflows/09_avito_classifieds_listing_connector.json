@@ -365,6 +365,55 @@
       "parameters": {
         "jsCode": "// Final run summary. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Avito Connector Config').first().json;\nconst recs=$('Deduplicate Listings').all().map(i=>i.json);\nconst actor_items_received=recs.length;\nconst invalid_items=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst structurally_valid_items=actor_items_received-invalid_items;\nconst hard_skipped_items=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst business_relevant_items=structurally_valid_items-hard_skipped_items;\nconst over_pipeline_limit=recs.filter(r=>str(r.dedup_status)==='over_pipeline_limit').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst skipped=recs.filter(r=>str(r.predicted_route)==='skipped_log'&&['invalid','over_pipeline_limit','hard_skipped'].indexOf(str(r.dedup_status))<0).length;\nconst predicted_route_counts={};const record_type_counts={};\nfor(const r of recs){\n  if(['invalid','over_pipeline_limit','hard_skipped'].indexOf(str(r.dedup_status))>=0)continue;\n  const pr=str(r.predicted_route)||'unknown';predicted_route_counts[pr]=(predicted_route_counts[pr]||0)+1;\n  const t=str(r.record_type_hint)||'unknown';record_type_counts[t]=(record_type_counts[t]||0)+1;\n}\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst rawWritten=writeDupAudit?(unique+duplicate):unique;\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\nreturn [{ json: {\n  workflow:'09 - Avito Classifieds Listing Connector',\n  agent_request_id:str(cfg.agent_request_id),\n  run_id:str(cfg.run_id),\n  fixture_mode:fixtureMode,\n  live_mode:(cfg.live_mode===true||str(cfg.live_mode).toLowerCase()==='true'),\n  actor_items_received:actor_items_received,\n  structurally_valid_items:structurally_valid_items,\n  invalid_items:invalid_items,\n  business_relevant_items:business_relevant_items,\n  hard_skipped_items:hard_skipped_items,\n  over_pipeline_limit:over_pipeline_limit,\n  unique_count:unique,\n  duplicate_count:duplicate,\n  skipped_count:skipped,\n  raw_market_records_written:rawWritten,\n  registry_rows_written:unique,\n  predicted_route_counts:predicted_route_counts,\n  record_type_counts:record_type_counts,\n  next_action:(unique>0?'Inspect raw_market_records, then run Workflow 08 (Touchpoint Analyzer) manually with agent_request_id_filter. No auto-handoff.':(business_relevant_items>0?'All business-relevant items were duplicates; registry unchanged — no Workflow 08 run needed.':'No business-relevant unique rows: do NOT run Workflow 08; inspect Apify output / relevance filter (hard_skipped_items shows filtered false positives).'))\n}}];"
       }
+    },
+    {
+      "id": "wf09-build-runlog",
+      "name": "Build live_source_runs Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        900
+      ],
+      "parameters": {
+        "jsCode": "function moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\n// WF09 live_source_runs ledger (23 cols, DEC-126). Avito connector; fixture=$0/no calls, live=Apify.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Avito Connector Config').first().json||{};\nconst recs=$('Deduplicate Listings').all().map(i=>i.json);\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\nconst received=recs.length;\nconst invalid=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst hard=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst valid=received-invalid;\nconst relevant=valid-hard;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst dup=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst queries=Array.isArray(cfg.search_queries)?cfg.search_queries.join('; '):str(cfg.query);\nreturn [{ json: {\n  run_id:str(cfg.agent_request_id)||('avito_'+Date.now()),\n  created_at:moscowIsoNow(),\n  workflow:'WF09 - Avito Classifieds Connector',\n  source_family:'classifieds',\n  platform:'avito',\n  mode:(fixtureMode?'fixture':'live'),\n  approval_token_used:'no',\n  source_allowlist:queries,\n  max_items:Number(cfg.pipeline_limit)||Number(cfg.live_max_items)||10,\n  items_received:received,\n  items_relevant:relevant,\n  items_written_raw:unique+dup,\n  items_unique:unique,\n  items_duplicate:dup,\n  hard_skipped:hard,\n  external_calls:(fixtureMode?0:1),\n  estimated_source_cost_usd:0,\n  llm_calls:0,\n  estimated_llm_cost_usd:0,\n  status:'completed',\n  error_summary:(invalid>0?('invalid_items='+invalid+' (inspect Apify actor schema)'):''),\n  operator_next_action:(unique>0?'Run WF08 on collected raw records':'No unique business-relevant rows; inspect relevance/Apify output'),\n  notes:'Avito '+(fixtureMode?'fixture':'live Apify')+' run; '+(fixtureMode?'$0, no external calls':'cost not recovered (apify_avito)')+'.'\n}}];"
+      }
+    },
+    {
+      "id": "wf09-app-runlog",
+      "name": "Append live_source_runs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2420,
+        900
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "live_source_runs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     }
   ],
   "connections": {
@@ -517,6 +566,22 @@
         [
           {
             "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build live_source_runs Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build live_source_runs Row": {
+      "main": [
+        [
+          {
+            "node": "Append live_source_runs",
             "type": "main",
             "index": 0
           }

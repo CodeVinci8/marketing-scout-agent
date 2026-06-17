@@ -547,10 +547,157 @@
         -160
       ],
       "parameters": {
-        "content": "## Тест (вручную)\n\n1. НЕ активировать workflow.\n2. Создать вкладку url_registry с 10 колонками (docs/TABLE_SCHEMA.md): normalized_source_url, source_url, first_seen_at, last_seen_at, last_route, last_processing_status, last_entity_type, run_id, batch_index, note.\n3. ПОСЛЕ КАЖДОГО ИМПОРТА перепривязать креденшлы (ID локальны):\n   - Firecrawl Scrape API → Firecrawl API - Marketing Scout\n   - Claude Primary / Claude Repair → Claude API - Marketing Scout\n   - Registry Lookup / Append url_registry / Append Skipped Log (Duplicate) / Append to Dynamic Route Sheet → Google Sheets - Marketing Scout Service Account\n4. На всех Google Sheets нодах вставить реальный Spreadsheet ID.\n5. 6 бизнес-вкладок с 35-колоночным заголовком + вкладка url_registry (10 колонок).\n6. В 'Set URL List' вставить 3 URL (первый запуск). Максимум 5 (жёсткая отсечка).\n7. Записать кредиты Firecrawl и баланс Claude ДО.\n8. Execute Workflow один раз. Записать ПОСЛЕ.\n\nОжидаемо:\n- Новый конкурент → monitor_queue + строка в url_registry.\n- Повторный URL (есть в url_registry) → skipped_log, parse_method=dedup_source_url, БЕЗ трат.\n- Firecrawl упал/пусто → technical_errors (Claude не вызывается), строка в url_registry.\n- Праймери+ремонт без JSON, но ≥5 сигналов → deterministic_competitor_fallback → monitor_queue.\n\nРетест: оставить запись url_registry для одного из example.com URL, запустить те же 3 URL повторно → ожидать дубликат (skipped_log) для всех уже обработанных, monitor_queue только для новых. Если lookup/append падают при импорте — см. docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md (fallback).",
+        "content": "## Тест (вручную)\n\n1. НЕ активировать workflow.\n2. Создать вкладку url_registry с 10 колонками (docs/TABLE_SCHEMA.md): normalized_source_url, source_url, first_seen_at, last_seen_at, last_route, last_processing_status, last_entity_type, run_id, batch_index, note.\n3. ПОСЛЕ КАЖДОГО ИМПОРТА перепривязать креденшлы (ID локальны):\n   - Firecrawl Scrape API → Firecrawl API - Marketing Scout\n   - Claude Primary / Claude Repair → Claude API - Marketing Scout\n   - Registry Lookup / Append url_registry / Append Skipped Log (Duplicate) / Append to Dynamic Route Sheet → Google Sheets - Marketing Scout Service Account\n   - Append competitor_site_snapshots / Append live_source_runs / Append agent_requests → Google Sheets - Marketing Scout Service Account\n4. На всех Google Sheets нодах вставить реальный Spreadsheet ID.\n4b. Вкладки наблюдаемости/снапшотов (docs/TABLE_SCHEMA.md): competitor_site_snapshots (22 кол.), live_source_runs (23 кол.), agent_requests (21 кол.) — должны существовать. Снапшоты пишутся per-URL (baseline, change_type=baseline); live_source_runs/agent_requests — одна строка на прогон (ветка done цикла).\n5. 6 бизнес-вкладок с 35-колоночным заголовком + вкладка url_registry (10 колонок).\n6. В 'Set URL List' вставить 3 URL (первый запуск). Максимум 5 (жёсткая отсечка).\n7. Записать кредиты Firecrawl и баланс Claude ДО.\n8. Execute Workflow один раз. Записать ПОСЛЕ.\n\nОжидаемо:\n- Новый конкурент → monitor_queue + строка в url_registry.\n- Повторный URL (есть в url_registry) → skipped_log, parse_method=dedup_source_url, БЕЗ трат.\n- Firecrawl упал/пусто → technical_errors (Claude не вызывается), строка в url_registry.\n- Праймери+ремонт без JSON, но ≥5 сигналов → deterministic_competitor_fallback → monitor_queue.\n\nРетест: оставить запись url_registry для одного из example.com URL, запустить те же 3 URL повторно → ожидать дубликат (skipped_log) для всех уже обработанных, monitor_queue только для новых. Если lookup/append падают при импорте — см. docs/N8N_WORKFLOW_04_FIRECRAWL_URL_LIST_RU.md (fallback).",
         "height": 520,
         "width": 540,
         "color": 4
+      }
+    },
+    {
+      "id": "wf04-build-snap",
+      "name": "Build competitor_site_snapshots Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        1040
+      ],
+      "parameters": {
+        "jsCode": "function moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\n// WF04 -> competitor_site_snapshots BASELINE writer (22 cols, docs/TABLE_SCHEMA.md E). DEC-129 Phase B.\n// Per analyzed competitor WEBSITE page. Skips technical errors / placeholder skips. change_type=baseline\n// (content-hash diff vs previous snapshot = Phase C). No new external calls; pure mapping of analysis output.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nfunction hash(s){s=str(s).toLowerCase().replace(/\\s+/g,' ');var h=0;for(var i=0;i<s.length;i++){h=((h<<5)-h+s.charCodeAt(i))|0;}return 'h'+(h>>>0).toString(16);}\nfunction sheetSafe(v){v=str(v);return (v && /^[=+\\-@0-9]/.test(v))?(\"'\"+v):v;}\nconst r=$json;const route=low(r.route);const ps=low(r.processing_status);\nif(ps==='technical_error'||route==='technical_errors'||route==='skipped_log') return [];\nconst src=str(r.source_url); if(!src) return [];\nfunction domainOf(u){var h='';try{h=new URL(u).hostname;}catch(e){var m=String(u).match(/^https?:\\/\\/([^\\/?#]+)/i);h=m?m[1]:'';}h=h.toLowerCase();if(h.indexOf('www.')===0)h=h.slice(4);return h;}\nfunction pageType(u){var p='';try{p=new URL(u).pathname.toLowerCase();}catch(e){p=String(u).toLowerCase();}\n if(/contact|kontakt|\\/lk(\\/|$)/.test(p))return 'contact';\n if(/price|tarif|usl|cena|cost/.test(p))return 'prices';\n if(/about|o-nas|company|o_kompanii/.test(p))return 'about';\n if(/service|uslugi/.test(p))return 'services';\n if(p===''||p==='/')return 'landing';\n return 'other';}\nconst txt=str(r.text_context);\nfunction firstMatch(re){var m=txt.match(re);return m?cut(m[0].replace(/\\s+/g,' '),120):'';}\nconst guarantees=firstMatch(/[^.\\n]*(гаранти|по договору|вернем|возврат средств|официальн)[^.\\n]{0,80}/i);\nconst cta=firstMatch(/(оставьте заявку|оставить заявку|получить|оформить|заказать звонок|позвоните|узнать|рассчитать)[^.\\n]{0,60}/i);\nconst contact=str(r.contact_public);\nlet ch='unknown';var cl=contact.toLowerCase();\nif(/t\\.me\\/|@[a-z0-9_]{4,}/.test(cl))ch='telegram';else if(/wa\\.me\\//.test(cl))ch='whatsapp';else if(/@[^\\s]+\\.[a-z]{2,}/.test(cl))ch='email';else if(/\\d{6,}/.test(cl))ch='phone';else if(/https?:\\/\\//.test(cl))ch='profile';else if(!contact)ch='';\nconst stamp=moscowStamp();\nreturn [{ json: {\n  snapshot_id:'site_snap_'+stamp+'_'+(Number(r.batch_index)||0),\n  created_at:moscowIsoNow(),\n  run_id:str(r.run_id)||('wf04_'+stamp),\n  source_url:src,\n  domain:domainOf(src),\n  company_name:cut(str(r.company_name),120),\n  page_type:pageType(src),\n  title:'',\n  offer_summary:cut(str(r.offer_text),300),\n  prices_terms:cut(str(r.terms),300),\n  guarantees:guarantees,\n  service_types:str(r.service_type),\n  detected_pains:cut(str(r.detected_need),200),\n  contact_public:sheetSafe(contact),\n  contact_channel:ch,\n  cta_text:cta,\n  content_hash:hash(txt),\n  change_type:'baseline',\n  previous_snapshot_id:'',\n  source_confidence:80,\n  agent_request_id:str(r.run_id),\n  notes:'wf04 baseline snapshot; offer/prices/contact from analysis, guarantees/CTA heuristic; change_type diff is Phase C'\n}}];"
+      }
+    },
+    {
+      "id": "wf04-app-snap",
+      "name": "Append competitor_site_snapshots",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1720,
+        1040
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "competitor_site_snapshots",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "wf04-build-runlog",
+      "name": "Build live_source_runs Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        160
+      ],
+      "parameters": {
+        "jsCode": "function moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\n// WF04 live_source_runs ledger (23 cols, DEC-126/134). Aggregates the SplitInBatches DONE output via\n// $input.all() (NOT $('node').all(), which returns only the last loop iteration). One row per run.\nfunction str(v){return v==null?'':String(v).trim();}function low(v){return str(v).toLowerCase();}\nconst items=$input.all().map(i=>i.json);\nconst total=items.length;\nconst written=items.filter(r=>str(r.note)==='processed_by_workflow_04').length; // non-duplicate registry rows\nconst dup=total-written; // duplicates routed to skipped_log (no Firecrawl call)\nlet runId='wf04_'+(function(){try{return str($('Set URL List').first().json.run_id).replace(/^firecrawl_/,'');}catch(e){return Date.now();}})();\nlet received=total;try{received=$('Set URL List').all().length||total;}catch(e){}\nreturn [{ json: {\n  run_id:runId,\n  created_at:moscowIsoNow(),\n  workflow:'WF04 - Firecrawl URL List Resilient',\n  source_family:'web_competitor',\n  platform:'website',\n  mode:'live',\n  approval_token_used:'no',\n  source_allowlist:'operator url list (Set URL List, <=5)',\n  max_items:5,\n  items_received:received,\n  items_relevant:written,\n  items_written_raw:written,\n  items_unique:written,\n  items_duplicate:dup,\n  hard_skipped:0,\n  external_calls:written,\n  estimated_source_cost_usd:0,\n  llm_calls:written,\n  estimated_llm_cost_usd:0,\n  status:'completed',\n  error_summary:'',\n  operator_next_action:'Review monitor_queue/results + competitor_site_snapshots; refresh WF12 report.',\n  notes:'Web competitor scrape. received=Set URL List; written=url_registry rows (non-duplicates, each =1 Firecrawl + >=1 Claude); duplicates skipped before Firecrawl. Firecrawl/Claude cost not recovered here; repair Claude calls not separately counted.'\n}}];"
+      }
+    },
+    {
+      "id": "wf04-app-runlog",
+      "name": "Append live_source_runs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        520,
+        160
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "live_source_runs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "id": "wf04-build-ar",
+      "name": "Build agent_requests Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        360
+      ],
+      "parameters": {
+        "jsCode": "function moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\n// WF04 agent_requests row (21 cols). One per run, aggregated from the DONE output via $input.all().\nfunction str(v){return v==null?'':String(v).trim();}\nconst items=$input.all().map(i=>i.json);\nconst total=items.length;\nconst written=items.filter(r=>str(r.note)==='processed_by_workflow_04').length;\nconst dup=total-written;\nlet stamp='';try{stamp=str($('Set URL List').first().json.run_id).replace(/^firecrawl_/,'');}catch(e){stamp=String(Date.now());}\nreturn [{ json: {\n  agent_request_id:'wf04_'+stamp,\n  created_at:moscowIsoNow(),\n  requested_by:'operator',\n  request_text:'Firecrawl competitor website scrape (approved URL list, <=5).',\n  request_type:'web_competitor_scrape',\n  source_scope:'competitor_websites',\n  platforms:'website',\n  query:'',\n  region:'Москва/МО',\n  service_focus:'credit_broker',\n  requested_limit:5,\n  status:'completed',\n  plan_summary:'WF04 Firecrawl URL list -> business route sheets + url_registry + competitor_site_snapshots.',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:0,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:'urls_processed='+total+'; scraped_written='+written+'; duplicates='+dup+'; snapshots appended for non-error competitor pages.',\n  next_action:(written>0?'Review competitor_site_snapshots + monitor_queue; refresh WF12.':'No new pages written (all duplicates/errors); inspect Firecrawl output.'),\n  notes:'Firecrawl + Claude per non-duplicate URL. No outreach. Cost not recovered in-row (see Firecrawl/Anthropic dashboards).'\n}}];"
+      }
+    },
+    {
+      "id": "wf04-app-ar",
+      "name": "Append agent_requests",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        520,
+        360
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "agent_requests",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
       }
     }
   ],
@@ -579,7 +726,18 @@
     },
     "Loop Over Items": {
       "main": [
-        [],
+        [
+          {
+            "node": "Build live_source_runs Row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build agent_requests Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Normalize URL for Dedup",
@@ -793,6 +951,11 @@
             "node": "Append to Dynamic Route Sheet",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Build competitor_site_snapshots Row",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -824,6 +987,39 @@
         [
           {
             "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build competitor_site_snapshots Row": {
+      "main": [
+        [
+          {
+            "node": "Append competitor_site_snapshots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build live_source_runs Row": {
+      "main": [
+        [
+          {
+            "node": "Append live_source_runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build agent_requests Row": {
+      "main": [
+        [
+          {
+            "node": "Append agent_requests",
             "type": "main",
             "index": 0
           }

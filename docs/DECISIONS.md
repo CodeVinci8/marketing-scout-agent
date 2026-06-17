@@ -5,6 +5,39 @@ Most recent first.
 
 ---
 
+## DEC-137 — Stage 2 excellence consolidation: WF06 confirmation-marking + WF04 snapshots + WF04/05/07/09 auto-ledger (IMPLEMENTED)
+
+**Date:** 2026-06-17
+**Context:** DEC-136 scoped Stage 2 as a checklist; the operator rejected docs-only/micro-patch handling and
+required real implementation before Stage 4. This decision records the implemented consolidation (supersedes the
+"stays disabled / manual backfill / scoped" parts of DEC-136 and STAGE_2 §5).
+
+**Decision (implemented, all `active=false`, no external calls in-patch):**
+1. **WF06 processed-marking — solved & enabled.** Removed `Mark Candidates Processed (DISABLED)`; added a
+   **confirmation-based, idempotent** marker: `Select` emits `_confirm_processed` only for `approval_status=approved`
+   candidates whose `normalized_source_url` now exists in `url_registry` (proof WF04 wrote them); `IF Confirmed
+   Processed?` → enabled update node sets `approval_status=processed` + notes audit. Never marks skipped/failed,
+   never re-marks processed. Fresh handoffs stay `approved` until confirmed. Confirmation criterion = presence in
+   `url_registry`.
+2. **WF04 — competitor_site_snapshots writer + run ledger.** New per-URL branch writes a 22-col baseline
+   snapshot (TABLE_SCHEMA §E; gated to skip technical-error/placeholder rows; `change_type=baseline`,
+   `source_confidence=80`, Sheets-safe contact). Loop **done** output now appends one `live_source_runs` (23-col)
+   + one `agent_requests` (21-col) row per run, aggregating via `$input.all()` (DEC-134). `guarantees/cta/title`
+   richer extraction = **Phase B prompt work (deferred)**; snapshot **diff/change-detection** = **Phase C (deferred)**.
+3. **WF05/WF07/WF09 — automatic `live_source_runs` ledger** (one row/run), so source workflows no longer rely on
+   "manual WF15 logging optional". WF15 remains a fallback.
+4. **WF14 — read-once/cap/dedup self-test** added to Final Summary (`read_once_ok`, `append_cap_ok`,
+   `self_test_passed`, `health_check`), confirming each broad tab read once + append ≤25 + repeat dedup.
+
+**Stage 2 closure status:** WF04–WF07 are **code-complete / ready for controlled website snapshot collection**.
+Final "verified-populated" closure is **BLOCKED_BY_OPERATOR_ACTION** (requires a real Firecrawl/Apify run +
+new-tab creation/credential binding — out of patch scope: no external calls). No code blocker remains.
+
+**Impact:** the WF05 → approve → WF06 → WF04 → `competitor_site_snapshots` pipeline is fully wired with dedup,
+domain diversity, idempotent marking, ledger, technical_errors. Full text: STAGE_2_WEB_COMPETITOR_PIPELINE_REVIEW §6.
+
+---
+
 ## DEC-136 — Stage 3 MVP closure + Stage 2 cleanup scope + WF12 human wording + Stage 4 in 3 sub-stages
 
 **Date:** 2026-06-17

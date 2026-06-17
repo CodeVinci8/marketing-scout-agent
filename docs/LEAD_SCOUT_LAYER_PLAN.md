@@ -139,3 +139,34 @@ It never auto-contacts and never exposes raw contacts in chat; it surfaces count
 3. **Forum / Q&A / reviews connector** — fixture-first, own approval.
 4. **Stage 4.1 selective Claude enrichment** of chosen lead signals — budget-gated.
 5. **Stage 5** conversational surfacing — aggregate + manual-review only.
+
+---
+
+## 9. Stage 4.1 Lead Scout enrichment requirements (prep only — DO NOT BUILD NOW)
+
+These are the exact requirements Stage 4.1 (Claude Enrichment Core) must satisfy when it later enriches lead
+signals. No lead connector and no enrichment are built in this patch.
+
+**Inputs (existing, no new sheets):** selected `public_lead_signals` rows (status=new) + their `raw_market_records`
+evidence; never the whole raw dump. Selection is operator/score-gated.
+
+**Public contact evidence (binding):**
+- Store `contact_phone` / `contact_username` / `contact_profile_url` **only if explicitly public** and verbatim
+  in the source content (Sheets-safe per DEC-124).
+- `contact_source_url` **required** whenever any contact field is set; `extracted_at` **required**.
+- `contact_use_policy` ∈ {`manual_review`, `aggregate_only`} — **never** an auto-action flag.
+- **No auto-outreach. No message/call generation. Manual review only.** No hidden/private/inferred contacts;
+  no member extraction; no private-group scraping.
+
+**Enrichment outputs (per selected lead signal):** `lead_score` (0–100) plus its components —
+`urgency`, `intent`, `pain`, `fit_to_niche`, `freshness`, `source_confidence`, `contact_evidence_present` —
+and a short RU rationale. Claude may **refine** the deterministic score and extract intent/pain, but must not
+invent contacts, urgency, or evidence not present in the input.
+
+**Controls (mandatory):** approval-gated + budget-gated (max_calls_per_run, max_tokens, est-cost guard before the
+HTTP node) + cost/token logged to `agent_requests` + `COSTS_AND_LIMITS.md` + deterministic fallback when LLM is
+disabled/over-budget/non-JSON + bounded repair (≤1) + selected-row only. Same guard model as WF12's Claude branch.
+
+**Acceptance for Stage 4.1 lead enrichment:** on a small fixture set, enrichment runs only on selected rows,
+produces scored fields + rationale, writes zero contacts not present verbatim in input, logs cost, and falls back
+deterministically when the gate is closed.

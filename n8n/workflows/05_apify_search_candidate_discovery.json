@@ -264,6 +264,55 @@
           "name": "Google Sheets - Marketing Scout Service Account"
         }
       }
+    },
+    {
+      "id": "wf05-build-runlog",
+      "name": "Build live_source_runs Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        820
+      ],
+      "parameters": {
+        "jsCode": "function moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\n// WF05 live_source_runs ledger (23 cols, DEC-126). Apify search discovery run. No new external calls here.\nfunction str(v){return v==null?'':String(v).trim();}\nconst s=$('Build Discovery Request Summary').first().json;\nconst cfg=$('Set Discovery Request').first().json||{};\nconst cnt=Number(s.candidate_count)||0;\nconst st=(str(s.status)==='needs_review')?'completed':(cnt>0?'partial':'failed');\nreturn [{ json: {\n  run_id:str(s.discovery_request_id)||('disc_'+Date.now()),\n  created_at:moscowIsoNow(),\n  workflow:'WF05 - Apify Search Candidate Discovery',\n  source_family:'web_competitor',\n  platform:'apify_search',\n  mode:'live',\n  approval_token_used:'no',\n  source_allowlist:str(s.query||cfg.query),\n  max_items:Number(s.requested_limit)||Number(cfg.requested_limit)||10,\n  items_received:cnt,\n  items_relevant:cnt,\n  items_written_raw:0,\n  items_unique:Number(s.unique_candidate_count)||0,\n  items_duplicate:Number(s.duplicate_count)||0,\n  hard_skipped:0,\n  external_calls:1,\n  estimated_source_cost_usd:0,\n  llm_calls:0,\n  estimated_llm_cost_usd:0,\n  status:st,\n  error_summary:(st==='failed'?str(s.notes):''),\n  operator_next_action:'Approve direct_competitor candidates in url_candidates, then run WF06.',\n  notes:'Apify google-search discovery; cost not recovered (apify_search). Writes url_candidates (not raw_market_records).'\n}}];"
+      }
+    },
+    {
+      "id": "wf05-app-runlog",
+      "name": "Append live_source_runs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1820,
+        820
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "live_source_runs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     }
   ],
   "connections": {
@@ -365,6 +414,28 @@
         [
           {
             "node": "Append discovery_requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append discovery_requests": {
+      "main": [
+        [
+          {
+            "node": "Build live_source_runs Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build live_source_runs Row": {
+      "main": [
+        [
+          {
+            "node": "Append live_source_runs",
             "type": "main",
             "index": 0
           }

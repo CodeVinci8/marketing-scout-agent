@@ -274,6 +274,55 @@
       "parameters": {
         "jsCode": "// Final run summary. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst req=$('Set Manual Intake Request').first().json;\nconst recs=$('Dedup Against Registry').all().map(i=>i.json);\nconst total=recs.length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst irrelevant=recs.filter(r=>str(r.record_type_hint)==='irrelevant').length;\nconst platform_counts={};const record_type_counts={};\nfor(const r of recs){\n  const p=str(r.platform)||'unknown';platform_counts[p]=(platform_counts[p]||0)+1;\n  const t=str(r.record_type_hint)||'unknown';record_type_counts[t]=(record_type_counts[t]||0)+1;\n}\nreturn [{ json: {\n  workflow:'07 - Manual Touchpoint Intake',\n  agent_request_id:req.agent_request_id,\n  total_records:total,\n  unique_count:unique,\n  duplicate_count:duplicate,\n  irrelevant_count:irrelevant,\n  platform_counts:platform_counts,\n  record_type_counts:record_type_counts,\n  raw_market_records_written:total,\n  registry_rows_written:unique,\n  next_action:'Review raw_market_records and market_record_registry; then design/build the Touchpoint Analyzer (Stage 3.2). No scraping, no LLM here.'\n}}];"
       }
+    },
+    {
+      "id": "wf07-build-runlog",
+      "name": "Build live_source_runs Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        820
+      ],
+      "parameters": {
+        "jsCode": "function moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\n// WF07 live_source_runs ledger (23 cols, DEC-126). Manual deterministic intake; no external calls, no LLM.\nfunction str(v){return v==null?'':String(v).trim();}\nconst req=$('Set Manual Intake Request').first().json||{};\nconst recs=$('Dedup Against Registry').all().map(i=>i.json);\nconst total=recs.length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst dup=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst irrelevant=recs.filter(r=>str(r.record_type_hint)==='irrelevant').length;\nreturn [{ json: {\n  run_id:str(req.agent_request_id)||('manual_'+Date.now()),\n  created_at:moscowIsoNow(),\n  workflow:'WF07 - Manual Touchpoint Intake',\n  source_family:'other',\n  platform:'manual',\n  mode:'deterministic',\n  approval_token_used:'no',\n  source_allowlist:'manual_mixed_sources',\n  max_items:Number(req.requested_limit)||12,\n  items_received:total,\n  items_relevant:total-irrelevant,\n  items_written_raw:total,\n  items_unique:unique,\n  items_duplicate:dup,\n  hard_skipped:irrelevant,\n  external_calls:0,\n  estimated_source_cost_usd:0,\n  llm_calls:0,\n  estimated_llm_cost_usd:0,\n  status:'completed',\n  error_summary:'',\n  operator_next_action:'Review raw_market_records, then run WF08.',\n  notes:'Manual intake; no scraping, no LLM, no external API.'\n}}];"
+      }
+    },
+    {
+      "id": "wf07-app-runlog",
+      "name": "Append live_source_runs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2220,
+        820
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "live_source_runs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     }
   ],
   "connections": {
@@ -386,6 +435,22 @@
         [
           {
             "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build live_source_runs Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build live_source_runs Row": {
+      "main": [
+        [
+          {
+            "node": "Append live_source_runs",
             "type": "main",
             "index": 0
           }
