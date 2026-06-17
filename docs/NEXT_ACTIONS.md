@@ -4,7 +4,30 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-17, session 11) — STAGE 3.5 LEAD SCOUT FOUNDATION = BUILT → Stage C acceptance next (DEC-139)
+## CURRENT PRIORITY (2026-06-17, session 12) — STAGE 3.5 AUDIT ALIGNMENT + LIVE-READINESS HARDENING done → Stage C acceptance next (DEC-140)
+
+Post-audit hardening patch (DEC-140) — **no new features, no Stage 4, no external calls.** External audit found
+**no P0 blockers**; this closed its 4 pre-Stage-C items:
+1. **`review_priority` enum** now explicit + 4-value **{high, medium, low, ignore}** (WF14 `priorityOf` mirrors
+   `score_band`; default `min_lead_score=25` keeps `ignore` out of the sheet unless lowered).
+2. **Canonical timestamps** = `created_at` (write/append) / `updated_at` / `extracted_at`; **no
+   `append_timestamp`/`timestamp_appended` column** exists (phantom).
+3. **Stage C fixture outcomes pinned** (harness-derived): standalone 10-scenario → **7 written**, H/M/L **3/2/2**,
+   contacts_found=2, contacts_blank=1 (F10), dup=1, irrelevant=1, F6 excluded; WF13 9-item → **5 written**, H/M/L
+   **2/2/1**, repeat 0/dup 5; `outreach_allowed=FALSE` everywhere.
+4. **VK live readiness = `IMPLEMENTED_READY_FOR_STAGE_C`** (only runtime API blocked by VK credential). Plus a WF14
+   `splitCmt()` fix so fixture & live rows share dedup keys / `lead_signal_id` and `source_comment_url` is populated.
+
+**WF14 is the only workflow changed** (2 safe edits, verified by local harness — signals_written/bands/ids
+unchanged). WF12/WF13/WF15 unchanged. **Operator next steps are still the Stage C steps below** (unchanged), except:
+the `public_lead_signals` `review_priority` dropdown is now **{high, medium, low, ignore}**.
+
+**Blocked (operator/credentials/live):** C1 Stage 2 paid snapshot · C4 live VK run (VK credential — LEAD_SCOUT_LAYER_PLAN §12).
+**Do NOT:** start Stage 4 / call Claude · run paid/live external calls · micro-test per node.
+
+---
+
+## PREVIOUS PRIORITY (2026-06-17, session 11) — STAGE 3.5 LEAD SCOUT FOUNDATION = BUILT → Stage C acceptance next (DEC-139)
 
 Stage 3.5 Lead Scout Foundation is **BUILT** (deterministic, fixture-validated, $0; DEC-139): **WF14 v0.3**
 Lead Scout triage+scoring engine, **WF13 v0.3** VK public lead source (gated live `wall.get`/`wall.getComments`,

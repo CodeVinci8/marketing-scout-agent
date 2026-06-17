@@ -126,7 +126,16 @@ Each lead signal row carries:
 - `niche_fit` — credit_brokerage relevance (post-level evidence, DEC-133/135)
 - `source_confidence` — platform/source reliability (sc_rules)
 - `contact_confidence` — 0–100, strength that the contact belongs to the signal author
-- `contact_use_policy` — `manual_review` (default) or `aggregate_only`; **never** an auto-action flag
+- `contact_use_policy` — ∈ **{manual_review, aggregate_only, do_not_use}**; **never** an auto-action flag
+  (`do_not_use` = contact present but no public source URL → blanked)
+- `review_priority` — ∈ **{high, medium, low, ignore}**, faithfully mirrors `score_band` (default `min_lead_score=25`
+  filters ignore-band before write, so `ignore` is not emitted unless lowered)
+
+> **Canonical column names (audit alignment, DEC-140):** the conceptual names above map to the **47-col
+> `public_lead_signals` v0.3** headers in `TABLE_SCHEMA.md` §G — `phone→public_phone`, `username→public_username`,
+> `profile_url→public_profile_url`, `source_url→contact_source_url`, `intent→intent_type`, `pain→pain_type`,
+> `urgency→urgency` (0–100 number). **Timestamps are `created_at` (write/append time) / `updated_at` / `extracted_at`
+> — there is no `append_timestamp`/`timestamp_appended` column.**
 
 ## 3b. Status workflow (Stage 3.5)
 
@@ -284,3 +293,41 @@ Stage 3.5 build — alongside the postponed Stage 2 paid/live website acceptance
 **Not done in this patch (by policy):** any live VK/Telegram/Apify/Firecrawl/Claude call; activation; real
 credentials/Spreadsheet IDs; auto-outreach; member/private-group extraction. Live VK lead capture +
 end-to-end acceptance = **Stage C**.
+
+## 12. VK live readiness classification (audit hardening, DEC-140)
+
+**Status: `IMPLEMENTED_READY_FOR_STAGE_C`** — the live code path exists and is complete; only the runtime API
+behaviour is `BLOCKED_BY_OPERATOR_CREDENTIALS_OR_LIVE_RUN`. No code path is missing.
+
+What is already implemented in WF13 (verified this patch):
+- **Fixture mode is the default and stays default** (`fixture_mode=true`, `live_mode=false`); `IF fixture_mode?`
+  routes to the synthetic builder; $0.
+- **Gated live path:** `LIVE VK Approval Gate` throws unless `live_approval_token=I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION`
+  **and** a non-empty `live_group_allowlist` (for `wall.get`) and/or `live_post_allowlist` (for `wall.getComments`).
+- **Official public API only:** `wall.get` (public group walls) + `wall.getComments` (public post comments), API
+  version `5.199`, `fetch_url=https://api.vk.com/method/...`. The gate **rejects** invite/`join`/private/`@`/`+`
+  entries and non-`wall-<owner>_<post>` post URLs (allowlist-only, no crawling).
+- **Two-key safety:** the HTTP node `Fetch VK Public Wall` ships **DISABLED** with `access_token` =
+  `BIND_N8N_VK_CREDENTIAL_NEVER_PASTE_TOKEN` (placeholder — token is an **n8n credential**, never in JSON); the
+  inert `Parse Live VK Items` **throws** if no API response, so no fabricated rows can enter the pipeline.
+- **Caps:** `live_max_items_per_group ≤ 10`; 1–2 targets recommended on the first smoke.
+- **Ledger:** every run appends one `live_source_runs` row and one `agent_requests` row; dedup via
+  `market_record_registry` (`dedup_key`); failures route to the gate/parse throw, not to silent fabrication.
+- **`active=false`.** No real token. No private/closed groups, no messages/friends/member lists, no hidden
+  contacts, no auto-outreach (aggregate author counts only).
+
+Exact operator setup for the live run (Stage C / C4):
+1. **Token type:** a VK **standalone/service** app token with **read-only public wall** access (no review needed
+   for public read). Bind it **only as an n8n credential**; never paste into the workflow JSON.
+2. **Permissions:** public wall/comments read only. **Do NOT** request friends/messages/groups-management/offline scopes.
+3. **Public objects:** set `live_group_allowlist` = 1–2 public group screen-names/URLs (for `wall.get`) and/or
+   `live_post_allowlist` = 1–2 public post URLs `https://vk.com/wall-<owner>_<post>` (for `wall.getComments`).
+4. **Tracked public VK sources** are exactly those allowlists (operator-controlled, capped) — no discovery crawl.
+5. **Caps per run:** `live_max_items_per_group ≤ 10`; 1–2 targets first smoke.
+6. **Rate/limit:** public `wall.get`/`wall.getComments` are **free** (no USD/call); exposure is VK rate limits
+   (operational), not money. Record `cost_not_recovered` in COSTS if anything unexpected.
+7. **Must NOT be collected:** private/closed groups, private messages, member/follower lists, friends graphs,
+   hidden contacts, any non-public field. Contacts only if **verbatim public** in the post/comment text, always
+   with `contact_source_url`. **No auto-outreach** — manager decision only.
+
+Runtime verification of the actual VK API behaviour is the only thing deferred to Stage C.

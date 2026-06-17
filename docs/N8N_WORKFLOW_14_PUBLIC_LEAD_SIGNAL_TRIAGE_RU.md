@@ -11,6 +11,14 @@
 > new → needs_review → accepted/rejected/duplicate/stale. Полная приёмка = пакет Stage C
 > (`STAGE_C_ACCEPTANCE_PACK.md`). Раздел ниже (v0.2) — история.
 
+> **Выравнивание по аудиту (DEC-140, 2026-06-17):** `review_priority` ∈ **{high, medium, low, ignore}** —
+> точно повторяет `score_band` (`priorityOf`). При дефолтном `min_lead_score=25` строки полосы `ignore`
+> отсекаются **до** записи, поэтому фактически пишутся только {high, medium, low}; `ignore` появится, только если
+> оператор понизит `min_lead_score`. **Канонические таймстемпы:** `created_at` (время записи/append) / `updated_at`
+> / `extracted_at` — колонки `append_timestamp`/`timestamp_appended` **не существует** ни под одним именем.
+> `splitCmt()` извлекает `source_comment_url` из `post_url` с якорем `#reply`/`?reply=` и оставляет в
+> `source_post_url` базовый пост, поэтому фикстурные и live-строки дают одинаковые dedup-ключи и `lead_signal_id`.
+
 **Статус (история v0.2):** v0.2 (2026-06-16) — **ОПЕРАТОРСКИЙ РЕТЕСТ PASS** (TEST B: `public_lead_signals +4`,
 `signals_written=4`, `duplicates_skipped=2`, без quota-ошибки; TEST C повтор: `+0`, `duplicates_skipped=6`;
 TEST E full-history: без quota-ошибки) · детерминированный, $0,

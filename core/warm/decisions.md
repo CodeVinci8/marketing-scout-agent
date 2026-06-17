@@ -102,6 +102,23 @@ DEC-134 in `docs/DECISIONS.md`.
 
 ---
 
+## DEC-140 — Stage 3.5 audit alignment + live-readiness hardening (2026-06-17, session 12)
+
+**Rule:** post-audit hardening before Stage C — **no new features, no Stage 4, no external calls.** Canonical
+public_lead_signals timestamps = **`created_at`** (write/append) / `updated_at` / `extracted_at`; **there is no
+`append_timestamp`/`timestamp_appended` column.** `review_priority` ∈ **{high, medium, low, ignore}** and faithfully
+mirrors `score_band` (WF14 `priorityOf` fixed to 4 values; default `min_lead_score=25` keeps `ignore` out of the
+sheet unless lowered). WF14 `splitCmt()` derives `source_comment_url` from a reply-anchored `post_url` so **fixture
+and live rows share dedup keys / `lead_signal_id`** (raw_market_records stays 40-col). VK live path =
+**`IMPLEMENTED_READY_FOR_STAGE_C`** (only runtime API = `BLOCKED_BY_OPERATOR_CREDENTIALS_OR_LIVE_RUN`).
+
+**Pinned Stage C fixture outcomes (harness-derived):** standalone 10-scenario → **7 written**, H/M/L **3/2/2**,
+contacts_found=2, contacts_blank=1 (F10), dup=1 (F8), irrelevant=1 (F7), F6 excluded; WF13 9-item fixture → **5
+written**, H/M/L **2/2/1**, repeat=0/dup=5; `outreach_allowed=FALSE` everywhere. WF12 unchanged (already compliant).
+Full text: DEC-140 in `docs/DECISIONS.md`. Related: [[project-stage3-closed-stage4-next]].
+
+---
+
 ## DEC-139 — Stage 3.5 Lead Scout Foundation BUILT (2026-06-17, session 11)
 
 **Rule:** Stage 3.5 Lead Scout = **BUILT** (deterministic, fixture-validated, $0). Architecture = Option A refined

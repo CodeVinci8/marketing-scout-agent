@@ -25,10 +25,14 @@ counters unchanged, `claude_calls=0`, `technical_errors=0`, deterministic report
 Telegram public-preview live channel (own approval). **State:** fixture = ready now; live = operator-gated.
 
 ### C3 — Stage 3.5 fixture lead-source run  *($0, ready now)*
-WF13 **fixture mode** → `raw_market_records` audience rows → WF14 v0.3 → `public_lead_signals`. **Expect:** WF13
-items_received=9, hard_skipped=1, unique=7 (5 consumer-demand comments + 1 competitor + 1 market post), duplicates=1;
-WF14 writes ~5 scored lead signals (high/medium/low bands), repeat run writes 0 + `duplicates_skipped>0`,
-`self_test_passed=true`. **State:** ready now ($0).
+WF13 **fixture mode** → `raw_market_records` audience rows → WF14 v0.3 → `public_lead_signals`. **Expect (exact,
+harness-derived — see `n8n/fixtures/lead_scout/README.md` vector B):** WF13 `items_received=9`, `hard_skipped=1`,
+`unique=7` (5 consumer-demand comments + 1 competitor post + 1 market post), `duplicate_in_batch=1`, 8 raw rows
+written (7 unique + 1 dup-audit); WF14 writes **exactly 5** scored signals, priority **high/medium/low = 2/2/1**,
+`irrelevant_skipped=1` (market-news post), `contacts_found_public=2`, `contacts_blank_due_to_policy=0`; **repeat run**
+writes 0 + `duplicates_skipped=5`; `self_test_passed=true`; **`outreach_allowed=FALSE` on every row.** The
+policy-blank case is exercised by the standalone 10-scenario fixture (vector A / F10), not by WF13's 9-item fixture.
+**State:** ready now ($0).
 
 ### C4 — Stage 3.5 controlled public VK source run  *(operator; live VK official API)*
 Arm WF13 live: `live_approval_token=I_APPROVE_LIVE_VK_PUBLIC_DISCUSSION`, fill `live_group_allowlist` (1–2 public
@@ -38,9 +42,14 @@ WF14 lead signals; `live_source_runs +1` (mode=live, external_calls counted, cos
 **no member extraction, no private data.** **State:** `BLOCKED_BY_OPERATOR_CREDENTIALS_OR_LIVE_RUN` (see §VK below).
 
 ### C5 — WF14 lead scoring / dedup / contact-policy check  *($0, ready now)*
-On C3/C4 output: verify `lead_score`/`score_band`/`review_priority` are sane; severe pains (bank_refusal / overdue /
-bad КИ / pledge) score higher; **dedup** holds on repeat; public contacts appear **only** with `contact_source_url`
-and are blanked → `do_not_use` when unprovable; **every row has `outreach_allowed=false`** and
+On C3/C4 output **and** the standalone 10-scenario fixture (`n8n/fixtures/lead_scout/README.md` vector A → 10
+scenarios, **7 written**, priority **3/2/2**, `contacts_found_public=2`, `contacts_blank_due_to_policy=1`,
+`duplicates_skipped=1`, `irrelevant_skipped=1`): verify `lead_score`/`score_band`/`review_priority` are sane and that
+**`review_priority` faithfully mirrors `score_band`** over **{high, medium, low, ignore}** (`ignore` only if
+`min_lead_score`<25); severe pains (bank_refusal / overdue / bad КИ / pledge_auto_pts) score higher; **dedup** holds on
+repeat (`source_comment_url` derived from reply-anchored `post_url`, so fixture and live rows share keys/`lead_signal_id`);
+public contacts appear **only** with `contact_source_url` and are blanked → `do_not_use` when unprovable
+(`privacy_flags=contact_blanked_no_source_url`); **every row has `outreach_allowed=false`** and
 `recommended_action ∈ {manual_review, content_idea, monitor, ignore}`. **State:** ready now (already fixture-validated;
 re-confirm on real data).
 

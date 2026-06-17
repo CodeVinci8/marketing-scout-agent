@@ -546,6 +546,13 @@ personal data minimized; no memory may drive unauthorized outreach.
 > `contact_channel`→`public_contact_type`, `status`→`review_status`, `evidence_note`→`score_reasons`. WF12 tolerates
 > both schemas during migration.
 
+> **Canonical timestamps (audit alignment, DEC-140):** the only timestamp columns are `created_at` (write/append
+> time = when the row was triaged, MSK ISO), `updated_at` (first write = `created_at`; manager edits later), and
+> `extracted_at` (when the source evidence was observed). **There is no `append_timestamp`/`timestamp_appended`
+> column** under either name — any such reference in older informal notes is non-canonical. The **append/write
+> timestamp is `created_at`.** WF14 writes via `autoMapInputData`, so these 47 JSON keys (in this exact order) **are**
+> the tab headers.
+
 **Core / evidence (public, verbatim only):**
 
 | # | Column | Notes |
@@ -557,8 +564,8 @@ personal data minimized; no memory may drive unauthorized outreach.
 | 5 | `source_platform` | vk / telegram / avito / forum / reviews |
 | 6 | `source_type` | social_comment / social_post / classified / … |
 | 7 | `source_url` | group/board/listing page |
-| 8 | `source_post_url` | public post URL (evidence anchor + dedup) |
-| 9 | `source_comment_url` | public comment URL when applicable (strongest dedup key) |
+| 8 | `source_post_url` | public **post** URL (base post, evidence anchor + dedup) |
+| 9 | `source_comment_url` | public **comment** URL when applicable (strongest dedup key). A source connector may fold the comment anchor into `post_url` (e.g. `…_201#reply2011`); WF14 `splitCmt()` splits it → base post into `source_post_url`, the `#reply`/`?reply=` URL into `source_comment_url`, so fixture and live rows produce **identical** dedup keys / `lead_signal_id` |
 | 10 | `source_author_public_id` | public handle/id, if any |
 | 11 | `source_author_public_name` | public display name, if any |
 | 12 | `source_public_profile_url` | ONLY if public in source. **Evidence, NOT outreach permission** |
@@ -599,7 +606,7 @@ personal data minimized; no memory may drive unauthorized outreach.
 | # | Column | Notes |
 |---|--------|-------|
 | 34 | `review_status` | `new` → `needs_review` → `accepted` / `rejected` / `duplicate` / `stale` |
-| 35 | `review_priority` | `high` / `medium` / `low` (from score_band) |
+| 35 | `review_priority` | `high` / `medium` / `low` / `ignore` — **faithfully mirrors `score_band`** (WF14 `priorityOf`). With the default `min_lead_score=25` (= `band_low`), ignore-band rows are filtered out **before** write, so in practice only `high`/`medium`/`low` are emitted; `ignore` appears only if the operator lowers `min_lead_score` below 25 |
 | 36 | `recommended_action` | `manual_review` / `content_idea` / `monitor` / `ignore` — outreach values are forbidden |
 | 37 | `manager_note` | manager free text |
 | 38 | `reviewed_by` | manager id (manual) |

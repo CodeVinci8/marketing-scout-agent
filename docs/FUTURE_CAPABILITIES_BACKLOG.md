@@ -186,3 +186,26 @@ Tracked so the web pipeline is not forgotten; none of this blocks Stage 3 closur
 - **deep / no-deep domain policy** needs a cleaner operator flow (currently mode-switch by hand).
 - **`competitor_site_snapshots`** tab still needs population (WF04 Phase B snapshot-append, own approval — DEC-129).
 - Cross-ref: `docs/STAGE_2_WEB_PIPELINE_REVIEW.md`, `docs/WORKFLOW_06_AUTO_HANDOFF_PLAN.md`.
+
+## Post-Stage-3.5 audit P2/P4 triage (DEC-140, 2026-06-17)
+
+The external audit's non-P0 / future suggestions, classified. **Nothing here is built in the alignment patch** —
+only items required for Stage-C live-readiness/safety/schema-consistency were done now (those were code fixes in
+WF14, not backlog). Everything below stays gated.
+
+| Suggestion | Classification | Note |
+|------------|----------------|------|
+| `review_priority` enum explicit + 4-value | **DONE now** (DEC-140) | needed for schema/validation consistency — WF14 `priorityOf` + docs |
+| Canonical timestamp clarification | **DONE now** (DEC-140) | `created_at` is the write/append timestamp; no `append_timestamp` column |
+| `source_comment_url` / dedup stable across fixture & live | **DONE now** (DEC-140) | WF14 `splitCmt()`; required for "dedup keys stable" |
+| VK live path implementation-ready | **DONE now** (DEC-140) | code complete; runtime = `BLOCKED_BY_OPERATOR_CREDENTIALS_OR_LIVE_RUN` |
+| LLM / Claude enrichment of lead signals | **`STAGE_4_SCOPE`** | Phase D 4.1 — refine intent/pain/score; deterministic fallback intact; never before Stage C |
+| Telegram Business Agent / conversational manager UX | **`STAGE_5_SCOPE`** | after the Stage 4 contract (4.3) |
+| Manager dashboard / lead UI | **`BACKLOG_AFTER_STAGE_C`** | product polish; Google Sheets review workflow is the MVP surface |
+| CRM layer / status automation | **`BACKLOG_AFTER_STAGE_C`** | Stage 7 historical; not needed for Stage C |
+| Cross-platform / cross-source dedup | **`BACKLOG_AFTER_STAGE_C`** | current per-source dedup (`market_record_registry` + `lead_signal_id`) is sufficient for Stage C |
+| Additional public sources (reviews/maps, Dzen, forums, Telegram comments) | **`BACKLOG_AFTER_STAGE_C`** | one-source-at-a-time; VK first; each its own approval + feasibility |
+| Contact-permission / consent checker | **`BACKLOG_AFTER_STAGE_C`** | current policy already blanks unprovable contacts + `outreach_allowed=false`; a richer checker is polish |
+
+Binding invariants unchanged: public evidence only; contact = evidence not permission; `outreach_allowed=false`;
+no hidden/private/member extraction; no MTProto; no auto-outreach (`CONTACT_AND_OUTREACH_POLICY.md`).

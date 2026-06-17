@@ -70,7 +70,7 @@ pipeline era) so existing data does not light up as invalid. Never delete a lega
 | 25 | `repair_status` | none, not_needed, repaired_json, failed, fallback |
 | 26 | `angle_category` | speed, price, trust, pain, segment |
 | 27 | `review_status` | new, needs_review, accepted, rejected, duplicate, stale *(Lead Scout v0.3 — manager edit field)* |
-| 28 | `review_priority` | high, medium, low |
+| 28 | `review_priority` | high, medium, low, ignore *(mirrors `score_band`; WF14 `priorityOf`. With default `min_lead_score=25`, `ignore`-band rows are filtered before write, so `ignore` is emitted only if the operator lowers `min_lead_score`)* |
 | 29 | `score_band` | high, medium, low, ignore |
 | 30 | `intent_type` | question, objection, complaint, buying_intent, content_signal |
 | 31 | `pain_type` | bank_refusal, bad_credit_history, overdue_debt, refinancing_need, mortgage_need, business_finance_need, pledge_auto_pts, broker_price_question, fraud_fear, prepayment_fear, document_problem, unknown *(comma-multi — warning mode)* |
@@ -167,9 +167,18 @@ system-generated append-only field (ids, timestamps, hashes, free-text evidence,
 | `review_priority` | review_priority | warning |
 | `outreach_allowed` | boolean | **Reject input** *(must stay FALSE in Stage 3.5)* |
 
-Not validated here (system-written / free text / numeric): `lead_signal_id`, timestamps, urls, `evidence_text`,
-`evidence_excerpt`, `score_reasons`, `privacy_flags`, `policy_note`, `public_phone`, `public_username`,
-`public_profile_url`, scores/`lead_score`, `manager_note`, `notes`.
+> **Explicit enums actually emitted by WF14 v0.3 (audit alignment, DEC-140):**
+> - `review_priority` ∈ **{high, medium, low, ignore}** (`ignore` only if `min_lead_score`<25 — see list 28).
+> - `review_status` ∈ **{new, needs_review, accepted, rejected, duplicate, stale}** (WF14 writes `new`; rest are manager edits).
+> - `recommended_action` ∈ **{manual_review, content_idea, monitor, ignore}** — outreach values are impossible by construction.
+> - `contact_use_policy` ∈ **{manual_review, aggregate_only, do_not_use}** — the only three values WF14 emits for this tab (list 14 carries extra **legacy** values used by older `raw_market_records` rows; warning mode tolerates them, but these three are canonical here).
+> - `score_band` ∈ **{high, medium, low, ignore}**; `freshness_status` ∈ **{fresh, stale, unknown}**; `intent_type` ∈ **{question, objection, complaint, buying_intent, content_signal}**; `pain_type` = comma list from list 31; `public_contact_type` ∈ **{phone, username, profile_url, ""}**.
+> - `outreach_allowed` = **FALSE** on every row (invariant).
+> - **`urgency` is a 0–100 NUMBER** in `public_lead_signals` (col 19), **not** an enum — the categorical urgency enum {none/low/medium/high/unknown} is `urgency_hint` on `raw_market_records` (list 17). Do not put a text dropdown on `public_lead_signals.urgency`.
+
+Not validated here (system-written / free text / numeric): `lead_signal_id`, timestamps (`created_at`/`updated_at`/`extracted_at`),
+urls, `evidence_text`, `evidence_excerpt`, `score_reasons`, `privacy_flags`, `policy_note`, `public_phone`, `public_username`,
+`public_profile_url`, scores/`lead_score`/`urgency`/`niche_fit`/`source_confidence`/`contact_confidence`, `manager_note`, `notes`.
 
 ### 3.5 Not validated (deliberately)
 
