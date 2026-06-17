@@ -4,6 +4,43 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-17 (session 12) — Stage 3.5 audit alignment + live-readiness hardening (DEC-140)
+
+**Status (exact):** post-audit hardening patch before Stage C. **No new features, no Stage 4/Claude, no external
+calls** (no VK/Telegram/Firecrawl/Apify/Claude/OpenAI), no activation, no real keys/Spreadsheet IDs, no
+auto-outreach, no member/private extraction. External audit found **no P0 blockers**; this patch closes its 4
+pre-Stage-C items. All workflows `active=false`.
+
+**Code fixes (WF14 only — verified safe via local harness):**
+- **`review_priority` → 4-value enum.** `priorityOf` now faithfully mirrors `score_band` over {high, medium, low,
+  **ignore**} (was collapsing ignore→low). Default `min_lead_score=25` still filters ignore-band before write, so
+  emitted set stays {high,medium,low} unless lowered. No behaviour change on fixtures.
+- **`splitCmt()` comment-URL contract fix.** WF13 (fixture+live) folds the comment anchor into `post_url`
+  (`…_201#reply2011`) and can't add a `comment_url` column (raw_market_records is fixed 40-col). WF14 now derives
+  `source_comment_url` from a reply-anchored `post_url` and cleans `source_post_url` to the base post → **fixture
+  and live rows share dedup keys + `lead_signal_id`**, and `source_comment_url` is populated. Harness: WF13-path
+  `signals_written=5` (H/M/L 2/2/1) with **byte-identical lead_signal_ids** to baseline; repeat run 0/dup 5.
+
+**Canonical decisions (docs):**
+- **Timestamps:** `created_at` (write/append) / `updated_at` / `extracted_at`; **no `append_timestamp`/
+  `timestamp_appended` column exists** under either name (phantom). Documented in TABLE_SCHEMA §G + validation plan.
+- **Pinned Stage C fixture outcomes (harness-derived, not invented):** standalone 10-scenario → **7 written**, H/M/L
+  **3/2/2**, contacts_found=2, **contacts_blank=1 (F10)**, dup=1 (F8), irrelevant=1 (F7), F6 competitor excluded;
+  WF13 9-item fixture → **5 written**, H/M/L **2/2/1**, repeat 0/dup 5; `outreach_allowed=FALSE` everywhere.
+- **VK live readiness = `IMPLEMENTED_READY_FOR_STAGE_C`** (token gate + allowlist-only wall.get/wall.getComments
+  v5.199 + disabled HTTP placeholder-token node + inert throwing parser + caps + ledger). Only runtime API =
+  `BLOCKED_BY_OPERATOR_CREDENTIALS_OR_LIVE_RUN`. Exact operator setup in LEAD_SCOUT_LAYER_PLAN §12.
+- **WF12 unchanged** — already audit-compliant (anonymized lead block, schema-tolerant, no raw contacts, no Claude).
+
+**Docs edited (md):** TABLE_SCHEMA §G, GOOGLE_SHEETS_VALIDATION_PLAN (list 28 + §3.6 explicit enums),
+PUBLIC_LEAD_SIGNAL_LAYER, LEAD_SCOUT_LAYER_PLAN (§3a/§12), STAGE_C_ACCEPTANCE_PACK (C3/C5), fixtures README,
+DECISIONS (DEC-140), warm decisions, NEXT_ACTIONS, AGENT_LOG.
+
+**Next:** **Stage C acceptance** unchanged — C3/C5/C6/C7 fixture-runnable now ($0); C1 (Stage 2 paid) + C4 (live VK)
+= `BLOCKED_BY_OPERATOR_CREDENTIALS_OR_LIVE_RUN`. Then Phase D / Stage 4 Claude (own approval). Stage 4 NOT started.
+
+---
+
 ## Session: 2026-06-17 (session 11) — Stage 3.5 Lead Scout Foundation BUILT (DEC-139)
 
 **Status (exact):** real build patch (Phase B of the LOCKED A/B/C/D model). Deterministic, **all `active=false`,
@@ -63,35 +100,3 @@ DECISIONS + warm decisions (DEC-138).
 
 **Next:** start **Stage 3.5 Lead Scout Foundation** (its own approval per step); Stage 2 paid/live acceptance and
 Stage 4 wait for Stage C / Stage D respectively.
-
----
-
-## Session: 2026-06-17 (session 9) — Stage 2 EXCELLENCE CONSOLIDATION implemented (WF04/05/06/07/09/14) (DEC-137)
-
-**Status (exact):** real implementation patch (not docs-only). All workflows `active=false`, placeholder-safe,
-**no external calls made** (no Firecrawl/Apify/VK/Telegram/Claude), no activation, no real keys/Spreadsheet IDs,
-no auto-outreach, no MTProto/member extraction. Stage 3 stays CLOSED (DEC-136); this patch closes Stage 2 code.
-
-**Implemented (code):**
-- **WF06:** removed `Mark Candidates Processed (DISABLED)` → enabled **confirmation-based idempotent** marker.
-  `Select` emits `_confirm_processed` only for approved candidates now present in `url_registry`; `IF Confirmed
-  Processed?` → update sets `approval_status=processed` + audit notes. Never marks skipped/failed; never re-marks.
-- **WF04:** new per-URL branch writes **baseline `competitor_site_snapshots`** (22 cols, gated, change_type=baseline,
-  Sheets-safe contact); loop **done** output appends one **`live_source_runs`** (23) + one **`agent_requests`** (21)
-  per run via `$input.all()` (DEC-134). technical_errors path unchanged. Phase B (prompt-rich guarantees/CTA/title)
-  + Phase C (snapshot diff) deferred.
-- **WF05/WF07/WF09:** automatic **`live_source_runs`** append per run (manual WF15 now fallback only).
-- **WF14:** read-once/cap/dedup **self-test** in Final Summary (`read_once_ok`/`append_cap_ok`/`self_test_passed`).
-
-**Validation:** JSON valid for all 6 edited workflows; all Code nodes `node --check` OK; active=false; no real
-keys; Spreadsheet IDs are placeholders; user-facing "allowlist" only as internal `source_allowlist` column; no
-`DISABLED` node remains in WF06.
-
-**Stage 2 status:** WF04–WF07 **code-complete / ready for controlled snapshot collection**; full populated-closure
-= **BLOCKED_BY_OPERATOR_ACTION** (operator must create new tabs + bind credential/Spreadsheet ID + run the
-controlled Firecrawl runbook — out of patch scope). Then **Stage 4.1** after external audit.
-
-**Next operator action:** create `competitor_site_snapshots` (22) tab + confirm `live_source_runs`(23)/`agent_requests`(21);
-bind credential + real Spreadsheet ID on the new nodes; run WF05→approve→WF06→WF04 on 3–5 top domains; verify the
-expected Sheets deltas; re-run WF06 to confirm idempotent `processed` marking. Then hand repo + audit brief to the
-external agent.

@@ -5,6 +5,47 @@ Most recent first.
 
 ---
 
+## DEC-140 — Stage 3.5 audit alignment + live-readiness hardening (canonical schema, review_priority enum, comment-URL contract, VK live readiness)
+
+**Date:** 2026-06-17 (session 12)
+**Context:** an external post-Stage-3.5 audit found **no P0 blockers** but flagged four pre-Stage-C items: (1)
+`review_priority` enum not explicit; (2) `append_timestamp` vs `timestamp_appended` ambiguity; (3) Stage C fixture
+expected outcomes not exact; (4) VK live readiness needed to be implementation-ready, not just documented. This is a
+hardening patch — no new features, no Stage 4, no external calls.
+
+**Findings & decisions:**
+1. **Canonical timestamps.** WF14's 47-col output has **no** `append_timestamp`/`timestamp_appended` column under
+   either name (neither string exists anywhere in workflows or docs). The canonical timestamps are **`created_at`**
+   (write/append time), `updated_at`, `extracted_at`. The append/write timestamp **is `created_at`**. Documented in
+   TABLE_SCHEMA §G + validation plan + plan doc; no workflow change needed.
+2. **`review_priority` enum made explicit + 4-value.** WF14 `priorityOf` collapsed ignore→low (3 values), while
+   `score_band` has 4. Fixed `priorityOf` to **faithfully mirror `score_band` over {high, medium, low, ignore}**
+   (1-line). Safe: with the default `min_lead_score=25`, ignore-band rows are filtered **before** write, so the
+   emitted set stays {high, medium, low} unless the operator lowers `min_lead_score`. Validation list 28 +
+   TABLE_SCHEMA §35 + plan doc updated to the 4-value enum.
+3. **Comment-URL contract fix (`splitCmt`).** WF13 (fixture **and** live) folds the comment anchor into `post_url`
+   (`…_201#reply2011`) and — because `raw_market_records` is a fixed 40-col schema — never emits a separate
+   `comment_url`, while WF14 + the standalone fixtures key on `source_comment_url`. Added a hoisted `splitCmt()`
+   helper in WF14: when `comment_url` is empty and `post_url` carries a `#reply`/`?reply=` anchor, it derives
+   `source_comment_url` and cleans `source_post_url` to the base post. Result: **fixture and live rows for the same
+   comment produce identical dedup keys + `lead_signal_id`**, and `source_comment_url` is populated. Verified
+   signals_written/bands/ids unchanged (5 on the WF13 path; 7 on the standalone fixtures).
+4. **Stage C fixture expected outcomes pinned (harness-derived, not invented).** Two vectors: (A) standalone
+   10-scenario file → WF14 = **7 written**, priority **3/2/2**, `contacts_found_public=2`,
+   `contacts_blank_due_to_policy=1` (F10), `duplicates_skipped=1` (F8), `irrelevant_skipped=1` (F7), F6 competitor
+   excluded; (B) operational WF13 fixture (9 items, hard_skipped=1, unique=7, dup=1) → WF14 = **5 written**, priority
+   **2/2/1**, repeat=0/dup=5. `outreach_allowed=FALSE` everywhere. Documented in the fixtures README + Stage C C3/C5.
+5. **VK live readiness = `IMPLEMENTED_READY_FOR_STAGE_C`.** The WF13 live path is complete (token gate, allowlist-only
+   `wall.get` + `wall.getComments` v5.199, disabled HTTP node with placeholder token, inert throwing parser, caps,
+   live_source_runs + agent_requests ledger, `active=false`). Only runtime API behaviour is
+   `BLOCKED_BY_OPERATOR_CREDENTIALS_OR_LIVE_RUN`. Exact operator setup added to LEAD_SCOUT_LAYER_PLAN §12.
+
+**Scope guard:** no Stage 4 / Claude; no live VK/Telegram/Firecrawl/Apify/OpenAI; no activation; no real
+credentials/Spreadsheet IDs; no auto-outreach; no member/private-group extraction. WF12 unchanged (already
+audit-compliant — anonymized, schema-tolerant). Related: [[project-stage3-closed-stage4-next]], DEC-139.
+
+---
+
 ## DEC-139 — Stage 3.5 Lead Scout Foundation BUILT (WF14 v0.3 engine + WF13 VK lead source + WF12 lead block + public_lead_signals v0.3)
 
 **Date:** 2026-06-17 (session 11)

@@ -5,6 +5,43 @@ Most recent first.
 
 ---
 
+## 2026-06-17 (session 12) — Stage 3.5 audit alignment + live-readiness hardening (DEC-140)
+
+**Agent role:** project-engineer · **Scope:** post-audit hardening before Stage C. **No new features, no Stage 4,
+no external calls** (no VK/Telegram/Firecrawl/Apify/Claude/OpenAI), no activation, no real keys/Spreadsheet IDs, no
+auto-outreach, no member/private extraction. External audit verdict = **no P0 blockers**; this patch closes its 4
+pre-Stage-C items. All workflows `active=false`.
+
+**Code (WF14 only — 2 safe edits, verified by local deterministic harness running the real WF13/WF14 Code nodes):**
+- `priorityOf` → 4-value enum mirroring `score_band` (`{high, medium, low, ignore}`); default `min_lead_score=25`
+  keeps `ignore` out of the sheet unless lowered (so emitted set unchanged on fixtures).
+- `splitCmt()` helper (hoisted): derives `source_comment_url` from a reply-anchored `post_url` and cleans
+  `source_post_url` to the base post → fixture & live rows share dedup keys / `lead_signal_id`; `source_comment_url`
+  now populated for VK comments (raw_market_records stays 40-col, so the split happens in WF14).
+- Harness proof: WF13-path `signals_written=5` (H/M/L 2/2/1) with **byte-identical `lead_signal_id`s** to baseline;
+  repeat run 0/dup 5; standalone 10-scenario fixtures unchanged (7 written, H/M/L 3/2/2, blank=1); self_test_passed.
+
+**Findings (docs):**
+- **Canonical timestamps** = `created_at` (write/append) / `updated_at` / `extracted_at`; **no
+  `append_timestamp`/`timestamp_appended`** column exists under either name (phantom).
+- **VK live readiness = `IMPLEMENTED_READY_FOR_STAGE_C`** (token gate + allowlist-only wall.get/wall.getComments
+  v5.199 + disabled HTTP node with placeholder token + inert throwing parser + caps + live_source_runs/agent_requests
+  ledger). Only runtime API = `BLOCKED_BY_OPERATOR_CREDENTIALS_OR_LIVE_RUN`. Exact operator setup in LEAD_SCOUT §12.
+- **WF13→WF14 contract verified**, **WF12 lead block verified** (anonymized, schema-tolerant, no raw contacts, no
+  Claude) — WF12/WF13/WF15 unchanged.
+
+**Docs changed:** TABLE_SCHEMA §G (review_priority §35 + canonical-timestamp note + post/comment URL note),
+GOOGLE_SHEETS_VALIDATION_PLAN (list 28 + §3.6 explicit-enum block), PUBLIC_LEAD_SIGNAL_LAYER (§3/§4/§dedup),
+LEAD_SCOUT_LAYER_PLAN (§3a canonical names + §12 VK live readiness), STAGE_C_ACCEPTANCE_PACK (C3/C5 exact outcomes),
+`n8n/fixtures/lead_scout/README.md` (exact vectors A/B), FUTURE_CAPABILITIES_BACKLOG (P2/P4 triage), DECISIONS
+(DEC-140), warm decisions, recent.md (session 12), NEXT_ACTIONS, this log.
+
+**Files changed (workflow):** `n8n/workflows/14_public_lead_signal_triage.json` only.
+
+**Next:** Stage C acceptance (C3/C5/C6/C7 fixture-runnable now; C1/C4 operator-blocked). Stage 4 NOT started.
+
+---
+
 ## 2026-06-17 (session 11) — Stage 3.5 Lead Scout Foundation BUILT (DEC-139)
 
 **Agent role:** project-engineer · **Scope:** real build (Phase B of the LOCKED A/B/C/D model). Deterministic,

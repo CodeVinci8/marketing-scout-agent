@@ -44,9 +44,12 @@ are captured even before the competitor analyzer runs), and also consumes `revie
   `prepayment_fear` · `document_problem` · `unknown`
 - **intent_type (one):** `question` · `objection` · `complaint` · `buying_intent` · `content_signal`
 - **lead_score (0–100, deterministic):** weighted sum `intent25 + urgency15 + pain20 + niche15 + contact8 +
-  region7 + freshness10 − penalties` → `score_band` (`high`≥75 / `medium`50–74 / `low`25–49 / `ignore`<25) +
-  `review_priority` + `score_reasons` (component audit trail). Supplier/competitor-ad rows are excluded (a broker
-  advertising is not a consumer lead).
+  region7 + freshness10 − penalties` → `score_band` (`high`≥75 / `medium`50–74 / `low`25–49 / `ignore`<25).
+- **review_priority** ∈ **{high, medium, low, ignore}** — faithfully mirrors `score_band` (WF14 `priorityOf`). With
+  the default `min_lead_score=25` (= `band_low`), ignore-band rows are filtered **before** write, so only
+  `high`/`medium`/`low` are emitted in practice; `ignore` appears only if `min_lead_score` is lowered. Each row also
+  carries `score_reasons` (component audit trail). Supplier/competitor-ad rows are excluded (a broker advertising is
+  not a consumer lead).
 - **recommended_action:** `manual_review` (questions/buying intent) · `content_idea` (objections/complaints —
   answer publicly, not DMs) · `monitor` · `ignore` (below threshold). **Never an outreach action;
   `outreach_allowed=false` always.**
@@ -57,11 +60,18 @@ are captured even before the competitor analyzer runs), and also consumes `revie
 2. **A public profile URL is evidence, not permission for outreach.** It exists so a manager can verify
    the signal in context — not to message the author.
 3. `contact_public` only if it was verbatim in the public text upstream; written Sheets-safe (DEC-124).
-4. `contact_use_policy` defaults: `manual_review` when a public contact exists, `aggregate_only` otherwise.
+4. `contact_use_policy` ∈ **{manual_review, aggregate_only, do_not_use}**: `manual_review` when a public contact
+   exists **with** a public source URL (evidence anchor); `aggregate_only` when there is no contact; **`do_not_use`**
+   when a contact appears but cannot be evidenced by a public source URL — the contact is then **blanked** and
+   `privacy_flags=contact_blanked_no_source_url` (the "policy-risk blanking" case). A public contact is therefore
+   only ever surfaced **with** `contact_source_url`.
 5. No private chats, no hidden contacts, no member extraction, no mass "active people" lists, no
    auto-outreach — structurally impossible: WF14 writes only `public_lead_signals` + `agent_requests`.
 6. Deterministic by default; no Claude calls; $0.
-7. Dedup: a signal with the same `post_url` + text hash is never written twice (repeat runs are no-ops).
+7. Dedup: multi-key (`source_comment_url` strongest, then `source_post_url`+text-hash, then profile+text-hash, then
+   platform+text-hash) + a deterministic `lead_signal_id`; a signal is never written twice (repeat runs are no-ops).
+   WF14 `splitCmt()` derives `source_comment_url` from a reply-anchored `post_url` (`…#reply<id>` / `?reply=<id>`),
+   so **fixture and live rows for the same comment produce identical keys / `lead_signal_id`** (audit alignment, DEC-140).
 
 ## 5. Manager workflow (v0.3 review/status)
 
