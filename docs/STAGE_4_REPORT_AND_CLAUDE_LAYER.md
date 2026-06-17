@@ -76,19 +76,29 @@ Stage 4 now contains two concrete deliverables:
 
 ---
 
-## 2026-06-17 — Stage 4 is now the NEXT ACTIVE STAGE (after the WF11 v0.4.2 acceptance run, DEC-135)
+## 2026-06-17 — Stage 4 = Claude Intelligence Layer; it does NOT start now (LOCKED A/B/C/D model, DEC-138)
 
-With the Stage 3 Telegram source closure pending only a short acceptance run, **Stage 4 (Claude enrichment +
-executive report) becomes the next active stage.** Nothing is built/called yet in this patch — Claude enrichment
-is **not** implemented and **must not** be called until its own approval. Stage 4 entry plan, in order:
+**Stage 4 is the Claude Intelligence Layer (Claude enrichment + executive report).** Under the LOCKED stage model
+(DEC-138), **Stage 4 does NOT start now.** The forward order is **A Cleanup Lock → B Stage 3.5 Lead Scout
+Foundation + paid/live readiness → C Acceptance Pack → D Stage 4 Claude Intelligence Layer**. Stage 4 begins
+**only after** Stage 3.5 **and** the Stage C Acceptance Pack are complete.
 
-1. Finish the Stage 3 Telegram acceptance run (≤5 operator tests, WF11 RU doc) so enrichment runs on **clean,
-   relevant** rows only — never adjacent/holiday/personal false positives (that is the whole point of DEC-135).
+> Earlier wording in this file calling Stage 4 "the next active stage" is superseded by DEC-138: the **next active
+> build is Stage 3.5 Lead Scout Foundation**, not Stage 4.
+
+Claude enrichment is **not** implemented and **must not** be called until Stage D, behind its own approval +
+budget guard. When Stage 4 (Stage D) does start, the entry order is:
+
+1. Confirm Stage 3.5 Lead Scout Foundation is built and the Stage C Acceptance Pack has passed (incl. Stage 2
+   paid/live website acceptance) so enrichment runs on **clean, relevant** rows only — never adjacent/holiday/
+   personal false positives (the point of DEC-135).
 2. **Deterministic WF12 report** stays the default ($0) and is already PASS — no change required.
 3. **Then, behind its own gate:** bind the Anthropic credential **in n8n** (never in files), enable the disabled
    Claude HTTP node, run the **budget-gated, evidence-bound** summary on the deterministic report (model
    `claude-opus-4-8` or `claude-sonnet-4-6` per cost/quality), record token/cost in `agent_requests` +
    `COSTS_AND_LIMITS.md`. Selective enrichment scope is below.
+
+The Stage 4.1 / 4.2 / 4.3 sub-stage structure below is unchanged.
 
 ## Planned Claude enrichment scope (DEC-133/135 context) — selective, NOT every raw row
 
@@ -116,7 +126,9 @@ positives, so token spend is not wasted on holiday/personal posts.
 
 Stage 4 is split into exactly three sub-stages. Each is approval-gated, budget-gated, cost/token-logged,
 selected-row only, no auto-outreach, no uncontrolled repair loops, deterministic fallback always intact.
-Stage 4 starts **after** the external audit (`PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md`).
+Stage 4 starts **only after Stage 3.5 Lead Scout Foundation + the Stage C Acceptance Pack** (LOCKED model,
+DEC-138) — and the external audit (`PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md`) — **not** immediately after Stage 3
+closure.
 
 ### Stage 4.1 — Claude Enrichment Core
 

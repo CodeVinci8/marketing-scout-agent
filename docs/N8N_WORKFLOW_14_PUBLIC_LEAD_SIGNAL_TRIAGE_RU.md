@@ -1,6 +1,17 @@
-# N8N_WORKFLOW_14_PUBLIC_LEAD_SIGNAL_TRIAGE_RU.md — WF14: триаж публичных лид-сигналов
+# N8N_WORKFLOW_14_PUBLIC_LEAD_SIGNAL_TRIAGE_RU.md — WF14: Lead Scout (триаж + скоринг)
 
-**Статус:** v0.2 (2026-06-16) — **ОПЕРАТОРСКИЙ РЕТЕСТ PASS** (TEST B: `public_lead_signals +4`,
+> **v0.3 (2026-06-17, Stage 3.5, DEC-139) — переименован «Lead Scout Triage & Scoring».** Детерминированный
+> **скоринговый движок**: читает audience-строки `raw_market_records` (ПЕРВИЧНО, без зависимости от WF08) +
+> `review_queue` (обогащение); скоринг 0–100 (intent25+urgency15+pain20+niche15+contact8+region7+freshness10 −
+> штрафы) → `lead_score`/`score_band`(high≥75/medium50-74/low25-49/ignore<25)/`review_priority`/
+> `recommended_action`/`score_reasons`; извлечение ТОЛЬКО публичных контактов (verbatim; `contact_source_url`
+> обязателен; бланк+`do_not_use` если публичность не подтверждается); мультиключевой дедуп; исключение
+> рекламы/конкурентов; пишет `public_lead_signals` **v0.3 (47 колонок, TABLE_SCHEMA §G)** + `agent_requests`;
+> self-test (read_once/cap/dedup/policy). **`outreach_allowed=false` всегда.** review_status:
+> new → needs_review → accepted/rejected/duplicate/stale. Полная приёмка = пакет Stage C
+> (`STAGE_C_ACCEPTANCE_PACK.md`). Раздел ниже (v0.2) — история.
+
+**Статус (история v0.2):** v0.2 (2026-06-16) — **ОПЕРАТОРСКИЙ РЕТЕСТ PASS** (TEST B: `public_lead_signals +4`,
 `signals_written=4`, `duplicates_skipped=2`, без quota-ошибки; TEST C повтор: `+0`, `duplicates_skipped=6`;
 TEST E full-history: без quota-ошибки) · детерминированный, $0,
 без Claude · **Решение:** DEC-130 (+ **DEC-131** — патч квоты Google Sheets: single-read + scoped/capped + capped append)

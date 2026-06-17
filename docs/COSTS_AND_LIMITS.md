@@ -5,6 +5,18 @@ Updated after each session that incurs or measures real costs.
 
 ---
 
+## Session 2026-06-17 (session 11) — Stage 3.5 Lead Scout build: $0 incurred
+
+Deterministic build only (WF14 v0.3 Lead Scout engine, WF13 VK lead source, WF12 lead block, schema/docs, fixtures).
+**No external calls** (no VK/Telegram/Apify/Firecrawl/Claude). All `active=false`. Fixture/harness validation = $0.
+
+**VK lead-source cost model (for Stage C C4, when armed):** VK official API `wall.get` / `wall.getComments` on
+**public** communities are **free** (no USD per call). Cost exposure is **operational** (VK rate limits), not money.
+First smoke: 1–2 public targets, `live_max_items_per_group ≤ 10`. Log each run to `live_source_runs`; record
+`cost_not_recovered` only if something unexpected incurs a fee. **Nothing spent in this patch.**
+
+---
+
 ## Session 2026-06-16 (session 5) — consistency pass + WF11 v0.4 gated live preview: $0 incurred
 
 No external calls, no Claude, no Apify, no Firecrawl, no live scraping this session. WF14 quota patch (v0.2),

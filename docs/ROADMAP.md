@@ -1,5 +1,45 @@
 # ROADMAP.md — Marketing Scout Stages
 
+## STAGE MODEL — LOCKED (DEC-138, 2026-06-17, session 10)
+
+**This block is authoritative. It overrides any older "next active stage" wording further down this file.**
+The forward sequence is now A → B → C → D:
+
+| Phase | Name | Meaning |
+|-------|------|---------|
+| **A** | **Cleanup Lock** | Documentation/stage-model consistency lock (this patch). No new build. |
+| **B** | **Stage 3.5 — Lead Scout Foundation + paid/live readiness** | **NEXT ACTIVE BUILD.** Public lead-signal layer on the current architecture; prepare paid/live readiness. |
+| **C** | **Acceptance Pack** | Controlled acceptance: Stage 2 paid/live website acceptance + Stage 3.5 lead acceptance, run as one deliberate pass after the builds — **not** micro-tested per node. |
+| **D** | **Stage 4 — Claude Intelligence Layer** | Claude enrichment + executive report (4.1/4.2/4.3). Starts **only after** Stage 3.5 **and** the Acceptance Pack. |
+
+**Locked stage status:**
+
+| Stage | Status |
+|-------|--------|
+| **Stage 1** | **CLOSED** |
+| **Stage 2** | **CODE-COMPLETE / READY FOR CONTROLLED PAID-LIVE ACCEPTANCE** (acceptance happens in Phase C, not now) |
+| **Stage 3** | **MVP CLOSED / PASS** (DEC-136) |
+| **Stage 3.5** | **BUILT — deterministic, fixture-validated, $0 (DEC-139)**; live VK lead path gated/inert (runtime = PENDING_STAGE_C); next = Stage C acceptance |
+| **Stage 4** | After Stage 3.5 **and** the Acceptance Pack (Phase D) |
+| **Stage 5** | After the Stage 4 contract (4.3) is defined |
+
+> **Phase B progress (2026-06-17, DEC-139):** Stage 3.5 Lead Scout Foundation **built** — WF14 v0.3 Lead Scout
+> scoring engine + WF13 VK public lead source (gated live `wall.get`/`wall.getComments`) + WF12 lead block +
+> `public_lead_signals` v0.3 (47 cols) + fixtures. Public signals only, manual review, `outreach_allowed=false`.
+> Live VK capture + end-to-end acceptance = **Stage C** (`STAGE_C_ACCEPTANCE_PACK.md`). Stage 4 still not started.
+
+**Locked rules (DEC-138):**
+- Stage 3.5 Lead Scout Foundation is the next active build. Do **not** point to Stage 4 as the next active build.
+- Stage 2 paid/live acceptance is **postponed to the Stage C Acceptance Pack** — it is not run now.
+- Stage 4 (Claude Intelligence Layer) starts **only after** Stage 3.5 + the Acceptance Pack.
+- Testing happens **after full builds** (acceptance pack), not as micro-tests after every node.
+
+> Older "Stage 4 is the next active stage / closure pending" lines below (session-6/7/8 blocks, incl. "next active
+> stage = Stage 4 after external audit") are **historical and no longer current** — the next active build is
+> **Stage 3.5**, superseded by this LOCKED model and DEC-136/DEC-138.
+
+---
+
 **Near-term sequence (updated 2026-06-08, DEC-048/049/050):**
 1.5 Resilient Output Layer ✅ done → 2 First Real Source Test (Firecrawl single competitor URL) ✅ done → **2.1 Firecrawl URL List mini-batch (3–5 URLs, manual) ✅ built — operator test next** → 2.5 Telegram Control Bot / URL Discovery (future) → 3 Competitor Monitor Agent → 4 Content Agent → 5 Telegram Control Bot. Stages 6–8 (Inbound Lead Bot, CRM, Analytics) follow. Stage numbers are canonical labels; the Telegram bot (Stage 5) block appears before the Content Agent block in this file for historical reasons.
 
@@ -19,7 +59,9 @@
 - This session: WF12 operator-facing wording de-jargoned ("tracked channels", no "allowlist"/"enable HTTP node");
   full Markdown report kept; Sheets long-row formatting documented. **No Stage 4 build, no external calls.**
 
-**Session-7 update (2026-06-17, DEC-135) — WF11 v0.4.2 FINAL Stage 3 quality gate; closure pending one acceptance run:**
+**[HISTORICAL — NO LONGER CURRENT] Session-7 update (2026-06-17, DEC-135) — WF11 v0.4.2 FINAL Stage 3 quality gate; closure pending one acceptance run:**
+> Superseded by DEC-136 (Stage 3 MVP CLOSED/PASS) and the LOCKED stage model (DEC-138) at the top of this file.
+> The "closure PENDING one acceptance run" / "next active stage = Stage 4" wording in this block is historical.
 - WF11 v0.4.2 closes the last relevance gap: **post-text-only** relevance with **5 classes**
   (`competitor_activity` · `market_signal` · `adjacent_real_estate_signal` skip · `irrelevant_live_false_positive`
   skip · `hard_negative` skip). Real-estate object/lot promos and agent recruitment no longer pollute

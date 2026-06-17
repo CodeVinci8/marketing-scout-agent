@@ -3,16 +3,18 @@
 **Status:** ✅ **STAGE 3 MVP SOURCE/INTELLIGENCE FOUNDATION: CLOSED / PASS (2026-06-17, DEC-135 + final
 two-channel acceptance run).** Telegram public-channel source CLOSED for the MVP tracked-channel public preview.
 VK live + Telegram groups/MTProto/member extraction = expansion/future, **not** MVP blockers. Perfect semantic
-classification = Stage 4.1 enrichment task, not a Stage 3 blocker. **Next active stage = Stage 4 (Claude
-enrichment + report), entered after the external audit (see PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md).** · **Decisions:**
+classification = Stage 4.1 enrichment task, not a Stage 3 blocker. **Next active build = Stage 3.5 Lead Scout
+Foundation (LOCKED A/B/C/D model, DEC-138)** — Stage 4 (Claude Intelligence Layer) starts only after Stage 3.5 +
+the Stage C Acceptance Pack, **not** immediately after this closure. · **Decisions:**
 DEC-113, DEC-119–123, DEC-124–134, **DEC-135 (WF11 v0.4.2 final quality gate: 5-class post-level relevance +
-adjacent_real_estate_signal skip + gate-based transport + tracked-channel wording)**, **DEC-136 (Stage 3 MVP closure)**
+adjacent_real_estate_signal skip + gate-based transport + tracked-channel wording)**, **DEC-136 (Stage 3 MVP closure)**,
+**DEC-138 (LOCKED A/B/C/D stage model; Stage 3.5 next)**
 
-> **2026-06-16 update:** WF14 public-lead-signal triage quota fix (DEC-130/131) **passed operator retest**
-> (TEST B `+4`, TEST C repeat `+0`/dup=6, TEST E full-history no quota error) — **WF14 no longer blocks** the
-> deterministic source/intelligence chain. WF12 deterministic report ingests `public_lead_signals` (PASS).
-> Live Telegram (WF11 v0.4, DEC-132) is **built but gated/inert** — first live smoke is the next operator step;
-> live VK (WF13) is the step after. Stage 3 stays open until live connectors are armed/tested.
+> **[HISTORICAL — superseded by the CLOSED/PASS status above] 2026-06-16 update:** WF14 public-lead-signal
+> triage quota fix (DEC-130/131) **passed operator retest** (TEST B `+4`, TEST C repeat `+0`/dup=6, TEST E
+> full-history no quota error) — **WF14 no longer blocks** the deterministic source/intelligence chain. WF12
+> deterministic report ingests `public_lead_signals` (PASS). The "Stage 3 stays open until live connectors are
+> armed/tested" wording in this dated note is **no longer current**: Stage 3 MVP is CLOSED/PASS (DEC-136).
 
 ## 1. What Stage 3 is
 
@@ -115,7 +117,12 @@ remains open** — re-run the live smoke + WF08 handoff on clean data, and live 
 
 ---
 
-## 2026-06-17 — WF11 v0.4.2 final quality gate → Stage 3 closure PENDING one short acceptance run (DEC-135)
+## [HISTORICAL — SUPERSEDED by the STAGE 3 MVP CLOSURE / PASS section below (DEC-136)] 2026-06-17 — WF11 v0.4.2 final quality gate → Stage 3 closure PENDING one short acceptance run (DEC-135)
+
+> **This subsection is historical.** Its "closure PENDING one final acceptance run" and "next active stage =
+> Stage 4" wording is **no longer current**. The final two-channel acceptance run was completed and Stage 3 MVP
+> is **CLOSED / PASS** (DEC-136, section below); the next active build is **Stage 3.5** (DEC-138), not Stage 4.
+> Kept for traceability of the v0.4.1 → v0.4.2 path.
 
 After v0.4.1, the diagnostic run `wf11_req_20260617_032817` (`ipotekapro`) is a **useful diagnostic, NOT closure
 evidence**: post-level relevance had fixed greetings/personal posts, but **adjacent real-estate posts** still

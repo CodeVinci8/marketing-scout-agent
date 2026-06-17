@@ -534,35 +534,86 @@ personal data minimized; no memory may drive unauthorized outreach.
 | 22 | `operator_next_action` | what to do next |
 | 23 | `notes` | free text |
 
-### G. `public_lead_signals` — 28 columns (Public Lead Signal Layer, DEC-130; written by WF14, read by WF12)
+### G. `public_lead_signals` — 47 columns (v0.3 Lead Scout layer, Stage 3.5 DEC-138; written by WF14, read by WF12)
+
+> **v0.3 (2026-06-17, DEC-138):** the Lead Scout engine (WF14 v0.3) replaces the 28-col v0.2 schema with a richer
+> 47-col schema (scoring engine output, split public-contact evidence, review/status workflow, safety fields).
+> **Migration:** create/extend the `public_lead_signals` tab to the 47 headers below before re-importing WF14 v0.3.
+> Old→new mapping (v0.2 → v0.3): `platform`→`source_platform`, `post_url`→`source_post_url`,
+> `profile_url`→`source_public_profile_url`, `profile_name`→`source_author_public_name`,
+> `author_handle`→`source_author_public_id`, `text_evidence`→`evidence_text`, `urgency_score`→`urgency`,
+> `intent_score`/`objection_score`→folded into `lead_score`/`score_reasons`, `contact_public`→`public_phone`/`public_username`,
+> `contact_channel`→`public_contact_type`, `status`→`review_status`, `evidence_note`→`score_reasons`. WF12 tolerates
+> both schemas during migration.
+
+**Core / evidence (public, verbatim only):**
 
 | # | Column | Notes |
 |---|--------|-------|
-| 1 | `lead_signal_id` | `pls_YYYYMMDD_HHmmss_<n>` (MSK) |
-| 2 | `created_at` | ISO 8601 MSK `+03:00` |
-| 3 | `source_type` | social_comment / social_post / classified / … |
-| 4 | `platform` | vk / telegram / avito / … |
-| 5 | `source_url` | group/listing page |
-| 6 | `post_url` | exact public post/comment URL (evidence anchor + dedup key with text hash) |
-| 7 | `profile_url` | ONLY if public in source. **Evidence, NOT outreach permission** |
-| 8 | `profile_name` | public display name, if any |
-| 9 | `author_handle` | public handle, if any |
-| 10 | `public_identity_label` | `public_profile_visible` / `no_public_identity` |
-| 11 | `region` | region hint |
-| 12 | `service_need` | service hint (credit_after_refusals / mortgage_refinance / …) |
-| 13 | `text_evidence` | ≤300-char excerpt of the public text |
-| 14 | `pain_type` | comma list: `after_refusal` `bad_credit_history` `overdue_debt` `urgent_money_need` `prepayment_fear` `fraud_fear` `broker_price_question` `mortgage_refinance_need` `business_finance_need` |
-| 15 | `intent_type` | `question` / `objection` / `complaint` / `buying_intent` / `content_signal` |
-| 16 | `urgency_score` | 0–100 deterministic |
-| 17 | `intent_score` | 0–100 deterministic |
-| 18 | `objection_score` | 0–100 deterministic |
-| 19 | `contact_public` | verbatim public contact only; Sheets-safe (DEC-124) |
-| 20 | `contact_channel` | DEC-114 category |
-| 21 | `contact_use_policy` | `manual_review` (contact present) / `aggregate_only` (default) — never an outreach grant |
-| 22 | `recommended_action` | `manual_review` / `content_idea` / `monitor` — outreach values are forbidden |
-| 23 | `status` | `new` / `confirmed` / `dismissed` (manager edits) |
+| 1 | `lead_signal_id` | deterministic hash id `pls_<hex16>` (stable across runs → dedup) |
+| 2 | `created_at` | ISO 8601 MSK — when triaged |
+| 3 | `updated_at` | ISO 8601 MSK — first write = created_at; manager edits later |
+| 4 | `extracted_at` | when the source evidence was observed (from the raw row) |
+| 5 | `source_platform` | vk / telegram / avito / forum / reviews |
+| 6 | `source_type` | social_comment / social_post / classified / … |
+| 7 | `source_url` | group/board/listing page |
+| 8 | `source_post_url` | public post URL (evidence anchor + dedup) |
+| 9 | `source_comment_url` | public comment URL when applicable (strongest dedup key) |
+| 10 | `source_author_public_id` | public handle/id, if any |
+| 11 | `source_author_public_name` | public display name, if any |
+| 12 | `source_public_profile_url` | ONLY if public in source. **Evidence, NOT outreach permission** |
+| 13 | `evidence_text` | ≤300-char public excerpt |
+| 14 | `evidence_excerpt` | ≤160-char short excerpt (report-safe) |
+
+**Classification / scoring (deterministic; Claude refines later = Stage 4):**
+
+| # | Column | Notes |
+|---|--------|-------|
+| 15 | `service_type` | mortgage_refinance / business_credit / pts_loan / credit_after_refusals / credit_broker / unknown |
+| 16 | `region` | region hint |
+| 17 | `intent_type` | `question` / `objection` / `complaint` / `buying_intent` / `content_signal` |
+| 18 | `pain_type` | comma list: `bank_refusal` `bad_credit_history` `overdue_debt` `refinancing_need` `mortgage_need` `business_finance_need` `pledge_auto_pts` `broker_price_question` `fraud_fear` `prepayment_fear` `document_problem` `unknown` |
+| 19 | `urgency` | 0–100 deterministic |
+| 20 | `niche_fit` | 0–100 deterministic (credit_brokerage relevance) |
+| 21 | `lead_score` | 0–100 weighted sum (intent25+urgency15+pain20+niche15+contact8+region7+freshness10 − penalties) |
+| 22 | `score_band` | `high` (≥75) / `medium` (50–74) / `low` (25–49) / `ignore` (<25) |
+| 23 | `score_reasons` | per-component breakdown (audit trail) |
 | 24 | `source_confidence` | 0–100 |
-| 25 | `evidence_note` | matched keywords / hit counts |
-| 26 | `agent_request_id` | FK → agent_requests |
-| 27 | `run_id` | WF14 run id |
-| 28 | `notes` | includes `text_hash=` for dedup |
+| 25 | `contact_confidence` | 0–100 (phone 80 / username 60 / profile 40) |
+| 26 | `freshness_status` | `fresh` / `stale` / `unknown` |
+
+**Public contact evidence (verbatim public only; evidence ≠ permission):**
+
+| # | Column | Notes |
+|---|--------|-------|
+| 27 | `public_phone` | only if verbatim public; Sheets-safe leading `'` (DEC-124) |
+| 28 | `public_username` | only if verbatim public |
+| 29 | `public_profile_url` | only if public |
+| 30 | `public_contact_type` | `phone` / `username` / `profile_url` / empty |
+| 31 | `contact_source_url` | **mandatory when any contact field is set** — where it was publicly visible |
+| 32 | `contact_evidence_text` | short snippet containing the contact |
+| 33 | `contact_use_policy` | `manual_review` / `aggregate_only` / `do_not_use` — **never** an outreach grant |
+
+**Review workflow (manager-edited):**
+
+| # | Column | Notes |
+|---|--------|-------|
+| 34 | `review_status` | `new` → `needs_review` → `accepted` / `rejected` / `duplicate` / `stale` |
+| 35 | `review_priority` | `high` / `medium` / `low` (from score_band) |
+| 36 | `recommended_action` | `manual_review` / `content_idea` / `monitor` / `ignore` — outreach values are forbidden |
+| 37 | `manager_note` | manager free text |
+| 38 | `reviewed_by` | manager id (manual) |
+| 39 | `reviewed_at` | manual timestamp |
+| 40 | `rejection_reason` | manual, when rejected |
+| 41 | `duplicate_of` | `lead_signal_id` this collapses into (manual/auto) |
+
+**Safety:**
+
+| # | Column | Notes |
+|---|--------|-------|
+| 42 | `privacy_flags` | e.g. `public_contact_present_manual_review_only`, `contact_blanked_no_source_url`, `no_public_identity` |
+| 43 | `outreach_allowed` | **always `FALSE` in Stage 3.5** — no auto-outreach, ever |
+| 44 | `policy_note` | binding policy reminder string |
+| 45 | `agent_request_id` | FK → agent_requests |
+| 46 | `run_id` | WF14 run id |
+| 47 | `notes` | includes `text_hash=` for dedup + scoring trail |
