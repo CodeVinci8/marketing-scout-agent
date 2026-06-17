@@ -1,7 +1,16 @@
-# N8N_WORKFLOW_13_PUBLIC_DISCUSSION_OR_REVIEWS_CONNECTOR_RU.md — Workflow 13 (VK Public Discussions, foundation)
+# N8N_WORKFLOW_13_PUBLIC_DISCUSSION_OR_REVIEWS_CONNECTOR_RU.md — Workflow 13 (VK Public Discussion / Lead Source)
+
+> **v0.3 (2026-06-17, Stage 3.5, DEC-139):** WF13 — ПЕРВЫЙ практический источник Lead Scout. Добавлено
+> детектирование ПУБЛИЧНОГО СПРОСА (нужен кредит после отказа / под залог ПТС / для бизнеса / ищу брокера) →
+> такие комментарии/посты идут как `question_objection`/`public_comment` в `raw_market_records` → WF14 Lead Scout.
+> Live-путь (INERT, gated) теперь поддерживает ДВА публичных метода официального VK API: `wall.get` (стены групп,
+> `live_group_allowlist`) и **`wall.getComments`** (комментарии под публичными постами, `live_post_allowlist`) —
+> ОТКЛЮЧЁННЫЙ HTTP-плейсхолдер + инертный парсер обеих форм. Runtime-проверка live = **PENDING_STAGE_C_ACCEPTANCE**
+> (шаги и требования VK-креденшла — `STAGE_C_ACCEPTANCE_PACK.md` §VK). Fixture-набор расширен под Lead Scout
+> (синтетические телефоны +7 000). По умолчанию всё инертно: `fixture_mode=true`, `live_mode=false`.
 
 **Workflow:** `n8n/workflows/13_public_discussion_or_reviews_connector_foundation.json`
-**Имя:** `13 - Public Discussion Connector Foundation (VK Public Groups)`
+**Имя:** `13 - VK Public Discussion / Lead Source Connector (Stage 3.5)`
 **Статус:** 🔧 ПОСТРОЕН foundation v0.1 (DEC-121). `active=false`, `fixture_mode=true`, `live_mode=false`.
 Детерминированный, $0, **в воркфлоу нет ни одной HTTP-ноды** — live-режим НЕ реализован (guard с ошибкой).
 **Дата:** 2026-06-12 · **Решения:** DEC-121 (выбор источника = VK public), DEC-096 (один источник за раз),

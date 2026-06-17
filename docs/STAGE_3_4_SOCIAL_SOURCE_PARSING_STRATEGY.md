@@ -1,7 +1,9 @@
 # STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md — Social Source Parsing Strategy
 
-**Status:** ✅ **FOUNDATION FIXTURE PASS + 🔧 WF11 v0.4.2 FINAL QUALITY GATE (2026-06-17, DEC-135); Telegram
-public-channel source CLOSURE PENDING one short acceptance run.** §1–4 remain strategy; §5 documents the built
+**Status:** ✅ **FOUNDATION FIXTURE PASS + WF11 v0.4.2 FINAL QUALITY GATE (DEC-135); Telegram public-channel
+source = MVP CLOSED / PASS (DEC-136).** *(Historical: this was previously "closure pending one acceptance run";
+the final two-channel acceptance run completed — see STAGE_3 doc.)* Next active build = **Stage 3.5 Lead Scout
+Foundation** (LOCKED A/B/C/D model, DEC-138), **not** Stage 4. §1–4 remain strategy; §5 documents the built
 WF11 connector; the live Telegram public-channel preview path is **implemented and gate-protected** (transport
 nodes enabled but unreachable unless the approval gate passes). **No live API call, credential, or scrape is
 authorized by this document** — the first live smoke needs explicit operator approval (token + tracked-channel

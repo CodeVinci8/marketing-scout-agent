@@ -4,6 +4,68 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-17 (session 11) — Stage 3.5 Lead Scout Foundation BUILT (DEC-139)
+
+**Status (exact):** real build patch (Phase B of the LOCKED A/B/C/D model). Deterministic, **all `active=false`,
+$0, NO external calls** (no VK/Telegram/Apify/Firecrawl/Claude), no activation, no real keys/Spreadsheet IDs, no
+auto-outreach, no member/private extraction. Fixture/harness-validated only.
+
+**Architecture (DEC-139):** Option A refined — **no new WF16**. WF13 = VK public lead source, WF14 = central Lead
+Scout engine, WF12 = lead report block; competitor branch (WF08/WF10) untouched (no pollution).
+
+**Built (code, fixture-validated):**
+- **WF14 v0.3 Lead Scout Triage & Scoring engine:** reads `raw_market_records` audience rows (PRIMARY, decoupled
+  from WF08) + `review_queue`; deterministic 0–100 scoring (intent25+urgency15+pain20+niche15+contact8+region7+
+  freshness10 − penalties) → `lead_score`/`score_band`/`review_priority`/`recommended_action`/`score_reasons`;
+  public-contact extraction (verbatim only, `contact_source_url` mandatory, blank+`do_not_use` if unprovable);
+  multi-key dedup; supplier/competitor-ad exclusion; writes `public_lead_signals` v0.3 (47 cols) + `agent_requests`;
+  self-test (read_once/cap/dedup/policy). **61/61 fixture checks; repeat-run dedup PASS.**
+- **WF13 v0.3 VK public lead source:** consumer-demand detection → audience lead rows; gated live `wall.get` +
+  `wall.getComments` (inert; runtime = PENDING_STAGE_C); lead-rich synthetic fixtures (+7 000 phones).
+  **Routing harness: 6 audience rows incl dedup + competitor separate + 1 hard-skip PASS.**
+- **WF12 lead block:** priority H/M/L + public-contact-evidence counts + top-N **anonymized** summaries (no
+  contacts in report). **12/12 incl. no-leak checks.**
+- **WF15:** source_family += public_lead_source/lead_triage.
+- **Schema/docs:** `public_lead_signals` v0.3 (47 cols, TABLE_SCHEMA §G + migration); validation lists 27–33 +
+  §3.6; LEAD_SCOUT_LAYER_PLAN BUILT; PUBLIC_LEAD_SIGNAL_LAYER v0.3; **new STAGE_C_ACCEPTANCE_PACK** (max 7 checks);
+  COSTS note; fixtures `n8n/fixtures/lead_scout/`.
+
+**Policy:** public evidence only; contact = evidence not permission; `outreach_allowed=false` always;
+recommended_action ∈ {manual_review, content_idea, monitor, ignore}; no hidden/inferred contacts, no member
+extraction, no private groups, no MTProto.
+
+**Next:** **Stage C acceptance** (`STAGE_C_ACCEPTANCE_PACK.md`) — C3/C5/C6/C7 fixture-runnable now ($0); C1 Stage 2
+paid snapshot + C4 live VK run = `BLOCKED_BY_OPERATOR_CREDENTIALS_OR_LIVE_RUN`. Then **Phase D / Stage 4 Claude** (own approval). Stage 4 NOT started.
+
+---
+
+## Session: 2026-06-17 (session 10) — Stage A Cleanup Lock: A/B/C/D stage model LOCKED (DEC-138)
+
+**Status (exact):** documentation/stage-model cleanup-lock patch only. **No build, no Stage 3.5 build, no Stage 4,
+no code/workflow edits, no external calls** (no Firecrawl/Apify/VK/Telegram/Claude), no activation, no real
+keys/Spreadsheet IDs, no deletions.
+
+**What was locked (DEC-138):**
+- **Stage model A/B/C/D:** A = Cleanup Lock · B = **Stage 3.5 Lead Scout Foundation + paid/live readiness (NEXT
+  ACTIVE BUILD)** · C = Acceptance Pack · D = Stage 4 Claude Intelligence Layer.
+- **Locked status:** Stage 1 CLOSED · Stage 2 CODE-COMPLETE / READY FOR CONTROLLED PAID-LIVE ACCEPTANCE ·
+  Stage 3 MVP CLOSED/PASS · **Stage 3.5 NEXT ACTIVE BUILD** · Stage 4 after Stage 3.5 + Acceptance Pack ·
+  Stage 5 after the Stage 4 contract.
+- Stage 2 paid/live acceptance **postponed to Stage C**; Stage 4 starts **only after** Stage 3.5 + Acceptance Pack;
+  testing happens **after full builds**, not micro-tests per node.
+
+**Docs edited (Markdown only):** ROADMAP (LOCKED block + session-7/8 historical), NEXT_ACTIONS (Stage 3.5 priority),
+LEAD_SCOUT_LAYER_PLAN (reframed Stage 3.5 NEXT ACTIVE BUILD + source priority/fields/status/testing),
+STAGE_3 doc (v0.4.2 closure-PENDING marked historical/superseded; current = MVP CLOSED/PASS), STAGE_4 doc
+(Stage 4 = Claude Intelligence Layer, does NOT start now; Stage 3.5 + Acceptance Pack first; 4.1/4.2/4.3 kept),
+PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF (audit v2 response appended), AGENT_LOG (session 10 + session-7 historical),
+DECISIONS + warm decisions (DEC-138).
+
+**Next:** start **Stage 3.5 Lead Scout Foundation** (its own approval per step); Stage 2 paid/live acceptance and
+Stage 4 wait for Stage C / Stage D respectively.
+
+---
+
 ## Session: 2026-06-17 (session 9) — Stage 2 EXCELLENCE CONSOLIDATION implemented (WF04/05/06/07/09/14) (DEC-137)
 
 **Status (exact):** real implementation patch (not docs-only). All workflows `active=false`, placeholder-safe,
@@ -33,70 +95,3 @@ controlled Firecrawl runbook — out of patch scope). Then **Stage 4.1** after e
 bind credential + real Spreadsheet ID on the new nodes; run WF05→approve→WF06→WF04 on 3–5 top domains; verify the
 expected Sheets deltas; re-run WF06 to confirm idempotent `processed` marking. Then hand repo + audit brief to the
 external agent.
-
----
-
-## Session: 2026-06-17 (session 8) — Stage 3 MVP CLOSED + Stage 2 scoped + WF12 wording + Stage 4/Lead Scout/audit docs (DEC-136)
-
-**Status (exact):** stage-closure + cleanup patch (no Stage 4 build, no Stage 5, no new sources, no external
-calls/Firecrawl/Telegram/VK/Claude, no activation, no real keys/Spreadsheet ID). On the clean two-channel WF11
-v0.4.2 acceptance run, **Stage 3 MVP source/intelligence foundation is CLOSED / PASS** (DEC-136). Telegram
-tracked-channel public preview closed; WF08/WF10/WF12 deterministic chain PASS. VK live + Telegram
-groups/MTProto/member extraction = expansion/future; semantic-classification debt → Stage 4.1. Dirty diagnostic
-runs (`wf11_req_…054733/055318/055705`, `touchpoint_…060227`, `wf10_…061138`, `wf11_req_20260617_032817`) kept
-but **never** closure evidence.
-
-**Code (only WF12 + WF06; JSON valid; all Code nodes `node --check` OK; active=false; no keys/Spreadsheet ID):**
-- **WF12 (Task B):** `source_collection_actions` + empty-snapshot notice rewritten to human wording — Telegram =
-  "публичный превью по отслеживаемым каналам протестирован … добавить/одобрить", **no "allowlist"/"enable HTTP
-  node"** in operator-facing text; VK = future expansion; empty snapshots = "Stage 2 not yet populated, not a
-  fault". Full Markdown **not** shortened. (Internal `source_allowlist` column kept.)
-- **WF06 (Task D):** `Build Execution Summary & Handoff` operator_note rewritten with explicit, idempotent
-  acceptance criteria for marking candidates processed (separate confirmation step; only when in url_registry;
-  never skipped). WF06 already auto-reads `url_candidates`+`url_registry` — "too manual" concern was stale.
-  "Mark Processed" stays disabled (manual WF04 handoff = no success signal).
-
-**Docs:** Stage 3 closure section (exact framing + diagnostic-run ledger); `STAGE_2_WEB_COMPETITOR_PIPELINE_REVIEW.md`
-§5 cleanup checklist (WF06 already-correct, Mark-Processed blocker/criteria, observability via WF15, shallow=MVP
-default deep policy, snapshot runbook); GOOGLE_SHEETS_VALIDATION_PLAN + report schema formatting (Clip/top-align,
-keep full markdown); **new** `LEAD_SCOUT_LAYER_PLAN.md` + `PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md`; Stage 4 split
-into 4.1/4.2/4.3; DEC-136 in DECISIONS + warm; ROADMAP/NEXT_ACTIONS updated.
-
-**Next operator action:** run the ≤5 acceptance checks (below in this file / final report), then hand the repo +
-`PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md` to the external ChatGPT-agent audit. After audit → **Stage 4.1 Claude
-Enrichment Core** (its own approval + budget guard; never call Claude before that).
-
----
-
-## Session: 2026-06-17 (session 7) — WF11 v0.4.2 FINAL Stage 3 quality gate: adjacent-RE skip + gate-based transport (DEC-135)
-
-**Status (exact):** final Stage 3 closure patch — **WF11 only** (WF08 untouched; no VK live, no Telegram
-groups/MTProto/member extraction, no Stage 5, no Claude enrichment, no external calls). After v0.4.1 fixed
-greeting/personal false positives, the diagnostic `wf11_req_20260617_032817` (`ipotekapro`) still leaked
-**adjacent real-estate** posts (object/lot/ЖК promos + agent recruitment) as `competitor_activity` and a holiday
-post as `market_signal` (TEST 6: 10/10 business-relevant — too broad). That run + the 2026-06-16 runs remain
-**diagnostic/contaminated, NOT closure evidence.**
-
-**WF11 v0.4.2 (DEC-135; $0, fixture default, inert live via gate):**
-- `Normalize Telegram Posts`: **post-text-only** relevance, **5 classes** — `competitor_activity` (post-level
-  service evidence) · `market_signal` (news/program/rate) · `adjacent_real_estate_signal` (object/lot/recruitment
-  → **skip** by default; override to competitor only on STRONG_SERVICE) · `irrelevant_live_false_positive`
-  (greeting/holiday/personal → skip) · `hard_negative` (skip). Cleaned OFFER vocab so bare `комисси`/`ставк` no
-  longer trigger competitor; added STRONG_SERVICE / RE_OBJECT / RE_RECRUIT / GREETING term sets. Strong service CTA
-  wins over market context (4101 → competitor). `adjacent_real_estate_skips` counter added.
-- **Task B — gate-based transport:** nodes renamed `… (LIVE gated transport)` / `… (HTTP fallback, LIVE gated)` and
-  **enabled**; safety = approval gate + tracked-channel validation + caps (not manual disabling); `Route Live
-  Transport` runs only the selected transport; fixture/empty-token → `external_calls=0` by graph. `active=false`.
-- Wording: operator-facing strings → "tracked channels / список отслеживаемых каналов" (internal
-  `live_channel_allowlist` kept).
-
-**Validation:** JSON valid; 11 Code nodes `node --check` OK; local sim **16/16** snippets correct; fixture
-regression unchanged (6/5/1/4/1, false_positives=0, adjacent=0, unique=4, dup=1, raw +5, registry +4). No real
-keys/Spreadsheet ID; no Bot API/MTProto/member/outreach code.
-
-**Next operator action:** run the **≤5-test final acceptance plan** (WF11 RU doc / NEXT_ACTIONS): fixture →
-live `ipotekapro` (4106 skip / 4092+4098 adjacent skip / 4091/4093/4099 competitor / 4090/4097 market) → live
-`brokershakurova` no-regression → WF08 handoff on clean run → WF10 clean. Then **close the Telegram source** and
-start **Stage 4 (Claude enrichment + report)**. VK live + Telegram groups = expansion/future.
-
----

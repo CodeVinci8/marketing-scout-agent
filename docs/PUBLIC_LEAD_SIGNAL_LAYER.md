@@ -1,9 +1,17 @@
-# PUBLIC_LEAD_SIGNAL_LAYER.md — Public Lead Signal Layer (WF14 + `public_lead_signals`)
+# PUBLIC_LEAD_SIGNAL_LAYER.md — Public Lead Signal Layer (WF14 Lead Scout + `public_lead_signals`)
 
-**Status:** BUILT, fixture/deterministic only (2026-06-12) · **Decision:** DEC-130
-**Workflow:** `n8n/workflows/14_public_lead_signal_triage.json` (`active=false`, manual trigger)
-**Related:** `TABLE_SCHEMA.md` (§ public_lead_signals), `CONTACT_AND_OUTREACH_POLICY.md` (binding),
-`LEAD_DISCOVERY_ARCHITECTURE.md`, `N8N_WORKFLOW_14_PUBLIC_LEAD_SIGNAL_TRIAGE_RU.md`.
+**Status:** ✅ **v0.3 Lead Scout engine BUILT, fixture/deterministic, $0 (2026-06-17, Stage 3.5).** ·
+**Decisions:** DEC-130 (layer), **DEC-138 (LOCKED A/B/C/D)**, **DEC-139 (Lead Scout v0.3 engine)**
+**Workflow:** `n8n/workflows/14_public_lead_signal_triage.json` (`active=false`, manual trigger; node "Build
+Candidate Pool & Classify" = the scoring engine). **Source:** `13_..._connector.json` (VK public lead source).
+**Related:** `LEAD_SCOUT_LAYER_PLAN.md`, `STAGE_C_ACCEPTANCE_PACK.md`, `TABLE_SCHEMA.md` (§G v0.3),
+`CONTACT_AND_OUTREACH_POLICY.md` (binding), `N8N_WORKFLOW_14_PUBLIC_LEAD_SIGNAL_TRIAGE_RU.md`.
+
+> **v0.3 (Stage 3.5):** WF14 is now a deterministic **scoring** engine (not just triage): reads
+> `raw_market_records` audience rows as the PRIMARY source (decoupled from WF08) + `review_queue` enrichment;
+> emits `public_lead_signals` v0.3 (47 cols) with `lead_score`/`score_band`/`review_priority`, split public-contact
+> evidence, a review/status workflow, and `outreach_allowed=false` on every row. The classification below is the
+> v0.3 canonical set.
 
 ---
 
@@ -19,22 +27,29 @@ This is a *signal* layer, not a lead-generation/outreach layer.
 ## 2. Flow
 
 ```
-WF09/WF11/WF13 connectors → raw_market_records → WF08 → review_queue
-                                   └────────────┬─────────────┘
-                                          WF14 Public Lead Signal Triage (deterministic, $0, no Claude)
-                                                → public_lead_signals (28 cols) + agent_requests
-                                                → WF12 report "Аудитория и публичные лид-сигналы" block (aggregates only)
+WF13 VK public lead source (+ WF09/WF11) → raw_market_records (audience rows)
+                                   ├──────────────► WF14 Lead Scout (PRIMARY: raw audience rows)
+                                   └─ WF08 → review_queue ─► WF14 Lead Scout (enrichment)
+                                          WF14 Lead Scout Triage & Scoring (deterministic, $0, no Claude)
+                                                → public_lead_signals (47 cols, v0.3) + agent_requests
+                                                → WF12 report "Аудитория и публичные лид-сигналы" block (aggregates + anonymized; NO contacts)
 ```
+The Lead Scout path is **decoupled from WF08**: WF14 reads `raw_market_records` audience rows directly (so leads
+are captured even before the competitor analyzer runs), and also consumes `review_queue` when present.
 
-## 3. Classification (deterministic keyword vocabulary v0.1, credit_brokerage)
+## 3. Classification (deterministic vocabulary v0.3, credit_brokerage)
 
-- **pain_type (multi):** `after_refusal` · `bad_credit_history` · `overdue_debt` · `urgent_money_need` ·
-  `prepayment_fear` · `fraud_fear` · `broker_price_question` · `mortgage_refinance_need` ·
-  `business_finance_need`
+- **pain_type (multi):** `bank_refusal` · `bad_credit_history` · `overdue_debt` · `refinancing_need` ·
+  `mortgage_need` · `business_finance_need` · `pledge_auto_pts` · `broker_price_question` · `fraud_fear` ·
+  `prepayment_fear` · `document_problem` · `unknown`
 - **intent_type (one):** `question` · `objection` · `complaint` · `buying_intent` · `content_signal`
-- **scores (0–100, deterministic):** `urgency_score`, `intent_score`, `objection_score`
-- **recommended_action:** `manual_review` (questions/buying intent) · `content_idea`
-  (objections/complaints — answer publicly with content, not DMs) · `monitor`. **Never an outreach action.**
+- **lead_score (0–100, deterministic):** weighted sum `intent25 + urgency15 + pain20 + niche15 + contact8 +
+  region7 + freshness10 − penalties` → `score_band` (`high`≥75 / `medium`50–74 / `low`25–49 / `ignore`<25) +
+  `review_priority` + `score_reasons` (component audit trail). Supplier/competitor-ad rows are excluded (a broker
+  advertising is not a consumer lead).
+- **recommended_action:** `manual_review` (questions/buying intent) · `content_idea` (objections/complaints —
+  answer publicly, not DMs) · `monitor` · `ignore` (below threshold). **Never an outreach action;
+  `outreach_allowed=false` always.**
 
 ## 4. Hard policy (binding, CONTACT_AND_OUTREACH_POLICY)
 
@@ -48,10 +63,12 @@ WF09/WF11/WF13 connectors → raw_market_records → WF08 → review_queue
 6. Deterministic by default; no Claude calls; $0.
 7. Dedup: a signal with the same `post_url` + text hash is never written twice (repeat runs are no-ops).
 
-## 5. Manager workflow
+## 5. Manager workflow (v0.3 review/status)
 
-1. Open `public_lead_signals`, filter `status=new`.
-2. Read `text_evidence` / `evidence_note`; open `post_url` to verify in context.
-3. Set `status` to `confirmed` / `dismissed` (manual edit); use confirmed objections/questions as
-   content/FAQ input (see WF12 content actions). Any contact decision stays a human decision under
-   `contact_use_policy` — the system never initiates contact.
+1. Open `public_lead_signals`, filter `review_status=new`, sort by `review_priority` (high first) / `lead_score`.
+2. Read `evidence_excerpt` / `score_reasons`; open `source_comment_url` / `source_post_url` to verify in context.
+3. Move the row through the status workflow (manual edit): `new` → `needs_review` →
+   `accepted` / `rejected` / `duplicate` / `stale`. Use `manager_note` / `rejection_reason` / `duplicate_of`.
+4. Use confirmed objections/questions as content/FAQ input (WF12 content actions). Any contact decision is a
+   **human** decision under `contact_use_policy` (`manual_review`/`aggregate_only`/`do_not_use`) — the system
+   never initiates contact; `outreach_allowed` is always `FALSE`.

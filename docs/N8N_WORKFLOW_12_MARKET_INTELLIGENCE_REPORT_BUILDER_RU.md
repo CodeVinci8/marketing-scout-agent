@@ -1,4 +1,10 @@
-# N8N_WORKFLOW_12_MARKET_INTELLIGENCE_REPORT_BUILDER_RU.md — Workflow 12 (Report Builder, deterministic skeleton)
+# N8N_WORKFLOW_12_MARKET_INTELLIGENCE_REPORT_BUILDER_RU.md — Workflow 12 (Report Builder, deterministic)
+
+> **Lead-блок v0.3.1 (2026-06-17, Stage 3.5, DEC-139):** секция «Аудитория и публичные лид-сигналы» расширена —
+> счётчики приоритета H/M/L, число публичных контактов-свидетельств + скрытых по политике, топ-N **анонимных**
+> сводок лид-сигналов (band/score/intent/pain/action/выдержка). **Контакты (телефон/username/профиль) В ОТЧЁТ НЕ
+> ВЫВОДЯТСЯ НИКОГДА** — только «публичный контакт-свидетельство есть, см. строку (manual_review)». Совместимо с
+> новой схемой `public_lead_signals` v0.3 и старой 28-колоночной (на время миграции). `outreach_allowed=false`.
 
 **Workflow:** `n8n/workflows/12_market_intelligence_report_builder.json`
 **Имя:** `12 - Market Intelligence Report Builder (Deterministic Skeleton)`

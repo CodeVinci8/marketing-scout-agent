@@ -4,7 +4,63 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-17, session 9) — STAGE 2 CODE-COMPLETE → controlled snapshot run → external audit → Stage 4.1 (DEC-137)
+## CURRENT PRIORITY (2026-06-17, session 11) — STAGE 3.5 LEAD SCOUT FOUNDATION = BUILT → Stage C acceptance next (DEC-139)
+
+Stage 3.5 Lead Scout Foundation is **BUILT** (deterministic, fixture-validated, $0; DEC-139): **WF14 v0.3**
+Lead Scout triage+scoring engine, **WF13 v0.3** VK public lead source (gated live `wall.get`/`wall.getComments`,
+inert), **WF12** lead report block, **`public_lead_signals` v0.3** (47 cols), synthetic fixtures. Public signals
+only, manual review, **`outreach_allowed=false` always.** Stage model still LOCKED A/B/C/D (DEC-138); Stage 4 NOT
+started.
+
+**Operator next steps (Phase B → Phase C):**
+1. Migrate `public_lead_signals` to the **47-col v0.3** headers (TABLE_SCHEMA §G mapping); add §3.6 dropdowns
+   (GOOGLE_SHEETS_VALIDATION_PLAN). Re-import WF14 v0.3 + WF13 v0.3 + WF12 + WF15 (do NOT activate; rebind
+   credential + real Spreadsheet ID).
+2. **$0 ready now:** WF13 fixture → WF14 → `public_lead_signals` (Stage C checks C3/C5/C6/C7 are fixture-runnable).
+3. **Stage C — combined Acceptance Pack** (`docs/STAGE_C_ACCEPTANCE_PACK.md`, **max 7 checks**, run as ONE pass):
+   Stage 2 paid/live website acceptance (C1, operator/paid) + Stage 3 regression (C2) + Stage 3.5 fixture lead
+   run (C3) + controlled public VK live run (C4, operator/VK credential) + scoring/dedup/contact-policy (C5) +
+   WF12 lead block (C6) + safety (C7).
+4. After Stage C → **Phase D / Stage 4 Claude Intelligence Layer** (own approval + budget guard; never call
+   Claude before that).
+
+**Blocked (operator/credentials/live):** C1 Stage 2 paid snapshot run · C4 live VK run (VK API credential — see
+Stage C §VK). Marked `BLOCKED_BY_OPERATOR_CREDENTIALS_OR_LIVE_RUN`.
+
+**Do NOT:** start Stage 4 / call Claude · run paid/live external calls in-agent · micro-test per node (Stage C is
+one deliberate pass).
+
+---
+
+## PREVIOUS PRIORITY (2026-06-17, session 10) — STAGE 3.5 LEAD SCOUT FOUNDATION (next active build) — LOCKED A/B/C/D model (DEC-138)
+
+Stage model is **LOCKED** (DEC-138): A Cleanup Lock → **B Stage 3.5 Lead Scout Foundation + paid/live
+readiness** → C Acceptance Pack → D Stage 4 Claude Intelligence Layer. **The next active build is Stage 3.5
+Lead Scout Foundation — not Stage 4.** Stage 4 starts only after Stage 3.5 **and** the Acceptance Pack.
+
+**Locked status:** Stage 1 = CLOSED · Stage 2 = CODE-COMPLETE / READY FOR CONTROLLED PAID-LIVE ACCEPTANCE ·
+Stage 3 = MVP CLOSED / PASS (DEC-136) · **Stage 3.5 = NEXT ACTIVE BUILD** · Stage 4 = after Stage 3.5 +
+Acceptance Pack · Stage 5 = after the Stage 4 contract.
+
+**Current priority — Stage 3.5 Lead Scout Foundation** (plan: `docs/LEAD_SCOUT_LAYER_PLAN.md`):
+- Build the lead-signal layer on the **current** architecture (public lead signals only, manual review, no
+  auto-outreach). Source priority: **VK public comments/discussions/reviews first**, then Banki/forums/Q&A,
+  then public reviews/complaints/questions, then Telegram public comments/groups (later/high-risk); Avito is
+  mostly competitor/source evidence, not a primary consumer lead source.
+- Add the lead fields + scoring + status workflow defined in `LEAD_SCOUT_LAYER_PLAN.md`.
+
+**Testing philosophy (LOCKED, DEC-138):** **no micro-tests after every node.** Testing happens after the full
+build, as the **Stage C Acceptance Pack** (fixture lead source + one controlled public source + WF14 + WF12
+lead block + no-auto-outreach/contact-policy check).
+
+**Postponed to Stage C Acceptance Pack:** **Stage 2 paid/live website acceptance** (controlled Firecrawl/Apify
+snapshot runbook) — it is **not** run now. The Stage 2 code is ready; acceptance is deliberate, after the builds.
+
+**Do NOT in this phase:** start Stage 4 / call Claude · run paid/live external calls · micro-test per node.
+
+---
+
+## PREVIOUS PRIORITY (2026-06-17, session 9) — STAGE 2 CODE-COMPLETE → controlled snapshot run → external audit → Stage 4.1 (DEC-137) — [SUPERSEDED by DEC-138: next build is Stage 3.5, Stage 2 acceptance → Stage C]
 
 Stage 2 web pipeline is now **implemented** (DEC-137): WF06 confirmation-based idempotent processed-marking
 (enabled); WF04 writes baseline `competitor_site_snapshots` + per-run `live_source_runs`/`agent_requests`;

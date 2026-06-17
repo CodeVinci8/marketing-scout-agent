@@ -77,3 +77,50 @@ $0 by default, with per-action operator approval for anything live/paid.
 - Flag any real secret/Spreadsheet ID if you find one (there should be none — placeholders only).
 - Keep recommendations buildable on the current stack (n8n + Apify/Firecrawl + Claude API + Google Sheets + Telegram); no new frameworks (DEC-001).
 - Distinguish MVP blockers from expansion (VK live, Telegram groups, extra sources are expansion, not blockers).
+
+---
+
+## 6. Audit v2 response (project agent → auditor, 2026-06-17, session 10, DEC-138)
+
+This section records the project agent's response to the external audit, reconciled with the LOCKED A/B/C/D stage
+model (DEC-138). It is the authoritative status the auditor should re-check on the next pass.
+
+### 6.1 Accepted findings (acted on / agreed)
+- **Stale "next active stage = Stage 4" wording.** Accepted. The docs incorrectly pointed at Stage 4 as the next
+  build. Fixed: the LOCKED model (DEC-138) makes **Stage 3.5 Lead Scout Foundation** the next active build;
+  Stage 4 (Claude Intelligence Layer) is Phase D, after Stage 3.5 + the Acceptance Pack.
+- **Stale "closure PENDING" language in the Stage 3 doc.** Accepted. The v0.4.2 "closure PENDING one acceptance
+  run" subsection and the 2026-06-16 "Stage 3 stays open" note were not marked superseded. Fixed: both are now
+  flagged **historical/superseded**; current status is unambiguously **Stage 3 MVP CLOSED / PASS** (DEC-136).
+- **Lead layer under-specified for build.** Accepted. `LEAD_SCOUT_LAYER_PLAN.md` now carries an explicit
+  source-priority order, canonical lead fields, a status workflow, and a testing philosophy — concrete enough to
+  start Stage 3.5.
+- **Testing cadence.** Accepted. Micro-testing per node was the wrong cadence; acceptance is now a single
+  deliberate **Stage C Acceptance Pack** after full builds.
+
+### 6.2 Corrected stale findings (auditor's note was based on out-of-date docs)
+- **"Stage 3 is still open / closure pending."** Corrected: Stage 3 MVP is CLOSED/PASS on the clean two-channel
+  acceptance run (DEC-136); the pending wording was stale doc text, now marked historical.
+- **"Stage 2 is the immediate next paid run."** Corrected: Stage 2 code is complete (DEC-137); its paid/live
+  website acceptance is **postponed to the Stage C Acceptance Pack**, not run now.
+- **"Claude/Stage 4 is imminent."** Corrected: Claude is **not** the next step. Stage 4 starts only after Stage
+  3.5 + the Acceptance Pack; no Claude call is authorized before Phase D.
+- **"WF06 mark-processed is broken / too manual" / "allowlist" jargon in operator output.** Corrected: these were
+  addressed in DEC-136/137 (confirmation-based idempotent marking; operator-facing wording de-jargoned). Internal
+  `source_allowlist` column name is retained for compatibility but is not operator-facing.
+
+### 6.3 Remaining blockers
+- **Stage 2 verified-populated closure** = `BLOCKED_BY_OPERATOR_ACTION` (needs a real Firecrawl/Apify run + tab
+  creation + credential/Spreadsheet-ID binding) — deferred to the Stage C Acceptance Pack, not a code blocker.
+- **Stage 3.5 lead connectors** (VK public comments / forums / reviews) not built yet — that is the Phase B work
+  about to begin; each connector is its own approval + fixture-first.
+- **Claude enrichment (Stage 4)** intentionally not implemented; remains gated until Phase D.
+- No technical secret/Spreadsheet-ID leaks found (placeholders only) — please re-confirm in your next pass.
+
+### 6.4 Next plan
+1. **Phase B — Stage 3.5 Lead Scout Foundation:** build the lead-signal layer per `LEAD_SCOUT_LAYER_PLAN.md`
+   (source priority, fields, status workflow), public signals only, manual review, no auto-outreach.
+2. **Phase C — Acceptance Pack:** run the Stage 3.5 lead acceptance pack + the postponed Stage 2 paid/live
+   website acceptance as one deliberate pass.
+3. **Phase D — Stage 4 Claude Intelligence Layer:** only after B + C; 4.1 Enrichment Core → 4.2 Synthesis &
+   Executive Report → 4.3 Agent-Ready Report & Control Contract, each approval/budget-gated and cost-logged.

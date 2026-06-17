@@ -5,6 +5,91 @@ Most recent first.
 
 ---
 
+## DEC-139 — Stage 3.5 Lead Scout Foundation BUILT (WF14 v0.3 engine + WF13 VK lead source + WF12 lead block + public_lead_signals v0.3)
+
+**Date:** 2026-06-17 (session 11)
+**Context:** Phase B of the LOCKED model (DEC-138). The project had a deterministic public-lead-signal triage (WF14
+v0.2) but no real Lead Scout: thin schema, no scoring engine, no public-contact extraction discipline, no VK lead
+capture, no review workflow. Stage 3.5 turns the foundation into a real public Lead Scout layer.
+
+**Architecture decision (Option A refined; NOT a new WF16):** WF13 is already the VK public source on the shared
+`raw_market_records` contract and WF14 is already the lead-triage layer. A separate WF16 connector/engine would
+duplicate VK logic and split the lead engine in two. So: **extend WF13** (VK public *lead* source) + **upgrade
+WF14 into the central Lead Scout engine** + **upgrade WF12 lead block**. The competitor branch (WF08/WF10/WF12
+competitor sections) is untouched → lead flows do not pollute competitor intelligence; future lead sources reuse
+the same connector→raw→WF14 contract.
+
+**Decision (implemented, all `active=false`, $0, no external calls, fixture-validated):**
+1. **WF14 v0.3 — Lead Scout Triage & Scoring engine.** Reads `raw_market_records` audience rows (PRIMARY,
+   decoupled from WF08) + `review_queue` (enrichment), each tab read once (DEC-131). Deterministic 0–100 scoring
+   (intent25+urgency15+pain20+niche15+contact8+region7+freshness10 − penalties) → `lead_score`/`score_band`
+   (high≥75/medium50-74/low25-49/ignore<25)/`review_priority`/`recommended_action`/`score_reasons`. Public-contact
+   extraction (phone/username/profile, verbatim only; `contact_source_url` mandatory; blanked + `do_not_use` when
+   unprovable). Multi-key dedup. Supplier/competitor-ad exclusion. Writes `public_lead_signals` v0.3 (47 cols) +
+   `agent_requests`. Final-summary self-test (`read_once_ok`/`append_cap_ok`/`dedup_ok`/`policy_ok`). Canonical
+   `pain_type` set: bank_refusal/bad_credit_history/overdue_debt/refinancing_need/mortgage_need/
+   business_finance_need/pledge_auto_pts/broker_price_question/fraud_fear/prepayment_fear/document_problem/unknown.
+2. **WF13 v0.3 — VK public lead source.** Consumer-demand detection routes public comments/posts to audience lead
+   rows; gated live `wall.get` **and** `wall.getComments` (inert HTTP placeholder + dual-shape parser; runtime
+   verification = `PENDING_STAGE_C_ACCEPTANCE`); lead-rich synthetic fixtures (+7 000 synthetic phones).
+3. **WF12 lead block.** Priority H/M/L counts, public-contact-evidence count + policy-hidden count, top-N
+   **anonymized** lead summaries — **no phone/username/profile ever surfaced in the report**; manual-review +
+   `outreach_allowed=false` statements; tolerates v0.3 + old 28-col schema during migration.
+4. **Schema/validation:** `public_lead_signals` v0.3 (47 cols, TABLE_SCHEMA §G + migration map); validation lists
+   27–33 + §3.6 dropdowns; WF15 source_family += `public_lead_source`/`lead_triage`.
+5. **Fixtures:** `n8n/fixtures/lead_scout/` synthetic golden data + README.
+
+**Hard policy (binding, CONTACT_AND_OUTREACH_POLICY):** public evidence only; public profile/contact = evidence,
+NOT outreach permission; `outreach_allowed=false` on every row; `recommended_action ∈ {manual_review, content_idea,
+monitor, ignore}`; no hidden/inferred contacts; no member extraction; no private-group scraping; no MTProto.
+
+**Validation:** WF14 engine 61/61 fixture checks (bands/pains/contacts/policy/47-col) + repeat-run dedup; WF13
+routing 6 audience rows incl. dedup + competitor kept separate + 1 hard-skip; WF12 lead block 12/12 incl. no-leak
+checks (phone/username/profile never in report). All workflows JSON-valid; Code nodes `node --check` OK.
+
+**Stage status:** Stage 3.5 = **BUILT (deterministic, fixture-validated)**. Live VK lead capture + full end-to-end
+acceptance = **Stage C** (`STAGE_C_ACCEPTANCE_PACK.md`, max 7 checks). Stage 4 (Claude) still not started (Phase D).
+Related: [[project-stage3-closed-stage4-next]].
+
+---
+
+## DEC-138 — LOCKED A/B/C/D stage model: Stage 3.5 Lead Scout is next; Stage 2 acceptance → Stage C; Stage 4 after Stage 3.5 + Acceptance Pack
+
+**Date:** 2026-06-17 (session 10)
+**Context:** After Stage 3 MVP closure (DEC-136) and the Stage 2 code consolidation (DEC-137), the docs still
+pointed to "Stage 4 as the next active stage" and carried stale "closure pending" wording. The operator wanted
+the stage model **locked** and the documentation made internally consistent (Stage A Cleanup Lock) before any
+further build — specifically to stop pointing at Stage 4 prematurely and to move lead work ahead of the Claude
+layer.
+
+**Decision (locked stage model A/B/C/D):**
+- **A — Cleanup Lock:** this documentation/stage-model consistency patch. No new build, no code/workflow edits,
+  no external calls.
+- **B — Stage 3.5 Lead Scout Foundation + paid/live readiness:** the **next active build**. Public lead-signal
+  layer on the current architecture (public signals only, manual review, no auto-outreach), plus paid/live
+  readiness prep.
+- **C — Acceptance Pack:** controlled acceptance run after the builds — **Stage 2 paid/live website acceptance**
+  + **Stage 3.5 lead acceptance** — performed as one deliberate pass, not micro-tested per node.
+- **D — Stage 4 Claude Intelligence Layer:** Claude enrichment + executive report (4.1/4.2/4.3). Starts **only
+  after** Stage 3.5 **and** the Acceptance Pack.
+
+**Locked status:** Stage 1 = CLOSED · Stage 2 = CODE-COMPLETE / READY FOR CONTROLLED PAID-LIVE ACCEPTANCE ·
+Stage 3 = MVP CLOSED / PASS (DEC-136) · **Stage 3.5 = NEXT ACTIVE BUILD** · Stage 4 = after Stage 3.5 +
+Acceptance Pack · Stage 5 = after the Stage 4 contract (4.3).
+
+**Locked rules:**
+1. Stage 3.5 Lead Scout Foundation is the next active build. Do **not** point to Stage 4 as the next active build.
+2. Stage 2 paid/live acceptance is **postponed to the Stage C Acceptance Pack** — not run now.
+3. Stage 4 (Claude Intelligence Layer) starts **only after** Stage 3.5 + the Acceptance Pack.
+4. **No micro-tests after every node.** Testing happens after full builds, as the Stage C Acceptance Pack.
+
+**Impact:** ROADMAP carries the authoritative LOCKED block; session-6/7/8 "next active = Stage 4 / closure
+pending" lines are historical; NEXT_ACTIONS current priority = Stage 3.5; `LEAD_SCOUT_LAYER_PLAN.md` reframed as
+Stage 3.5 NEXT ACTIVE BUILD; STAGE_3/STAGE_4 docs de-ambiguated. Supersedes the "next active stage = Stage 4"
+framing of DEC-135/DEC-136 (the closure facts of DEC-136 stand). Related: [[project-stage3-closed-stage4-next]].
+
+---
+
 ## DEC-137 — Stage 2 excellence consolidation: WF06 confirmation-marking + WF04 snapshots + WF04/05/07/09 auto-ledger (IMPLEMENTED)
 
 **Date:** 2026-06-17

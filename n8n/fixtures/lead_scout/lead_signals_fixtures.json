@@ -1,0 +1,60 @@
+{
+  "_meta": {
+    "purpose": "Synthetic Stage 3.5 Lead Scout golden fixtures. SYNTHETIC TEST DATA ONLY — no real people, no real phone numbers (000 prefix), no real profiles. Used to validate WF14 v0.3 deterministic scoring/contact/dedup/policy without any live API call.",
+    "schema_target": "public_lead_signals v0.3 (47 cols)",
+    "rules": "Public evidence only; contact = evidence not permission; outreach_allowed=false always.",
+    "shape": "Each item mirrors a raw_market_records audience row that WF13 (or another public source connector) would write; WF14 reads these and produces scored public_lead_signals."
+  },
+  "rows": [
+    {
+      "id": "F1_high_intent_username",
+      "raw": { "platform": "vk", "source_type": "social_comment", "touchpoint_type": "public_comment", "record_type_hint": "question_objection", "dedup_status": "unique", "source_url": "https://vk.com/kredity_msk_fixture", "post_url": "https://vk.com/wall-111222_301", "comment_url": "https://vk.com/wall-111222_301?reply=3011", "profile_url": "https://vk.com/id_user_synthetic_1", "profile_name": "Игорь (fixture)", "author_handle": "id_user_synthetic_1", "region_hint": "Москва/МО", "published_at": "2026-06-14T10:00:00+03:00", "comment_text": "Срочно нужен кредит после отказа двух банков, плохая кредитная история. Кто реально помог? Пишите @synthetic_lead_1", "contact_public": "@synthetic_lead_1", "contact_channel": "telegram" },
+      "expect": { "is_lead": true, "intent_type": "buying_intent", "score_band": "high", "pain_contains": ["bank_refusal", "bad_credit_history"], "public_contact_type": "username", "contact_use_policy": "manual_review", "outreach_allowed": false }
+    },
+    {
+      "id": "F2_high_intent_phone",
+      "raw": { "platform": "vk", "source_type": "social_comment", "touchpoint_type": "public_comment", "record_type_hint": "question_objection", "dedup_status": "unique", "source_url": "https://vk.com/kredity_msk_fixture", "post_url": "https://vk.com/wall-111222_302", "comment_url": "https://vk.com/wall-111222_302?reply=3021", "profile_url": "https://vk.com/id_user_synthetic_2", "profile_name": "Марина (fixture)", "author_handle": "id_user_synthetic_2", "region_hint": "Москва/МО", "published_at": "2026-06-14T11:00:00+03:00", "comment_text": "Нужны деньги под залог ПТС срочно, ищу брокера в Москве. Мой телефон +7 000 000-00-01, перезвоните пожалуйста", "contact_public": "+7 000 000-00-01", "contact_channel": "phone" },
+      "expect": { "is_lead": true, "intent_type": "buying_intent", "score_band": "high", "pain_contains": ["pledge_auto_pts"], "public_contact_type": "phone", "contact_use_policy": "manual_review", "sheets_safe_phone": true, "outreach_allowed": false }
+    },
+    {
+      "id": "F3_question_no_contact",
+      "raw": { "platform": "vk", "source_type": "social_comment", "touchpoint_type": "public_comment", "record_type_hint": "question_objection", "dedup_status": "unique", "source_url": "https://vk.com/kredity_msk_fixture", "post_url": "https://vk.com/wall-111222_303", "comment_url": "https://vk.com/wall-111222_303?reply=3031", "profile_url": "", "profile_name": "", "author_handle": "id_user_synthetic_3", "region_hint": "Москва/МО", "published_at": "2026-06-13T09:00:00+03:00", "comment_text": "Подскажите, к кому обращаться при плохой кредитной истории? Сколько это стоит обычно?", "contact_public": "", "contact_channel": "" },
+      "expect": { "is_lead": true, "intent_type": "question", "score_band": "medium", "pain_contains": ["bad_credit_history", "broker_price_question"], "public_contact_type": "", "contact_use_policy": "aggregate_only", "outreach_allowed": false }
+    },
+    {
+      "id": "F4_complaint_fraud_fear",
+      "raw": { "platform": "vk", "source_type": "social_comment", "touchpoint_type": "public_comment", "record_type_hint": "question_objection", "dedup_status": "unique", "source_url": "https://vk.com/kredity_msk_fixture", "post_url": "https://vk.com/wall-111222_304", "comment_url": "https://vk.com/wall-111222_304?reply=3041", "profile_url": "https://vk.com/id_user_synthetic_4", "profile_name": "Аноним (fixture)", "author_handle": "id_user_synthetic_4", "region_hint": "Москва/МО", "published_at": "2026-06-13T12:00:00+03:00", "comment_text": "Эти брокеры мошенники — взяли предоплату за кредит и пропали, обманули. Боюсь теперь всех.", "contact_public": "", "contact_channel": "" },
+      "expect": { "is_lead": true, "intent_type": "complaint", "pain_contains": ["fraud_fear", "prepayment_fear"], "recommended_action": "content_idea", "outreach_allowed": false }
+    },
+    {
+      "id": "F5_business_finance",
+      "raw": { "platform": "vk", "source_type": "social_comment", "touchpoint_type": "public_comment", "record_type_hint": "question_objection", "dedup_status": "unique", "source_url": "https://vk.com/biznes_finansy_fixture", "post_url": "https://vk.com/wall-333444_305", "comment_url": "https://vk.com/wall-333444_305?reply=3051", "profile_url": "https://vk.com/id_user_synthetic_5", "profile_name": "ИП Синтетик (fixture)", "author_handle": "id_user_synthetic_5", "region_hint": "Москва/МО", "published_at": "2026-06-14T08:00:00+03:00", "comment_text": "Нужен кредит для бизнеса (ООО), оборотные средства, и банковская гарантия под тендер. Где лучше взять?", "contact_public": "", "contact_channel": "" },
+      "expect": { "is_lead": true, "intent_type": "buying_intent", "pain_contains": ["business_finance_need"], "service_type": "business_credit", "outreach_allowed": false }
+    },
+    {
+      "id": "F6_competitor_broadcast_NOT_lead",
+      "raw": { "platform": "vk", "source_type": "social_post", "touchpoint_type": "competitor_content_post", "record_type_hint": "competitor_activity", "dedup_status": "unique", "source_url": "https://vk.com/kredity_msk_fixture", "post_url": "https://vk.com/wall-111222_306", "comment_url": "", "profile_url": "https://vk.com/id_broker_fixture", "profile_name": "Кредитный Брокер МСК (fixture)", "author_handle": "id_broker_fixture", "region_hint": "Москва/МО", "published_at": "2026-06-14T07:00:00+03:00", "comment_text": "Кредитный брокер: помощь в получении кредита после отказов, без предоплаты, оплата за результат. Звоните +7 000 000-00-09", "contact_public": "+7 000 000-00-09", "contact_channel": "phone" },
+      "expect": { "is_lead": false, "reason": "supplier_ad/competitor_activity excluded from lead pool" }
+    },
+    {
+      "id": "F7_generic_news_NOT_lead",
+      "raw": { "platform": "vk", "source_type": "social_post", "touchpoint_type": "forum_discussion", "record_type_hint": "market_signal", "dedup_status": "unique", "source_url": "https://vk.com/biznes_finansy_fixture", "post_url": "https://vk.com/wall-333444_307", "comment_url": "", "profile_url": "", "profile_name": "Редакция (fixture)", "author_handle": "id_editor_fixture", "region_hint": "", "published_at": "2026-06-12T09:00:00+03:00", "comment_text": "Банки ужесточили скоринг в этом квартале — обзор рынка кредитования и статистика отказов.", "contact_public": "", "contact_channel": "" },
+      "expect": { "is_lead": false, "reason": "market_signal not an audience row / no consumer demand -> excluded" }
+    },
+    {
+      "id": "F8_duplicate_of_F1",
+      "raw": { "platform": "vk", "source_type": "social_comment", "touchpoint_type": "public_comment", "record_type_hint": "question_objection", "dedup_status": "unique", "source_url": "https://vk.com/kredity_msk_fixture", "post_url": "https://vk.com/wall-111222_301", "comment_url": "https://vk.com/wall-111222_301?reply=3011", "profile_url": "https://vk.com/id_user_synthetic_1", "profile_name": "Игорь (fixture)", "author_handle": "id_user_synthetic_1", "region_hint": "Москва/МО", "published_at": "2026-06-14T10:00:00+03:00", "comment_text": "Срочно нужен кредит после отказа двух банков, плохая кредитная история. Кто реально помог? Пишите @synthetic_lead_1", "contact_public": "@synthetic_lead_1", "contact_channel": "telegram" },
+      "expect": { "is_lead": false, "reason": "in-batch duplicate of F1 (same comment_url+text) -> duplicates_skipped" }
+    },
+    {
+      "id": "F9_stale_low_confidence",
+      "raw": { "platform": "vk", "source_type": "social_comment", "touchpoint_type": "public_comment", "record_type_hint": "question_objection", "dedup_status": "unique", "source_url": "https://vk.com/uslugi_msk_fixture", "post_url": "https://vk.com/wall-555666_309", "comment_url": "https://vk.com/wall-555666_309?reply=3091", "profile_url": "", "profile_name": "", "author_handle": "id_user_synthetic_9", "region_hint": "", "published_at": "2025-09-01T09:00:00+03:00", "comment_text": "А что вообще такое рефинансирование? Просто интересно почитать.", "contact_public": "", "contact_channel": "" },
+      "expect": { "is_lead": true, "freshness_status": "stale", "score_band": "low", "note": "backfill on; low score due to weak intent + stale" }
+    },
+    {
+      "id": "F10_policy_risk_contact_blanked",
+      "raw": { "platform": "vk", "source_type": "social_comment", "touchpoint_type": "public_comment", "record_type_hint": "question_objection", "dedup_status": "unique", "source_url": "", "post_url": "", "comment_url": "", "profile_url": "", "profile_name": "", "author_handle": "id_user_synthetic_10", "region_hint": "Москва/МО", "published_at": "2026-06-14T13:00:00+03:00", "comment_text": "Нужен кредит после отказа, мой телефон +7 000 000-00-10", "contact_public": "+7 000 000-00-10", "contact_channel": "phone" },
+      "expect": { "is_lead": true, "public_contact_type": "", "contact_blanked": true, "contact_use_policy": "do_not_use", "privacy_flags_contains": "contact_blanked_no_source_url", "reason": "contact present but NO public source URL to evidence visibility -> blanked, do_not_use" }
+    }
+  ]
+}

@@ -102,6 +102,46 @@ DEC-134 in `docs/DECISIONS.md`.
 
 ---
 
+## DEC-139 — Stage 3.5 Lead Scout Foundation BUILT (2026-06-17, session 11)
+
+**Rule:** Stage 3.5 Lead Scout = **BUILT** (deterministic, fixture-validated, $0). Architecture = Option A refined
+(**no new WF16**): WF13 is the VK public lead source, WF14 is the central Lead Scout engine, WF12 reports — the
+competitor branch (WF08/WF10) is untouched so lead flows don't pollute competitor intelligence.
+
+- **WF14 v0.3 Lead Scout engine:** reads `raw_market_records` audience rows (PRIMARY, decoupled from WF08) +
+  `review_queue`; deterministic 0–100 scoring (intent25+urgency15+pain20+niche15+contact8+region7+freshness10 −
+  penalties) → `lead_score`/`score_band`/`review_priority`; public-contact extraction (verbatim only,
+  `contact_source_url` mandatory, blank+`do_not_use` when unprovable); multi-key dedup; supplier/competitor-ad
+  exclusion; writes `public_lead_signals` v0.3 (47 cols) + `agent_requests`; self-test summary.
+- **WF13 v0.3 VK lead source:** consumer-demand detection → audience lead rows; gated live `wall.get` +
+  `wall.getComments` (inert; runtime = PENDING_STAGE_C); synthetic lead fixtures.
+- **WF12 lead block:** priority counts + contact counts + top-N anonymized summaries (**no contacts in report**).
+- **public_lead_signals v0.3** (47 cols), validation lists 27–33, WF15 family +=public_lead_source.
+
+**Binding:** public evidence only; contact = evidence not permission; `outreach_allowed=false` always; no
+hidden/inferred contacts, no member extraction, no private-group scraping, no MTProto. Live VK + full end-to-end =
+**Stage C** (max 7 checks). Stage 4 (Claude) = Phase D, not started. Full text: DEC-139 in `docs/DECISIONS.md`.
+Related: [[project-stage3-closed-stage4-next]].
+
+---
+
+## DEC-138 — LOCKED A/B/C/D stage model (2026-06-17, session 10)
+
+**Rule:** Stage sequence is locked: **A Cleanup Lock → B Stage 3.5 Lead Scout Foundation + paid/live readiness
+(NEXT ACTIVE BUILD) → C Acceptance Pack → D Stage 4 Claude Intelligence Layer.** Locked status: Stage 1 CLOSED ·
+Stage 2 CODE-COMPLETE / READY FOR CONTROLLED PAID-LIVE ACCEPTANCE · Stage 3 MVP CLOSED/PASS · **Stage 3.5 NEXT
+ACTIVE BUILD** · Stage 4 after Stage 3.5 + Acceptance Pack · Stage 5 after the Stage 4 contract.
+
+- Stage 3.5 Lead Scout is next — do **not** point to Stage 4 as the next active build.
+- Stage 2 paid/live acceptance is **postponed to Stage C Acceptance Pack** (not run now).
+- Stage 4 starts **only after** Stage 3.5 + the Acceptance Pack.
+- **No micro-tests per node** — testing happens after full builds (Stage C).
+
+Supersedes the "next active stage = Stage 4" framing of DEC-135/136 (DEC-136 closure facts stand). Full text:
+DEC-138 in `docs/DECISIONS.md`. Related: [[project-stage3-closed-stage4-next]].
+
+---
+
 ## DEC-137 — Stage 2 excellence consolidation IMPLEMENTED (2026-06-17)
 
 **Rule:** Stage 2 web pipeline is implemented, not scoped. **WF06** marks `processed` via a **confirmation-based,

@@ -5,6 +5,79 @@ Most recent first.
 
 ---
 
+## 2026-06-17 (session 11) — Stage 3.5 Lead Scout Foundation BUILT (DEC-139)
+
+**Agent role:** project-engineer · **Scope:** real build (Phase B of the LOCKED A/B/C/D model). Deterministic,
+**all `active=false`, $0, NO external calls** (no VK/Telegram/Apify/Firecrawl/Claude), no activation, no real
+keys/Spreadsheet IDs, no auto-outreach, no member/private extraction. Fixture/harness-validated only.
+
+**Architecture decision (DEC-139):** Option A refined — **no new WF16**. WF13 = VK public lead source, WF14 =
+central Lead Scout engine, WF12 = lead report block; competitor branch (WF08/WF10) untouched (no pollution).
+
+**Built (code):**
+- **WF14 v0.3 — Lead Scout Triage & Scoring engine** (renamed): reads `raw_market_records` audience rows (PRIMARY,
+  decoupled from WF08) + `review_queue`; deterministic 0–100 scoring → `lead_score`/`score_band`/`review_priority`/
+  `recommended_action`/`score_reasons`; public-contact extraction (verbatim only, `contact_source_url` mandatory,
+  blank+`do_not_use` if unprovable); multi-key dedup; supplier/competitor-ad exclusion; writes `public_lead_signals`
+  v0.3 (47 cols) + `agent_requests`; self-test (read_once/cap/dedup/policy).
+- **WF13 v0.3 — VK public lead source** (renamed): consumer-demand detection → audience lead rows; gated live
+  `wall.get` + `wall.getComments` (inert HTTP + dual-shape parser; runtime PENDING_STAGE_C); synthetic lead fixtures.
+- **WF12 — lead block:** priority counts + public-contact-evidence counts + top-N anonymized summaries (no contacts
+  in report); tolerates v0.3 + old schema.
+- **WF15:** source_family += `public_lead_source`/`lead_triage`.
+
+**Docs/schema:** `public_lead_signals` v0.3 (47 cols, TABLE_SCHEMA §G + migration map); GOOGLE_SHEETS_VALIDATION_PLAN
+lists 27–33 + §3.6; LEAD_SCOUT_LAYER_PLAN (BUILT + arch decision + §11 status); PUBLIC_LEAD_SIGNAL_LAYER v0.3; **new**
+STAGE_C_ACCEPTANCE_PACK (max 7 checks + VK readiness); COSTS note; fixtures `n8n/fixtures/lead_scout/`; ROADMAP/
+NEXT_ACTIONS/DECISIONS(DEC-139)/warm/recent updated.
+
+**Validation:** WF14 engine **61/61** fixture checks + repeat-run dedup; WF13 routing harness PASS (6 audience rows,
+dedup, competitor separate, 1 hard-skip); WF12 lead block **12/12** incl. no-contact-leak checks. All edited
+workflows `python3 -m json.tool` VALID; all Code nodes `node --check` OK; `active=false`; no real keys/Spreadsheet
+IDs; fixture phones synthetic (+7 000).
+
+**Not done (by policy):** live VK/Telegram/Apify/Firecrawl/Claude calls; activation; auto-outreach; member/private
+extraction. Live VK lead capture + end-to-end acceptance = **Stage C**; Stage 4 (Claude) = Phase D (not started).
+
+---
+
+## 2026-06-17 (session 10) — Stage A Cleanup Lock: A/B/C/D stage model LOCKED (DEC-138)
+
+**Agent role:** project-engineer · **Scope:** documentation/stage-model **cleanup-lock only** — **no build, no
+Stage 3.5 build, no Stage 4, no code/workflow edits, no external calls** (no Firecrawl/Apify/VK/Telegram/Claude),
+no activation, no real keys/Spreadsheet IDs, no deletions.
+
+**What was done**
+- **Locked the A/B/C/D stage model (DEC-138):** A Cleanup Lock · B Stage 3.5 Lead Scout Foundation + paid/live
+  readiness (NEXT ACTIVE BUILD) · C Acceptance Pack · D Stage 4 Claude Intelligence Layer. Stage 3.5 is next;
+  Stage 2 paid/live acceptance postponed to Stage C; Stage 4 only after Stage 3.5 + Acceptance Pack; testing
+  after full builds, not micro-tests per node.
+- **ROADMAP.md:** prepended the authoritative `STAGE MODEL — LOCKED (DEC-138)` block (A/B/C/D + locked stage
+  status); marked session-7 "closure pending" block historical; broadened the supersession note to session-6/7/8.
+- **NEXT_ACTIONS.md:** current priority = Stage 3.5 Lead Scout Foundation; Stage 2 acceptance → Stage C; no
+  micro-tests; demoted the session-9 "next = Stage 4.1" block as superseded.
+- **LEAD_SCOUT_LAYER_PLAN.md:** reframed as **Stage 3.5 NEXT ACTIVE BUILD**; added the locked source-priority
+  order (VK first → Banki/forums/Q&A → reviews/complaints/questions → Telegram public later/high-risk → Avito =
+  competitor/source evidence), the lead fields, status workflow (new/needs_review/accepted/rejected/duplicate/
+  stale), and the testing philosophy (no micro-tests; full Stage 3.5 acceptance pack only).
+- **STAGE_3 doc:** v0.4.2 "closure PENDING" subsection marked **historical/superseded**; current status =
+  Stage 3 MVP CLOSED/PASS (no ambiguous pending language).
+- **STAGE_4 doc:** rewrote the next-stage framing — Stage 4 = Claude Intelligence Layer, does **not** start now;
+  Stage 3.5 + Stage C Acceptance Pack come first; 4.1/4.2/4.3 structure kept.
+- **PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md:** appended an **audit v2 response** (accepted findings, corrected stale
+  findings, remaining blockers, next plan).
+- **Memory:** DEC-138 in `DECISIONS.md` + `core/warm/decisions.md`; `core/hot/recent.md` prepended session 10 and
+  trimmed to 3 sessions (10/9/8).
+
+**Validation:** `git diff --stat`; grep for stale `pending`/`current`/`closure PENDING` ambiguity; grep for
+user-facing `allowlist` / `enable HTTP` / `HTTP-ноды` / `включение HTTP` / `готов за гейтом`; remaining hits
+classified internal/historical/acceptable. **No workflow edits** (no JSON validation needed).
+
+**Next:** Stage 3.5 Lead Scout Foundation (next active build, own approval per step). Stage 2 paid/live
+acceptance = Stage C; Stage 4 = Stage D.
+
+---
+
 ## 2026-06-17 (session 9) — Stage 2 EXCELLENCE CONSOLIDATION implemented (WF04/05/06/07/09/14) (DEC-137)
 
 **Agent role:** project-engineer · **Scope:** real implementation consolidation (not docs-only). All workflows
@@ -80,6 +153,10 @@ agent, then Stage 4.1 (own approval + budget guard).
 
 ## 2026-06-17 (session 7) — WF11 v0.4.2 FINAL Stage 3 quality gate: adjacent-RE skip + gate-based transport (DEC-135)
 
+> **[HISTORICAL — NO LONGER CURRENT]** The "closure PENDING one acceptance run" / "next active stage = Stage 4"
+> wording in this entry is superseded by DEC-136 (Stage 3 MVP CLOSED/PASS) and DEC-138 (LOCKED A/B/C/D model;
+> next active build = Stage 3.5). Kept for historical continuity.
+
 **Agent role:** project-engineer · **Scope:** final Stage 3 closure patch — WF11 only (WF08 untouched; no new
 sources, no VK live, no Telegram groups/MTProto/member extraction, no Stage 5 bot, no Claude enrichment, no
 external calls).
@@ -109,8 +186,9 @@ registry +4). `active=false`; no real keys/Spreadsheet ID; no Bot API/MTProto/me
 strategy (§5.10), STAGE_3_2_TEST_RESULTS (diagnostic inventory), STAGE_4 (next active stage), FUTURE backlog
 (VK live + Stage 2 cleanup), DECISIONS (DEC-135), NEXT_ACTIONS, ROADMAP, core/hot + core/warm.
 
-**Status:** Stage 3 source pipeline operational; **Telegram public-channel source closure PENDING one short
-acceptance run**; VK live + Telegram groups = expansion/future; next active stage = Stage 4 (Claude enrichment + report).
+**Status (historical, as recorded that session):** Stage 3 source pipeline operational; Telegram public-channel
+source closure PENDING one short acceptance run; VK live + Telegram groups = expansion/future; next active stage =
+Stage 4. **Now superseded:** Stage 3 MVP CLOSED/PASS (DEC-136); next active build = Stage 3.5 (DEC-138).
 
 ---
 

@@ -2,8 +2,12 @@
 
 > **Wording note (2026-06-17, DEC-135):** operator-facing report/summary/Telegram text uses **"tracked Telegram
 > channels / список отслеживаемых каналов"**, not "allowlist". Internal config/column names (e.g.
-> `live_channel_allowlist`, `source_allowlist`) may stay for compatibility. With the Stage 3 Telegram source
-> closure pending one acceptance run, **Stage 4 (Claude enrichment + executive report) becomes the next active stage.**
+> `live_channel_allowlist`, `source_allowlist`) may stay for compatibility.
+>
+> **[Update 2026-06-17, DEC-138 — supersedes the line below]** Stage 3 MVP is **CLOSED/PASS** (DEC-136) and the
+> stage model is now LOCKED A/B/C/D: the **next active build is Stage 3.5 Lead Scout Foundation**, not Stage 4.
+> Stage 4 (Claude Intelligence Layer) starts only after Stage 3.5 + the Stage C Acceptance Pack.
+> ~~With the Stage 3 Telegram source closure pending one acceptance run, Stage 4 becomes the next active stage.~~ (historical)
 
 **Status:** 🔧 PLAN + **Report Builder v0.3 DETERMINISTIC — OPERATOR PASS (2026-06-16, TEST D):**
 `n8n/workflows/12_market_intelligence_report_builder.json` (`active=false`, deterministic, $0 — no Claude,

@@ -39,7 +39,7 @@ every dropdown at once. This tab is operator-owned; workflows never read or writ
 present in historical rows (e.g. `web` next to `website`, `social_content`/`social_search` from the web
 pipeline era) so existing data does not light up as invalid. Never delete a legacy value while rows carry it.
 
-### Lists (26 — column per list)
+### Lists (33 — column per list; v1.2 adds 27–33 for the Lead Scout v0.3 layer)
 
 | # | List | Values |
 |---|------|--------|
@@ -56,7 +56,7 @@ pipeline era) so existing data does not light up as invalid. Never delete a lega
 | 11 | `processing_status` | raw_collected, analyzed, skipped, business_skip, parse_error, technical_error, completed, completed_no_data |
 | 12 | `route` | results, review_queue, monitor_queue, content_queue, skipped_log, technical_errors, no_route |
 | 13 | `contact_channel` | phone, email, telegram, profile, form, unknown — **never `handle`** (DEC-114: `handle` is a contact *format*; Telegram handles get `contact_channel=telegram`, the format goes to `notes` as `contact_format=handle`; empty cell = no contact) |
-| 14 | `contact_use_policy` | manager_allowed, manual_review, no_outreach, aggregate_only |
+| 14 | `contact_use_policy` | manager_allowed, manual_review, no_outreach, aggregate_only, do_not_use *(v0.3: `do_not_use` added for weak/unprovable public-contact evidence)* |
 | 15 | `confidence_level` | high, medium, low, raises lead confidence only, lower |
 | 16 | `lead_intent_hint` | none, low, medium, high, unknown |
 | 17 | `urgency_hint` | none, low, medium, high, unknown |
@@ -69,6 +69,13 @@ pipeline era) so existing data does not light up as invalid. Never delete a lega
 | 24 | `freshness_status` | fresh, stale, unknown |
 | 25 | `repair_status` | none, not_needed, repaired_json, failed, fallback |
 | 26 | `angle_category` | speed, price, trust, pain, segment |
+| 27 | `review_status` | new, needs_review, accepted, rejected, duplicate, stale *(Lead Scout v0.3 — manager edit field)* |
+| 28 | `review_priority` | high, medium, low |
+| 29 | `score_band` | high, medium, low, ignore |
+| 30 | `intent_type` | question, objection, complaint, buying_intent, content_signal |
+| 31 | `pain_type` | bank_refusal, bad_credit_history, overdue_debt, refinancing_need, mortgage_need, business_finance_need, pledge_auto_pts, broker_price_question, fraud_fear, prepayment_fear, document_problem, unknown *(comma-multi — warning mode)* |
+| 32 | `public_contact_type` | phone, username, profile_url *(empty = no public contact)* |
+| 33 | `lead_recommended_action` | manual_review, content_idea, monitor, ignore *(Lead Scout — outreach values forbidden)* |
 
 > v1.1 changes vs v1.0: `dedup_status` now contains the full set WF09/WF11 emit (`duplicate_in_batch`,
 > `hard_skipped`, `invalid`, `over_pipeline_limit`); `source_type`/`platform` carry legacy `web` and the
@@ -142,6 +149,28 @@ system-generated append-only field (ids, timestamps, hashes, free-text evidence,
 | `content_positioning_plan` | `next_action` | next_action *(warning mode — WF10 writes sentence-style next actions; `no_data` rows match the list)* |
 | `source_confidence_rules` | `confidence_effect` | confidence_level *(warning mode — seed rules carry ranges like `high (75-85)`)* |
 
+### 3.6 `public_lead_signals` (47 cols — Lead Scout v0.3, WF14 writes; manager reviews/edits)
+
+| Column | List | Mode |
+|--------|------|------|
+| `source_platform` | platform | warning |
+| `source_type` | source_type | warning |
+| `service_type` | service_type | warning |
+| `intent_type` | intent_type | warning |
+| `pain_type` | pain_type | warning *(comma-multi)* |
+| `score_band` | score_band | warning |
+| `freshness_status` | freshness_status | warning |
+| `public_contact_type` | public_contact_type | warning |
+| `contact_use_policy` | contact_use_policy | warning |
+| `recommended_action` | lead_recommended_action | warning |
+| `review_status` | review_status | **Reject input** *(manager's main edit field — typos must not drift)* |
+| `review_priority` | review_priority | warning |
+| `outreach_allowed` | boolean | **Reject input** *(must stay FALSE in Stage 3.5)* |
+
+Not validated here (system-written / free text / numeric): `lead_signal_id`, timestamps, urls, `evidence_text`,
+`evidence_excerpt`, `score_reasons`, `privacy_flags`, `policy_note`, `public_phone`, `public_username`,
+`public_profile_url`, scores/`lead_score`, `manager_note`, `notes`.
+
 ### 3.5 Not validated (deliberately)
 
 - ids, hashes, dedup keys, URLs, timestamps, free text (`offer_text`, `reason`, `notes`, `result_summary`, …);
@@ -168,7 +197,10 @@ Before re-importing WF11 v0.3 / WF12 v0.3 / WF13 v0.2 / WF14 / WF15, the operato
 `TABLE_SCHEMA.md` §E–G and `MARKET_INTELLIGENCE_REPORT_SCHEMA.md` v0.3):
 1. `competitor_site_snapshots` — 22 columns (may stay empty; WF12 tolerates absence).
 2. `live_source_runs` — 23 columns (required for WF11/12/13/15 appends).
-3. `public_lead_signals` — 28 columns (required for WF14; WF12 tolerates absence).
+3. `public_lead_signals` — **47 columns (v0.3 Lead Scout, Stage 3.5, DEC-138)** — migrate the old 28-col tab to
+   the 47 headers in `TABLE_SCHEMA.md` §G before re-importing WF14 v0.3 (required for WF14; WF12 tolerates absence
+   and both schemas). Add the §3.6 dropdowns; confirm `outreach_allowed` only ever contains `FALSE`; `#ERROR!`
+   check on `public_phone` (`+7 …` must render as text — DEC-124).
 4. `market_intelligence_reports` — extend/recreate headers to the 25-column v0.3 layout.
 Validation: append-only; `#ERROR!` check on `contact_public` cells with `+7…` values (must render as text —
 DEC-124); `approval_token_used` in `live_source_runs` must only ever contain `yes`/`no`.
