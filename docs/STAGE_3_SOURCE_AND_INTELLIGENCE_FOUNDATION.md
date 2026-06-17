@@ -1,10 +1,12 @@
 # STAGE_3_SOURCE_AND_INTELLIGENCE_FOUNDATION.md — Stage 3 Definition
 
-**Status:** ACTIVE — **source pipeline OPERATIONAL; Telegram public-channel source CLOSURE PENDING one short
-acceptance run after WF11 v0.4.2 (DEC-135, 2026-06-17). VK live + Telegram groups/MTProto = expansion/future,
-not MVP blockers. Next active stage after acceptance = Stage 4 (Claude enrichment + report).** · **Decisions:**
+**Status:** ✅ **STAGE 3 MVP SOURCE/INTELLIGENCE FOUNDATION: CLOSED / PASS (2026-06-17, DEC-135 + final
+two-channel acceptance run).** Telegram public-channel source CLOSED for the MVP tracked-channel public preview.
+VK live + Telegram groups/MTProto/member extraction = expansion/future, **not** MVP blockers. Perfect semantic
+classification = Stage 4.1 enrichment task, not a Stage 3 blocker. **Next active stage = Stage 4 (Claude
+enrichment + report), entered after the external audit (see PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md).** · **Decisions:**
 DEC-113, DEC-119–123, DEC-124–134, **DEC-135 (WF11 v0.4.2 final quality gate: 5-class post-level relevance +
-adjacent_real_estate_signal skip + gate-based transport + tracked-channel wording)**
+adjacent_real_estate_signal skip + gate-based transport + tracked-channel wording)**, **DEC-136 (Stage 3 MVP closure)**
 
 > **2026-06-16 update:** WF14 public-lead-signal triage quota fix (DEC-130/131) **passed operator retest**
 > (TEST B `+4`, TEST C repeat `+0`/dup=6, TEST E full-history no quota error) — **WF14 no longer blocks** the
@@ -136,3 +138,54 @@ Local sim: 16/16 representative snippets correct; fixture regression unchanged (
 
 > Wording: operator-facing text now uses **"tracked Telegram channels" / "список отслеживаемых каналов"**, not
 > "allowlist" (internal config name `live_channel_allowlist` kept for compatibility).
+
+---
+
+## 2026-06-17 — STAGE 3 MVP CLOSURE / PASS (DEC-136)
+
+Stage 3 MVP source/intelligence foundation is **closed at MVP level**. Closure framing (exact):
+
+- **Stage 3 MVP source/intelligence foundation: CLOSED / PASS.**
+- **Telegram public-channel source: CLOSED for MVP tracked-channel public preview.**
+- **Guard / parser / dedup / relevance gate: PASS** (WF11 v0.4.2, DEC-135).
+- **WF08 deterministic handoff / accounting: PASS** (v0.10, DEC-134; duplicate-only handoff correctly stops at
+  Filter & Select when a WF11 run had unique=0 — acceptable).
+- **WF10 deterministic aggregation: PASS** (rows_considered=115 → rows_after_filters=110, 22 competitor_profiles,
+  9 market_angles, 8 audience_signals, 1 plan, source_mix=mixed, telegram present, technical_errors=0).
+- **WF12 deterministic downstream report: PASS** (market_intelligence_reports +1, agent_requests +1,
+  live_source_runs +1, rows_after_filters=110, llm_status=disabled, llm_cost_usd=0, telegram_send=false,
+  delivered_to=none, public_lead_signals block present, no outreach, technical_errors=0).
+- **VK live: Stage 3 expansion, NOT an MVP blocker.**
+- **Telegram groups / MTProto / member extraction: future high-risk extension, NOT an MVP blocker.**
+- **Perfect semantic classification: Stage 4.1 enrichment task, NOT a Stage 3 blocker.**
+
+### Final live two-channel acceptance run (closure evidence)
+
+`brokershakurova` + `ipotekapro`, WF11 v0.4.2:
+posts_received=20 · structurally_valid_items=19 · invalid_items=1 · business_relevant_items=8 ·
+hard_skipped_items=11 (irrelevant_false_positives=4, adjacent_real_estate_skips=6, hard_negative_skips=1) ·
+unique=0 · duplicates=8 · registry_rows_written=0 · external_calls=2 · technical_errors=0.
+False positives and adjacent real-estate posts are correctly skipped; this is the clean run that the v0.4.2
+quality gate was built for.
+
+### Diagnostic / contaminated runs (NOT closure evidence — kept, not deleted)
+
+These earlier runs were the diagnostics that led to v0.4.1 → v0.4.2; they used looser (channel-level / pre-adjacent)
+relevance and **must not be cited as closure evidence**:
+
+- `wf11_req_20260616_054733`
+- `wf11_req_20260616_055318`
+- `wf11_req_20260616_055705`
+- `touchpoint_20260616_060227`
+- `wf10_20260616_061138`
+- `wf11_req_20260617_032817`
+
+### Known remaining semantic debt → Stage 4.1 (do NOT reopen Stage 3)
+
+Some deterministic record-type classifications are imperfect and are deferred to Stage 4.1 Claude
+enrichment/classification improvement:
+- `brokershakurova/1237` likely `competitor_activity`, may currently be `market_signal`.
+- `brokershakurova/1245` likely competitor/pricing positioning, may currently be `market_signal`.
+- `ipotekapro/4090` likely `market_signal`, may currently be `competitor_activity`.
+
+These are interpretation refinements, not source/guard/pipeline failures, and do not block Stage 3 closure.

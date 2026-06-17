@@ -5,6 +5,55 @@ Most recent first.
 
 ---
 
+## DEC-136 — Stage 3 MVP closure + Stage 2 cleanup scope + WF12 human wording + Stage 4 in 3 sub-stages
+
+**Date:** 2026-06-17
+**Context:** Stage 3 had been retested many times; the operator wanted the stage **closed cleanly**, visible
+product/doc issues fixed, Stage 2 web debt scoped, and the repo prepared for an external pre-Stage-4 audit —
+**not** another open-ended Stage 3 retest loop.
+
+**Decision (closure):** Stage 3 MVP source/intelligence foundation is **CLOSED / PASS**. Telegram
+public-channel source is **CLOSED for the MVP tracked-channel public preview** (WF11 v0.4.2, DEC-135) on the
+final clean two-channel acceptance run (posts=20, business_relevant=8, hard_skipped=11, unique=0, dup=8,
+external_calls=2, technical_errors=0). WF08 handoff/accounting, WF10 aggregation, WF12 deterministic report all
+PASS. **VK live** and **Telegram groups/MTProto/member extraction** are expansion/future, **not** MVP blockers.
+**Perfect semantic classification** (e.g. `brokershakurova/1237`, `/1245`, `ipotekapro/4090`) is a **Stage 4.1**
+enrichment task, not a Stage 3 blocker. The listed 2026-06-16/17 diagnostic runs are kept as diagnostic
+evidence and **must never** be cited as closure evidence.
+
+**Decision (WF12 wording):** the deterministic report's `source_collection_actions` and the empty-snapshot
+notice were rewritten to human/product language — Telegram = "публичный превью по отслеживаемым каналам
+протестирован … добавить/одобрить"; **no "allowlist", no "enable HTTP node"** in operator-facing report text;
+Firecrawl/HTTP mentioned only as a technical detail; VK = future expansion; empty `competitor_site_snapshots` =
+"Stage 2 web snapshots not yet populated, not a system fault". Full Markdown report is **not** shortened.
+
+**Decision (Stage 2 cleanup scope):** WF06 already auto-reads `url_candidates` + re-reads `url_registry`
+(no hardcoded URLs); the only safe code change applied was a sharper WF06 handoff `operator_note`. "Mark
+Candidates Processed" stays **disabled** — the manual WF04 handoff gives WF06 no success signal, so the safe
+pattern is a separate confirmation pass that marks `processed` only when `normalized_source_url` appears in
+`url_registry` (idempotent, never marks skipped). Native `live_source_runs` append for WF04/05 is folded into
+Phase B; WF15 manual logging is the interim standard. Deep vs shallow policy: **shallow is the MVP default**
+(single-page WF04 + first-pass domain diversity); deep is ≤3 key pages/domain for priority competitors only,
+within the ≤5 URLs/run cap. `competitor_site_snapshots` population is a controlled operator runbook (3–5 top
+competitors), **not run now**. Full text: `STAGE_2_WEB_COMPETITOR_PIPELINE_REVIEW.md` §5.
+
+**Decision (Stage 4 structure):** Stage 4 = exactly three sub-stages — **4.1 Claude Enrichment Core**
+(selective, capped, cost-logged, deterministic fallback; includes the semantic-classification corrections),
+**4.2 Intelligence Synthesis & Executive Report** (WF12 Claude executive summary, evidence-bound, budget-gated),
+**4.3 Agent-Ready Report & Control Contract** (Telegram-friendly summary + report contract for Stage 5).
+Stage 4 starts **after** the external audit (`PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md`).
+
+**Decision (Lead Scout):** the project is a **Lead + Market Intelligence Agent**, not only a competitor
+analyzer. The MVP lead layer (`LEAD_SCOUT_LAYER_PLAN.md`) reuses `raw_market_records` → WF08/WF14 →
+`public_lead_signals` → manager review → WF12 lead block. Public contact evidence may be stored only if verbatim
+public, always with `source_url` + `extracted_at`, `contact_use_policy=manual_review/aggregate_only`; **no
+auto-outreach, no member extraction, no private-group scraping** in the MVP.
+
+**Impact:** Stage 3 closed; Stage 2 debt scoped with a runbook; WF12 operator-facing wording de-jargoned;
+Stage 4 structured; Lead Scout concrete; external audit brief prepared. Next active stage = Stage 4, after audit.
+
+---
+
 ## DEC-135 — WF11 v0.4.2 final quality gate: 5-class post-level relevance + adjacent-RE skip + gate-based transport
 
 **Date:** 2026-06-17

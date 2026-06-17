@@ -109,3 +109,53 @@ Claude enrichment must remain: **approval-gated**, **budget-gated**, **cost/toke
 **no uncontrolled repair loops**, and **selected-row only** — never the whole raw dump by default. The post-level
 relevance fix (DEC-133) matters here: enrichment runs on **clean, relevant** rows, not channel-level false
 positives, so token spend is not wasted on holiday/personal posts.
+
+---
+
+## Stage 4 in 3 sub-stages (2026-06-17, definitive structure)
+
+Stage 4 is split into exactly three sub-stages. Each is approval-gated, budget-gated, cost/token-logged,
+selected-row only, no auto-outreach, no uncontrolled repair loops, deterministic fallback always intact.
+Stage 4 starts **after** the external audit (`PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md`).
+
+### Stage 4.1 — Claude Enrichment Core
+
+Selected-row enrichment in WF08 (LLM path), never the whole raw dump. Targets:
+- high-value competitor ads
+- unclear `market_signal` rows
+- public questions / objections
+- lead signals (scoring/extraction refinement, see `LEAD_SCOUT_LAYER_PLAN.md`)
+- offer decomposition (price / guarantee / CTA / proof / risk reversal / trust signals)
+- рекламные углы / positioning angles
+- **semantic classification corrections** (the known Stage 3 record-type debt:
+  `brokershakurova/1237`, `brokershakurova/1245`, `ipotekapro/4090`)
+
+Controls: `max_calls`, `max_tokens`, repair limit (bounded), cost logging (`agent_requests` +
+`COSTS_AND_LIMITS.md`), deterministic fallback when the LLM is disabled/over budget/non-JSON.
+
+### Stage 4.2 — Intelligence Synthesis & Executive Report
+
+WF12 Claude executive summary on top of the deterministic report (DEC-112/128). Produces:
+- competitor semantic insights
+- offer / price comparison
+- lead-signal interpretation (aggregate, no contacts)
+- content recommendations
+- source gaps
+- next actions
+- data-quality limitations
+- manager-facing RU report
+
+Evidence-bound prompt (deterministic report fields only), budget guard before the HTTP node, quality flags,
+usage-based cost recorded on the report row.
+
+### Stage 4.3 — Agent-Ready Report & Control Contract
+
+Output contract that Stage 5 (Telegram Business Agent) consumes:
+- Telegram-friendly summary (short digest from the report row)
+- `report_next_actions`
+- `report_sources_used`
+- `report_costs`
+- `approval_required_next_steps`
+- `suggested_followups`
+- a documented **control contract** for the Stage 5 Telegram Business Agent (request → plan → cost/approval →
+  trigger → report → next actions), no outreach, operator-only chat.

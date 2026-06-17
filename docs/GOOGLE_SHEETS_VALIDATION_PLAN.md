@@ -172,3 +172,31 @@ Before re-importing WF11 v0.3 / WF12 v0.3 / WF13 v0.2 / WF14 / WF15, the operato
 4. `market_intelligence_reports` — extend/recreate headers to the 25-column v0.3 layout.
 Validation: append-only; `#ERROR!` check on `contact_public` cells with `+7…` values (must render as text —
 DEC-124); `approval_token_used` in `live_source_runs` must only ever contain `yes`/`no`.
+
+---
+
+## Long report rows — visual formatting recommendations (2026-06-17)
+
+The `market_intelligence_reports.notes` cell carries the **full** Markdown report inline (DEC-128). This is by
+design and **must not be truncated** — the row is the single source of truth for "what was reported when". The
+only side effect is large row height in Google Sheets. This is a **display ergonomics** matter, not a workflow
+bug, and is handled in the Sheet UI, not by shortening the data.
+
+**Recommended formatting for the `market_intelligence_reports` tab (operator, in Sheets UI):**
+
+- **Keep the full Markdown field** (`notes`). Do not truncate, do not split across runs.
+- Set long-text columns (`notes`, `top_competitors`, `top_angles`, `audience_summary`, `llm_summary_ru`,
+  `llm_recommendations_ru`) text-wrap to **Clip** (Format → Wrapping → Clip) or a **controlled Wrap** with a
+  fixed row height — Clip keeps every row the same height and the full text stays in the cell/formula bar.
+- **Vertical align: Top** for the whole tab (Format → Vertical align → Top) so clipped rows read cleanly.
+- Optional **fixed row height** for the report table (right-click row → Resize rows → set a fixed px height) so
+  one giant report does not stretch the sheet.
+- Keep the **summary fields short** (`top_competitors`, `top_angles`, `audience_summary` are already short,
+  bounded strings) so the at-a-glance columns stay readable while `notes` holds the full report.
+- **Future UX option (no data loss):** when a cleaner display is needed, export the full report to a
+  Google Doc / a Markdown artifact (`report_markdown_path`) / a Telegram digest, **while keeping the full raw
+  Markdown in Sheets**. The Sheet stays the source of truth; the export is a view.
+
+**Do not** call Google Sheets formatting APIs from a workflow in the current patch. There is no existing,
+safe formatting script; formatting is a one-time manual UI step per tab. (If a vetted formatting script is added
+later, it must be idempotent and touch only display properties, never cell values.)
