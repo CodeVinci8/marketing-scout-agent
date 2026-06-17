@@ -4,7 +4,29 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-17, session 8) — STAGE 3 MVP CLOSED → external audit → Stage 4.1 (DEC-136)
+## CURRENT PRIORITY (2026-06-17, session 9) — STAGE 2 CODE-COMPLETE → controlled snapshot run → external audit → Stage 4.1 (DEC-137)
+
+Stage 2 web pipeline is now **implemented** (DEC-137): WF06 confirmation-based idempotent processed-marking
+(enabled); WF04 writes baseline `competitor_site_snapshots` + per-run `live_source_runs`/`agent_requests`;
+WF05/07/09 auto-ledger; WF14 self-test. Stage 3 stays **CLOSED** (DEC-136). All `active=false`, no external calls
+made this patch.
+
+**Operator next steps (in order):**
+1. Re-import WF04/05/06/07/09/14. Create the `competitor_site_snapshots` (22-col) tab; confirm `live_source_runs`
+   (23) + `agent_requests` (21) tabs exist. Bind the Google Sheets credential + real Spreadsheet ID on the **new**
+   nodes (`Append competitor_site_snapshots`, `Append live_source_runs`, `Append agent_requests`).
+2. **Controlled website snapshot run (paid Firecrawl/Apify — operator-run, BLOCKED for the agent):** run
+   WF05 → approve direct_competitor candidates in `url_candidates` → WF06 (handoff) → WF04 on 3–5 top domains.
+   Verify Sheets deltas (below). Re-run WF06 → confirm idempotent `approval_status=processed` marking.
+3. Refresh WF12 → the "Сайты конкурентов" block populates from the new snapshots.
+4. Hand repo + `docs/PRE_STAGE_4_EXTERNAL_AUDIT_BRIEF.md` to the external ChatGPT-agent audit.
+5. After audit → **Stage 4.1 Claude Enrichment Core** (own approval + budget guard; never call Claude before that).
+
+Phase B (prompt-rich snapshot guarantees/CTA/title) + Phase C (snapshot change-detection diff) are deferred.
+
+---
+
+## PREVIOUS PRIORITY (2026-06-17, session 8) — STAGE 3 MVP CLOSED → external audit → Stage 4.1 (DEC-136)
 
 Stage 3 MVP source/intelligence foundation is **CLOSED / PASS** on the clean two-channel WF11 v0.4.2 acceptance
 run (posts=20, business_relevant=8, hard_skipped=11, unique=0, dup=8, external_calls=2, technical_errors=0).

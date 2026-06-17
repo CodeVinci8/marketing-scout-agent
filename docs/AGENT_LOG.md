@@ -5,6 +5,39 @@ Most recent first.
 
 ---
 
+## 2026-06-17 (session 9) — Stage 2 EXCELLENCE CONSOLIDATION implemented (WF04/05/06/07/09/14) (DEC-137)
+
+**Agent role:** project-engineer · **Scope:** real implementation consolidation (not docs-only). All workflows
+`active=false`; **no external calls made** (no Firecrawl/Apify/VK/Telegram/Claude); no activation; no real
+keys/Spreadsheet IDs; no auto-outreach; no MTProto/member extraction. Continues the interrupted patch (WF06 +
+WF05/07/09 ledger were already applied before the socket closed; WF04 + docs completed this continuation).
+
+**Implemented (code):**
+- **WF04:** new per-URL branch `Normalize + Route → Build competitor_site_snapshots Row → Append
+  competitor_site_snapshots` (22-col baseline, gated to skip technical-error/placeholder, `change_type=baseline`,
+  Sheets-safe contact, content_hash). Loop **done** output → `Build live_source_runs Row` + `Build agent_requests
+  Row` (each aggregates `$input.all()` per DEC-134) → appends. Setup note updated for the new tabs. technical_errors
+  path unchanged.
+- **WF06:** removed `Mark Candidates Processed (DISABLED)`; enabled **confirmation-based idempotent** marker
+  (`_confirm_processed` ⇔ approved + present in `url_registry`; `IF Confirmed Processed?` → update
+  `approval_status=processed` + notes). Sticky notes + handoff note updated to the new safe flow.
+- **WF05/WF07/WF09:** automatic `live_source_runs` append per run.
+- **WF14:** read-once/cap/dedup self-test fields in Final Summary.
+
+**Docs:** `STAGE_2_WEB_COMPETITOR_PIPELINE_REVIEW.md` §6 (implemented consolidation + honest closure status);
+`LEAD_SCOUT_LAYER_PLAN.md` §9 (Stage 4.1 enrichment requirements); DEC-137 in DECISIONS + warm; recent.md
+(session 9, trimmed to 3); NEXT_ACTIONS updated. Stage 3 stays CLOSED (DEC-136, session 8).
+
+**Validation:** JSON valid for WF04/05/06/07/09/14; all Code nodes `node --check` OK; active=false; no real
+keys; Spreadsheet IDs are placeholders; user-facing "allowlist" only as internal `source_allowlist` column; no
+`DISABLED` node remains in WF06.
+
+**Stage 2 status:** WF04–WF07 **code-complete / ready**; full populated-closure = **BLOCKED_BY_OPERATOR_ACTION**
+(operator runs the controlled Firecrawl runbook + creates tabs/binds credential — out of patch scope). Phase B
+(prompt-rich snapshot fields) + Phase C (snapshot diff) deferred.
+
+---
+
 ## 2026-06-17 (session 8) — Stage 3 MVP CLOSED + Stage 2 scoped + WF12 wording + Stage 4/Lead Scout/audit docs (DEC-136)
 
 **Agent role:** project-engineer · **Scope:** stage-closure + cleanup + documentation patch. No Stage 4 build,

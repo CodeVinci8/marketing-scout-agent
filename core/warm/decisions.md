@@ -102,6 +102,22 @@ DEC-134 in `docs/DECISIONS.md`.
 
 ---
 
+## DEC-137 — Stage 2 excellence consolidation IMPLEMENTED (2026-06-17)
+
+**Rule:** Stage 2 web pipeline is implemented, not scoped. **WF06** marks `processed` via a **confirmation-based,
+idempotent** node (enabled): only approved candidates whose `normalized_source_url` is now in `url_registry`;
+never skipped/failed; never re-marks. **WF04** writes baseline `competitor_site_snapshots` (per-URL, gated,
+change_type=baseline) and appends one `live_source_runs` + one `agent_requests` row per run on the loop **done**
+output via `$input.all()` (DEC-134). **WF05/07/09** append `live_source_runs` automatically (manual WF15 = fallback
+only). **WF14** has a read-once/cap/dedup self-test. All `active=false`, placeholder-safe, no external calls.
+
+**Stage 2 status:** WF04–WF07 **code-complete / ready**; full populated-closure is **BLOCKED_BY_OPERATOR_ACTION**
+(needs a real Firecrawl/Apify run + tab/credential setup — out of patch scope). Phase B (prompt-rich snapshot
+fields) + Phase C (snapshot diff/change-detection) = deferred. Full text: DEC-137 in `docs/DECISIONS.md`,
+`STAGE_2_WEB_COMPETITOR_PIPELINE_REVIEW.md` §6. Related: [[project-stage3-closed-stage4-next]].
+
+---
+
 ## DEC-136 — Stage 3 MVP closure + Stage 2 scope + WF12 human wording + Stage 4 in 3 sub-stages (2026-06-17)
 
 **Rule:** Stage 3 MVP source/intelligence foundation is **CLOSED / PASS** (Telegram tracked-channel public

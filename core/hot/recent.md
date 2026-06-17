@@ -4,6 +4,38 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-17 (session 9) — Stage 2 EXCELLENCE CONSOLIDATION implemented (WF04/05/06/07/09/14) (DEC-137)
+
+**Status (exact):** real implementation patch (not docs-only). All workflows `active=false`, placeholder-safe,
+**no external calls made** (no Firecrawl/Apify/VK/Telegram/Claude), no activation, no real keys/Spreadsheet IDs,
+no auto-outreach, no MTProto/member extraction. Stage 3 stays CLOSED (DEC-136); this patch closes Stage 2 code.
+
+**Implemented (code):**
+- **WF06:** removed `Mark Candidates Processed (DISABLED)` → enabled **confirmation-based idempotent** marker.
+  `Select` emits `_confirm_processed` only for approved candidates now present in `url_registry`; `IF Confirmed
+  Processed?` → update sets `approval_status=processed` + audit notes. Never marks skipped/failed; never re-marks.
+- **WF04:** new per-URL branch writes **baseline `competitor_site_snapshots`** (22 cols, gated, change_type=baseline,
+  Sheets-safe contact); loop **done** output appends one **`live_source_runs`** (23) + one **`agent_requests`** (21)
+  per run via `$input.all()` (DEC-134). technical_errors path unchanged. Phase B (prompt-rich guarantees/CTA/title)
+  + Phase C (snapshot diff) deferred.
+- **WF05/WF07/WF09:** automatic **`live_source_runs`** append per run (manual WF15 now fallback only).
+- **WF14:** read-once/cap/dedup **self-test** in Final Summary (`read_once_ok`/`append_cap_ok`/`self_test_passed`).
+
+**Validation:** JSON valid for all 6 edited workflows; all Code nodes `node --check` OK; active=false; no real
+keys; Spreadsheet IDs are placeholders; user-facing "allowlist" only as internal `source_allowlist` column; no
+`DISABLED` node remains in WF06.
+
+**Stage 2 status:** WF04–WF07 **code-complete / ready for controlled snapshot collection**; full populated-closure
+= **BLOCKED_BY_OPERATOR_ACTION** (operator must create new tabs + bind credential/Spreadsheet ID + run the
+controlled Firecrawl runbook — out of patch scope). Then **Stage 4.1** after external audit.
+
+**Next operator action:** create `competitor_site_snapshots` (22) tab + confirm `live_source_runs`(23)/`agent_requests`(21);
+bind credential + real Spreadsheet ID on the new nodes; run WF05→approve→WF06→WF04 on 3–5 top domains; verify the
+expected Sheets deltas; re-run WF06 to confirm idempotent `processed` marking. Then hand repo + audit brief to the
+external agent.
+
+---
+
 ## Session: 2026-06-17 (session 8) — Stage 3 MVP CLOSED + Stage 2 scoped + WF12 wording + Stage 4/Lead Scout/audit docs (DEC-136)
 
 **Status (exact):** stage-closure + cleanup patch (no Stage 4 build, no Stage 5, no new sources, no external
@@ -68,37 +100,3 @@ live `ipotekapro` (4106 skip / 4092+4098 adjacent skip / 4091/4093/4099 competit
 start **Stage 4 (Claude enrichment + report)**. VK live + Telegram groups = expansion/future.
 
 ---
-
-## Session: 2026-06-16 (session 6) — WF11 v0.4.1 post-level relevance fix + WF08 loop-summary accounting fix (DEC-133/134)
-
-**Status (exact):** first gated WF11 live smoke ran end-to-end (transport/parser/dedup PASS) but **live relevance
-was too loose** — holiday/personal posts written as business-relevant, market news inflated to competitor. This
-session is a **focused correction patch only** (no new sources, no VK/groups/MTProto/Claude/Stage 5). The live
-runs `wf11_req_…054733/055318/055705`, `touchpoint_…060227`, `wf10_…061138` are **contaminated diagnostics — NOT
-Stage 3 closure evidence.** Stage 3 is NOT closed.
-
-**WF11 v0.4.1 (DEC-133; $0, fixture default, inert live):**
-- Relevance now decided by **post text only**; channel title/username/allowlist = confidence/metadata, never
-  relevance. `OFFER`→competitor_activity, `MARKET`/`POSITIVE`→market_signal, no post-level finance evidence →
-  `irrelevant_live_false_positive`→hard_skip (counted in `hard_skipped_items`/`irrelevant_false_positives`; not
-  written to raw/registry by default; `live_debug_audit=false` gates optional audit). Short tokens use Cyrillic
-  word boundaries; no hardcoded post IDs. market/news on a competitor channel stays market_signal.
-- LIVE `agent_requests` now logs the **actual live allowlist** + `source=live_preview` + `transport=…` (was
-  fixture allowlist). next_action gated on `unique>0 && business_relevant>0`; suggests allowlist/relevance
-  change when false positives dominate; no auto-handoff.
-
-**WF08 v0.10 (DEC-134; summary accounting only — routing untouched):**
-- `Final Summary` aggregates the loop **done** output (`$input.all()`) instead of last-iteration in-loop `.all()`
-  → `total_processed`/`deterministic_rows`/`route_counts` were 1, now correct (sim: selected=8 → processed=8).
-  `processed_accounting_ok` added. `llm_enabled=false` ⇒ claude_calls=0, cost=0 preserved.
-
-**Validation:** JSON valid; 7 Code nodes pass `node --check`; relevance sim 11/11; WF08 summary sim coherent;
-active=false; transports DISABLED; fixture_mode=true/live_mode=false defaults; no keys/Spreadsheet ID/Bot
-API/MTProto-usage.
-
-**Next operator action:** (1) commit; (2) re-import WF11 + WF08; (3) **WF11 fixture retest** (expect unchanged:
-6/1/5/4/1, false_positives=0); (4) **WF11 live retest** on `brokershakurova` + `ipotekapro` — expect
-1231/1233/1240/4106 skipped as false positives, real service posts kept, market digests = market_signal; (5)
-WF08 handoff on a **clean** WF11 live run and confirm summary counters match queue rows. Live VK + Claude summary
-remain gated. Stage 3/4 NOT closed.
-

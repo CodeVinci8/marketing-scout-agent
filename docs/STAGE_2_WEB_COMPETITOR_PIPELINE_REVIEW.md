@@ -144,3 +144,68 @@ scoped checklist with blockers and acceptance criteria.
   6. Re-run WF12 → the "Сайты конкурентов" block populates; the empty-tab notice disappears.
 - **Until populated:** WF12 now states the empty tab means *"Stage 2 web snapshots not yet populated, not a
   system fault"* and points to the controlled run above (wording fixed this session).
+
+---
+
+## 6. Stage 2 EXCELLENCE CONSOLIDATION — IMPLEMENTED (2026-06-17, DEC-137)
+
+This supersedes the "stays disabled / manual backfill / scoped checklist" framing in §5. The Stage 2 work was
+**implemented in code**, not just documented. All workflows remain `active=false`, fixture/placeholder-safe,
+no external calls made by this patch.
+
+### 6.1 WF06 — processed marking SOLVED (IMPLEMENTED)
+- The old `Mark Candidates Processed (DISABLED)` node is **gone**. It is now **enabled** and renamed
+  `Mark Candidates Processed (confirmed in url_registry)`.
+- **Safe, confirmation-based, idempotent:** `Select, Prioritize & Annotate` re-reads `url_registry` and emits
+  `_confirm_processed=true` only for candidates that were `approval_status=approved` **and whose
+  `normalized_source_url` is now present in `url_registry`** (i.e. WF04 actually wrote them). The renamed IF node
+  `IF Confirmed Processed?` routes only those to the update node, which sets `approval_status=processed` and
+  appends a `notes` audit line (`run_id` + timestamp).
+- **Never marks skipped/failed** (they never enter `url_registry`). **Never re-marks** already-processed rows
+  (they classify as `already_processed`, not `registry_recheck_duplicate`, so `_confirm_processed=false`).
+- **Confirmation criterion (exact):** processed ⇔ approved candidate's normalized URL appears in `url_registry`.
+  Freshly handed-off candidates stay `approved` until the next WF06 run confirms them. Flow:
+  approve → WF06 (handoff) → run WF04 → re-run WF06 (auto-confirm + mark).
+
+### 6.2 WF04 — competitor_site_snapshots writer + run ledger (IMPLEMENTED)
+- **`competitor_site_snapshots` is now written by the workflow** (no longer "manual backfill / Phase B not
+  built"). New per-URL branch `Normalize + Route → Build competitor_site_snapshots Row → Append
+  competitor_site_snapshots` maps the 22-col schema (TABLE_SCHEMA §E): `offer_summary←offer_text`,
+  `prices_terms←terms`, `service_types←service_type`, `detected_pains←detected_need`, `company_name`,
+  `domain`/`page_type` derived from URL, `contact_public` (Sheets-safe, DEC-124) + `contact_channel`,
+  `content_hash` of page text, `change_type=baseline`, `source_confidence=80`.
+  - **Gated:** technical-error and placeholder/skip rows write **no** snapshot.
+  - `guarantees`/`cta_text` are heuristic from page text; `title` empty — richer extraction needs a WF04
+    Claude-prompt extension = **Phase B prompt work (DEFERRED_BY_EXPLICIT_SCOPE)**.
+  - **Change detection (diff vs previous snapshot per domain)** = `change_type` beyond `baseline` =
+    **Phase C (DEFERRED_BY_EXPLICIT_SCOPE)**; needs a previous-snapshot read + own cost approval.
+- **Run ledger:** `Loop Over Items` **done** output (output 0) now feeds `Build live_source_runs Row` +
+  `Build agent_requests Row` (each aggregates the looped items via `$input.all()` per DEC-134, **not**
+  `$('node').all()`), then their appends. One `live_source_runs` (23-col) + one `agent_requests` (21-col) row
+  per run; `external_calls`/`items_written_raw` = non-duplicate `url_registry` rows; duplicates skip Firecrawl.
+- **technical_errors:** unchanged existing behavior — failed scrape/parse routes to the `technical_errors`
+  sheet via `route` (verified).
+
+### 6.3 WF05/WF07/WF09 — automatic live_source_runs ledger (IMPLEMENTED)
+- Each now appends one `live_source_runs` row per run automatically (no reliance on manual WF15):
+  - **WF05** (Apify discovery): from `Append discovery_requests → Build → Append`; `mode=live`,
+    `platform=apify_search`, `external_calls=1`, writes `url_candidates` (not raw).
+  - **WF07** (manual intake): parallel from `Append agent_requests`; `mode=deterministic`, `external_calls=0`.
+  - **WF09** (Avito): parallel from `Build agent_requests Row`; `mode=fixture|live`, counts mirror the
+    agent_requests result_summary.
+- WF15 manual logger remains available as a fallback/secondary path, but Stage 2/3 source workflows no longer
+  depend on "manual logging optional."
+
+### 6.4 Stage 2 closure status (honest)
+- **WF04–WF07 are CODE-COMPLETE and READY for controlled website snapshot collection.** The pipeline
+  WF05 → approve in `url_candidates` → WF06 → WF04 → `competitor_site_snapshots` is fully wired, with dedup,
+  domain diversity, idempotent processed-marking, ledger, and technical_errors handling.
+- **Remaining for full "verified-populated" closure = BLOCKED_BY_OPERATOR_ACTION (no code blocker):**
+  - **Reason:** populating `competitor_site_snapshots` requires a real Firecrawl/Apify run, which this patch must
+    not perform (no external calls).
+  - **Operator action:** create the `competitor_site_snapshots` tab (22 cols) + confirm `live_source_runs`
+    (23)/`agent_requests` (21) tabs; bind the Google Sheets credential + real Spreadsheet ID on the new nodes;
+    run the controlled runbook (§5.6) for 3–5 top competitor domains.
+  - **Acceptance:** after the run — `competitor_site_snapshots` gains ≥1 baseline row per scraped domain;
+    `live_source_runs` +1 (mode=live, external_calls=non-duplicates); `agent_requests` +1; WF12 "Сайты
+    конкурентов" block populates; re-running WF06 flips those candidates to `processed` idempotently.
