@@ -4,6 +4,47 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-19 (session 14) — Stage C Hardening: taxonomy + semantic engine + WF16 + WF08 llm_primary (DEC-142)
+
+**Status (exact):** systemic production-hardening patch over the 64-item acceptance defect register. **No
+external calls** (no Claude/Apify/Firecrawl/VK/Telegram), no real keys/Spreadsheet IDs, all workflows
+`active=false`. **$0.** BUILT + offline-validated; **operator runtime retest required** before Stage C close.
+
+**New systemic core (all tested, $0):**
+- **`config/taxonomy.json`** (`semantic-v2.0`) — ONE canonical taxonomy: record/entity/activity/service enums +
+  alias compat (`secured_auto_loan→pts_loan`, `return_lease_refinancing→auto_lease_refinance`,
+  `question_objection→audience_question`, `credit_broker→credit_brokerage`) + route map + confidence caps + flags.
+- **`n8n/lib/semantic_core.js`** — Stage A pre-gate (system-event/placeholder/search-card/evidence completeness),
+  owned-media/affiliate/direct-offer/negation detectors, explainable confidence + caps, Stage D validator, route
+  mapper, `classifyOffline()` (free offline/fixture classifier = LLM fallback). Cyrillic-`\w` regex bug fixed.
+- **`n8n/lib/quality_gate.js` + WF16** (`16_source_quality_gate_health_score.json`) — run/source health →
+  `source_health` tab; quality_score/status/report_eligible/llm_eligible/flags; gates WF10/WF12. **Real, importable,
+  NOT doc-only**; embedded scoring proven byte-equal to the lib.
+
+**Workflows patched (real node code, harness-tested):**
+- **WF08:** `analysis_mode=llm_primary` (Claude PRIMARY, POST_EVIDENCE overrides hints; semantic-v2 prompt with
+  POST_EVIDENCE/SOURCE_METADATA/UPSTREAM_HINTS separation, canonical enums, evidence caps); system-event hard-skip
+  pre-gate; `llm_enabled=false` safe default (guard intact).
+- **WF09:** `LIVE Apify Safety Gate` (fixture=false ∧ live=true ∧ token match ∧ max_items ∧ budget; token value
+  NEVER logged/propagated); placeholder/search-card → source_candidate + detail_fetch_required + report/llm
+  ineligible (no fabricated `Оффер: Ещё4 фото`); search_query vs source_search_url separation; data_mode.
+- **WF11:** system-event gate (service NOT from new title) + affiliate subtype + direct-offer override + negation/
+  quotation + per-post freshness + data_mode/eligibility.
+
+**Harness:** `make test` / `node tests/run_all.js` → **654 checks PASS, 0 external calls, $0**
+(taxonomy 96 · semantic-contract 86 · quality-gate 31 · wf16-node 37 · intake-gates 55 · validate_workflows.py
+217 · lead_scout 132/132). 12 semantic evidence fixtures + 3 quality fixtures. `scripts/validate_workflows.py`
+(JSON validity + secret-leak scan).
+
+**Docs:** new SEMANTIC_TAXONOMY, SOURCE_QUALITY_GATE, STAGE_C_HARDENING_IMPLEMENTATION, _TEST_RESULTS,
+SHEETS_MIGRATION_STAGE_C_HARDENING; README + DECISIONS (DEC-142) updated.
+
+**Next:** operator runtime retest — (1) import WF08/09/11/16 + add `source_health` tab/columns; (2) `make test`;
+(3) WF16 fixture self-test; (4) controlled WF08 Claude batch (own approval); (5) one live Telegram channel;
+(6) one approved Avito live smoke; (7) WF10/WF12 must consult `source_health.report_eligible`. Then Stage C close.
+
+---
+
 ## Session: 2026-06-19 (session 13) — Stage C.1 consolidated patch (DEC-141)
 
 **Status (exact):** corrective patch from REAL operator n8n runtime evidence. **No Stage 4/Claude, no external calls**
