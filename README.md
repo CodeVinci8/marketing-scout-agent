@@ -30,8 +30,12 @@ Google Sheets, and delivers a Telegram summary.
 WF08 runs an `llm_primary` semantic-v2 contract; a shared semantic engine + canonical taxonomy
 (`config/taxonomy.json`, `n8n/lib/`) replace ad-hoc keyword logic.
 
-See `docs/STAGE_C_HARDENING_IMPLEMENTATION.md`, `docs/SOURCE_QUALITY_GATE.md`,
-`docs/SEMANTIC_TAXONOMY.md`, and `docs/ROADMAP.md`.
+**Stage C Closure Patch 2** then physically wired WF16/`source_health` enforcement into WF10 + WF12 (shared
+`n8n/lib/report_gate.js`) and closed the remaining source-workflow defects in WF04–WF09 and WF14. See
+`docs/STAGE_C_CLOSURE_PATCH_2.md`.
+
+See `docs/STAGE_C_HARDENING_IMPLEMENTATION.md`, `docs/STAGE_C_CLOSURE_PATCH_2.md`,
+`docs/SOURCE_QUALITY_GATE.md`, `docs/SEMANTIC_TAXONOMY.md`, and `docs/ROADMAP.md`.
 
 ## Testing (offline, $0, no paid APIs)
 
@@ -43,7 +47,9 @@ python3 scripts/validate_workflows.py
 ```
 
 All Claude/Apify/Firecrawl/VK calls are **gated and off by default**. The regression performs
-**zero external calls and incurs $0**. See `docs/STAGE_C_HARDENING_TEST_RESULTS.md`.
+**zero external calls and incurs $0**. CI (`.github/workflows/regression.yml`) runs the same `make test` on
+every pull request and on pushes to `main`, with no repository secrets. See
+`docs/STAGE_C_HARDENING_TEST_RESULTS.md`.
 
 ## Operator
 

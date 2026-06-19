@@ -15,6 +15,15 @@ test-js:
 	node tests/test_quality_gate.js
 	node tests/test_wf16_node.js
 	node tests/test_intake_gates.js
+	node tests/test_report_gate.js
+	node tests/test_wf04_processed.js
+	node tests/test_wf05_classify.js
+	node tests/test_wf06_processed.js
+	node tests/test_wf07_cost.js
+	node tests/test_wf09_multiquery.js
+	node tests/test_wf10_source_health.js
+	node tests/test_wf12_closure.js
+	node tests/test_ci_workflow.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

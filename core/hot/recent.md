@@ -4,6 +4,38 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-19 (session 15) — Stage C Closure Patch 2 (DEC-143)
+
+**Status (exact):** finishes the Stage C work DEC-142 left partial/merged-only/not-wired. **0 external calls,
+$0**, all workflows `active=false`, no real keys/IDs, no contacts surfaced, `outreach=false` preserved. BUILT +
+offline-validated; **operator runtime retest required** (see `docs/STAGE_C_CLOSURE_PATCH_2.md`). Local commit
+only — **not pushed**.
+
+**Headline:** WF16/`source_health` is now **physically enforced** in WF10 and WF12 via a shared, drift-proof
+`n8n/lib/report_gate.js` (embedded mirror in both nodes; tests assert node==lib). Each adds a `Read
+source_health` node + config switches. Excluded by default: fixture/manual_test/quarantined/pending/
+semantic-failed/stale/degraded; degraded only via `allow_degraded_report` (warning), fixture only via
+`allow_fixture_report` (watermark). WF10 also: strict run isolation + observed-vs-inferred split +
+pending/uncertain record exclusion. WF12 also: no dangling `(x34 =)`, compatible baseline /
+`no_compatible_baseline`, contact counters (`report_contains_contacts=false`), corrected VK wording,
+`changed_domains=0` neutral action, degraded website-snapshot exclusion.
+
+**Source-workflow fixes (each with a test running the real node):** WF04 (Final Summary + repair/fallback
+accounting, MKBK brand fallback, no raw Markdown in offer, evidence confidence/page_type/services, phone
+normalization, cost telemetry), WF05 (regulator/publisher/direct/indirect/source split — cbr.ru not a
+competitor; root URL canonicalization; scope/service; cost), WF06 (`approval_status=processed` in the real
+payload), WF07 (actual-vs-estimated cost, irrelevant≠hard_skipped, `data_mode=manual_test`), WF09 (declared
+multi-query drives start URLs + dedup + origin), WF14 (`zero_write_reason` never empty).
+
+**Tests/CI:** extended offline harness (no coverage removed); new suites `report-gate, wf04/05/06/07/09/10/12,
+ci-workflow`; `.github/workflows/regression.yml` runs `make test` on PR + push:main (Node 20 / Python 3.12, no
+secrets). `make test` → **ALL SUITES PASS (external calls=0, live cost=$0)**.
+
+**Next:** operator applies Sheets migration (`docs/SHEETS_MIGRATION_STAGE_C_HARDENING.md` Closure Patch 2 §7–13)
+→ import workflows (`active=false`) → run retest order → then Stage C / MVP close. No Claude before Phase D.
+
+---
+
 ## Session: 2026-06-19 (session 14) — Stage C Hardening: taxonomy + semantic engine + WF16 + WF08 llm_primary (DEC-142)
 
 **Status (exact):** systemic production-hardening patch over the 64-item acceptance defect register. **No

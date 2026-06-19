@@ -57,6 +57,9 @@ H.eq('A contacts_blank_due_to_policy = 1', A.summary.contacts_blank_due_to_polic
 H.ok('A outreach_allowed=false on every row', A.signals.every(s => s.outreach_allowed === false));
 H.ok('A recommended_action in allowed set', A.signals.every(s => ['manual_review', 'content_idea', 'monitor', 'ignore'].includes(s.recommended_action)));
 H.ok('A self_test_passed', A.summary.self_test_passed === true);
+// Closure C1-D4 / S?: successful write must NOT leave an ambiguous empty zero_write_reason.
+H.eq('A zero_write_reason = not_applicable (successful write)', A.summary.zero_write_reason, 'not_applicable');
+H.ok('A zero_write_reason is non-empty', String(A.summary.zero_write_reason).length > 0);
 // Defect B (service_type) — F2 = PTS, F5 = business
 const f2 = A.signals.find(s => /ПТС/.test(s.evidence_text || ''));
 const f5 = A.signals.find(s => /бизнеса/.test(s.evidence_text || ''));
@@ -108,6 +111,12 @@ H.ok('B-repeat next_action names dedup / already-exist',
 H.ok('B-repeat next_action does NOT suggest lowering min_lead_score',
   !/lower\s+min_lead_score|снизить\s+min_lead_score|lower the threshold/i.test(String(Brep.summary.next_action)),
   String(Brep.summary.next_action));
+// Closure C1-D4: zero-write run must carry an explicit (non-empty) reason from the allowed set.
+H.eq('B-repeat zero_write_reason = all_eligible_already_exist', Brep.summary.zero_write_reason, 'all_eligible_already_exist');
+H.ok('B-repeat zero_write_reason in allowed enum',
+  ['all_eligible_already_exist', 'no_eligible_records', 'no_source_rows', 'no_audience_rows', 'below_threshold',
+    'supplier_excluded', 'none_relevant', 'append_cap', 'no_new_signals', 'quality_gate_blocked', 'validation_failed']
+    .includes(String(Brep.summary.zero_write_reason)));
 
 const r = H.report('WF14 triage (vectors A + B + repeat)');
 if (require.main === module) process.exit(r.fail ? 1 : 0);

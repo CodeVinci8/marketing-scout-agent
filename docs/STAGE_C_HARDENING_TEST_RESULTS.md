@@ -56,3 +56,26 @@ failures**. **21 workflow JSON files** validated and importable. **12 semantic e
   `STAGE_C_HARDENING_IMPLEMENTATION.md` / final report).
 - Live transports (Apify detail, Firecrawl, VK) remain staged/disabled; the regression exercises only
   deterministic Code-node logic and fixtures.
+
+---
+
+## Stage C Closure Patch 2 — offline results (re-run `make test`)
+
+`make test` (offline, $0, **0 external calls**) — all suites PASS:
+
+| suite | checks | what it proves |
+|---|---|---|
+| `report-gate` | 32 | shared `n8n/lib/report_gate.js`: default exclusion of fixture/manual/quarantined/pending/stale/semantic-failed/degraded; degraded & fixture opt-ins; per-record gate; compatible-baseline selection; trend marker never dangles. |
+| `wf04-processed` | 43 | **real** WF04 snapshot node: MKBK brand-preserving fallback, no raw Markdown in the offer field, evidence `page_type`/`service_primary` (Finardi stays `credit_brokerage`), non-fixed confidence, RU phone normalization, cost telemetry `unknown`≠0; Final Summary repair/fallback accounting (repair success distinguished from primary success / repair failure / deterministic fallback; high repair rate surfaced as degraded). |
+| `wf05-classify` | 27 | **real** WF05 classify node: cbr.ru→regulator (not a competitor entity), publisher/direct/indirect/source separation, root-domain canonicalization, broad-query vs narrow-focus, non-uniform confidence, Apify cost `unknown`≠0. |
+| `wf06-processed` | 23 | **real** WF06 nodes + Sheets update mapping: registry-confirmed candidate persisted as `approval_status=processed`; `selected_count=0`, `registry_recheck_duplicate` counted. |
+| `wf07-cost` | 19 | **real** WF07 nodes: actual=0 vs estimated (unique-relevant only), `eligible_unique_for_analysis=10`, `irrelevant_items=2`, `hard_skipped_items=0`, `data_mode=manual_test`; duplicate-repeat estimates 0. |
+| `wf09-multiquery` | 22 | **real** WF09 config + normalize + dedup: each declared query builds its own start URL, overall batch limit + per-query allocation, same listing across queries dedupes, query origin auditable; no live actor. |
+| `wf10-source-health` | 27 | **real** WF10 aggregate node: run isolation; observed vs inferred split; pending/uncertain exclusion; source_health enforcement (fixture/manual/quarantined/pending/degraded excluded by default, degraded/fixture only via opt-in with warning); **drift proof** node gate == `report_gate.js`. |
+| `wf12-closure` | 30 | **real** WF12 report node: no dangling `(x34 =)`; compatible-baseline / `no_compatible_baseline`; `changed_domains=0` neutral action; corrected VK wording; degraded website snapshot excluded; contact counters; watermark; source_health enforcement + **drift proof**. |
+| `ci-workflow` | 10 | `.github/workflows/regression.yml` triggers on PR + push:main, pins Node/Python, runs `make test`, uses no secrets, keeps the secret-leak / active-workflow guards. |
+| `lead_scout` (WF12/13/14) | 141 | pre-existing behavior unchanged (WF14 + WF12 redaction extended for the new `zero_write_reason` / contact-counter contract). |
+| `validate_workflows.py` | 217 | all 21 workflow JSON parse, `active=false`, unique nodes, connections valid, no secret/token leakage, taxonomy consistent. |
+
+**external calls = 0 · live cost = $0 · all workflows `active=false`.** Runtime validation pending operator
+import (see `docs/STAGE_C_CLOSURE_PATCH_2.md`).

@@ -1,0 +1,65 @@
+name: offline-regression
+
+# Stage C offline regression. NO repository secrets, NO external/paid API calls, $0.
+# Fails on: workflow JSON errors, taxonomy drift, secret-leak patterns, or any regression failure.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    # Hard guarantee: no secrets are exposed to this job.
+    env:
+      NODE_OPTIONS: "--max-old-space-size=2048"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js (stable)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Python (stable)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Show toolchain
+        run: |
+          node --version
+          python3 --version
+
+      # Full offline regression: JS suites + Python workflow validator (JSON parse, required nodes,
+      # taxonomy consistency, active=false, secret-leak scan) + the Lead Scout harness.
+      - name: make test (offline, $0, no network)
+        run: make test
+
+      # Defense-in-depth secret-leak scan over the whole tree (independent of the validator).
+      - name: Secret-leak scan
+        run: |
+          set -e
+          if grep -rInE \
+            'sk-ant-[A-Za-z0-9_-]{8,}|apify_api_[A-Za-z0-9]{8,}|fc-[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----' \
+            --include='*.json' --include='*.js' --include='*.py' --include='*.md' --include='*.yml' \
+            --exclude-dir=.git . ; then
+            echo "Potential secret detected — failing." >&2
+            exit 1
+          fi
+          echo "No secret-leak patterns found."
+
+      # Workflows must never be committed active=true (re-checked explicitly).
+      - name: Assert no active workflow committed
+        run: |
+          set -e
+          if grep -rIl '"active": true' n8n/workflows ; then
+            echo "A workflow is committed with active=true — failing." >&2
+            exit 1
+          fi
+          echo "All workflows are active=false."

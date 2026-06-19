@@ -11,6 +11,16 @@ const JS_SUITES = [
   ['quality-gate', 'test_quality_gate.js'],
   ['wf16-node', 'test_wf16_node.js'],
   ['intake-gates', 'test_intake_gates.js'],
+  // --- Stage C Closure Patch 2 workflow-level suites ---
+  ['report-gate', 'test_report_gate.js'],
+  ['wf04-processed', 'test_wf04_processed.js'],
+  ['wf05-classify', 'test_wf05_classify.js'],
+  ['wf06-processed', 'test_wf06_processed.js'],
+  ['wf07-cost', 'test_wf07_cost.js'],
+  ['wf09-multiquery', 'test_wf09_multiquery.js'],
+  ['wf10-source-health', 'test_wf10_source_health.js'],
+  ['wf12-closure', 'test_wf12_closure.js'],
+  ['ci-workflow', 'test_ci_workflow.js'],
 ];
 
 let failed = 0;

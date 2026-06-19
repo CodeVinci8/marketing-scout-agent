@@ -5,6 +5,36 @@ Most recent first.
 
 ---
 
+## DEC-143 — Stage C Closure Patch 2 (WF16 physically enforced in WF10/WF12; WF04–WF09/WF14 source fixes; CI)
+
+**Date:** 2026-06-19
+**Context:** The Stage C hardening patch (DEC-142) built WF16 + `source_health` and the canonical
+taxonomy/semantic engine, but several defects were only *detectable* by WF16, only documented, or not
+physically wired into their source workflows. WF10/WF12 did not yet enforce `source_health`.
+**Decision:**
+- Add a shared, pure, $0 **`n8n/lib/report_gate.js`** and **embed a mirror** of it inside WF10 and WF12
+  (drift-proof, like WF16). WF10 and WF12 each add a `Read source_health` node and **physically exclude**
+  fixture/manual_test/quarantined/pending/semantic-failed/stale/degraded(-without-opt-in) runs by default;
+  degraded is includable only via explicit `allow_degraded_report` (with a visible warning) and fixture only
+  via `allow_fixture_report` (with a TEST/FIXTURE watermark).
+- Fix defects **at the source workflow**, each covered by an offline test that runs the real node code:
+  WF04 (Final Summary + repair/fallback accounting, MKBK brand-preserving fallback, no raw Markdown in offer,
+  evidence confidence, page_type/services taxonomy, phone normalization, cost telemetry), WF05
+  (regulator/publisher/direct/indirect/source separation, root URL canonicalization, scope/service
+  representation, cost telemetry), WF06 (`approval_status=processed` persisted in the real payload), WF07
+  (actual-vs-estimated cost, irrelevant≠hard_skipped, `data_mode=manual_test`), WF09 (declared multi-query
+  drives discovery start URLs), WF14 (`zero_write_reason` never an ambiguous empty string).
+- Add `.github/workflows/regression.yml` (Node 20 / Python 3.12, no secrets, no external calls) running
+  `make test`.
+**Why not "WF16 flags it" alone:** a defect is only *fixed* when the faulty source logic is corrected (or
+removed via a shared runtime component the workflow demonstrably invokes), proven by a workflow-level test —
+not when WF16 can merely hide the bad row.
+**Cost/safety:** 0 external calls, $0, all workflows `active=false`, no real keys/Spreadsheet IDs, no contacts
+surfaced, `outreach=false` preserved. BUILT + offline-validated; operator runtime retest required.
+See `docs/STAGE_C_CLOSURE_PATCH_2.md`.
+
+---
+
 ## DEC-142 — Stage C Hardening (canonical taxonomy + semantic engine + WF16 quality gate + WF08 llm_primary)
 
 **Date:** 2026-06-19 (session 14)

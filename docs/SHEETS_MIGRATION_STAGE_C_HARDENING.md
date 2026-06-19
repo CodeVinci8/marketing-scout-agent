@@ -79,3 +79,67 @@ them with explicit provenance. This is optional and safe.
 
 Delete the added columns and the `source_health` tab. No existing column or value is modified by this
 migration, so rollback is lossless.
+
+---
+
+# Closure Patch 2 (additive — same rules: append columns to the right, never reorder)
+
+> Header order matters only **within** a tab for the n8n Google Sheets node that uses `defineBelow` mapping by
+> header name; appending to the right is safe. Create the `source_health` tab first (§1 above) — WF10 and WF12
+> now **read** it. All new columns default empty/`unknown` for legacy rows; the reading workflows apply the
+> documented defaults. Rollback = delete the added columns (lossless).
+
+## 7. WF10/WF12 source_health enforcement — required reads
+WF10 (`Read source_health`) and WF12 (`Read source_health`) both read the **`source_health`** tab. No new
+columns are required on `source_health` beyond the WF16 schema (`docs/SOURCE_QUALITY_GATE.md`); ensure the tab
+exists. WF10/WF12 config switches (in the `Set …Config` node, not Sheets): `enforce_source_health=true`,
+`require_source_health=false`, `allow_degraded_report=false`, `allow_fixture_report=false`,
+WF12 `report_data_mode=live`.
+
+## 8. `competitor_site_snapshots` (WF04) — additive columns
+| column | default for legacy rows | written by |
+|---|---|---|
+| `brand_source` (`analysis\|title\|domain\|none`) | `analysis` | WF04 |
+| `broken_brand` | `false` | WF04 |
+| `service_primary` / `service_secondary` | empty (derive from `service_types`) | WF04 |
+| `offer_text_raw_audit` | empty | WF04 (raw Markdown audit only) |
+| `contact_public_raw_audit` | empty | WF04 |
+| `quality_status` / `report_eligible` / `fallback_reason` | `healthy` / `true` / empty | WF04 |
+| `parse_method` / `repair_used` | empty / `false` | WF04 |
+| `primary_calls` / `repair_calls` / `firecrawl_calls` / `claude_calls` | empty | WF04 |
+| `input_tokens` / `output_tokens` | empty | WF04 |
+| `actual_source_cost_usd` / `actual_llm_cost_usd` / `cost_status` | empty / empty / `unknown` | WF04 |
+
+`source_confidence` is now evidence-based (was a fixed `80`); `page_type` may now be `home`/`services`/`offer`/
+`prices`/`about`/`contact`/`other`.
+
+## 9. `url_candidates` (WF05) — additive columns
+`requested_search_scope`, `canonical_url`, `is_root`, `competitor_class`
+(`direct\|indirect\|regulator\|publisher\|source_candidate\|irrelevant`), `is_competitor_entity`,
+`service_primary`, `service_secondary`. Legacy rows: empty. cbr.ru-style regulator/article rows now carry
+`is_competitor_entity=false` and must **not** be promoted to competitor entities.
+
+## 10. `discovery_requests` (WF05) — additive columns
+`requested_search_scope`, `service_primary`, `service_secondary`, `query_terms`, `direct_competitor_count`,
+`regulator_count`, `publisher_count`, `source_candidate_count`, `estimated_apify_cost_usd`,
+`actual_apify_cost_usd`, `apify_cost_status` (`unknown` for legacy/non-recovered).
+
+## 11. WF07 / WF14 — additive columns
+- WF07 summary + `live_source_runs`: `data_mode=manual_test`, `audit_rows_written`,
+  `eligible_unique_for_analysis`, `irrelevant_items`, `hard_skipped_items` (now `0` for stored irrelevant),
+  `actual_analysis_cost_usd`, `estimated_future_analysis_cost_usd`, `cost_status`.
+- WF14 `public_lead_signals`/summary: `zero_write_reason` is now `not_applicable` on a successful write (never
+  an empty string) and an explicit enum (`all_eligible_already_exist`, `no_eligible_records`, …) on zero
+  writes. No schema change required — only the value semantics changed.
+
+## 12. `market_intelligence_reports` (WF12) — additive columns
+`trend_status` (`baseline_selected\|no_compatible_baseline`), `source_runs_evaluated`, `source_runs_included`,
+`source_runs_excluded`, `report_contains_degraded_data`, `report_contains_fixture_data`,
+`report_contains_contacts` (always `false`), `contacts_detected`, `contacts_redacted`,
+`contacts_excluded_from_report`, `quality_warning`, `website_snapshots_excluded`, `is_fixture_report`.
+
+## 13. Operator actions (order)
+1. Create `source_health` tab (if not already present).
+2. Append the columns in §8–§12 to the right of each tab's existing header row.
+3. Import updated workflows (all `active=false`), then run the retest sequence in
+   `docs/STAGE_C_CLOSURE_PATCH_2.md`.

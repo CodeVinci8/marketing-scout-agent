@@ -93,3 +93,27 @@ quality_flags, key rates, cost status, operator_next_action`, plus `status_count
 `node tests/test_wf16_node.js` runs the **real** WF16 nodes and asserts the embedded scoring equals
 `n8n/lib/quality_gate.js` for the same bundles (drift-proof). Import WF16, keep `fixture_self_test=true`, run,
 and read the Final Summary to see the three statuses before pointing it at live data.
+
+---
+
+## Closure Patch 2 — WF10/WF12 now physically enforce source_health
+
+The gate is no longer advisory. `n8n/lib/report_gate.js` (mirrored, drift-proof, inside the WF10
+`Aggregate Market Intelligence` and WF12 `Build Deterministic Report` nodes) turns `source_health` rows into
+run-level decisions both workflows consume:
+
+- **Excluded by default:** `report_eligible=false`, `quality_status=quarantined`, `data_mode∈{fixture,
+  manual_test}`, `review_status=pending` (or `pending_review` flag), `semantic_validation_failed`,
+  `stale_source`.
+- **Degraded:** excluded unless `allow_degraded_report=true`; when included it carries a visible
+  `report_quality_warning`.
+- **Fixture/manual_test:** excluded unless `allow_fixture_report=true`; when included WF12 renders the
+  `TEST / FIXTURE DATA — NOT PRODUCTION INTELLIGENCE` watermark.
+- **Per record:** `review_status=pending` and `parse_method=deterministic_uncertain_no_llm` are dropped so
+  they never become confirmed content ideas or market facts.
+
+WF10 nodes: `Set Aggregator Config` (switches) → `Read source_health` → `Aggregate Market Intelligence`
+(builds eligibility, run isolation, gate, observed/inferred split). WF12 nodes: `Set Report Config` (switches)
+→ `Read source_health` → `Build Deterministic Report` (eligibility, source-quality section, baseline,
+watermark). Proven by `tests/test_wf10_source_health.js` and `tests/test_wf12_closure.js` (each asserts the
+embedded gate equals `n8n/lib/report_gate.js`).

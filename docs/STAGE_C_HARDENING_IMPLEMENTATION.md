@@ -107,3 +107,9 @@ See `git diff --stat` and the final report. Workflow JSON patched: WF08, WF09, W
 - WF10/WF12 report-builder cosmetic items are addressed systemically via WF16 gating + the taxonomy; remaining
   localized formatting items are tracked in the defect register with explicit status.
 - The Avito detail-enrichment transport is staged/disabled pending approval.
+
+---
+
+> **Follow-up:** the WF16→WF10/WF12 enforcement, WF04–WF09 and WF14 source-workflow corrections, the shared
+> `n8n/lib/report_gate.js`, the extended tests, and CI were completed in **Stage C Closure Patch 2** —
+> see `docs/STAGE_C_CLOSURE_PATCH_2.md` and DEC-143.
