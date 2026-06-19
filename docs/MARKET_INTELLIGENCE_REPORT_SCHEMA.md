@@ -1,6 +1,6 @@
 # MARKET_INTELLIGENCE_REPORT_SCHEMA.md — `market_intelligence_reports` Tab Schema (v0.3)
 
-**Status:** 📐 BUILD-READY SCHEMA — the tab is **not created yet** (operator creates it with these 20 headers
+**Status:** 📐 BUILD-READY SCHEMA — the tab is **not created yet** (operator creates it with these 25 v0.3 headers
 before the first WF12 run). **The Report Builder that writes it is built as a deterministic skeleton:**
 `n8n/workflows/12_market_intelligence_report_builder.json` (WF12, `active=false`, DEC-118 — no Claude, no
 Telegram send; `report_markdown_path` stays empty in v0.1, the Markdown is kept inline in `notes`).

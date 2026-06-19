@@ -9,12 +9,27 @@
 > (шаги и требования VK-креденшла — `STAGE_C_ACCEPTANCE_PACK.md` §VK). Fixture-набор расширен под Lead Scout
 > (синтетические телефоны +7 000). По умолчанию всё инертно: `fixture_mode=true`, `live_mode=false`.
 
+> **Stage C.1 (2026-06-19, DEC-141) — ТЕКУЩЕЕ СОСТОЯНИЕ (главнее нижних исторических разделов):**
+> Канонический хэндофф = **raw_market_records → WF14 (Lead Scout) → public_lead_signals**; WF08 — ОПЦИОНАЛЬНЫЙ
+> аналитический путь Stage 3, НЕ обязательный (исправлен Defect D). Fixture-набор = **9 элементов** (5 потреб.
+> комментариев + 1 конкурентный пост + 1 market-пост + 1 hard-negative + 1 in-batch дубль): items_received=9,
+> hard_skipped=1, unique=7, duplicate=1, raw +8, registry +7. **Аудиторные агрегаты = только потребительские авторы**
+> (`audience_author_count`, по `question_objection`; в fixture = **5**, не 7 — исправлен Defect F). `probable_need`
+> теперь основан на доказательствах (Defect C): бизнес-кредит НЕ получает ложную пометку «после отказов»;
+> `service_hint` для ПТС = `pts_loan`. **Live-путь = gated + INERT** (одностадийный HTTP DISABLED) **+ добавлен
+> STAGED двухстадийный мониторинг групп** (`wall.get → relevant posts → wall.getComments`): движок + детерминированная
+> симуляция (`monitored_fixture_mode`) построены и провалидированы ($0); живой транспорт DISABLED/BLOCKED — см.
+> `docs/VK_MONITORED_SOURCE_RUNBOOK.md`. Контакты в отчёт WF12 не попадают (redaction — на стороне WF12, Defect A).
+> Локальная проверка: `node n8n/fixtures/lead_scout/run_all.js`. Stage C.1 PASS — только после операторского ретеста.
+
 **Workflow:** `n8n/workflows/13_public_discussion_or_reviews_connector_foundation.json`
 **Имя:** `13 - VK Public Discussion / Lead Source Connector (Stage 3.5)`
-**Статус:** 🔧 ПОСТРОЕН foundation v0.1 (DEC-121). `active=false`, `fixture_mode=true`, `live_mode=false`.
-Детерминированный, $0, **в воркфлоу нет ни одной HTTP-ноды** — live-режим НЕ реализован (guard с ошибкой).
-**Дата:** 2026-06-12 · **Решения:** DEC-121 (выбор источника = VK public), DEC-096 (один источник за раз),
-DEC-097/098/114 (политика контактов), DEC-119 (handoff в WF08 при llm_enabled=false).
+**Статус:** 🔧 v0.3 + Stage C.1 (DEC-139/140/141). `active=false`, `fixture_mode=true`, `live_mode=false`.
+Детерминированный, $0. Live: ОТКЛЮЧЁННЫЕ HTTP-плейсхолдеры (одностадийный `wall.get`/`wall.getComments` + двухстадийный
+мониторинг) — gated + inert по умолчанию; runtime-проверка live = BLOCKED_BY_OPERATOR. (Нижние разделы §3/§4/§5
+описывают исторический v0.1 foundation и оставлены как историческая справка.)
+**Дата:** 2026-06-12 (обновлено 2026-06-19) · **Решения:** DEC-121 (выбор источника = VK public), DEC-096 (один
+источник за раз), DEC-097/098/114 (политика контактов), DEC-139/140/141 (Lead Scout v0.3 + Stage C.1).
 **Стратегия:** `docs/STAGE_3_4_SOCIAL_SOURCE_PARSING_STRATEGY.md`, матрица `docs/SOCIAL_CLASSIFIED_SOURCE_MATRIX.md`.
 
 ## 1. Почему VK (решение DEC-121)
@@ -39,9 +54,11 @@ DEC-097/098/114 (политика контактов), DEC-119 (handoff в WF08 
 - `contact_public` — только если контакт дословно виден в публичном тексте (телефон/@handle);
   `contact_channel` = категория канала (phone/telegram…, НЕ `handle` — DEC-114); формат и evidence URL — в notes.
 - `profile_url` автора — только если профиль публичный (`author_profile_public=true` в фикстуре).
-- Агрегаты авторов (`active_author_count`/`repeat_author_count`) — только счётчики по UNIQUE-записям,
-  никогда не списки участников и не цели аутрича.
-- Без Claude. Без авто-handoff в WF08. Пишет только agent_requests / raw_market_records (40) /
+- Аудиторные агрегаты (`audience_author_count`/`repeat_audience_author_count`, Stage C.1/Defect F) — счётчики
+  авторов ТОЛЬКО потребительских комментариев (`record_type_hint=question_objection`; без аккаунтов конкурентов/
+  редакций), по UNIQUE-записям; никогда не списки участников и не цели аутрича.
+- Без Claude. Канонический хэндофф: raw_market_records → **WF14 (Lead Scout)** → public_lead_signals (вручную;
+  авто-handoff нет; WF08 — опциональный аналитический путь Stage 3). Пишет только agent_requests / raw_market_records (40) /
   market_record_registry (15). MSK `+03:00`. Дедуп и hard-negative фильтр — паттерн WF09/WF11
   (hard-skip ДО registry и ДО pipeline_limit).
 
@@ -72,13 +89,18 @@ Manual Start → Set Connector Config → IF fixture_mode?
    профиля (`id_fin_editor_fixture`) — `profile_url` пустой.
 2. **Тест 2 (повтор):** unique=0, duplicates=5, registry +0.
 3. **Тест 3 (guard):** `fixture_mode=false` → ошибка `WF13 live_mode is not implemented…`.
-4. **Handoff в WF08** (после одобрения, $0): `agent_request_id_filter=<первый wf13_req_*>`,
+4. **Канонический хэндофф → WF14 (Lead Scout):** запустить WF14 вручную (`source_agent_request_id=<wf13_req_*>`)
+   → `public_lead_signals`. **WF08 — опциональный аналитический путь Stage 3** (исторический; после одобрения, $0): `agent_request_id_filter=<первый wf13_req_*>`,
    `platform_filter=vk`, `llm_enabled=false` → ожидаются: конкурентный пост → monitor_queue
    (deterministic_pre_route), вопросы/возражения → review_queue, market signal → content_queue
    ИЛИ review_queue с `parse_method=deterministic_uncertain_no_llm` (cost-control, DEC-119);
    `technical_errors=0`, Claude=0.
 
-## 5. Live-режим (НЕ реализован — план)
+## 5. Live-режим (ИСТОРИЧЕСКИЙ раздел v0.1 — актуально: верхний баннер Stage C.1 + `docs/VK_MONITORED_SOURCE_RUNBOOK.md`)
+
+> ⚠️ Этот раздел описывает старый v0.1 («live не реализован»). В v0.3/Stage C.1 live-путь реализован как
+> **gated + INERT**: отключённые HTTP-плейсхолдеры (одностадийный `wall.get`/`wall.getComments` + STAGED
+> двухстадийный мониторинг групп) + инертный парсер; runtime = BLOCKED_BY_OPERATOR. См. верхний баннер и runbook.
 
 Включение live потребует, по порядку: явное одобрение оператора → выбор транспорта (официальный VK API
 community/wall/comments-методы с токеном в n8n credential, или Apify VK actor) → привязка credential →

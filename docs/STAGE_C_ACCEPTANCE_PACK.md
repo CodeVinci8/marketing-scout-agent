@@ -9,6 +9,18 @@ checks covering Stage 2 paid/live + Stage 3 regression + Stage 3.5 lead end-to-e
 > `BLOCKED_BY_OPERATOR_CREDENTIALS_OR_LIVE_RUN` here — the agent does not execute them. Deterministic/fixture
 > checks are $0 and can run immediately.
 
+> **Stage C.1 update (2026-06-19, DEC-141):** a corrective patch (from real operator runtime evidence) lands
+> before this pack — see **`docs/STAGE_C_1_TEST_RESULTS.md`** for the local PASS table (132 checks, $0) and the
+> **operator retest runbook**. It changes some expectations here: the PTS lead's `service_type` is now **`pts_loan`**
+> (not `unknown`) in C3/C5; WF13's audience aggregate is **`audience_author_count=5`** (consumer authors only — was
+> `active_author_count=7`); the WF14 repeat-run diagnosis names successful **dedup** (no "lower min_lead_score"); the
+> WF12 report (C6) now applies deterministic **contact redaction** (no phone/@handle/profile/email/t.me ever printed).
+> The canonical Lead Scout handoff is **WF13 → WF14** (WF08 = optional Stage 3 analysis). A **monitored VK groups**
+> engine + simulation is added (live two-stage transport STAGED/DISABLED) — see `docs/VK_MONITORED_SOURCE_RUNBOOK.md`.
+> Run `node n8n/fixtures/lead_scout/run_all.js`. **Do NOT mark Stage C/C.1 passed until the operator retest passes.**
+> (Note: C2's `WF11 → WF08 → WF10` competitor regression legitimately still uses WF08 — that is the competitor path,
+> not the Lead Scout handoff.)
+
 ---
 
 ## The 7 checks

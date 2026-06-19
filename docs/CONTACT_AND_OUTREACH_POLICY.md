@@ -93,3 +93,15 @@ The `public_lead_signals` tab (WF14) is governed by this policy in full:
 - Reports (WF12) consume lead signals **as aggregates only** — no names, handles, profile URLs or contacts
   appear in any report or Telegram digest.
 - Sheets-safe writing (DEC-124) preserves contact evidence verbatim (apostrophe prefix is presentation-only).
+
+## Addendum (2026-06-19, DEC-141) — Report-layer contact redaction (C6)
+
+Report consumption of lead signals is **aggregate + redacted**. Contact identifiers can hide inside lead **evidence
+text** (`evidence_excerpt`/`evidence_text`), not only in dedicated contact columns. WF12 therefore applies a
+deterministic `redact()` to every printed field **before** truncation/formatting, removing phones (RU + intl),
+`@handles`, `t.me`/`telegram.me` and VK **profile** links, and emails → `[PUBLIC CONTACT REDACTED]`, while preserving
+amounts/percentages/rates/dates and ordinary source-**post** URLs (`vk.com/wall…`). The same redaction guards the
+Claude facts payload (future Telegram/LLM). Full public contact evidence remains **only** in `public_lead_signals`
+for manual manager review (with `contact_source_url`, `outreach_allowed=false`) — it must never reach an aggregate
+report, digest, or Telegram output. A code comment claiming "contacts are hidden" is not evidence; the generated
+report output (and `n8n/fixtures/lead_scout/run_wf12_redaction.test.js`) proves it.

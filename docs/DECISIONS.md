@@ -5,6 +5,60 @@ Most recent first.
 
 ---
 
+## DEC-141 — Stage C.1 consolidated patch (report redaction, PTS service_type, evidence-based hints, WF14 handoff, dedup diagnosis, audience authors, run isolation, monitored VK engine)
+
+**Date:** 2026-06-19 (session 13)
+**Context:** the operator ran the Lead Scout path (WF13 → raw_market_records → WF14 → public_lead_signals) and the
+WF12 report end-to-end in n8n. Counters/dedup were correct, but real runtime evidence exposed several defects, stale
+instructions, and a missing monitored-VK architecture. This is a corrective patch — **no new product features beyond
+the operator-approved monitored engine, no Stage 4/Claude, no live calls, all `active=false`, $0.**
+
+**Decision (defects fixed, root-caused against the actual Code nodes):**
+- **A — WF12 contact leakage:** the report printed `evidence_excerpt`/`evidence_text` verbatim, so contacts embedded
+  in evidence text leaked while the report claimed contacts were hidden. Fix: a deterministic `redact()` applied
+  **before** truncation and as a final pass over **every** printed field (markdown/`notes`, `audience_summary`,
+  digest, top-leads, Claude facts) — removes RU/intl phones, `@handles`, `t.me`/VK **profile** links and emails →
+  `[PUBLIC CONTACT REDACTED]`; preserves amounts/%/rates/dates and `vk.com/wall…` post URLs. Contact counts stay
+  correct; full evidence remains only in `public_lead_signals` for manual review.
+- **B — PTS `service_type=unknown`:** WF14 used `str(c.service_need)||svc`, so WF13's literal `"unknown"` hint
+  shadowed the correct `svcType()→pts_loan`. Fix: **deterministic-first** — `svcType()` evidence wins unless it
+  returns `unknown`; non-informative hints (`unknown`/empty) are ignored. `pts_loan` is the canonical value
+  (TABLE_SCHEMA §G col 15). WF13 also now emits `service_hint=pts_loan` for PTS.
+- **C — false probable-need hint:** WF13 hardcoded `probable_need='помощь с кредитом после отказов'` for any
+  question. Fix: evidence-based `probableNeed()` — refusal hint only with refusal evidence; business/PTS/mortgage/
+  bad-credit map to their own needs.
+- **D — stale WF08 handoff:** WF13 told the operator to run WF08 as the mandatory next step. Fix: canonical Lead
+  Scout handoff = **WF13 → WF14 → public_lead_signals**; WF08 remains an **optional** Stage 3 analytical path.
+- **E — misleading zero-write diagnosis:** WF14 suggested lowering thresholds when the real reason was successful
+  dedup. Fix: `diagnoseZeroWrite()` (8 reasons) + a `below_threshold_skipped` counter; the repeat run reports
+  "all N eligible already exist (dedup succeeded); collect new source data; no threshold change."
+- **F — author aggregate semantics:** `active_author_count` counted competitor/editor accounts as audience. Fix:
+  **audience authors only** (`record_type_hint=question_objection`) → `audience_author_count`/
+  `repeat_audience_author_count` (fixture: 5, not 7).
+- **G — review_queue contamination:** WF14 always read all `review_queue` + `raw_market_records`. Fix: config
+  `include_review_queue` + `source_agent_request_id` for deterministic acceptance isolation (defaults unchanged).
+- **H — doc/sticky contradictions:** WF13→WF08, 20-col report, 28-col leads, monitored-vs-smoke, "live not
+  implemented" — resolved across active docs/stickies; historical sections clearly marked.
+
+**Decision (new scope — monitored VK groups, operator-approved):** WF13 gains a monitored two-stage engine
+(`wall.get` → POST-level relevance → bounded post selection → `wall.getComments` → COMMENT-level relevance → dedup →
+counters), exposed as a deterministic `monitored_fixture_mode` **simulation** (20 §6.4 cases, $0) plus
+`monitored_groups` config (categories: competitor/finance_community/city_community/entrepreneur_community; caps).
+The live two-stage transport ships as **DISABLED/staged** HTTP placeholders + inert parser; live =
+`BLOCKED_BY_OPERATOR_CREDENTIALS_OR_LIVE_RUN` (`docs/VK_MONITORED_SOURCE_RUNBOOK.md`). PUBLIC-only; no private/member/
+hidden data; `outreach_allowed=false`.
+
+**Validation:** a new Node harness runs the **actual Code-node logic** under n8n shims —
+`node n8n/fixtures/lead_scout/run_all.js` → **132/132 PASS ($0)**. Pinned fixture counters unchanged (vector A 7/3-2-2;
+vector B 5/2-2-1; repeat 0/dup 5). All workflows `active=false`; HTTP nodes disabled; no real creds/Spreadsheet IDs/VK
+groups.
+
+**Status:** local validation PASS; **Stage C.1 NOT marked passed** — operator runtime retest required
+(`docs/STAGE_C_1_TEST_RESULTS.md` §3). Supersedes the WF13→WF08-handoff framing and the author-aggregate semantics of
+earlier sessions; DEC-140 facts otherwise stand. Related: [[project-stage3-closed-stage4-next]].
+
+---
+
 ## DEC-140 — Stage 3.5 audit alignment + live-readiness hardening (canonical schema, review_priority enum, comment-URL contract, VK live readiness)
 
 **Date:** 2026-06-17 (session 12)

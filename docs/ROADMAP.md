@@ -12,6 +12,13 @@ The forward sequence is now A → B → C → D:
 | **C** | **Acceptance Pack** | Controlled acceptance: Stage 2 paid/live website acceptance + Stage 3.5 lead acceptance, run as one deliberate pass after the builds — **not** micro-tested per node. |
 | **D** | **Stage 4 — Claude Intelligence Layer** | Claude enrichment + executive report (4.1/4.2/4.3). Starts **only after** Stage 3.5 **and** the Acceptance Pack. |
 
+> **Stage C.1 (2026-06-19, DEC-141):** a corrective patch ahead of Phase C — from real operator runtime evidence —
+> fixed report contact redaction (A), PTS `service_type=pts_loan` (B), evidence-based hints (C), WF13→**WF14** handoff
+> (D), zero-write dedup diagnosis (E), audience-only author counts (F), run isolation (G), doc contradictions (H), and
+> added the operator-approved **monitored VK groups** engine + simulation (live transport staged/disabled). Local
+> validation **132/132 PASS ($0)**. **Stage C/C.1 not passed until operator runtime retest** —
+> `docs/STAGE_C_1_TEST_RESULTS.md`, `docs/VK_MONITORED_SOURCE_RUNBOOK.md`.
+
 **Locked stage status:**
 
 | Stage | Status |

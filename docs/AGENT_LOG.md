@@ -5,6 +5,42 @@ Most recent first.
 
 ---
 
+## 2026-06-19 (session 13) — Stage C.1 consolidated patch (DEC-141)
+
+**Agent role:** project-engineer · **Scope:** corrective patch from REAL operator n8n runtime evidence + operator-
+approved monitored-VK engine. **No Stage 4/Claude, no external calls** (no VK/Telegram/Firecrawl/Apify/Claude/OpenAI),
+no activation, no real keys/Spreadsheet IDs/VK groups, no auto-outreach, no member/private extraction. All workflows
+`active=false`. **$0.** **Stage C.1 NOT marked passed — operator runtime retest required.**
+
+**Changed workflow files (`active=false`):**
+- `n8n/workflows/14_public_lead_signal_triage.json` — Defect B (`service_type` deterministic-first → PTS=`pts_loan`),
+  Defect E (`diagnoseZeroWrite()` + `below_threshold_skipped`), Defect G (`include_review_queue` +
+  `source_agent_request_id`).
+- `n8n/workflows/13_public_discussion_or_reviews_connector_foundation.json` — Defect C (evidence-based `probableNeed()`
+  + `pts_loan` service), Defect D (WF13→WF14 handoff strings), Defect F (audience-only author aggregates), + monitored
+  Mode-2 engine node (`Monitored VK Engine (inert + fixture sim)`) + two STAGED/DISABLED HTTP placeholders
+  (`Fetch VK Group Walls`, `Fetch VK Post Comments`) + monitored config.
+- `n8n/workflows/12_market_intelligence_report_builder.json` — Defect A (`redact()` over every report field) + sticky
+  schema-count fixes (Defect H).
+
+**Created files:** `n8n/fixtures/lead_scout/_harness.js`, `run_wf14_triage.test.js`, `run_wf13_monitored.test.js`,
+`run_wf12_redaction.test.js`, `run_all.js`; `docs/STAGE_C_1_TEST_RESULTS.md`, `docs/VK_MONITORED_SOURCE_RUNBOOK.md`.
+
+**Validation:** `node n8n/fixtures/lead_scout/run_all.js` runs the **actual Code-node logic** under n8n shims →
+**132/132 PASS ($0)**. Baseline reproduced the operator's exact runtime evidence (PTS=`unknown`, threshold-lowering
+diagnosis, contact leak) before the fix; after the fix all pass with pinned counters unchanged (vector A 7/3-2-2;
+vector B 5/2-2-1; repeat 0/dup 5). Structural/safety scan: all `active=false`, HTTP nodes disabled, no secrets/
+Spreadsheet IDs/real VK groups, `outreach_allowed=false` everywhere, JSON diffs localized (no reflow).
+
+**Docs updated (md):** WF12/13/14 RU, fixtures README, STAGE_C_ACCEPTANCE_PACK, MARKET_INTELLIGENCE_REPORT_SCHEMA
+(20→25), CONTACT_AND_OUTREACH_POLICY (redaction addendum), DECISIONS (DEC-141), core hot/recent + warm/decisions,
+NEXT_ACTIONS, ROADMAP, auto-memory.
+
+**Next:** operator runtime retest (`docs/STAGE_C_1_TEST_RESULTS.md` §3). Then Stage C C1 (paid Stage 2) / C4 (live VK)
+operator-gated; monitored VK live = blocked. Stage 4 (Claude) not started.
+
+---
+
 ## 2026-06-17 (session 12) — Stage 3.5 audit alignment + live-readiness hardening (DEC-140)
 
 **Agent role:** project-engineer · **Scope:** post-audit hardening before Stage C. **No new features, no Stage 4,
