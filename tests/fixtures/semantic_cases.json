@@ -1,0 +1,77 @@
+{
+  "_doc": "Stage C Hardening evidence-based acceptance fixtures (§16). Each case runs through semantic_core.classifyOffline (free offline/fixture mode = no live calls). 'expect' lists the contract-required semantic outcome. These also serve as the deterministic-fallback expectations for WF08 when Claude is unavailable.",
+  "cases": [
+    {
+      "name": "credeo_affiliate_program",
+      "ref": "§16.1 affiliate; S3-L3",
+      "input": { "source_type": "social_channel", "platform": "telegram", "post_url": "https://t.me/credeo_fixture/10", "text_context": "Партнёрская программа Credéo: получите персональную реферальную ссылку и вознаграждение за каждого заёмщика. Зарегистрируйтесь и получите доступ в личном кабинете.", "competitor_name": "Credéo", "published_at": "2026-06-15T10:00:00+03:00" },
+      "expect": { "record_type": "competitor_activity", "entity_type": "competitor", "activity_subtype": "affiliate_program", "route": "monitor_queue", "report_eligible": true, "not_record_type": "market_signal" }
+    },
+    {
+      "name": "credeo_return_leasing_educational_offer",
+      "ref": "§16.1 return leasing; S3-L4",
+      "input": { "source_type": "social_channel", "platform": "telegram", "post_url": "https://t.me/credeo_fixture/11", "text_context": "Разбираем риски возвратного лизинга авто. Credéo предлагает законный займ под залог авто и рефинансирование возвратного лизинга. Авто остаётся у вас.", "competitor_name": "Credéo", "published_at": "2026-06-15T10:00:00+03:00" },
+      "expect": { "record_type": "competitor_activity", "activity_subtype": "educational_offer", "service_primary": "auto_lease_refinance", "service_secondary_includes": "pts_loan", "route": "monitor_queue", "report_eligible": true }
+    },
+    {
+      "name": "credeo_direct_offer_15m",
+      "ref": "§16.1 direct offer; S3-L2",
+      "input": { "source_type": "social_channel", "platform": "telegram", "post_url": "https://t.me/credeo_fixture/12", "text_context": "Финансирование под залог авто, недвижимости, оборудования и бизнеса. До 15 000 000 ₽ в день обращения. Без предоплаты, без справок, без поручителей. Напишите марку и год выпуска.", "competitor_name": "Credéo", "published_at": "2026-06-15T10:00:00+03:00" },
+      "expect": { "record_type": "competitor_activity", "activity_subtype": "direct_offer", "route": "monitor_queue", "report_eligible": true, "min_confidence": 80, "offer_terms_speed": "same day" }
+    },
+    {
+      "name": "telegram_system_event",
+      "ref": "§16.1 system event; S3-L1",
+      "input": { "source_type": "social_channel", "platform": "telegram", "post_url": "https://t.me/credeo_fixture/13", "text_context": "Channel name was changed to «Credéo финансы»", "published_at": "2026-06-15T10:00:00+03:00" },
+      "expect": { "record_type": "system_event", "hard_skip": true, "skip_reason": "telegram_service_message", "route": "skipped_log", "report_eligible": false, "llm_eligible": false }
+    },
+    {
+      "name": "mfo_owned_article_credit_history",
+      "ref": "§16.2 owned article; S3-L8",
+      "input": { "source_type": "social_channel", "platform": "telegram", "post_url": "https://t.me/mfo_market_fixture/20", "text_context": "Как восстановить кредитную историю после отказов банков. Подробно разбираем в нашей статье на da.credit — читайте по ссылке. Подпишись на наш канал, чтобы не пропустить разбор.", "competitor_name": "mfo_market", "published_at": "2026-06-15T10:00:00+03:00" },
+      "expect": { "record_type": "competitor_activity", "activity_subtype": "owned_media_content", "service_primary": "credit_history_consulting", "route": "monitor_queue", "report_eligible": true }
+    },
+    {
+      "name": "mfo_sbp_payments_regulation",
+      "ref": "§16.2 SBP regulation",
+      "input": { "source_type": "social_channel", "platform": "telegram", "post_url": "https://t.me/mfo_market_fixture/21", "text_context": "ЦБ обновил правила Системы быстрых платежей (СБП): новые лимиты на эквайринг по QR вступают в силу с июля. Что это значит для бизнеса.", "published_at": "2026-06-15T10:00:00+03:00" },
+      "expect": { "record_type": "market_signal", "market_signal_subtype": "payments_regulation", "route": "content_queue", "report_eligible": true, "not_record_type": "competitor_activity" }
+    },
+    {
+      "name": "mfo_central_bank_rate",
+      "ref": "§16.2 central bank rate",
+      "input": { "source_type": "social_channel", "platform": "telegram", "post_url": "https://t.me/mfo_market_fixture/22", "text_context": "Центробанк снизил ключевую ставку с 15 до 14.5 процентов. Разбираем, что это значит для заёмщиков и ставок по кредитам.", "published_at": "2026-06-15T10:00:00+03:00" },
+      "expect": { "record_type": "market_signal", "market_signal_subtype": "central_bank_rate", "route": "content_queue", "report_eligible": true }
+    },
+    {
+      "name": "mfo_credit_secured_by_apartment",
+      "ref": "§16.2 credit secured by apartment; S3-L7",
+      "input": { "source_type": "social_channel", "platform": "telegram", "post_url": "https://t.me/mfo_market_fixture/23", "text_context": "Кредит под залог квартиры на любые цели: до 60% от стоимости, можно направить на рефинансирование и объединение кредитов в один платёж. Оставьте заявку.", "competitor_name": "mfo_market", "published_at": "2026-06-15T10:00:00+03:00" },
+      "expect": { "record_type": "competitor_activity", "service_primary": "real_estate_secured_loan", "route": "monitor_queue", "report_eligible": true, "not_route": "skipped_log" }
+    },
+    {
+      "name": "mfo_scam_quote_not_author_offer",
+      "ref": "§16.2 scam quote; S3-L9",
+      "input": { "source_type": "social_channel", "platform": "telegram", "post_url": "https://t.me/mfo_market_fixture/24", "text_context": "«Удалим просрочки за один день» — это мошенничество. Не верьте таким обещаниям, реальная работа с кредитной историей так не делается.", "published_at": "2026-06-15T10:00:00+03:00" },
+      "expect": { "not_record_type": "competitor_activity", "report_eligible": false, "quoted_claims_nonempty": true, "no_author_speed_claim": true }
+    },
+    {
+      "name": "avito_search_card_placeholder",
+      "ref": "§16.3 isDetail=false + placeholder; S3-D25/D26/C2.3",
+      "input": { "source_type": "classified", "platform": "avito", "listing_url": "https://www.avito.ru/moskva/predlozheniya_uslug/x_100", "title": "Ещё4 фото", "description": "", "seller_name": "", "published_at": "", "is_detail": false },
+      "expect": { "record_type": "source_candidate", "detail_fetch_required": true, "llm_eligible": false, "report_eligible": false, "contains_flag": "placeholder_titles", "no_offer_text": true }
+    },
+    {
+      "name": "avito_mortgage_listing_competitor",
+      "ref": "§16.3 mortgage listing; S3-D28; C2.5",
+      "input": { "source_type": "classified", "platform": "avito", "listing_url": "https://www.avito.ru/moskva/predlozheniya_uslug/ipoteka_semeynaya_ipoteka_123456", "title": "Ипотечный брокер. Семейная ипотека", "description": "Подбор и одобрение семейной ипотеки, рефинансирование действующих кредитов. Работаем с большинством банков. Оставьте заявку.", "seller_name": "Ипотека Просто", "published_at": "2026-06-10", "is_detail": true },
+      "expect": { "record_type": "competitor_activity", "route": "monitor_queue", "report_eligible": true, "not_record_type": "market_signal", "service_in": ["mortgage_brokerage", "mortgage_refinance"] }
+    },
+    {
+      "name": "telegram_legal_address_hard_negative",
+      "ref": "WF11 hard negative control",
+      "input": { "source_type": "social_channel", "platform": "telegram", "post_url": "https://t.me/biz_uslugi_fixture/77", "text_context": "Юридический адрес для ООО от собственника. Регистрация ООО и ИП под ключ, бухгалтерское сопровождение. Метро Таганская.", "published_at": "2026-06-11T10:00:00+03:00" },
+      "expect": { "record_type": "irrelevant", "hard_skip": true, "route": "skipped_log", "report_eligible": false }
+    }
+  ]
+}
