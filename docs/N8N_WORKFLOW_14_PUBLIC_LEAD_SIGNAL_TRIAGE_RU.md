@@ -19,6 +19,16 @@
 > `splitCmt()` извлекает `source_comment_url` из `post_url` с якорем `#reply`/`?reply=` и оставляет в
 > `source_post_url` базовый пост, поэтому фикстурные и live-строки дают одинаковые dedup-ключи и `lead_signal_id`.
 
+> **Stage C.1 (2026-06-19, DEC-141):** (B) `service_type` теперь **детерминированно-первичен** — `svcType()`
+> по тексту-доказательству побеждает; неинформативная подсказка (`unknown`/пусто) НЕ перекрывает её, поэтому
+> спрос «под залог ПТС» → **`pts_loan`** (а не `unknown`). (E) При нулевой записи диагностика
+> `diagnoseZeroWrite()` называет реальную причину (8 случаев): для повторного прогона — «все N подходящих сигналов
+> уже существуют (дедуп успешен), порог менять не нужно, собрать новые данные», а НЕ «понизьте min_lead_score»;
+> добавлен счётчик `below_threshold_skipped`. (G) Изоляция прогона: `include_review_queue` (по умолчанию true;
+> false — чтобы старые строки `review_queue` не загрязняли приёмку конкретного прогона WF13) и
+> `source_agent_request_id` (фильтр `raw_market_records` по agent_request_id прогона WF13). Дефолты = прежнее
+> поведение; закреплённые fixture-счётчики неизменны. Локальная проверка: `node n8n/fixtures/lead_scout/run_all.js`.
+
 **Статус (история v0.2):** v0.2 (2026-06-16) — **ОПЕРАТОРСКИЙ РЕТЕСТ PASS** (TEST B: `public_lead_signals +4`,
 `signals_written=4`, `duplicates_skipped=2`, без quota-ошибки; TEST C повтор: `+0`, `duplicates_skipped=6`;
 TEST E full-history: без quota-ошибки) · детерминированный, $0,

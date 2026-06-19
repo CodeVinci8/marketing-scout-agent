@@ -6,6 +6,14 @@
 > ВЫВОДЯТСЯ НИКОГДА** — только «публичный контакт-свидетельство есть, см. строку (manual_review)». Совместимо с
 > новой схемой `public_lead_signals` v0.3 и старой 28-колоночной (на время миграции). `outreach_allowed=false`.
 
+> **Stage C.1 (2026-06-19, DEC-141) — Defect A (C6) исправлен:** добавлена детерминированная **redaction** на
+> уровне отчёта (`redact()`). Прямые контактные идентификаторы, встроенные в текст-доказательство лида (телефоны,
+> `@handle`, ссылки t.me/VK-профиля, email), удаляются **до** обрезки и форматирования и заменяются на
+> `[PUBLIC CONTACT REDACTED]` во ВСЕХ полях отчёта (`notes`/markdown, `audience_summary`, дайджест, топ-лиды, а
+> также в фактах для будущего Claude/Telegram). Сохраняются деловые числа (суммы, %, ставки, даты) и обычные
+> URL постов-источников (`vk.com/wall…`). Счётчики контактов остаются корректными; полная публичная контактная
+> информация остаётся ТОЛЬКО в `public_lead_signals` для ручной проверки. Проверка: `node n8n/fixtures/lead_scout/run_wf12_redaction.test.js`.
+
 **Workflow:** `n8n/workflows/12_market_intelligence_report_builder.json`
 **Имя:** `12 - Market Intelligence Report Builder (Deterministic Skeleton)`
 **Статус:** 🔧 ПОСТРОЕН скелет v0.1 (DEC-118). `active=false`, **полностью детерминированный, $0**:
@@ -13,7 +21,7 @@
 (доставка НЕ реализована, `delivered_to=none`), **HTTP-нод нет вообще**.
 **Дата:** 2026-06-12 · **Решения:** DEC-112 (Claude — в report/control-слое, НЕ в WF10), DEC-118 (скелет v0.1),
 DEC-108 (обязательный source_mix), DEC-097/098 (контакты/outreach — запрещены в отчётах).
-**Схема выходной вкладки:** `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md` (20 колонок).
+**Схема выходной вкладки:** `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md` (25 колонок v0.3).
 **Архитектура слоя:** `docs/REPORTING_AND_TELEGRAM_SUMMARY_PLAN.md`.
 
 > **ПАТЧ v0.2 (DEC-122) — операторский отчёт + охраняемая Claude-ветка.**
@@ -73,7 +81,7 @@ Manual Start
 
 ## 3. Импорт и тесты
 
-1. НЕ активировать. **Сначала создать вкладку `market_intelligence_reports`** (20 колонок — заголовки по
+1. НЕ активировать. **Сначала создать вкладку `market_intelligence_reports`** (25 колонок v0.3 — заголовки по
    `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md` §2).
 2. Перепривязать креденшл Google Sheets на 6 sheet-нодах (4 read + 2 append); заменить
    `PASTE_SPREADSHEET_ID_HERE` на реальный ID.

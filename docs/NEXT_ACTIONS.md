@@ -4,6 +4,25 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
+## CURRENT PRIORITY (2026-06-19, session 13) — STAGE C.1 PATCH applied → operator runtime retest (DEC-141)
+
+Corrective patch from real operator runtime evidence + operator-approved monitored-VK engine. Local validation
+**132/132 PASS ($0)** (`node n8n/fixtures/lead_scout/run_all.js`). All `active=false`. **Stage C.1 NOT passed.**
+
+**Operator next (exact runbook): `docs/STAGE_C_1_TEST_RESULTS.md` §3.**
+1. Re-import patched WF12, WF13, WF14 (WF15 unchanged). Rebind Sheets cred + Spreadsheet ID. Keep inactive.
+2. Clear ONLY `raw_market_records` / `market_record_registry` / `public_lead_signals` / `market_intelligence_reports`
+   (NOT Stage-2/3 aggregate tabs). Optionally set WF14 `include_review_queue:false` to isolate cleanly.
+3. WF13 fixture → raw +8 / registry +7 / `audience_author_count=5` / next_action → WF14. PTS raw row `service_hint=pts_loan`.
+4. WF14 → public_lead_signals +5 (H/M/L 2/2/1), **PTS `service_type=pts_loan`**, `outreach_allowed=FALSE`.
+5. WF14 repeat → +0, dup 5, diagnosis = "all eligible already exist (dedup)" (NOT lower min_lead_score).
+6. WF12 → report +1; verify NO `@synthetic_lead_1` / `+7 000 000-00-01` / profile URLs / emails / t.me in `notes`.
+
+Then Stage C: C1 (paid Stage 2) / C4 (live VK) operator-gated; monitored VK live = blocked
+(`docs/VK_MONITORED_SOURCE_RUNBOOK.md`). Stage 4 (Claude) not started.
+
+---
+
 ## CURRENT PRIORITY (2026-06-17, session 12) — STAGE 3.5 AUDIT ALIGNMENT + LIVE-READINESS HARDENING done → Stage C acceptance next (DEC-140)
 
 Post-audit hardening patch (DEC-140) — **no new features, no Stage 4, no external calls.** External audit found
@@ -244,7 +263,7 @@ no auto-outreach, no Claude calls inside the bot itself.**
   VK comments → `touchpoint_type=public_comment`; stage label → `stage_3_source_foundation_vk_public_discussion`;
   per-run `live_source_runs` logging.
 - **WF11 v0.3:** per-run `live_source_runs` logging + Sheets-safe contacts (live path of DEC-120 unchanged).
-- **WF14 NEW:** Public Lead Signal Triage — deterministic pains/intents/scores → `public_lead_signals` (28 cols);
+- **WF14 NEW:** Public Lead Signal Triage — deterministic pains/intents/scores → `public_lead_signals` (47 cols v0.3; was 28);
   evidence-not-permission policy; dedup post_url+text_hash.
 - **WF15 NEW:** manual live-source run logger with enum validation (rejects token values in rows).
 - **WF10 v0.3:** objection_count now real (review_queue-scoped distrust vocabulary); pains merged
@@ -354,7 +373,7 @@ legacy-compatible values added (`web`, `social_content`, `social_search`, `revie
 4. [ ] **Sync `validation_lists` to v1.1** in Sheets (operator, $0): extend lists per
    `docs/GOOGLE_SHEETS_VALIDATION_PLAN.md` §2 (legacy values + full dedup_status set; `angle_category` already
    exists); confirm modes (warning on system-written, reject on human-only).
-5. [ ] **(Optional) WF12 first run:** create the `market_intelligence_reports` tab (20 headers per
+5. [ ] **(Optional) WF12 first run:** create the `market_intelligence_reports` tab (25 v0.3 headers per
    `docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md`), import WF12 (do NOT activate; rebind credential on 6 sheet
    nodes + Spreadsheet ID) → Execute once → reports +1 (`on_demand`, `llm_*` empty, $0, `delivered_to=none`),
    agent_requests +1. Guard test: `enable_llm_summary=true` → expected error; restore false.

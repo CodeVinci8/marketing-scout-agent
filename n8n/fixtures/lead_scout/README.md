@@ -88,3 +88,30 @@ WF13's internal fixture has **9 items**.
 
 Validation is run **once** as part of the **Stage C Acceptance Pack** (see `docs/STAGE_C_ACCEPTANCE_PACK.md`),
 not as per-node micro-tests.
+
+---
+
+## Executable harness (Stage C.1, DEC-141) — $0, no network
+
+A deterministic Node harness now runs the **actual workflow Code-node logic** (extracted from the workflow JSON
+and executed under minimal n8n shims) against these fixtures. No VK/Apify/Firecrawl/Telegram/Claude calls.
+
+```
+node n8n/fixtures/lead_scout/run_all.js
+```
+
+| Script | Covers |
+|--------|--------|
+| `run_wf14_triage.test.js` | vector A (F1–F10 → 7 written, 3/2/2, contacts 2, blank 1) + vector B (WF13→WF14 → 5 written, 2/2/1, **PTS `service_type=pts_loan`**) + repeat (0 written, dup 5, dedup diagnosis) — **42 checks** |
+| `run_wf13_monitored.test.js` | WF13 fixture counters + **`audience_author_count=5`** (audience authors only) + evidence-based `probable_need` + the **monitored Mode-2 simulation** (20 §6.4 cases) — **51 checks** |
+| `run_wf12_redaction.test.js` | WF12 report contact redaction (Defect A): contacts absent from every field, amounts/%/post-URL preserved, counts correct — **39 checks** |
+| `_harness.js` | n8n shims (`$(name).all()`, `$input`, `$getWorkflowStaticData`) + Code-node loader/runner |
+
+**Total: 132 checks PASS.** Numbers are **harness-derived from the real Code nodes**, not invented.
+
+### Stage C.1 deltas vs the old pinned outcomes
+- WF13 audience aggregate is now **audience-only**: `audience_author_count=5` (was `active_author_count=7` — the
+  competitor-post broker and the market-post editor are no longer counted as audience authors; Defect F).
+- The PTS lead's `service_type` is **`pts_loan`** end-to-end (was `unknown`; Defect B).
+- Monitored Mode-2 simulation (`monitored_fixture_mode`) emits 8 WF14-ready items (2 posts + 6 lead comments),
+  skipping supplier/admin/spam comments and never fetching comments under irrelevant/hard-negative posts.

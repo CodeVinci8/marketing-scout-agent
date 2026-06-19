@@ -102,6 +102,26 @@ DEC-134 in `docs/DECISIONS.md`.
 
 ---
 
+## DEC-141 — Stage C.1 consolidated patch (2026-06-19, session 13)
+
+**Rule:** corrective patch from real operator runtime evidence — **no Stage 4, no external calls, all `active=false`,
+$0.** Canonical Lead Scout handoff = **WF13 → WF14 → public_lead_signals** (WF08 = optional Stage 3 analysis, never the
+mandatory handoff). WF14 `service_type` is **deterministic-first** — `svcType()` evidence wins over a non-informative
+upstream hint, so PTS demand → **`pts_loan`** (canonical, not `unknown`). WF14 zero-write runs report the **real**
+reason via `diagnoseZeroWrite()` (repeat = successful dedup, never "lower min_lead_score"); isolation via
+`include_review_queue` + `source_agent_request_id`. WF13 `probable_need` is **evidence-based** (no false refusal hint);
+audience aggregates are **consumer authors only** → `audience_author_count` (fixture 5, not 7). WF12 applies
+deterministic **contact `redact()`** before truncation over every field — no phone/@handle/profile/email/t.me ever in a
+report; amounts/%/post-URLs preserved; full evidence stays only in `public_lead_signals`. WF13 gains a **monitored VK
+groups** engine + `monitored_fixture_mode` simulation; live two-stage transport STAGED/DISABLED = `BLOCKED_BY_OPERATOR`.
+
+**Validation:** `node n8n/fixtures/lead_scout/run_all.js` → **132/132 PASS ($0)**; pinned counters unchanged.
+**Stage C.1 NOT passed — operator runtime retest required.** Full text: DEC-141 in `docs/DECISIONS.md`;
+runbooks: `docs/STAGE_C_1_TEST_RESULTS.md`, `docs/VK_MONITORED_SOURCE_RUNBOOK.md`. Related:
+[[project-stage3-closed-stage4-next]].
+
+---
+
 ## DEC-140 — Stage 3.5 audit alignment + live-readiness hardening (2026-06-17, session 12)
 
 **Rule:** post-audit hardening before Stage C — **no new features, no Stage 4, no external calls.** Canonical

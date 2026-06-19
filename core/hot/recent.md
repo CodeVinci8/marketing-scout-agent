@@ -4,6 +4,41 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-19 (session 13) — Stage C.1 consolidated patch (DEC-141)
+
+**Status (exact):** corrective patch from REAL operator n8n runtime evidence. **No Stage 4/Claude, no external calls**
+(no VK/Telegram/Firecrawl/Apify/Claude/OpenAI), no activation, no real keys/Spreadsheet IDs/VK groups, no
+auto-outreach, no member/private extraction. All workflows `active=false`. **$0.** **Stage C.1 NOT passed — operator
+runtime retest required** (`docs/STAGE_C_1_TEST_RESULTS.md` §3).
+
+**Defects fixed (code, harness-validated):**
+- **WF14:** (B) `service_type` deterministic-first → PTS = **`pts_loan`** (was `unknown`; the WF13 `"unknown"` hint no
+  longer shadows `svcType()`). (E) `diagnoseZeroWrite()` (8 reasons) + `below_threshold_skipped` → repeat run says
+  "all 5 already exist, dedup succeeded, collect new data" (NOT "lower min_lead_score"). (G) `include_review_queue` +
+  `source_agent_request_id` for clean acceptance isolation (defaults unchanged).
+- **WF13:** (C) evidence-based `probableNeed()` — business/PTS/bad-credit no longer get a false "после отказов" hint;
+  `service_hint` for PTS = `pts_loan`. (D) handoff strings → **WF14** canonical (WF08 optional Stage 3). (F) audience
+  aggregates = consumer authors only → **`audience_author_count=5`** (was `active_author_count=7`).
+- **WF12:** (A) deterministic `redact()` before truncation + final pass over every field → no phone/@handle/profile/
+  email/t.me ever printed; amounts/%/post-URLs kept; contact counts correct. (H) sticky schema counts 20→25, 28→47.
+
+**New scope (operator-approved):** WF13 **monitored VK groups** engine (group→posts→relevant posts→public comments;
+post+comment relevance, bounded selection, dedup, counters) + deterministic `monitored_fixture_mode` simulation (20
+§6.4 cases). Live two-stage transport = STAGED/DISABLED, `BLOCKED_BY_OPERATOR` (`docs/VK_MONITORED_SOURCE_RUNBOOK.md`).
+
+**New harness (real Code-node logic under n8n shims):** `node n8n/fixtures/lead_scout/run_all.js` → **132/132 PASS
+($0)**. Pinned counters unchanged (A 7/3-2-2; B 5/2-2-1; repeat 0/dup 5). Files: `_harness.js`, `run_wf14_triage.test.js`,
+`run_wf13_monitored.test.js`, `run_wf12_redaction.test.js`, `run_all.js`.
+
+**Docs:** new `STAGE_C_1_TEST_RESULTS.md` (results + retest runbook + expected deltas) + `VK_MONITORED_SOURCE_RUNBOOK.md`;
+updated WF12/13/14 RU, fixtures README, STAGE_C pack, report schema (20→25), CONTACT policy, DECISIONS (DEC-141), warm.
+
+**Next:** operator runtime retest (import WF12/13/14, clear only raw_market_records/market_record_registry/
+public_lead_signals/market_intelligence_reports, run WF13→WF14→WF14 repeat→WF12, verify pts_loan + dedup diagnosis +
+redaction). Then Stage C C1 (paid Stage 2) / C4 (live VK) = operator-gated; monitored VK live = blocked. Stage 4 NOT started.
+
+---
+
 ## Session: 2026-06-17 (session 12) — Stage 3.5 audit alignment + live-readiness hardening (DEC-140)
 
 **Status (exact):** post-audit hardening patch before Stage C. **No new features, no Stage 4/Claude, no external
