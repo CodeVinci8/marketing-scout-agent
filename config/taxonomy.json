@@ -1,0 +1,240 @@
+{
+  "taxonomy_version": "semantic-v2.0",
+  "generated_for": "Stage C Hardening — canonical semantic taxonomy (single source of truth)",
+  "notes": "Machine-readable canonical taxonomy. n8n Code nodes cannot require() local files in the sandbox, so the runtime mirror lives in n8n/lib/semantic_core.js (TAXONOMY constant). tests/test_taxonomy.js asserts the mirror is byte-identical to this file, so drift is impossible. Do NOT duplicate enum lists ad-hoc inside individual workflows.",
+
+  "record_type": [
+    "competitor_activity",
+    "market_signal",
+    "audience_question",
+    "audience_objection",
+    "audience_complaint",
+    "buying_intent",
+    "lead_signal",
+    "source_candidate",
+    "irrelevant",
+    "system_event",
+    "unknown"
+  ],
+
+  "entity_type": [
+    "competitor",
+    "market_signal",
+    "content_idea",
+    "audience_signal",
+    "lead",
+    "source_candidate",
+    "irrelevant",
+    "system_event",
+    "unknown"
+  ],
+
+  "activity_subtype": [
+    "direct_offer",
+    "owned_media_content",
+    "affiliate_program",
+    "product_explainer",
+    "educational_offer",
+    "client_case",
+    "price_change",
+    "service_change",
+    "channel_profile",
+    "other"
+  ],
+
+  "market_signal_subtype": [
+    "central_bank_rate",
+    "payments_regulation",
+    "regulation",
+    "program",
+    "demand_shift",
+    "scoring_change",
+    "other"
+  ],
+
+  "service": [
+    "credit_brokerage",
+    "credit_after_refusals",
+    "credit_history_consulting",
+    "pts_loan",
+    "secured_financing",
+    "real_estate_secured_loan",
+    "business_credit",
+    "mortgage_brokerage",
+    "mortgage_refinance",
+    "auto_credit",
+    "auto_lease_refinance",
+    "debt_refinancing",
+    "debt_consolidation",
+    "bankruptcy_advisory",
+    "business_credit_rehabilitation",
+    "credit_legal_consulting",
+    "consumer_credit",
+    "bank_guarantee",
+    "unknown"
+  ],
+
+  "record_type_aliases": {
+    "question_objection": "audience_question",
+    "objection": "audience_objection",
+    "complaint": "audience_complaint",
+    "question": "audience_question",
+    "irrelevant_live_false_positive": "irrelevant",
+    "irrelevant_source": "irrelevant",
+    "weak_market_noise": "irrelevant",
+    "telegram_service_message": "system_event",
+    "service_message": "system_event",
+    "content_idea": "market_signal",
+    "lead": "lead_signal",
+    "buying_signal": "buying_intent",
+    "purchase_intent": "buying_intent"
+  },
+
+  "entity_type_aliases": {
+    "lead_signal": "lead",
+    "market": "market_signal",
+    "audience": "audience_signal"
+  },
+
+  "service_aliases": {
+    "secured_auto_loan": "pts_loan",
+    "auto_collateral_loan": "pts_loan",
+    "loan_against_vehicle": "pts_loan",
+    "zaym_pod_avto": "pts_loan",
+    "zaym_pod_pts": "pts_loan",
+    "zalog_avto": "pts_loan",
+    "auto_pledge_loan": "pts_loan",
+    "return_lease_refinancing": "auto_lease_refinance",
+    "sale_leaseback_refinancing": "auto_lease_refinance",
+    "leaseback_refinancing": "auto_lease_refinance",
+    "vozvratnyy_lizing_refinance": "auto_lease_refinance",
+    "secured_real_estate_loan": "real_estate_secured_loan",
+    "real_estate_collateral_loan": "real_estate_secured_loan",
+    "zalog_nedvizhimosti": "real_estate_secured_loan",
+    "credit_broker": "credit_brokerage",
+    "kreditnyy_broker": "credit_brokerage",
+    "generic_lending": "credit_brokerage",
+    "mortgage_adjacent": "mortgage_brokerage",
+    "ipoteka": "mortgage_brokerage",
+    "refinancing": "debt_refinancing",
+    "credit_refinancing": "debt_refinancing",
+    "consumer_loan": "consumer_credit",
+    "potreb_kredit": "consumer_credit",
+    "auto_loan": "auto_credit",
+    "bank_guarantees": "bank_guarantee",
+    "bankovskaya_garantiya": "bank_guarantee"
+  },
+
+  "service_keyword_aliases_cyrillic": {
+    "займ под авто": "pts_loan",
+    "займ под птс": "pts_loan",
+    "кредит под птс": "pts_loan",
+    "под залог авто": "pts_loan",
+    "рефинансирование возвратного лизинга": "auto_lease_refinance",
+    "возвратный лизинг": "auto_lease_refinance"
+  },
+
+  "route_map": {
+    "competitor_activity": "monitor_queue",
+    "market_signal": "content_queue",
+    "audience_question": "review_queue",
+    "audience_objection": "review_queue",
+    "audience_complaint": "review_queue",
+    "buying_intent": "review_queue",
+    "lead_signal": "results",
+    "source_candidate": "review_queue",
+    "irrelevant": "skipped_log",
+    "system_event": "skipped_log",
+    "unknown": "review_queue"
+  },
+
+  "valid_routes": [
+    "results",
+    "review_queue",
+    "monitor_queue",
+    "content_queue",
+    "skipped_log",
+    "technical_errors"
+  ],
+
+  "entity_for_record_type": {
+    "competitor_activity": "competitor",
+    "market_signal": "market_signal",
+    "audience_question": "audience_signal",
+    "audience_objection": "audience_signal",
+    "audience_complaint": "audience_signal",
+    "buying_intent": "lead",
+    "lead_signal": "lead",
+    "source_candidate": "source_candidate",
+    "irrelevant": "irrelevant",
+    "system_event": "system_event",
+    "unknown": "unknown"
+  },
+
+  "legacy_entity_for_record_type": {
+    "competitor_activity": "competitor",
+    "market_signal": "content_idea",
+    "audience_question": "content_idea",
+    "audience_objection": "content_idea",
+    "audience_complaint": "content_idea",
+    "buying_intent": "lead_signal",
+    "lead_signal": "lead_signal",
+    "source_candidate": "content_idea",
+    "irrelevant": "irrelevant",
+    "system_event": "irrelevant",
+    "unknown": "content_idea"
+  },
+
+  "report_eligible_default_false_record_types": [
+    "source_candidate",
+    "irrelevant",
+    "system_event",
+    "unknown"
+  ],
+
+  "confidence_caps": {
+    "placeholder_title": 20,
+    "missing_description": 45,
+    "source_metadata_only": 30,
+    "query_prior_only": 20,
+    "deterministic_fallback": 40,
+    "raw_markdown_fallback": 25,
+    "unresolved_taxonomy_alias": 50,
+    "search_card_no_detail": 30,
+    "pending_review": 50
+  },
+
+  "quality_flags": [
+    "fixture_data",
+    "manual_test_data",
+    "stale_source",
+    "search_cards_only",
+    "no_detail_records",
+    "placeholder_titles",
+    "missing_seller_identity",
+    "missing_descriptions",
+    "missing_published_at",
+    "missing_exact_evidence_url",
+    "high_unknown_service_rate",
+    "high_generic_offer_rate",
+    "high_repair_rate",
+    "deterministic_fallback",
+    "raw_markdown_fallback",
+    "broken_brand",
+    "taxonomy_drift",
+    "owned_media_misclassification",
+    "system_event_contamination",
+    "metadata_contamination",
+    "pending_review",
+    "semantic_validation_failed",
+    "cost_unknown",
+    "approval_gate_missing",
+    "no_compatible_baseline",
+    "report_quality_warning"
+  ],
+
+  "quality_status": ["healthy", "degraded", "quarantined"],
+  "data_mode": ["live", "fixture", "manual_test"],
+  "cost_status": ["known", "estimated", "unknown", "not_applicable"],
+  "quality_rule_version": "qrule-v1.0"
+}

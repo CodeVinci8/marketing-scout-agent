@@ -1,0 +1,403 @@
+{
+  "name": "16 - Source Quality Gate & Health Score",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## WF16 — Source Quality Gate & Health Score\n\nRun-level + source-level health BEFORE report generation. **No Claude / Apify / Firecrawl.** Reads live_source_runs + raw_market_records (+ registry/queues), computes quality_score / quality_status / report_eligible / llm_eligible / quality_flags, writes the **source_health** tab, and emits a Final Summary.\n\n**fixture_self_test=true** (default): runs the 3 demo cases (healthy / degraded / quarantined) with no sheet reads, $0. Set false + write_result=true (with creds) for real runs.\n\nWF10/WF12 must consult source_health.report_eligible before including a run as production intelligence.",
+        "height": 320,
+        "width": 420
+      },
+      "id": "overview_note",
+      "name": "Overview Note RU",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        -40
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual_start",
+      "name": "Manual Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        160,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// WF16 config. NO external API (no Claude/Apify/Firecrawl). Reads sheets + computes run health -> source_health.\n// fixture_self_test=true (default) runs the 3 demo cases offline ($0, no creds) so import+run works immediately.\n// Operator sets fixture_self_test=false + write_result=true (with spreadsheet creds) to evaluate real runs.\nfunction pad(n){return String(n).padStart(2,'0');}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction stampNow(){var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+pad(m.getUTCMonth()+1)+pad(m.getUTCDate())+'_'+pad(m.getUTCHours())+pad(m.getUTCMinutes())+pad(m.getUTCSeconds());}\nvar stamp=stampNow();\nreturn [{ json: {\n  workflow:'16 - Source Quality Gate & Health Score',\n  fixture_self_test:true,\n  source_run_id_filter:'',\n  agent_request_id_filter:'',\n  source_family_filter:'',\n  platform_filter:'',\n  freshness_window_days:30,\n  allow_degraded_report:false,\n  write_result:false,\n  dry_run:true,\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  taxonomy_version:'semantic-v2.0',\n  quality_rule_version:'qrule-v1.0',\n  run_id:'wf16_'+stamp,\n  generated_at:moscowIsoNow(),\n  note:'WF16 quality gate. fixture_self_test=true => 3 demo runs (healthy/degraded/quarantined), no sheet reads, $0. Set false to read live_source_runs + raw_market_records (+ registry/queues) filtered by source_run_id_filter/agent_request_id_filter and compute real source_health. write_result=true appends to the source_health tab (needs creds). Default report_eligible policy: live healthy=eligible; degraded excluded unless allow_degraded_report=true (adds report_quality_warning); fixture/manual_test/quarantined/no_data=never eligible. NO external API calls, no Claude.'\n}}];\n"
+      },
+      "id": "set_wf16_config",
+      "name": "Set WF16 Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.fixture_self_test }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if_self_test",
+      "name": "IF Self-Test?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        620,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Self-test: 3 deterministic run-bundles demonstrating healthy / degraded / quarantined. No sheet reads, $0.\nfunction rec(o){return Object.assign({structurally_valid:true,unique:true,exact_evidence_url:true,report_candidate:true,published_at:'2026-06-15T10:00:00+03:00'},o||{});}\nfunction many(n,o){var a=[];for(var i=0;i<n;i++)a.push(rec(o));return a;}\n// healthy\nvar healthy={ is_run_bundle:true, run:{data_mode:'live',source_run_id:'tg_demo_healthy',agent_request_id:'req_h',workflow:'WF11',source_family:'social_channel',platform:'telegram',items_received:6,external_calls:1,source_cost_status:'not_applicable',llm_calls:0}, records:many(6) };\n// degraded\nvar dr=many(6);\ndr[0].structurally_valid=false;\ndr[0].repaired=true;dr[1].repaired=true;dr[2].repaired=true;dr[3].repaired=true;\ndr[0].primary_parse_failure=true;\ndr[0].unknown_service=true;dr[1].unknown_service=true;dr[2].unknown_service=true;\ndr[0].generic_offer=true;dr[1].generic_offer=true;\ndr[0].exact_evidence_url=false;dr[1].exact_evidence_url=false;dr[2].exact_evidence_url=false;\ndr[0].missing_description=true;dr[1].missing_description=true;dr[2].missing_description=true;\ndr[0].published_at='2026-01-01';dr[1].published_at='2026-01-05';dr[2].published_at='2026-02-01';\nvar degraded={ is_run_bundle:true, run:{data_mode:'live',source_run_id:'av_demo_degraded',agent_request_id:'req_d',workflow:'WF09',source_family:'classifieds',platform:'avito',items_received:6,external_calls:1,source_cost_status:'unknown'}, records:dr };\n// quarantined: avito search cards only\nvar quarantined={ is_run_bundle:true, run:{data_mode:'live',source_run_id:'av_demo_quarantined',agent_request_id:'req_q',workflow:'WF09',source_family:'classifieds',platform:'avito',items_received:5,external_calls:1,source_cost_status:'unknown'}, records:many(5,{placeholder_title:true,missing_description:true,missing_seller_identity:true,missing_published_at:true,report_candidate:false,degraded:true,published_at:''}) };\nreturn [healthy,degraded,quarantined].map(function(b){return {json:b};});\n"
+      },
+      "id": "build_fixture_runs",
+      "name": "Build Fixture Runs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "live_source_runs",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "read_live_source_runs",
+      "name": "Read live_source_runs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        860,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "raw_market_records",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "read_raw_market_records",
+      "name": "Read raw_market_records",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        860,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "market_record_registry",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "read_market_record_registry",
+      "name": "Read market_record_registry",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        860,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// LIVE assembly: read live_source_runs + raw_market_records (+ registry/queues), group records by source_run_id,\n// normalize each row into a quality descriptor, emit one run-bundle per run. Deterministic, NO external API.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction readNode(name){ try{ return $(name).all().map(function(i){return i.json;}).filter(Boolean); }catch(e){ return []; } }\nfunction detectPlaceholder(t){ t=str(t); if(!t)return false; if(/ещ[её]\\s*\\d+\\s*фото/i.test(t))return true; if(/^\\s*\\+?\\d+\\s*фото\\s*$/i.test(t))return true; return false; }\nfunction detectSysEvent(t){ t=str(t); return /channel name was changed to|канал переименован|(сменил|изменил)\\s+название\\s+канала|(сменил|изменил|обновил)\\s+фото\\s+канала/i.test(t); }\nvar cfg=$('Set WF16 Config').first().json;\nvar runIdF=str(cfg.source_run_id_filter);\nvar reqF=str(cfg.agent_request_id_filter);\nvar famF=low(cfg.source_family_filter);\nvar platF=low(cfg.platform_filter);\nvar runsRows=readNode('Read live_source_runs');\nvar raw=readNode('Read raw_market_records');\nvar registry=readNode('Read market_record_registry');\n// registry dedup_status lookup by record_id/dedup_key\nvar dedupByKey={};\nregistry.forEach(function(g){ var k=str(g.dedup_key)||str(g.record_id); if(k)dedupByKey[k]=low(g.dedup_status||'unique'); });\n// group raw rows by source_run_id (fall back to agent_request_id)\nvar groups={};\nraw.forEach(function(r){\n  var rid=str(r.source_run_id)||str(r.run_id)||str(r.agent_request_id);\n  if(!rid)return;\n  if(runIdF && rid!==runIdF)return;\n  if(reqF && str(r.agent_request_id)!==reqF)return;\n  (groups[rid]=groups[rid]||[]).push(r);\n});\nfunction normalize(r){\n  var rth=low(r.record_type_hint);\n  var title=str(r.title||r.offer_text);\n  var text=str(r.text_context||r.description);\n  var svc=low(r.service_hint||r.service_primary||r.normalized_service_type);\n  var placeholder=detectPlaceholder(title);\n  var sysev=detectSysEvent(text)||rth==='system_event';\n  var dedup=low(r.dedup_status)|| dedupByKey[str(r.dedup_key)] || dedupByKey[str(r.record_id)] || 'unique';\n  var hardSkip=(r.hard_skip===true||low(r.hard_skip)==='true');\n  var irr=(rth==='irrelevant'||rth==='irrelevant_live_false_positive'||rth==='irrelevant_source');\n  var pending=(low(r.review_status)==='pending'||low(r.parse_method)==='deterministic_uncertain_no_llm');\n  var generic=(low(r.interest_topic)==='competitor channel ad copy')||(low(r.offer_text)===''&&rth==='competitor_activity');\n  var reportCand=!placeholder&&!sysev&&!irr&&!hardSkip&&!pending&&dedup==='unique';\n  return {\n    structurally_valid:(r.is_valid_listing!==false)&&(str(r.record_id)!==''||str(r.dedup_key)!==''),\n    unique:dedup==='unique', duplicate:dedup==='duplicate',\n    hard_skipped:hardSkip||sysev, irrelevant:irr, report_candidate:reportCand,\n    placeholder_title:placeholder,\n    missing_description:(text.length<30),\n    missing_seller_identity:(str(r.profile_name)===''&&str(r.competitor_name)===''&&str(r.author_handle)===''&&str(r.seller_name)===''),\n    missing_published_at:(str(r.published_at)===''),\n    exact_evidence_url:(str(r.post_url)!==''||str(r.listing_url)!==''||str(r.source_url)!==''),\n    unknown_service:(svc===''||svc==='unknown'),\n    generic_offer:generic, system_event:sysev, pending_review:pending,\n    published_at:str(r.published_at)\n  };\n}\nvar out=[];\nObject.keys(groups).forEach(function(rid){\n  var runRow=runsRows.filter(function(x){return (str(x.source_run_id)||str(x.run_id))===rid;})[0]||{};\n  if(famF && low(runRow.source_family)!==famF) return;\n  if(platF && low(runRow.platform)!==platF) return;\n  var records=groups[rid].map(normalize);\n  var run=Object.assign({source_run_id:rid,data_mode:low(runRow.mode)===''?'live':(low(runRow.mode)||'live')},runRow,{source_run_id:rid});\n  if(run.data_mode===undefined||run.data_mode==='') run.data_mode='live';\n  out.push({json:{is_run_bundle:true, run:run, records:records}});\n});\nif(out.length===0){ out.push({json:{is_run_bundle:true, run:{source_run_id:runIdF||'none',data_mode:'live',items_received:0}, records:[]}}); }\nreturn out;\n"
+      },
+      "id": "assemble_run_bundles",
+      "name": "Assemble Run Bundles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// WF16 scoring node. Embedded MIRROR of n8n/lib/quality_gate.js computeRunHealth (drift-proof: the offline\n// harness runs THIS jsCode and asserts equality with the library). NO external API. Reads $input run-bundles.\nvar QRULE_VERSION='qrule-v1.0';\nvar CRITICAL_FLAGS=['semantic_validation_failed','system_event_contamination','no_detail_records','broken_brand','approval_gate_missing','no_compatible_baseline'];\nfunction num(v,d){var n=Number(v);return isNaN(n)?(d==null?0:d):n;}\nfunction rate(n,d){d=num(d);return d>0?(num(n)/d):0;}\nfunction pct(x){return Math.round(x*1000)/10;}\nfunction computeRunHealth(run,records,cfg){\n  run=run||{};records=records||[];cfg=cfg||{};\n  var win=num(cfg.freshness_window_days,30);\n  var nowMs=cfg.now_iso?Date.parse(cfg.now_iso):Date.now();\n  var data_mode=String(run.data_mode||cfg.data_mode||'live').toLowerCase();\n  var total=records.length;\n  var structurally_valid=0,invalid=0,unique=0,duplicate=0,hard_skipped=0,irrelevant=0,report_candidate=0,placeholder=0,missing_desc=0,missing_id=0,missing_pub=0,has_evidence_url=0,unknown_service=0,generic_offer=0,parse_failure=0,repaired=0,fallback=0,raw_md_fallback=0,degraded=0,pending=0,sysevent=0,stale=0,fresh_known=0;\n  var newest=null,oldest=null;\n  for(var i=0;i<records.length;i++){ var r=records[i];\n    if(r.structurally_valid===false)invalid++;else structurally_valid++;\n    if(r.duplicate===true)duplicate++;else if(r.unique!==false)unique++;\n    if(r.hard_skipped===true)hard_skipped++;\n    if(r.irrelevant===true)irrelevant++;\n    if(r.report_candidate===true)report_candidate++;\n    if(r.placeholder_title===true)placeholder++;\n    if(r.missing_description===true)missing_desc++;\n    if(r.missing_seller_identity===true)missing_id++;\n    if(r.missing_published_at===true)missing_pub++;\n    if(r.exact_evidence_url===true)has_evidence_url++;\n    if(r.unknown_service===true)unknown_service++;\n    if(r.generic_offer===true)generic_offer++;\n    if(r.primary_parse_failure===true)parse_failure++;\n    if(r.repaired===true)repaired++;\n    if(r.fallback===true)fallback++;\n    if(r.raw_markdown_fallback===true)raw_md_fallback++;\n    if(r.degraded===true)degraded++;\n    if(r.pending_review===true)pending++;\n    if(r.system_event===true)sysevent++;\n    var p=Date.parse(r.published_at);\n    if(!isNaN(p)){ fresh_known++; if(newest===null||p>newest)newest=p; if(oldest===null||p<oldest)oldest=p;\n      var age=Math.floor((nowMs-p)/86400000); var within=(r.within_window!=null)?r.within_window:(age<=win); if(!within)stale++; }\n  }\n  var items_received=num(run.items_received,total);\n  var noData=(total===0&&items_received===0);\n  var rates={\n    structurally_valid_rate:pct(rate(structurally_valid,total)), invalid_rate:pct(rate(invalid,total)),\n    duplicate_rate:pct(rate(duplicate,total)), hard_skip_rate:pct(rate(hard_skipped,total)),\n    irrelevant_rate:pct(rate(irrelevant,total)), unknown_service_rate:pct(rate(unknown_service,total)),\n    generic_offer_rate:pct(rate(generic_offer,total)), placeholder_title_rate:pct(rate(placeholder,total)),\n    missing_description_rate:pct(rate(missing_desc,total)), missing_identity_rate:pct(rate(missing_id,total)),\n    missing_published_at_rate:pct(rate(missing_pub,total)), exact_evidence_url_rate:pct(rate(has_evidence_url,total)),\n    primary_parse_failure_rate:pct(rate(parse_failure,total)), repair_rate:pct(rate(repaired,total)),\n    fallback_rate:pct(rate(fallback,total)), degraded_record_rate:pct(rate(degraded,total)),\n    pending_review_rate:pct(rate(pending,total)), stale_rate:pct(rate(stale,total))\n  };\n  var flags=[];\n  if(data_mode==='fixture')flags.push('fixture_data');\n  if(data_mode==='manual_test')flags.push('manual_test_data');\n  if(total>0&&stale===fresh_known&&fresh_known>0)flags.push('stale_source');\n  if(total>0&&placeholder===total)flags.push('placeholder_titles'); else if(placeholder>0)flags.push('placeholder_titles');\n  if(total>0&&report_candidate===0&&(placeholder+missing_desc)>=total)flags.push('search_cards_only');\n  if(total>0&&report_candidate===0&&hard_skipped<total&&degraded>0)flags.push('no_detail_records');\n  if(rates.missing_identity_rate>=60)flags.push('missing_seller_identity');\n  if(rates.missing_description_rate>=60)flags.push('missing_descriptions');\n  if(rates.missing_published_at_rate>=60)flags.push('missing_published_at');\n  if(rates.exact_evidence_url_rate<100&&total>0)flags.push('missing_exact_evidence_url');\n  if(rates.unknown_service_rate>=50)flags.push('high_unknown_service_rate');\n  if(rates.generic_offer_rate>=50)flags.push('high_generic_offer_rate');\n  if(rates.repair_rate>=40)flags.push('high_repair_rate');\n  if(fallback>0)flags.push('deterministic_fallback');\n  if(raw_md_fallback>0)flags.push('raw_markdown_fallback');\n  if(run.broken_brand===true)flags.push('broken_brand');\n  if(run.taxonomy_drift===true||(unknown_service>0&&rates.unknown_service_rate>=50))flags.push('taxonomy_drift');\n  if(sysevent>0)flags.push('system_event_contamination');\n  if(pending>0)flags.push('pending_review');\n  if(num(run.semantic_validation_failed_count)>0)flags.push('semantic_validation_failed');\n  var source_cost_status=String(run.source_cost_status||(num(run.external_calls)>0?'unknown':'not_applicable')).toLowerCase();\n  var llm_cost_status=String(run.llm_cost_status||(num(run.llm_calls)>0?'unknown':'not_applicable')).toLowerCase();\n  if(source_cost_status==='unknown'||llm_cost_status==='unknown')flags.push('cost_unknown');\n  if(run.approval_gate_missing===true)flags.push('approval_gate_missing');\n  if(noData)flags.push('no_compatible_baseline');\n  var d_transport; if(noData)d_transport=0; else if(run.transport_failed===true)d_transport=5; else d_transport=15;\n  var d_structural=noData?0:Math.round(rate(structurally_valid,total)*20);\n  var semFactor=1; semFactor-=rate(parse_failure,total)*0.5; semFactor-=Math.max(0,rate(repaired,total)-0.2)*0.5;\n  semFactor-=rate(unknown_service,total)*0.3; semFactor-=rate(generic_offer,total)*0.3; semFactor-=rate(sysevent,total)*0.6; semFactor-=rate(pending,total)*0.3;\n  if(semFactor<0)semFactor=0; var d_semantic=noData?0:Math.round(semFactor*25);\n  var evFactor=rate(has_evidence_url,total)*0.4+(1-rate(placeholder,total))*0.3+(1-rate(missing_desc,total))*0.3;\n  if(evFactor<0)evFactor=0; if(evFactor>1)evFactor=1; var d_evidence=noData?0:Math.round(evFactor*20);\n  var d_freshness=(fresh_known===0)?(noData?0:5):Math.round((1-rate(stale,fresh_known))*10);\n  var d_cost=10; if(source_cost_status==='unknown')d_cost-=4; if(llm_cost_status==='unknown')d_cost-=3; if(run.approval_gate_missing===true)d_cost-=3; if(d_cost<0)d_cost=0;\n  var quality_score=noData?0:(d_transport+d_structural+d_semantic+d_evidence+d_freshness+d_cost);\n  var hasCritical=flags.some(function(f){return CRITICAL_FLAGS.indexOf(f)>=0;});\n  var quality_status;\n  if(noData)quality_status='quarantined'; else if(hasCritical||quality_score<50)quality_status='quarantined'; else if(quality_score>=80)quality_status='healthy'; else quality_status='degraded';\n  var isProd=(data_mode==='live');\n  var report_eligible=isProd&&quality_status!=='quarantined'&&!noData;\n  if(quality_status==='degraded'){ report_eligible=isProd&&cfg.allow_degraded_report===true; if(report_eligible)flags.push('report_quality_warning'); }\n  var llm_eligible=!noData&&quality_status!=='quarantined'&&unique>0;\n  if(unique===0||(irrelevant+hard_skipped)>=total)llm_eligible=false;\n  var operator_next_action;\n  if(noData)operator_next_action='No data: re-run the source connector with a valid allowlist/run filter before any report. Do NOT treat as a baseline.';\n  else if(quality_status==='quarantined')operator_next_action='QUARANTINED: exclude from stakeholder report. Investigate critical flags ('+flags.filter(function(f){return CRITICAL_FLAGS.indexOf(f)>=0;}).join(', ')+'). Fix source/enrichment, then re-run.';\n  else if(quality_status==='degraded')operator_next_action='DEGRADED: excluded from report by default. Enable allow_degraded_report only with a visible TEST/QUALITY warning, or improve evidence/freshness and re-run.';\n  else operator_next_action='HEALTHY: eligible for stakeholder intelligence and (where unique>0) LLM analysis.';\n  return {\n    quality_evaluation_id:'qhealth_'+String(cfg.source_run_id||run.run_id||run.source_run_id||'run')+'_'+(cfg.stamp||''),\n    evaluated_at:cfg.now_iso||new Date().toISOString(),\n    source_run_id:run.source_run_id||run.run_id||cfg.source_run_id||'',\n    agent_request_id:run.agent_request_id||cfg.agent_request_id||'',\n    workflow:run.workflow||'', source_family:run.source_family||'', platform:run.platform||'',\n    source_key:run.source_key||run.source_allowlist||'', data_mode:data_mode, items_received:items_received,\n    structurally_valid_items:structurally_valid, invalid_items:invalid, unique_items:unique, duplicate_items:duplicate,\n    hard_skipped_items:hard_skipped, irrelevant_items:irrelevant, report_candidate_items:report_candidate,\n    newest_published_at:newest?new Date(newest).toISOString():'', oldest_published_at:oldest?new Date(oldest).toISOString():'',\n    source_staleness_days:newest?Math.floor((nowMs-newest)/86400000):null,\n    external_calls:num(run.external_calls), llm_calls:num(run.llm_calls),\n    actual_source_cost_usd:(source_cost_status==='known')?num(run.actual_source_cost_usd):null,\n    actual_llm_cost_usd:(llm_cost_status==='known')?num(run.actual_llm_cost_usd):null,\n    source_cost_status:source_cost_status, llm_cost_status:llm_cost_status,\n    cost_per_unique_record:(llm_cost_status==='known'&&unique>0)?Math.round((num(run.actual_llm_cost_usd)/unique)*10000)/10000:null,\n    dimension_scores:{transport:d_transport,structural:d_structural,semantic:d_semantic,evidence:d_evidence,freshness:d_freshness,observability_cost:d_cost},\n    quality_score:quality_score, quality_status:quality_status, report_eligible:report_eligible, llm_eligible:llm_eligible,\n    quality_flags:Array.from(new Set(flags)), operator_next_action:operator_next_action,\n    taxonomy_version:cfg.taxonomy_version||'semantic-v2.0', quality_rule_version:QRULE_VERSION, rates:rates\n  };\n}\nfunction pad(n){return String(n).padStart(2,'0');}\nfunction stampNow(){var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+pad(m.getUTCMonth()+1)+pad(m.getUTCDate())+'_'+pad(m.getUTCHours())+pad(m.getUTCMinutes())+pad(m.getUTCSeconds());}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nvar cfg0=$('Set WF16 Config').first().json;\nvar stamp=stampNow();\nvar baseCfg={ now_iso:moscowIsoNow(), stamp:stamp, freshness_window_days:Number(cfg0.freshness_window_days)||30, allow_degraded_report:cfg0.allow_degraded_report===true, taxonomy_version:cfg0.taxonomy_version||'semantic-v2.0' };\nvar bundles=$input.all().map(function(i){return i.json;}).filter(function(b){return b&&b.is_run_bundle;});\nvar out=[];\nfor(var i=0;i<bundles.length;i++){\n  var b=bundles[i];\n  var cfg=Object.assign({},baseCfg,{source_run_id:b.run&&b.run.source_run_id,agent_request_id:b.run&&b.run.agent_request_id});\n  var h=computeRunHealth(b.run||{}, b.records||[], cfg);\n  // flatten for the source_health sheet: arrays/objects -> strings\n  var row=Object.assign({}, h, {\n    quality_flags:(h.quality_flags||[]).join('; '),\n    dimension_scores:JSON.stringify(h.dimension_scores),\n    notes:''\n  });\n  // promote key rates as columns\n  Object.keys(h.rates||{}).forEach(function(k){ row[k]=h.rates[k]; });\n  delete row.rates;\n  out.push({json:row});\n}\nreturn out;\n"
+      },
+      "id": "build_source_health",
+      "name": "Build Source Health",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "w1",
+              "leftValue": "={{ $('Set WF16 Config').first().json.write_result }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if_write",
+      "name": "IF Write Result?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "source_health",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "append_source_health",
+      "name": "Append source_health",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1780,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// WF16 Final Summary Output (§7.6). Aggregates evaluated runs; flags which are report/llm eligible. NO external API.\nfunction str(v){return v==null?'':String(v).trim();}\nvar cfg=$('Set WF16 Config').first().json;\nvar rows=[];\ntry{ rows=$('Build Source Health').all().map(function(i){return i.json;}); }catch(e){ rows=[]; }\nvar runs=rows.map(function(r){ return {\n  source_run_id:r.source_run_id, data_mode:r.data_mode, workflow:r.workflow, platform:r.platform,\n  quality_score:r.quality_score, quality_status:r.quality_status,\n  report_eligible:r.report_eligible, llm_eligible:r.llm_eligible,\n  unique_items:r.unique_items, report_candidate_items:r.report_candidate_items,\n  source_cost_status:r.source_cost_status, llm_cost_status:r.llm_cost_status,\n  key_rates:{structurally_valid_rate:r.structurally_valid_rate, exact_evidence_url_rate:r.exact_evidence_url_rate, repair_rate:r.repair_rate, unknown_service_rate:r.unknown_service_rate, stale_rate:r.stale_rate},\n  quality_flags:r.quality_flags, operator_next_action:r.operator_next_action\n};});\nvar counts={healthy:0,degraded:0,quarantined:0};\nruns.forEach(function(r){ counts[r.quality_status]=(counts[r.quality_status]||0)+1; });\nvar report_eligible_runs=runs.filter(function(r){return r.report_eligible;}).map(function(r){return r.source_run_id;});\nreturn [{ json: {\n  workflow:'16 - Source Quality Gate & Health Score',\n  run_id:cfg.run_id||'', generated_at:cfg.generated_at||'',\n  fixture_self_test:cfg.fixture_self_test===true,\n  write_result:cfg.write_result===true,\n  external_calls:0, llm_calls:0, actual_cost_usd:0, cost_status:'not_applicable',\n  evaluated_runs:runs.length, status_counts:counts,\n  report_eligible_runs:report_eligible_runs,\n  runs:runs,\n  next_action:(cfg.write_result===true?'source_health rows appended. WF10/WF12 must consult source_health.report_eligible before including a run in stakeholder intelligence.':'DRY-RUN (write_result=false): review runs above; set write_result=true + creds to persist source_health. Quarantined/degraded/fixture runs are excluded from reports by default.')\n}}];\n"
+      },
+      "id": "final_summary_output",
+      "name": "Final Summary Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        320
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Set WF16 Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set WF16 Config": {
+      "main": [
+        [
+          {
+            "node": "IF Self-Test?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Self-Test?": {
+      "main": [
+        [
+          {
+            "node": "Build Fixture Runs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read live_source_runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Fixture Runs": {
+      "main": [
+        [
+          {
+            "node": "Build Source Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read live_source_runs": {
+      "main": [
+        [
+          {
+            "node": "Read raw_market_records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read raw_market_records": {
+      "main": [
+        [
+          {
+            "node": "Read market_record_registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read market_record_registry": {
+      "main": [
+        [
+          {
+            "node": "Assemble Run Bundles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Run Bundles": {
+      "main": [
+        [
+          {
+            "node": "Build Source Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Source Health": {
+      "main": [
+        [
+          {
+            "node": "IF Write Result?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Write Result?": {
+      "main": [
+        [
+          {
+            "node": "Append source_health",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append source_health": {
+      "main": [
+        [
+          {
+            "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "wf16-v001-source-quality-gate-stagec",
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

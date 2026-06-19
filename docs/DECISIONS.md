@@ -5,6 +5,39 @@ Most recent first.
 
 ---
 
+## DEC-142 — Stage C Hardening (canonical taxonomy + semantic engine + WF16 quality gate + WF08 llm_primary)
+
+**Date:** 2026-06-19 (session 14)
+**Context:** external/acceptance audit produced a 64-item defect register (C1/S2/S3/S3-L). The root causes were
+systemic: per-workflow private enum lists + keyword heuristics, hint over-trust, no run-level quality gate, no
+report-eligibility/pending-review isolation, faked/zero cost semantics, and Avito search cards / Telegram system
+events polluting intelligence.
+
+**Decision (systemic, not keyword crutches):**
+1. **Single canonical taxonomy** `config/taxonomy.json` (`semantic-v2.0`) — record/entity/activity/service enums,
+   alias compatibility (e.g. `secured_auto_loan→pts_loan`, `return_lease_refinancing→auto_lease_refinance`,
+   `question_objection→audience_question`), route map, confidence caps, quality flags. **One source of truth**;
+   workflows must not redeclare enums.
+2. **Shared semantic engine** `n8n/lib/semantic_core.js` — Stage A pre-gate (system-event/placeholder/search-card/
+   evidence completeness), owned-media/affiliate/direct-offer/negation detectors, explainable evidence-based
+   confidence with caps, Stage D validator, deterministic route mapper, and `classifyOffline()` (free offline/
+   fixture classifier = LLM fallback). The MODEL decides semantics; CODE maps class→queue.
+3. **WF16 Source Quality Gate** (`16_…json` + `n8n/lib/quality_gate.js`) — run/source health → `source_health`
+   tab; `quality_score/status/report_eligible/llm_eligible/quality_flags`; gates WF10/WF12. Critical flags force
+   quarantine; fixture/manual_test/no-data never report-eligible; degraded excluded unless explicitly opted in.
+4. **WF08 = `llm_primary`** — Claude is the primary classifier (semantic-v2; POST_EVIDENCE overrides hints);
+   deterministic logic kept only as pre-gate/dedup/system-event/hard-negative/safety/freshness/fallback/fixture.
+   `llm_enabled=false` stays the safe default until operator Claude approval.
+5. **WF09 paid-path safety gate** (fixture=false ∧ live=true ∧ token match ∧ max_items ∧ budget; token value
+   never logged); search-card/placeholder quarantine; query separation. **WF11** system-event gate + affiliate
+   subtype + negation + freshness.
+
+**Status:** BUILT, offline-validated (`make test` → 654 checks, $0, 0 external calls). All `active=false`.
+Pending operator runtime retest (controlled Claude batch + one live channel + one approved Avito smoke).
+**Cost = $0; no live calls.** Supersedes nothing — additive over DEC-141.
+
+---
+
 ## DEC-141 — Stage C.1 consolidated patch (report redaction, PTS service_type, evidence-based hints, WF14 handoff, dedup diagnosis, audience authors, run isolation, monitored VK engine)
 
 **Date:** 2026-06-19 (session 13)
