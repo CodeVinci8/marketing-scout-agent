@@ -38,7 +38,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// OPERATOR: edit rawUrls below. MAX 5 URLs (hard cap). First run: use 3.\n// Keep ONLY example.com placeholders committed to the repo — paste real URLs locally.\nconst rawUrls = [\n  'https://example.com/competitor-1',\n  'https://example.com/competitor-2',\n  'https://example.com/competitor-3'\n];\n\nfunction pad(n){ return String(n).padStart(2, '0'); }\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now = moscowIsoNow();\nconst run_id = 'firecrawl_' + moscowStamp();\n\nconst cleaned = [];\nfor (let u of rawUrls) {\n  if (u == null) continue;\n  u = String(u).trim();\n  if (u === '') continue;\n  cleaned.push(u);\n}\nconst capped = cleaned.slice(0, 5); // HARD CAP: max 5 URLs\n\n// --- Stage C Closure Patch 2: reset run-level repair/fallback accounting (S2-D7/D8/D9/D16) ---\nconst __sd=$getWorkflowStaticData('global');\n__sd.wf04_run={ urls_received:capped.length, urls_scraped:0, primary_calls:0, primary_parse_success:0, primary_parse_failure:0, repair_calls:0, repair_success:0, repair_failure:0, deterministic_fallback:0, degraded:0, quarantined:0, snapshots_written:0, firecrawl_calls:0, claude_calls:0 };\nconst items = [];\nlet idx = 0;\nfor (const u of capped) {\n  idx++;\n  items.push({ json: {\n    target_url: u,\n    source_type: 'scraped_web',\n    platform: 'website',\n    parsed_at: now,\n    source_note: 'firecrawl_url_list_manual',\n    run_id: run_id,\n    batch_index: idx,\n    force_reprocess: false\n  }});\n}\nreturn items;"
+        "jsCode": "// OPERATOR: edit rawUrls below. MAX 5 URLs (hard cap). First run: use 3.\n// Keep ONLY example.com placeholders committed to the repo — paste real URLs locally.\nconst rawUrls = [\n  'https://example.com/competitor-1',\n  'https://example.com/competitor-2',\n  'https://example.com/competitor-3'\n];\n\nfunction pad(n){ return String(n).padStart(2, '0'); }\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now = moscowIsoNow();\nconst __stamp = moscowStamp();\nconst run_id = 'firecrawl_' + __stamp;\nconst agent_request_id = 'wf04_req_' + __stamp; // distinct request id (not the source_run_id)\n\nconst cleaned = [];\nfor (let u of rawUrls) {\n  if (u == null) continue;\n  u = String(u).trim();\n  if (u === '') continue;\n  cleaned.push(u);\n}\nconst capped = cleaned.slice(0, 5); // HARD CAP: max 5 URLs\n\n// --- Stage C Closure Patch 2: reset run-level repair/fallback accounting (S2-D7/D8/D9/D16) ---\nconst __sd=$getWorkflowStaticData('global');\n__sd.wf04_run={ urls_received:capped.length, urls_scraped:0, primary_calls:0, primary_parse_success:0, primary_parse_failure:0, repair_calls:0, repair_success:0, repair_failure:0, deterministic_fallback:0, degraded:0, quarantined:0, snapshots_written:0, firecrawl_calls:0, claude_calls:0 };\nconst items = [];\nlet idx = 0;\nfor (const u of capped) {\n  idx++;\n  items.push({ json: {\n    target_url: u,\n    source_type: 'scraped_web',\n    platform: 'website',\n    parsed_at: now,\n    source_note: 'firecrawl_url_list_manual',\n    run_id: run_id,\n    agent_request_id: agent_request_id,\n    batch_index: idx,\n    force_reprocess: false\n  }});\n}\nreturn items;"
       }
     },
     {
@@ -712,6 +712,55 @@
         240,
         980
       ]
+    },
+    {
+      "id": "wf04-build-canonical-raw",
+      "name": "Build Canonical Raw Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        820
+      ],
+      "parameters": {
+        "jsCode": "// WF04 -> canonical raw_market_records (Stage 3 closure, DEC-148). WF04 is the WEBSITE SOURCE ADAPTER:\n// transport (Firecrawl) + cleaning + source metadata/evidence. It emits ONE canonical, WF16/WF08-compatible\n// raw record per successfully scraped URL with analysis_status='pending'. WF08 is the SINGLE semantic owner\n// and consumes this record exactly once; WF04's own extraction is kept here as SOURCE HINTS/evidence\n// (service_hint/competitor_name/offer_text), never as final analyzer authority. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nfunction domainOf(u){u=str(u).toLowerCase();var m=u.match(/^https?:\\/\\/([^\\/?#]+)/);var h=m?m[1]:'';return h.replace(/^www\\./,'');}\nfunction brandFromDomain(d){d=str(d).replace(/^www\\./,'').split('.')[0];if(!d)return '';return d.charAt(0).toUpperCase()+d.slice(1);}\nconst r=$json;\nconst route=low(r.route);const ps=low(r.processing_status);const pm=low(r.parse_method);\nconst src=str(r.source_url);\nif(!src) return []; // no URL => nothing was scraped; no canonical record\nlet sourceRunId='';try{sourceRunId=str($('Set URL List').first().json.run_id);}catch(e){}\nif(!sourceRunId)sourceRunId=str(r.run_id);\nlet agentReq='';try{agentReq=str($('Set URL List').first().json.agent_request_id);}catch(e){}\nif(!agentReq)agentReq=str(r.agent_request_id)||('wf04_req_'+sourceRunId.replace(/^firecrawl_/,''));\nconst stamp=sourceRunId.replace(/^firecrawl_/,'')||moscowStamp();\nconst workflowRunId='wf04_'+stamp;\nconst idx=Number(r.batch_index)||0;\nconst sourceRecordId='wf04_rec_'+stamp+'_'+idx;\nconst domain=domainOf(src);\nconst text=cut(str(r.text_context),4000);\nlet company=str(r.company_name);\nif(!company||/^конкурент без бренда$/i.test(company)){var bd=brandFromDomain(domain);if(bd)company=bd;}\nconst title=company||domain;\n// quality gate (mirrors the snapshot logic): primary success=healthy; repaired/deterministic-fallback=degraded;\n// transport/parse failure or no page evidence=quarantined.\nconst hasEvidence=(text.length>=30)||str(r.offer_text)!=='';\nlet quality_status='healthy';var qflags=[];\nif(ps==='technical_error'||route==='technical_errors'||!hasEvidence){quality_status='quarantined';qflags.push('no_page_evidence');}\nelse if(pm==='deterministic_competitor_fallback'||r.repair_used===true||low(r.repair_status)==='failed_fallback'){quality_status='degraded';qflags.push('deterministic_fallback');}\nconst isCompetitor=(low(r.entity_type)==='competitor');\nconst report_eligible=(quality_status==='healthy'&&isCompetitor);\nconst review_status=(quality_status==='healthy'?'confirmed':'pending');\nconst recordTypeHint=isCompetitor?'competitor_activity':(low(r.entity_type)==='irrelevant'?'irrelevant':'market_signal');\nconst repair_calls=(r.repair_used===true||(low(r.repair_status)&&low(r.repair_status)!==''))?1:0;\nreturn [{ json: {\n  record_id:sourceRecordId,\n  source_record_id:sourceRecordId,\n  agent_request_id:agentReq,\n  source_run_id:sourceRunId,\n  run_id:sourceRunId,\n  workflow_run_id:workflowRunId,\n  data_mode:'live',\n  created_at:str(r.created_at)||moscowIsoNow(),\n  source_type:'scraped_web',\n  platform:'website',\n  source_url:src,\n  post_url:src,\n  exact_evidence_url:(quality_status!=='quarantined'),\n  profile_url:'',\n  profile_name:company,\n  author_handle:'',\n  published_at:str(r.published_at),\n  region_hint:str(r.region),\n  service_hint:low(r.service_type)||'unknown',\n  title:title,\n  description:cut(text,800),\n  text_context:text,\n  comment_text:'',\n  contact_public:str(r.contact_public),\n  dedup_key:low(r.platform||'website')+'::scraped_web::'+(domain||sourceRecordId),\n  record_type_hint:recordTypeHint,\n  touchpoint_type:'competitor_website',\n  is_detail:true,\n  detail_fetch_required:false,\n  placeholder_title:false,\n  is_valid_listing:(quality_status!=='quarantined'),\n  competitor_related:isCompetitor,\n  competitor_name:isCompetitor?company:'',\n  interest_topic:str(r.detected_need),\n  probable_need:str(r.detected_need),\n  offer_text:cut(str(r.offer_text),600),\n  terms:cut(str(r.terms),300),\n  semantic_keywords:'',\n  ad_channel_hint:'website',\n  lead_intent_hint:'low',\n  urgency_hint:'low',\n  lead_temperature:'cold',\n  quality_status:quality_status,\n  report_eligible:report_eligible,\n  llm_eligible:report_eligible,\n  review_status:review_status,\n  analysis_status:'pending',\n  quality_flags:qflags.join('; '),\n  dedup_status:'unique',\n  approval_status:'new',\n  estimated_analysis_cost_usd:0,\n  firecrawl_calls:1,\n  primary_calls:1,\n  repair_calls:repair_calls,\n  actual_source_cost_usd:null,\n  cost_status:'unknown',\n  parse_method:str(r.parse_method),\n  manager_note:'WF04 website source record; analysis_status=pending; WF08 is the semantic owner.',\n  notes:'wf04_canonical_raw_record_stage3_closure',\n  taxonomy_version:'semantic-v2.0'\n}}];"
+      }
+    },
+    {
+      "id": "wf04-append-raw",
+      "name": "Append raw_market_records",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2200,
+        820
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "raw_market_records",
+          "mode": "name"
+        },
+        "options": {},
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        }
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     }
   ],
   "connections": {
@@ -974,6 +1023,11 @@
             "node": "Build competitor_site_snapshots Row",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Build Canonical Raw Record",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -1038,6 +1092,17 @@
         [
           {
             "node": "Append agent_requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Canonical Raw Record": {
+      "main": [
+        [
+          {
+            "node": "Append raw_market_records",
             "type": "main",
             "index": 0
           }

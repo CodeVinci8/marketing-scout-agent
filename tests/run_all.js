@@ -29,6 +29,8 @@ const JS_SUITES = [
   ['wf09-actor-input', 'test_wf09_actor_input.js'],
   // --- Stage 3 closure: canonical identity/lineage contract + WF16 boolean fidelity ---
   ['lineage-contract', 'test_lineage_contract.js'],
+  // --- Stage 3 closure: WF04 -> WF16 -> WF08 website source quality & analysis pipeline ---
+  ['website-pipeline', 'test_website_pipeline.js'],
   ['ci-workflow', 'test_ci_workflow.js'],
 ];
 

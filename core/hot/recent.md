@@ -22,11 +22,22 @@ orchestration and telegram gateway`; (3) `test(stage4): add end-to-end contracts
 - **WF16 §2.3 boolean fidelity:** `Assemble` `cbool()` (mirrors lib) — Sheets string `'FALSE'` now scored invalid.
 - `tests/test_lineage_contract.js` (34 checks). `make test` → ALL SUITES PASS (20 JS suites + validator + lead_scout).
 
-**Open (commit 2/3, see `docs/STAGE_3_CLOSURE_REPORT.md`):** WF04 canonical raw_market_records emission + WF08
-single-owner (§2.2/§2.4), WF10/WF12 production filtering (§2.5/§2.6), §2.7 remainder, and ALL of Stage 4 (Telegram
-gateway, planner, state machine, approval/budget gate, source-adapter contract, idempotency/outbox, dead-letter).
+**Commit 2 LANDED — `fix(stage3): connect website source quality and analysis pipeline` (DEC-148):**
+- **WF04 = website source adapter:** new `Build Canonical Raw Record` emits one canonical `raw_market_records`
+  row per scraped URL (full lineage + `source_record_id` + `analysis_status=pending`); WF04 extraction kept as
+  source hints; snapshots/transport preserved. + `Append raw_market_records` node.
+- **WF08 = single semantic owner:** `Filter & Select Records` + `source_run_id_filter` + record-level quality gate
+  (degraded/quarantined/pending blocked, per-record) + exactly-once via new `analysis_runs` ledger
+  (`Read analysis_runs` + `Build/Append analysis_runs Row`; key=`source_run_id::source_record_id`; `force_reprocess`).
+- WF16 scores WF04 rows by `source_run_id`. `tests/test_website_pipeline.js` (36 checks) on
+  `firecrawl_20260620_104531` (CASHMOTOR healthy→WF08 once; CarCapital degraded blocked; lineage identical).
+  `make test` → ALL SUITES PASS (21 JS suites). Sheets: `raw_market_records` WF04 cols + `analysis_runs` tab (§24/§25).
 
-**Next:** continue Phase A canonical-raw-record + WF08 handoff, then build Stage 4. No Claude before Phase D.
+**Open (chosen slice complete):** WF08 LLM via runtime guard (not node kill switch); WF10/WF12 production filtering
+(§2.5/§2.6); §2.7 remainder; ALL of Stage 4 (Telegram gateway, planner, state machine, approval/budget gate,
+source-adapter contract, idempotency/outbox, dead-letter). No Claude before Phase D.
+
+**Next:** per-user direction — the WF04→WF16→WF08 website slice is delivered; await next prioritization.
 
 ## Session: 2026-06-20 (session 18) — Stage C Runtime Patch 5 (DEC-146): WF09 Apify actor-input regression
 

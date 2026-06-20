@@ -5,6 +5,33 @@ Most recent first.
 
 ---
 
+## DEC-148 — Stage 3 closure: connect the website source quality & analysis pipeline (WF04→WF16→WF08)
+
+**Date:** 2026-06-20
+
+**Context:** After the lineage join was fixed (DEC-147), WF04 still wrote final business-route rows but no
+canonical `raw_market_records`, so WF16 could not score WF04 web data and WF08 (the analyzer) never saw it —
+risking double semantic analysis (WF04 Claude + WF08 Claude on the same page).
+
+**Decisions:**
+1. **WF04 is the website source adapter.** New `Build Canonical Raw Record` node emits ONE canonical
+   `raw_market_records` row per scraped URL with full lineage (`agent_request_id`, `source_run_id`,
+   `workflow_run_id`, `source_record_id`, `data_mode`), structural/quality fields and `analysis_status='pending'`.
+   WF04's own extraction is retained only as source hints/evidence; transport/Firecrawl/cleaning/snapshots stay.
+2. **WF08 is the single semantic owner.** It consumes the canonical record exactly once: `Filter & Select
+   Records` adds `source_run_id_filter`, a record-level quality gate (degraded/quarantined/pending blocked —
+   mixed runs gate per record), and exactly-once idempotency via a new `analysis_runs` ledger
+   (`analysis_idempotency_key = source_run_id::source_record_id`; `force_reprocess=true` overrides).
+3. **WF16** scores the WF04 canonical rows by `source_run_id` (no `no_compatible_baseline`).
+
+**Scope:** commit 2 of the Stage-3-closure effort (`fix(stage3): connect website source quality and analysis
+pipeline`). Proven by `tests/test_website_pipeline.js` (36 checks) on `firecrawl_20260620_104531` (CASHMOTOR
+healthy reaches WF08 once; CarCapital degraded blocked; lineage identical WF04==WF16==WF08; repeated run = no
+duplicate). New Sheets: `raw_market_records` WF04 columns + `analysis_runs` tab (migration §24/§25). Open
+follow-up: WF08 LLM via runtime guard (not a node kill switch). `make test` → ALL SUITES PASS; $0; active=false.
+
+---
+
 ## DEC-147 — Stage 3 closure: canonical identity/lineage contract + WF16 Sheets-boolean fidelity
 
 **Date:** 2026-06-20

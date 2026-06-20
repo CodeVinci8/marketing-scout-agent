@@ -51,15 +51,28 @@ Now WF04 `live_source_runs` emits `source_run_id = run_id = firecrawl_<stamp>` (
 `lineage.coerceSheetBool` (drift-proven): explicit `TRUE`/`FALSE`/strings/booleans/empty are all preserved, so a
 string-`FALSE` row is correctly scored structurally invalid.
 
-## Open items (not in commit 1)
+## Website source quality & analysis pipeline (§2.2/§2.3/§2.4/§2.6) — LANDED (commit 2)
 
-These remain for the follow-up commits and are tracked honestly here:
+Canonical website data now flows **WF04 → `raw_market_records` → WF16 → WF08 (exactly-once)**:
 
-- **§2.2 single semantic owner / WF04 canonical raw record:** WF04 still writes final business-route rows
-  (`monitor_queue`) and snapshots, but does **not** yet emit a canonical `raw_market_records` row that WF16
-  scores and WF08 analyzes exactly once. Until then WF16 cannot score WF04 web data from `raw_market_records`
-  (the lineage join above is the prerequisite; the record emission + WF08 single-owner handoff is the next unit).
-- **§2.4 WF08 source handoff** (`source_run_id_filter`, idempotency key, LLM via runtime guard not disabled node).
+- **WF04 = website source adapter.** A new `Build Canonical Raw Record` node emits **one canonical
+  `raw_market_records` row per scraped URL** with full lineage (`agent_request_id`, `source_run_id`,
+  `workflow_run_id`, `source_record_id`, `data_mode`), structural/quality fields, `analysis_status='pending'`,
+  and WF04's own extraction kept only as **source hints/evidence** (`service_hint`/`competitor_name`/`offer_text`).
+  Transport, Firecrawl evidence, cleaning and `competitor_site_snapshots` are preserved.
+- **WF08 = single semantic owner.** It consumes the canonical record exactly once. `Filter & Select Records`
+  gained `source_run_id_filter`, a **record-level quality gate** (degraded/quarantined/pending never reach
+  analysis — mixed runs gate per record, not per run), and **exactly-once idempotency** via a new `analysis_runs`
+  ledger (`analysis_idempotency_key = source_run_id::source_record_id`); `force_reprocess=true` overrides.
+- **WF16** reads the WF04 canonical rows and evaluates them by `source_run_id` (no `no_compatible_baseline`).
+
+Proven by `tests/test_website_pipeline.js` (36 checks) on the live-shaped run (`firecrawl_20260620_104531`;
+CASHMOTOR healthy reaches WF08 once; CarCapital degraded blocked; lineage identical across all three).
+
+## Open items (follow-ups)
+
+- **§2.4 WF08 LLM via runtime guard:** `llm_enabled` is still a node-level kill switch; the production target is
+  a runtime guard (approval token + budget) rather than a disabled node. Exactly-once handoff is now done.
 - **§2.5 WF10** (`time_window_days` from config, source mix from included rows, agent-request isolation).
 - **§2.6 WF12** (live isolation, consistent snapshot/profile quality filtering, enable guarded Claude summary).
 - **§2.7 remainder:** WF09 `items_relevant` search-card semantics; WF05 `items_relevant` + real approval/budget
