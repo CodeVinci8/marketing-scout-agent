@@ -5,6 +5,53 @@ Most recent first.
 
 ---
 
+## DEC-151 — Conversational agent: NL intent routing + bounded multi-layer memory (WF18 ext + WF22)
+
+**Date:** 2026-06-21
+
+**Context:** Stage 4 (DEC-150) was a button-driven workflow interface. The product goal is a real conversational
+Marketing Scout: free-form natural language is the primary interface, buttons are optional accelerators, and the
+agent must resolve contextual references ("the first two", "them", "the previous report") without sending the
+whole transcript to Claude every turn.
+
+**Decisions:**
+1. **Library-first again (extends DEC-142/150).** Five new pure libraries — `agent_charter`, `intent_router`,
+   `conversation_memory`, `conversation_response`, `tracked_sources` — hold all logic, are unit-tested
+   (`test_agent_contracts.js`, 109 checks) and embedded byte-identically into WF18/WF22 Code nodes (drift
+   asserted by `test_agent_workflows.js`). No cross-lib `require` in embeddable libs (the embed strips only
+   `use strict`/`module.exports`); shared helpers are `function` declarations so co-embedding two libs in one
+   node is legal in sloppy mode; top-level `const` names are unique per lib to avoid redeclaration SyntaxErrors.
+2. **Immutable charter + deterministic capability registry.** `agent_charter` injects a compact versioned
+   charter every turn and is the single source of truth for runnable capability IDs. Claude may select/phrase a
+   capability but cannot invent an ID or callback — only registry IDs route. Availability is derived from cfg
+   (a platform is available only if it is in the source allowlist), so the agent never claims Telegram/VK access
+   it lacks.
+3. **Deterministic-first intent routing.** `intent_router` resolves obvious commands/callbacks and clear
+   keyword phrases with zero LLM; genuinely ambiguous free text goes to a GUARDED Claude classifier whose JSON
+   is validated against a strict schema (`validateIntentJSON`); anything invalid/unsupported falls back to ONE
+   clarification question. **No external collection starts from an unvalidated intent** — `start_work` requires
+   `requested_action==='build_plan'` AND an available capability AND a deterministic route. Optional buttons use
+   `intent:<capability_id>` callbacks, so a button is exactly equivalent to typing the request.
+4. **Bounded multi-layer memory (the full transcript is never sent).** `conversation_memory` implements L1 state,
+   L2 recent window (default 8), L3 versioned rolling summary that PRESERVES decisions/entities/IDs/references
+   verbatim (a regex collects IDs and they are copied unchanged; the previous summary is retained for audit),
+   L4 durable per-user memory, and L5 artifact selection. `buildContext` assembles sections in a fixed priority
+   order under a token budget and NEVER drops charter / current state / safety-approval constraints / the newest
+   user message; omitted sections + truncation are recorded in `context_usage`.
+5. **Memory control + isolation.** `/new` resets active context but keeps durable preferences; `/forget` and
+   `/forget_all` (confirmation-gated) tombstone memory and write an audit event that keeps a value HASH, never
+   the raw value; memory is strictly isolated by Telegram user; a no-memory mode is supported per request.
+   `makeMemory` refuses to store token/secret-like values.
+6. **Conversational source management.** `tracked_sources` adds/lists/pauses/resumes/removes/checks public
+   sources purely from text; adds are idempotent; a platform not in the allowlist is honestly refused; refs can
+   be resolved from context ("add their sites" uses last-report competitor URLs).
+
+**Constraints honored:** WF18 extended + WF22 added, both `active=false`; Claude nodes guarded, not disabled;
+messages are not reloaded in full each turn; no secrets in Sheets/JSON; `make test` ALL SUITES PASS (agent
+contracts 109 + agent workflows 30); 0 external calls; $0; not pushed; no n8n import.
+
+---
+
 ## DEC-150 — Stage 4: single-user Telegram agent MVP (WF17–WF20 + seven contract libraries)
 
 **Date:** 2026-06-21

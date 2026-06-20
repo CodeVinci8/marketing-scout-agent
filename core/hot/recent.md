@@ -4,6 +4,35 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-21 (session 21) — Conversational agent: NL intent + bounded memory + deep analysis (DEC-151/152)
+
+**Status (exact):** transforming the button-driven Stage 4 bot into a real conversational agent. Branch
+`stage-3-closure-and-stage-4`. **0 external calls, $0**, all workflows `active=false`, **not pushed**, no n8n
+import, no AI attribution. Three planned commits: (1) `feat(agent): add conversational intent routing and
+bounded memory`; (2) `feat(agent): add context-aware deep competitor analysis`; (3) `test(agent): add
+multi-turn memory and deep-analysis e2e`.
+
+**Commit 1 (conversational intent + memory) — BUILT:**
+- 5 libs in `n8n/lib/`: `agent_charter` (immutable versioned charter + deterministic capability registry;
+  availability from allowlist; Claude can't invent IDs), `intent_router` (deterministic-first; guarded Claude
+  classifier with strict `validateIntentJSON`; clarification fallback; `intent:<id>` button == typed intent;
+  no external work from unvalidated intent), `conversation_memory` (L1 state, L2 window=8, L3 versioned rolling
+  summary preserving IDs/decisions verbatim, L4 per-user durable memory + forget/forget_all audit with value
+  HASH not raw, L5 artifacts, token-budgeted `buildContext` never drops charter/state/safety/newest),
+  `conversation_response` (useful text w/o buttons + post-report NL invitation; optional buttons only),
+  `tracked_sources` (add/list/pause/resume/remove/check; idempotent; honest platform availability).
+- Generator extended: WF18 now conversational (13 nodes: Route Intent, Build Conversation Context, Build
+  Conversational Reply) + new **WF22 Conversation Control & Sources** (9 nodes). Both `active=false`.
+- Tests: `test_agent_contracts.js` (109) + `test_agent_workflows.js` (30 drift+harness). Registered.
+- Migration extended (§B2: conversations/conversation_messages/conversation_state/conversation_summaries/
+  durable_memories/memory_audit_events/context_usage/tracked_sources/source_audit_events). Deploy order += WF22.
+- `make test` → ALL SUITES PASS (29 suites + validator 247 + lead_scout); $0; 0 calls; 26 workflows active=false.
+
+**Open:** commit 2 = `deep_analysis` + `orchestration_policy` libs + WF21 + WF20 reuse node; commit 3 = multi-turn
+conversational E2E + portfolio docs. Continuing autonomously.
+
+---
+
 ## Session: 2026-06-21 (session 20) — Stage 4 single-user Telegram agent MVP (branch stage-3-closure-and-stage-4, DEC-150)
 
 **Status (exact):** Phase A (Stage 3 closure) already LANDED as `0d0ab69`

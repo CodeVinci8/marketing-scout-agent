@@ -51,9 +51,11 @@ const WF18 = WFS['18_telegram_agent_gateway.json'];
 function gateway(update, opts) {
   opts = opts || {};
   const run = H.makeRun();
-  H.inject(run, 'Resolve Agent Config', [{ telegram_allowed_user_ids: ['111'], source_allowlist: ['website'] }]);
+  H.inject(run, 'Resolve Agent Config', [{ telegram_allowed_user_ids: ['111'], source_allowlist: ['website'], require_approval: true, config_complete: true, enable_llm_intent: false, max_context_tokens: 6000 }]);
   H.runCodeNode(run, WF18, 'Parse Telegram Update', [{ json: { body: update } }]);
   H.inject(run, 'Read agent_request_events', opts.events || []);
+  H.inject(run, 'Read conversation_state', opts.state || []);
+  H.runCodeNode(run, WF18, 'Route Intent', []);
   return H.runCodeNode(run, WF18, 'Build Intake Decision', [])[0].json;
 }
 const reqUpdate = { update_id: 900, message: { message_id: 7, text: 'найди конкурентов по ПТС', from: { id: 111 }, chat: { id: 555 } } };
@@ -62,7 +64,7 @@ A.eq('authorized request => accepted + start_work', accepted.decision + ':' + ac
 A.ok('accepted request gets an agent_request_id', /^req_/.test(accepted.request.agent_request_id));
 const unauth = gateway({ update_id: 901, message: { message_id: 8, text: 'hi', from: { id: 999 }, chat: { id: 555 } } });
 A.eq('unauthorized => no work', unauth.decision + ':' + unauth.start_work, 'unauthorized:false');
-const dupEvents = [{ idempotency_key: accepted.parsed.idempotency_key }];
+const dupEvents = [{ idempotency_key: accepted.routed.parsed.idempotency_key }];
 const dup = gateway(reqUpdate, { events: dupEvents });
 A.eq('duplicate update => no new work', dup.decision + ':' + dup.start_work, 'duplicate:false');
 

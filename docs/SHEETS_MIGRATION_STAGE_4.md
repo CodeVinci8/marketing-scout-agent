@@ -153,6 +153,50 @@ works; legacy rows with an empty `agent_request_id` are treated as un-scoped and
 
 ---
 
+## B2. NEW TABS — conversational agent (WF18 gateway + WF22 control)
+
+The conversational layer adds the tabs below. They keep the agent's interpreted context and durable memory
+out of the prompt-by-default: messages are NOT reloaded in full each turn — only a bounded window + a rolling
+summary are. All header orders are exact.
+
+### B2.1 `conversations` — one row per conversation thread (WF18)
+`conversation_id` · `owner_user_id` · `chat_id` · `started_at` · `last_activity_at` · `status` · `archived`
+
+### B2.2 `conversation_messages` — append-only message log (WF18); never reloaded in full
+`conversation_id` · `message_id` · `role` · `text` · `intent` · `created_at` · `archived`
+
+### B2.3 `conversation_state` — L1 active context, latest row per conversation (WF18/WF20 write; WF18 reads)
+`conversation_id` · `owner_user_id` · `active_agent_request_id` · `current_intent` · `current_state` ·
+`current_plan_id` · `last_report_id` · `last_source_run_ids` · `selected_competitors` · `selected_sources` ·
+`pending_clarification` · `pending_approval` · `current_region` · `current_service` · `comparison_baseline_id` ·
+`no_memory` · `updated_at`
+(`last_source_run_ids`/`selected_competitors`/`selected_sources` are JSON strings.)
+
+### B2.4 `conversation_summaries` — L3 rolling summary, versioned, previous retained (WF18)
+`conversation_id` · `version` · `prev_version` · `text` · `preserved_ids` · `covers_message_ids` ·
+`decisions` · `entities` · `unresolved` · `created_at`
+
+### B2.5 `durable_memories` — L4 durable per-user memory (WF22)
+`memory_id` · `owner_user_id` · `scope` · `conversation_id` · `memory_type` · `key` · `value_json` ·
+`source_message_id` · `confidence` · `status` · `created_at` · `updated_at` · `last_used_at` · `expires_at`
+(never stores secrets — `makeMemory` rejects token/key-like values.)
+
+### B2.6 `memory_audit_events` — deletion audit; retains a value HASH, never the raw value (WF22)
+`event` · `owner_user_id` · `memory_id` · `memory_type` · `key` · `value_hash` · `ts`
+
+### B2.7 `context_usage` — token-budget accounting per Claude-bound turn (WF18/WF19/WF20)
+`conversation_id` · `agent_request_id` · `est_input_tokens` · `max_context_tokens` · `sections_included` ·
+`sections_omitted` · `summary_version` · `truncated` · `ts`
+
+### B2.8 `tracked_sources` — monitored public sources (WF22)
+`source_id` · `owner_user_id` · `platform` · `ref` · `key` · `label` · `status` · `added_at` · `updated_at` ·
+`last_checked_at` · `agent_request_id`
+
+### B2.9 `source_audit_events` — source add/status audit (WF22)
+`event` · `owner_user_id` · `source_id` · `key` · `platform` · `from` · `to` · `ts`
+
+---
+
 ## C. Verification checklist (do this once, before `--apply`)
 
 1. [ ] Spreadsheet snapshot/copy taken.

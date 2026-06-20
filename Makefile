@@ -34,6 +34,8 @@ test-js:
 	node tests/test_stage4_contracts.js
 	node tests/test_stage4_workflows.js
 	node tests/test_stage4_e2e.js
+	node tests/test_agent_contracts.js
+	node tests/test_agent_workflows.js
 	node tests/test_ci_workflow.js
 
 test-wf:

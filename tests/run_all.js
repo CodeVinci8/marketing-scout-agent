@@ -37,6 +37,9 @@ const JS_SUITES = [
   ['stage4-contracts', 'test_stage4_contracts.js'],
   ['stage4-workflows', 'test_stage4_workflows.js'],
   ['stage4-e2e', 'test_stage4_e2e.js'],
+  // --- Conversational agent: charter, intent router, bounded memory, sources ---
+  ['agent-contracts', 'test_agent_contracts.js'],
+  ['agent-workflows', 'test_agent_workflows.js'],
   ['ci-workflow', 'test_ci_workflow.js'],
 ];
 
