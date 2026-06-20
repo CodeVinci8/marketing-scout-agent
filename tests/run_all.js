@@ -36,6 +36,7 @@ const JS_SUITES = [
   // --- Stage 4: single-user Telegram agent MVP (libs + generated WF17-20) ---
   ['stage4-contracts', 'test_stage4_contracts.js'],
   ['stage4-workflows', 'test_stage4_workflows.js'],
+  ['stage4-e2e', 'test_stage4_e2e.js'],
   ['ci-workflow', 'test_ci_workflow.js'],
 ];
 

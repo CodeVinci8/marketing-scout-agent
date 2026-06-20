@@ -34,9 +34,9 @@ function buildExecutionSummary(parts) {
   let next_action;
   if (state === 'cancelled') next_action = 'none — request cancelled by user';
   else if (state === 'completed') next_action = 'none — report delivered';
+  else if (roll.outcome === 'no_data') next_action = 'broaden sources/filters — no eligible data collected';
   else if (state === 'partial') next_action = 'review partial report; some sources failed/quarantined';
   else if (state === 'failed') next_action = blocking.length ? ('resolve: ' + blocking[0]) : 'inspect failed state events';
-  else if (roll.outcome === 'no_data') next_action = 'broaden sources/filters — no eligible data collected';
   else next_action = 'request in progress (' + state + ')';
 
   return {

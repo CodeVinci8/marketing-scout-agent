@@ -28,11 +28,28 @@ workflows `active=false`, **not pushed**, no n8n import, no AI attribution.
 - `make test` → **ALL SUITES PASS** (24 JS suites + validator 241 + lead_scout); 0 external calls; $0;
   25 workflow JSON all `active=false`.
 
-**Open (Phase C):** sanitized replay fixtures (Apify discovery / Avito cards / CASHMOTOR healthy / CarCapital
-degraded / WF10 / WF12), 15 mocked E2E scenarios, `scripts/deploy_n8n.sh` (validate/dry-run/inactive import),
-one consolidated Sheets migration (Stage 4 tabs: `agent_requests`/`agent_request_events`/`execution_plans`/
-`approval_decisions`/`telegram_outbox`/`dead_letter_events`), portfolio README + Mermaid. Commit
-`test(stage4): add replay e2e deployment and portfolio docs`. Continuing autonomously.
+**Phase C (testing/deploy/docs) — LANDED as `test(stage4): add replay e2e deployment and portfolio docs`:**
+- `n8n/fixtures/stage4/replay_fixtures.json` (sanitized: Apify SERP discovery / Avito search cards /
+  CASHMOTOR healthy Firecrawl / CarCapital degraded / source_health / WF08 / WF10 / WF12).
+- `tests/test_stage4_e2e.js` (62 checks) — mocked replay driving all 7 libs through the full lifecycle:
+  16 scenarios (duplicate-update, unauthorized, unapproved, cancelled/terminal-blocked, gate pass, off-allowlist,
+  budget/call/item overflow, deterministic idempotency, no-double-spend, healthy-proceeds, degraded-blocked,
+  partial state, all-quarantined no_data, invalid-planner-JSON 0 calls, summary-OFF 0 LLM, delivery-retry dedupe)
+  + full happy path Telegram→…→completed + illegal-transition rejection. Single external-call counter proves 0
+  calls on every negative path. Registered in run_all.js + Makefile.
+- `scripts/deploy_n8n.sh` — DRY-RUN default (validate JSON + config check + print plan, offline, no n8n);
+  `--apply` imports WF17→WF18→WF19→WF20 inactive, never touches credentials.
+- `docs/SHEETS_MIGRATION_STAGE_4.md` — 7 new tabs (exact headers: agent_requests/agent_request_events/
+  execution_plans/approval_decisions/telegram_outbox/execution_summaries/dead_letter_events) + existing-tab
+  append-only deps + verification checklist.
+- `docs/STAGE_4_AGENT.md` (Mermaid architecture + Telegram sequence + state machine + setup + controlled live
+  E2E + known limitations) + README updated to Stage 4.
+- **Fix surfaced by E2E:** `execution_summary.js` next-action ordering — `no_data` now precedes the generic
+  `partial` message (all-quarantined ⇒ "broaden sources", not "review partial report"); WF20 embed regenerated.
+- `make test` → **ALL SUITES PASS** (25 JS suites + validator 241 + lead_scout); 0 external calls; $0;
+  25 workflow JSON `active=false`. **Not pushed**, no n8n import, no AI attribution.
+
+**Open:** operator runtime retest (Stage C.1 + Stage 4 controlled live E2E). No further code work queued.
 
 ---
 

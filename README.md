@@ -25,17 +25,24 @@ Google Sheets, and delivers a Telegram summary.
 
 ## Current Stage
 
-**Stage C Hardening — BUILT (offline-validated, pending operator runtime retest).**
-16 live-capable workflows (WF00–WF16). WF16 (Source Quality Gate) gates report generation;
-WF08 runs an `llm_primary` semantic-v2 contract; a shared semantic engine + canonical taxonomy
-(`config/taxonomy.json`, `n8n/lib/`) replace ad-hoc keyword logic.
+**Stage 4 — Single-User Telegram Agent MVP (BUILT, offline-validated).**
+A Telegram request flows through one operator-facing agent: plan → human approval → website collection →
+WF16 quality gate → WF08 analysis → WF10 aggregation → WF12 report → Telegram delivery, with a durable
+14-state machine and a single fail-closed approval/budget gate for every paid call. Four new workflows
+(WF17–WF20) wrap the existing Stage 1–3 pipeline; seven contract libraries (`n8n/lib/agent_*`,
+`request_planner`, `approval_gate`, `source_adapter`, `telegram_io`, `execution_summary`) hold the logic and
+are embedded byte-identically into the workflow Code nodes (drift-tested).
 
-**Stage C Closure Patch 2** then physically wired WF16/`source_health` enforcement into WF10 + WF12 (shared
-`n8n/lib/report_gate.js`) and closed the remaining source-workflow defects in WF04–WF09 and WF14. See
-`docs/STAGE_C_CLOSURE_PATCH_2.md`.
+**Read first:** [`docs/STAGE_4_AGENT.md`](docs/STAGE_4_AGENT.md) (architecture + Mermaid + user flow +
+setup), [`docs/SHEETS_MIGRATION_STAGE_4.md`](docs/SHEETS_MIGRATION_STAGE_4.md) (exact tabs/headers),
+`scripts/deploy_n8n.sh` (inactive-by-default import).
 
-See `docs/STAGE_C_HARDENING_IMPLEMENTATION.md`, `docs/STAGE_C_CLOSURE_PATCH_2.md`,
-`docs/SOURCE_QUALITY_GATE.md`, `docs/SEMANTIC_TAXONOMY.md`, and `docs/ROADMAP.md`.
+**Prior stage — Stage C Hardening + Closure (BUILT).** 16 live-capable workflows (WF00–WF16). WF16 (Source
+Quality Gate) gates report generation; WF08 runs an `llm_primary` semantic-v2 contract; a shared semantic
+engine + canonical taxonomy (`config/taxonomy.json`, `n8n/lib/`) replace ad-hoc keyword logic. Stage C Closure
+wired WF16/`source_health` enforcement into WF10 + WF12 (shared `n8n/lib/report_gate.js`) and closed the
+remaining source-workflow defects (WF04–WF09, WF14). See `docs/STAGE_C_HARDENING_IMPLEMENTATION.md`,
+`docs/STAGE_C_CLOSURE_PATCH_2.md`, `docs/SOURCE_QUALITY_GATE.md`, `docs/SEMANTIC_TAXONOMY.md`, `docs/ROADMAP.md`.
 
 ## Testing (offline, $0, no paid APIs)
 
