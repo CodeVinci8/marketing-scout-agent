@@ -143,3 +143,38 @@ WF12 `report_data_mode=live`.
 2. Append the columns in §8–§12 to the right of each tab's existing header row.
 3. Import updated workflows (all `active=false`), then run the retest sequence in
    `docs/STAGE_C_CLOSURE_PATCH_2.md`.
+
+---
+
+# Closure Patch 3 (lineage contract — makes source_health enforcement functional)
+
+Patch 2 wired the WF10/WF12 gate but the join key + mode fields were never produced upstream, so the gate did
+nothing on real data. Patch 3 produces and consumes the lineage end-to-end. Full field/producer/consumer
+table: `docs/SOURCE_LINEAGE_CONTRACT.md`. Additive only; legacy rows keep the documented defaults.
+
+## 14. `raw_market_records` — lineage columns (producers: WF07/WF09/WF13)
+Add (right of existing): `source_run_id`, `data_mode` (`live|fixture|manual_test`), `quality_status`
+(`healthy|degraded|quarantined`), `report_eligible` (bool), `review_status` (`confirmed|pending`),
+`quality_flags`. Legacy default: `source_run_id`←`run_id|agent_request_id` at read time; `data_mode=live`;
+`quality_status=healthy`; `report_eligible` blank→eligible; `review_status=confirmed`.
+
+## 15. `monitor_queue` / `content_queue` / `review_queue` — lineage columns (producer: WF08)
+Add: `source_run_id`, `data_mode`, `quality_status`, `report_eligible`, `review_status`, `quality_flags`.
+WF08 writes these on BOTH the deterministic (`Build Deterministic Row`) and LLM (`Merge LLM Enrichment With
+Deterministic Row`) paths with identical derivation. **Without these columns WF10's run-level source_health
+gate cannot match and (production fail-closed) the rows are excluded as unverified** — so this column add is
+required for WF10/WF12 to render any live data after Patch 3.
+
+## 16. `competitor_profiles` / `market_angles` / `audience_activity_signals` — WF10 lineage stamp
+Add: `source_run_ids` (comma-joined contributing runs), `data_mode`, `report_eligible`. Producer: WF10
+`Aggregate Market Intelligence`. Consumer: WF12 `Build Deterministic Report` (`__bodyEligible`). Legacy rows
+(no stamp) are treated as unverified by WF12 and excluded unless `allow_unverified_source=true`.
+
+## 17. `market_intelligence_reports` (WF12) — add `body_records_excluded`
+Count of WF10-derived body rows dropped by the defensive gate (keeps body/section consistent).
+
+## 18. Operator order (Patch 3)
+1. Add columns §14–§17. 2. Re-run connectors (WF07/WF09/WF13) so `raw_market_records` carry lineage.
+3. Run WF08 (queues now carry lineage). 4. Run WF16 (writes `source_health`). 5. Run WF10 then WF12.
+Rollback: delete the added columns; the gate then fails closed (excludes unverified) — set
+`allow_unverified_source=true` on WF10/WF12 only for a non-production bring-up run.

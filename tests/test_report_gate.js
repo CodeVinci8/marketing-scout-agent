@@ -2,8 +2,28 @@
 // and WF12 embed. Pure, deterministic, $0. (Drift between the lib and the embedded mirrors is proven
 // separately in test_wf10_source_health.js / test_wf12_closure.js.)
 'use strict';
+const fs = require('fs');
+const path = require('path');
 const A = require('./_assert');
 const RG = require('../n8n/lib/report_gate.js');
+
+// --- embedded-mirror sync proof: WF10/WF12 embed report_gate.js verbatim (minus 'use strict'/exports) ---
+A.section('report_gate — embedded mirrors are byte-identical to the shared library (no drift)');
+const libCore = (function () {
+  let s = fs.readFileSync(path.join(__dirname, '..', 'n8n', 'lib', 'report_gate.js'), 'utf8');
+  s = s.replace(/^'use strict';\s*$/m, '').replace(/module\.exports[\s\S]*$/m, '');
+  return s.trim();
+})();
+for (const [file, node] of [
+  ['10_competitor_audience_intelligence_aggregator.json', 'Aggregate Market Intelligence'],
+  ['12_market_intelligence_report_builder.json', 'Build Deterministic Report']
+]) {
+  const wf = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'n8n', 'workflows', file), 'utf8'));
+  const code = wf.nodes.find(n => n.name === node).parameters.jsCode;
+  const m = code.match(/embedded n8n\/lib\/report_gate\.js[^\n]*\n([\s\S]*?)\n\/\/ --- end embedded report_gate ---/);
+  A.ok(node + ' contains the embedded report_gate block', !!m);
+  A.eq(node + ' embed === n8n/lib/report_gate.js core', m ? m[1] : '(missing)', libCore);
+}
 
 const health = [
   { source_run_id: 'h', data_mode: 'live', quality_status: 'healthy', report_eligible: true, quality_flags: '' },
@@ -45,6 +65,24 @@ A.eq('uncertain deterministic record excluded', RG.rowEligible({ source_run_id: 
 A.eq('clean record on eligible run included', RG.rowEligible({ source_run_id: 'h' }, def, {}).eligible, true);
 A.eq('record on excluded run excluded', RG.rowEligible({ source_run_id: 'q' }, def, {}).eligible, false);
 A.eq('require_source_health drops unknown-run record', RG.rowEligible({ source_run_id: 'unknown_run' }, def, { require_source_health: true }).eligible, false);
+
+A.section('report_gate — Patch 3 merge + production fail-closed verification');
+const empty = RG.buildEligibility([], {});
+// missing lineage entirely -> excluded by default; included only with explicit override
+A.eq('no lineage, no health -> excluded (fail closed)', RG.rowEligible({}, empty, {}).eligible, false);
+A.eq('no lineage + allow_unverified_source -> included', RG.rowEligible({}, empty, { allow_unverified_source: true }).eligible, true);
+// record self-attests live + healthy, source_health empty -> included (no join required)
+A.eq('live+healthy self-attest, empty health -> included', RG.rowEligible({ source_run_id: 'x', data_mode: 'live', quality_status: 'healthy', report_eligible: true }, empty, {}).eligible, true);
+// record-local fixture excluded even when source_health is empty (does not rely on join)
+A.eq('record-local fixture -> excluded (no health needed)', RG.rowEligible({ source_run_id: 'x', data_mode: 'fixture' }, empty, {}).eligible, false);
+A.eq('record-local fixture + allow_fixture_report -> included', RG.rowEligible({ source_run_id: 'x', data_mode: 'fixture', quality_status: 'healthy' }, empty, { allow_fixture_report: true }).eligible, true);
+// stricter-wins merge: health says healthy/eligible but the record itself is quarantined -> excluded
+const okIdx = RG.buildEligibility([{ source_run_id: 'r', data_mode: 'live', quality_status: 'healthy', report_eligible: true }], {});
+A.eq('health healthy but record-local quarantined -> excluded (stricter wins)', RG.rowEligible({ source_run_id: 'r', data_mode: 'live', quality_status: 'quarantined' }, okIdx, {}).eligible, false);
+A.eq('health healthy + record live/healthy -> included', RG.rowEligible({ source_run_id: 'r', data_mode: 'live', quality_status: 'healthy' }, okIdx, {}).eligible, true);
+// health quarantined overrides a live/healthy-looking record
+const quarIdx = RG.buildEligibility([{ source_run_id: 'r', data_mode: 'live', quality_status: 'quarantined', report_eligible: false }], {});
+A.eq('health quarantined overrides record self-attestation -> excluded', RG.rowEligible({ source_run_id: 'r', data_mode: 'live', quality_status: 'healthy', report_eligible: true }, quarIdx, {}).eligible, false);
 
 A.section('report_gate — baseline selection (S3-D7)');
 const cands = [

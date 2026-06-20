@@ -23,8 +23,10 @@ const health = [
 function plan(stamp, niche, rows) {
   return { plan_id: 'plan_' + stamp, niche: niche, region: REGION, top_angles: 'скорость (x34)', source_evidence: 'rows=' + rows + ' (window 30d)' };
 }
-function angle(stamp, freq) { return { angle_id: 'angle_speed_' + stamp, angle_text: 'скорость / срочность', category: 'speed', frequency: freq, recommended_content_response: 'Пост про реальные сроки' }; }
-const profile = { competitor_id: 'comp_1', competitor_name: 'Финард', platforms: 'avito', offers: 'Кредитный брокер', prices_terms: 'от 30 000 ₽', evidence_count: 3, source_confidence_score: 80, notes: 'wf10 v0.3; run wf10_' + CUR + '; window 30d' };
+// Patch 3: WF10 now stamps source lineage onto its outputs; a healthy run keeps the body intact.
+const LIN = { source_run_ids: 'run_healthy', data_mode: 'live', report_eligible: true };
+function angle(stamp, freq) { return Object.assign({ angle_id: 'angle_speed_' + stamp, angle_text: 'скорость / срочность', category: 'speed', frequency: freq, recommended_content_response: 'Пост про реальные сроки' }, LIN); }
+const profile = Object.assign({ competitor_id: 'comp_1', competitor_name: 'Финард', platforms: 'avito', offers: 'Кредитный брокер', prices_terms: 'от 30 000 ₽', evidence_count: 3, source_confidence_score: 80, notes: 'wf10 v0.3; run wf10_' + CUR + '; window 30d' }, LIN);
 const cleanSnap = { domain: 'finardi.ru', company_name: 'Финард', offer_summary: 'Кредитный брокер', prices_terms: 'от 30 000 ₽', change_type: 'baseline', created_at: '2026-06-15', quality_status: 'healthy', report_eligible: true };
 const degradedSnap = { domain: 'mkbk.ru', company_name: 'МКБ', offer_summary: '# RAW MARKDOWN DUMP\n\n## very long', change_type: 'baseline', created_at: '2026-06-15', quality_status: 'degraded', report_eligible: false, quality_flags: 'raw_markdown_fallback' };
 const leads = [
@@ -39,7 +41,7 @@ function buildReport(plans, angles, cfgOverride, snaps) {
   run.outputs['Set Report Config'] = [{ json: cfg }];
   H.inject(run, 'Read competitor_profiles', [profile]);
   H.inject(run, 'Read market_angles', angles);
-  H.inject(run, 'Read audience_activity_signals', [{ signal_id: 'sig_vk_' + CUR, platform: 'vk', question_count: 5, objection_count: 2, complaint_count: 0, buying_intent_count: 3, top_pains: 'отказы банков' }]);
+  H.inject(run, 'Read audience_activity_signals', [Object.assign({ signal_id: 'sig_vk_' + CUR, platform: 'vk', question_count: 5, objection_count: 2, complaint_count: 0, buying_intent_count: 3, top_pains: 'отказы банков' }, LIN)]);
   H.inject(run, 'Read content_positioning_plan', plans);
   H.inject(run, 'Read competitor_site_snapshots', snaps || [cleanSnap]);
   H.inject(run, 'Read public_lead_signals', leads);
