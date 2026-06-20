@@ -26,6 +26,7 @@ test-js:
 	node tests/test_wf09_multiquery.js
 	node tests/test_wf10_source_health.js
 	node tests/test_wf12_closure.js
+	node tests/test_wf16_runtime_searchcards.js
 	node tests/test_ci_workflow.js
 
 test-wf:

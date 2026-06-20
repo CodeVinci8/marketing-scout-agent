@@ -4,6 +4,36 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-20 (session 17) — Stage C Runtime Patch 4 (DEC-145): first real WF09→WF16 live run
+
+**Status (exact):** narrow runtime patch from the first live execution (`avito_20260620_055017`: 10 items, all
+non-detail Avito search cards, 9 unique + 1 dup). **0 external calls, $0**, all workflows `active=false`. Local
+commit only — **not pushed**. `make test` → ALL SUITES PASS (18 JS suites + validator + lead_scout); new
+`wf16-runtime-searchcards` = 77 checks.
+
+**Root causes fixed (the live run looked healthy when it was not):**
+- **WF09 `live_source_runs.run_id` = `agent_request_id`** broke WF16's join → blank workflow/platform/family.
+  Now `run_id=cfg.run_id` (+ `source_run_id`, preserved `agent_request_id`); WF16 join has an `agent_request_id`
+  legacy fallback. `approval_token_used` from the live gate (value never stored); cost `unknown`/`null` (never 0).
+- **Raw rows lacked the search-card contract** (`is_detail`/`detail_fetch_required`/`placeholder_title`/
+  `exact_evidence_url`(now boolean)/`activity_subtype`/`skip_reason`/`detail_fetch_status=pending`/populated
+  `quality_flags`/`llm_eligible`/`search_query`/`source_search_url`). WF16 now detects search cards from explicit
+  + legacy fields, recognizes `duplicate_in_registry`/`_in_batch`, and **quarantines** a `report_candidate=0`
+  search-card-only run via a critical `search_cards_only` flag; all-`pending` runs are never report/LLM eligible;
+  non-detail cards don't inflate `exact_evidence_url_rate`. Mirrored in `n8n/lib/quality_gate.js` + WF16 node
+  (drift-proven).
+- **WF09 summary** now separates search cards from confirmed offers (the company-registration card is preserved
+  for review, never an offer). **Query origin** = specific per-record query (start-URL `userData` propagated) or
+  `unknown`, never the concatenated list.
+
+**Files:** `n8n/lib/quality_gate.js`; `n8n/workflows/09…json` (Set Config, Apify request, Normalize, Build raw,
+Build live_source_runs, Final Summary); `n8n/workflows/16…json` (Assemble Run Bundles, Build Source Health);
+`tests/test_wf16_runtime_searchcards.js` (new), `tests/test_wf09_searchcard.js` (detail_fetch_status→pending),
+`tests/run_all.js`, `Makefile`; docs (migration §19–§21, DEC-145, this entry).
+
+**Next:** operator runtime retest on live n8n (real Apify call + Sheets header mapping per migration §19–§21);
+no WF10/WF12 change. No Claude before Phase D.
+
 ## Session: 2026-06-20 (session 16) — Stage C Closure Patch 3 (DEC-144): make the gate real
 
 **Status (exact):** narrow correctness patch closing the Patch-2 audit's blocking findings. **0 external

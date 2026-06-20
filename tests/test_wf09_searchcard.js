@@ -28,7 +28,7 @@ A.eq('record_type_hint = source_candidate (NOT competitor_activity)', card.recor
 A.eq('touchpoint_type = search_card', card.touchpoint_type, 'search_card');
 A.eq('predicted_route = review_queue (NOT monitor_queue)', card.predicted_route, 'review_queue');
 A.eq('detail_fetch_required = true', card.detail_fetch_required, true);
-A.eq('detail_fetch_status = not_run', card.detail_fetch_status, 'not_run');
+A.eq('detail_fetch_status = pending', card.detail_fetch_status, 'pending');
 A.ok('not a competitor entity', card.predicted_entity_type !== 'competitor');
 A.ok('competitor_related is not true', card.competitor_related !== true);
 A.ok('quality_status quarantined/degraded (not healthy)', card.quality_status === 'degraded' || card.quality_status === 'quarantined');

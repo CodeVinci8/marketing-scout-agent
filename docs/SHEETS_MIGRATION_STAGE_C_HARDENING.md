@@ -178,3 +178,25 @@ Count of WF10-derived body rows dropped by the defensive gate (keeps body/sectio
 3. Run WF08 (queues now carry lineage). 4. Run WF16 (writes `source_health`). 5. Run WF10 then WF12.
 Rollback: delete the added columns; the gate then fails closed (excludes unverified) — set
 `allow_unverified_source=true` on WF10/WF12 only for a non-production bring-up run.
+
+## 19. Runtime Patch 4 — `raw_market_records` §13 observability columns (producer: WF09 `Build raw_market_records Rows`)
+Add (append-only; `Append raw_market_records` is `autoMapInputData`, so the tab must hold these headers):
+`llm_eligible`, `placeholder_title`, `detail_fetch_required`, `detail_fetch_status`, `is_detail`,
+`search_query`, `source_search_url`, `exact_evidence_url` (BOOLEAN — exact evidence requires DETAIL content,
+not a listing-shaped URL), `activity_subtype`, `skip_reason`. `quality_flags` is now populated by WF09 (was
+empty). **Without these, WF16 cannot classify a non-detail search card and wrongly scores the run healthy.**
+
+## 20. Runtime Patch 4 — `live_source_runs` identity + cost columns (producer: WF09 `Build live_source_runs Row`)
+- `run_id` now = the connector execution id (e.g. `avito_20260620_055017`), **not** `agent_request_id`.
+- Add: `source_run_id` (= `run_id`), `agent_request_id` (preserved), `actual_source_cost_usd` (null when not
+  recovered), `source_cost_status`, `actual_llm_cost_usd`, `llm_cost_status`, `cost_status`.
+- `approval_token_used` is taken from the live safety gate (`yes` only when it validated the token; the token
+  value is never stored). When `external_calls>0` and provider cost was not recovered: cost statuses =
+  `unknown`, actual cost = `null` (never `0`/`not_applicable`).
+- **WF16 joins `live_source_runs` to `raw_market_records` on this `run_id`** (legacy fallback: match
+  `agent_request_id`). The pre-patch `run_id=agent_request_id` broke that join → blank workflow/platform/family.
+
+## 21. Operator order (Patch 4)
+1. Add columns §19–§20. 2. Re-run WF09 (live) → raw rows + `live_source_runs` row now carry the corrected
+identity/observability. 3. Run WF16 → a search-card-only run is `quarantined` (`search_cards_only`/`no_detail_records`
+critical), `report_eligible=false`, `llm_eligible=false`, `duplicate_items`/metadata correct. No WF10/WF12 change.
