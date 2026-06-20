@@ -31,6 +31,8 @@ const JS_SUITES = [
   ['lineage-contract', 'test_lineage_contract.js'],
   // --- Stage 3 closure: WF04 -> WF16 -> WF08 website source quality & analysis pipeline ---
   ['website-pipeline', 'test_website_pipeline.js'],
+  // --- Stage 3 closure: production analysis/aggregation/reporting gates (WF05/06/08/09/10/12) ---
+  ['stage3-gates', 'test_stage3_gates.js'],
   ['ci-workflow', 'test_ci_workflow.js'],
 ];
 

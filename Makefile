@@ -30,6 +30,7 @@ test-js:
 	node tests/test_wf09_actor_input.js
 	node tests/test_lineage_contract.js
 	node tests/test_website_pipeline.js
+	node tests/test_stage3_gates.js
 	node tests/test_ci_workflow.js
 
 test-wf:

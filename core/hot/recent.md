@@ -33,11 +33,25 @@ orchestration and telegram gateway`; (3) `test(stage4): add end-to-end contracts
   `firecrawl_20260620_104531` (CASHMOTOR healthy→WF08 once; CarCapital degraded blocked; lineage identical).
   `make test` → ALL SUITES PASS (21 JS suites). Sheets: `raw_market_records` WF04 cols + `analysis_runs` tab (§24/§25).
 
-**Open (chosen slice complete):** WF08 LLM via runtime guard (not node kill switch); WF10/WF12 production filtering
-(§2.5/§2.6); §2.7 remainder; ALL of Stage 4 (Telegram gateway, planner, state machine, approval/budget gate,
-source-adapter contract, idempotency/outbox, dead-letter). No Claude before Phase D.
+**Commit 3 IN PROGRESS — `fix(stage3): close production analysis aggregation and reporting gates` (DEC-149):**
+- **WF10/WF12 fail-closed verification:** `rowEligible` no longer lets a live row self-attest past a missing
+  `source_health` join when `require_source_health=true` (production default in both WF10 + WF12); explicit
+  `allow_unverified_source=true` is the only dev bypass. Embedded mirrors stay byte-identical to
+  `n8n/lib/report_gate.js` (drift-proof).
+- **Guarded LLM (not disabled nodes):** WF08 `Prepare Record` guard (enabled+token+quality+not-cancelled+
+  not-analyzed+budget); WF12 `Claude Summary Approval Gate`/`Build Claude Summary Prompt` (enable flag+token+
+  eligible facts+budget+idempotency); OFF⇒0 calls; invalid⇒1 repair⇒deterministic fallback; unknown cost=null.
+- **WF12 isolation parity:** report scoped by run stamp + (additive) `agent_request_id`; `report_data_mode=live`
+  excludes fixture/manual snapshots; lineage-carrying snapshots held to the same `__bodyEligible` gate as profiles.
+- **WF05** executable pre-Apify approval/budget gate (token never logged); `items_relevant`=direct competitors;
+  truthful `approval_token_used`. **WF06** regex root detection (no `new URL(`, sandbox-safe). **WF09** search
+  cards `items_relevant=0` + `Detail enrichment required; do not run WF08` (enrichment = documented limitation).
+- `tests/test_stage3_gates.js` (47 checks) + updated `test_lineage_e2e.js`/`test_report_gate.js`.
+  `make test` → ALL SUITES PASS (22 JS suites + validator + lead_scout); $0; 0 external calls; active=false.
 
-**Next:** per-user direction — the WF04→WF16→WF08 website slice is delivered; await next prioritization.
+**Open:** ALL of Stage 4 (Phase B — Telegram gateway, planner, state machine, approval/budget gate,
+source-adapter contract, idempotency/outbox, dead-letter) + Phase C (replay fixtures, mocked E2E, deploy script,
+consolidated migration, portfolio docs). Continuing autonomously per the single-user MVP directive.
 
 ## Session: 2026-06-20 (session 18) — Stage C Runtime Patch 5 (DEC-146): WF09 Apify actor-input regression
 

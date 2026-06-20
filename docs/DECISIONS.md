@@ -5,6 +5,46 @@ Most recent first.
 
 ---
 
+## DEC-149 — Stage 3 closure: production analysis/aggregation/reporting gates (WF05/06/08/09/10/12)
+
+**Date:** 2026-06-20
+
+**Context:** The website pipeline (DEC-148) flowed data, but the production-facing gates were either
+permissive or self-attesting: WF10 let a `data_mode=live` row pass without a matching `source_health` join,
+the Claude nodes in WF08/WF12 were guarded only by hand-disabling, WF05 had no executable pre-Apify gate,
+WF06 root detection used `new URL` (unavailable in the n8n sandbox), and WF09 counted search cards as
+confirmed offers. These are the remaining Phase-A production blockers.
+
+**Decisions:**
+1. **Fail-closed verification (WF10 + WF12 + `n8n/lib/report_gate.js`).** In `rowEligible`, live
+   self-attestation no longer verifies a row when `require_source_health=true` (the production default):
+   `verified = (healthMatched && healthEligible) || (selfAttestsLive && cfg.require_source_health !== true)
+   || fixtureOptedIn`. A missing `source_health` join is now excluded unless the operator sets the explicit
+   dev bypass `allow_unverified_source=true`. The embedded mirrors in WF10/WF12 stay byte-identical to the
+   library (drift-proof test). `require_source_health` defaults to `true` in both WF10 and WF12 config.
+2. **Guarded LLM execution, not disabled nodes.** WF08 `Prepare Record` and WF12 `Claude Summary Approval
+   Gate`/`Build Claude Summary Prompt` carry executable runtime guards (enabled flag + valid approval token
+   + canonical quality-eligibility + not-cancelled + not-previously-analyzed/summarized + per-call budget).
+   `llm_enabled/enable_llm_summary=false` ⇒ zero Claude calls; invalid primary ⇒ one bounded repair ⇒
+   deterministic fallback; primary/repair counted separately; unknown cost stays `null`. The Claude HTTP
+   nodes remain `disabled:false` in JSON.
+3. **WF12 report isolation parity.** Report data is isolated by the current run stamp **and** (additively)
+   by `agent_request_id` when rows carry it; `report_data_mode=live` now excludes fixture/manual snapshots,
+   and lineage-carrying snapshots are held to the same `__bodyEligible` gate as profiles — a snapshot can no
+   longer survive a gate that excluded its source run.
+4. **WF05** gains an executable approval/budget IIFE that throws before the Apify request when unapproved
+   (token value never logged); `items_relevant` counts direct competitors, `approval_token_used` is truthful.
+5. **WF06** root detection is regex-based and sandbox-safe (no `new URL(` call).
+6. **WF09** search cards are source candidates: `items_relevant=0` for a search-card-only run, which emits
+   exactly `Detail enrichment required; do not run WF08`. (Search-card→offer enrichment stays a documented
+   source limitation, not closed here.)
+
+**Scope:** commit `fix(stage3): close production analysis aggregation and reporting gates`. Proven by
+`tests/test_stage3_gates.js` (47 checks) plus updated `test_lineage_e2e.js`/`test_report_gate.js`.
+`make test` → ALL SUITES PASS; external calls=0; live cost=$0; all workflows `active=false`.
+
+---
+
 ## DEC-148 — Stage 3 closure: connect the website source quality & analysis pipeline (WF04→WF16→WF08)
 
 **Date:** 2026-06-20
