@@ -25,6 +25,8 @@ const JS_SUITES = [
   ['wf12-closure', 'test_wf12_closure.js'],
   // --- Stage C Runtime Patch 4: first real WF09 -> WF16 live execution regression ---
   ['wf16-runtime-searchcards', 'test_wf16_runtime_searchcards.js'],
+  // --- Stage C Runtime Patch 5: WF09 Apify actor-input regression (string startUrls, query origin) ---
+  ['wf09-actor-input', 'test_wf09_actor_input.js'],
   ['ci-workflow', 'test_ci_workflow.js'],
 ];
 
