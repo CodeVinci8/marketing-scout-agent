@@ -200,3 +200,26 @@ empty). **Without these, WF16 cannot classify a non-detail search card and wrong
 1. Add columns §19–§20. 2. Re-run WF09 (live) → raw rows + `live_source_runs` row now carry the corrected
 identity/observability. 3. Run WF16 → a search-card-only run is `quarantined` (`search_cards_only`/`no_detail_records`
 critical), `report_eligible=false`, `llm_eligible=false`, `duplicate_items`/metadata correct. No WF10/WF12 change.
+
+## 22. Runtime Patch 5 — WF09 Apify actor-input fix (no schema change)
+**No new columns.** This is a workflow-logic fix only; `raw_market_records`/`live_source_runs` headers are
+unchanged from §19–§20. What changed in WF09:
+- **Apify request body** now sends `startUrls = cfg.start_urls` (array of **plain URL strings**) + `limit =
+  cfg.actor_limit` (integer) — the input contract the actor `fatihtahta/avito-russia-scraper` expects. Patch 4
+  sent `actor_start_urls` (`{url,userData}` objects); the actor could not parse them and returned one
+  empty item, so `Build raw_market_records Rows` produced **zero** rows and the run stalled.
+- `actor_start_urls` (url+userData) is **kept in `Set Config` for internal mapping/tests only**; it is never
+  the live actor input.
+- **Per-record query origin** (Normalize) is recovered in this order: (1) explicit actor query metadata
+  (`query`/`search_query`/`userData.search_query`); (2) the actor's `parentSourceUrl` matched against
+  `cfg.query_plan` / configured search URLs; (3) `search_query='unknown'`. `source_search_url` comes from
+  `parentSourceUrl` when present, else the matched `query_plan` entry's specific URL. It **never** falls back
+  to `start_urls[0]` or the concatenated configured-query list.
+- **Malformed/empty actor items** (no listing URL/title/ID) are rejected as `invalid` and are **not** written
+  to `raw_market_records` or `market_record_registry`; the run reports an explicit error/skip summary
+  (`invalid_items=N` on `agent_requests.result_summary`/`live_source_runs.error_summary`, "do NOT run WF08").
+
+## 23. Operator order (Patch 5)
+No migration step. Re-run WF09 live: the Apify node now returns real listings (10 expected), `Build
+raw_market_records Rows` writes them with per-record `search_query`/`source_search_url`, and a degenerate
+empty actor response yields zero rows + an explicit error summary instead of a stalled run.

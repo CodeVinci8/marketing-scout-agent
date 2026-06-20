@@ -5,6 +5,39 @@ Most recent first.
 
 ---
 
+## DEC-146 — Stage C Runtime Patch 5 (WF09 Apify actor-input regression from the live retest)
+
+**Date:** 2026-06-20
+
+**Context:** Two real WF09 live retests stalled after `Build raw_market_records Rows`, which received exactly
+one malformed/empty item (empty `source_url`/`post_url`/`title`/`listing_id`/`query`). Before Patch 4 the
+actor `fatihtahta/avito-russia-scraper` returned 10 listings correctly. Patch 4 changed the Apify input from
+plain URL strings to `actor_start_urls` (`{url,userData}` objects); the actor expects `startUrls` (array of
+URL strings) + `limit` (integer) and returns `parentSourceUrl` per item.
+
+**Root cause & decisions:**
+1. **Wrong live actor input.** The Apify request sent `actor_start_urls` objects → the actor could not parse
+   them → it emitted one empty item → `Build raw_market_records Rows` dropped it as `invalid` → zero rows →
+   the run stalled. Decision: the live request sends `startUrls = cfg.start_urls` (plain string URLs) +
+   `limit = cfg.actor_limit`. `actor_start_urls` is preserved in `Set Config` for **internal mapping/tests
+   only**, never as the live actor input.
+2. **Query origin must survive the string-`startUrls` switch.** With userData no longer echoed, Normalize
+   recovers per-record origin in order: (1) explicit actor query metadata; (2) the actor's `parentSourceUrl`
+   matched against `cfg.query_plan` / configured search URLs; (3) `search_query='unknown'`. `source_search_url`
+   comes from `parentSourceUrl` when present, else the matched `query_plan` entry's specific URL. It **never**
+   falls back to `start_urls[0]` or the concatenated configured-query list (removed the old `firstStart`
+   fallback that silently single-query-biased every card).
+3. **Malformed items never become empty records.** An item with no listing URL/title/ID stays `invalid` and is
+   excluded from `raw_market_records` and `market_record_registry`; the run emits an explicit error/skip
+   summary (`invalid_items=N`, "do NOT run WF08") on `agent_requests`/`live_source_runs`/Final Summary. This
+   was already enforced; Patch 5 proves it with a direct regression test.
+
+**Scope:** WF09 only (`Set Config` comment, Apify request body, `Normalize`). WF16 and `n8n/lib/quality_gate.js`
+unchanged (no failing test required it). New `tests/test_wf09_actor_input.js` (48 checks). `make test` → ALL
+SUITES PASS; 0 external calls, $0; all workflows `active=false`.
+
+---
+
 ## DEC-145 — Stage C Runtime Patch 4 (first real WF09→WF16 live run: identity, search-card classification)
 
 **Date:** 2026-06-20

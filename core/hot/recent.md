@@ -4,6 +4,33 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-20 (session 18) — Stage C Runtime Patch 5 (DEC-146): WF09 Apify actor-input regression
+
+**Status (exact):** narrow WF09 fix from the first live retest — two runs stalled after `Build
+raw_market_records Rows`, which got one empty/malformed item. **0 external calls, $0**, all workflows
+`active=false`. Local commit only — **not pushed**. `make test` → ALL SUITES PASS (19 JS suites + validator +
+lead_scout); new `wf09-actor-input` = 48 checks; `intake-gates` back to 55.
+
+**Root cause:** Patch 4 sent `actor_start_urls` (`{url,userData}` objects) to the actor
+`fatihtahta/avito-russia-scraper`, which expects `startUrls` (array of **URL strings**) + `limit` (int) → it
+returned one empty item → zero raw rows → stalled run.
+
+**Fix (WF09 only):**
+- Apify request body now sends `startUrls = cfg.start_urls` (string URLs) + `limit = cfg.actor_limit`.
+  `actor_start_urls` kept in `Set Config` for internal mapping/tests only — never the live input.
+- Normalize per-record query origin: explicit actor query metadata → `parentSourceUrl` matched against
+  `cfg.query_plan` → `unknown`. `source_search_url` from `parentSourceUrl` (else matched query_plan URL).
+  Removed the old `start_urls[0]`/`firstStart` fallback; never the concatenated query list.
+- Malformed/empty actor items stay `invalid` → zero raw/registry rows + explicit error/skip summary (proven).
+
+**Files:** `n8n/workflows/09…json` (Set Config comment, Apify request, Normalize); `tests/test_wf09_actor_input.js`
+(new), `tests/run_all.js`, `Makefile`; docs (migration §22–§23, DEC-146, this entry). **WF16 + quality_gate.js
+unchanged.**
+
+**Next:** operator live retest on n8n (real Apify call now returns listings; verify `parentSourceUrl` echo →
+query mapping, and that an empty actor response yields zero rows + error summary, not a stall). No Claude before
+Phase D.
+
 ## Session: 2026-06-20 (session 17) — Stage C Runtime Patch 4 (DEC-145): first real WF09→WF16 live run
 
 **Status (exact):** narrow runtime patch from the first live execution (`avito_20260620_055017`: 10 items, all
