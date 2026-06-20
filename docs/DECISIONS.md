@@ -5,6 +5,45 @@ Most recent first.
 
 ---
 
+## DEC-145 — Stage C Runtime Patch 4 (first real WF09→WF16 live run: identity, search-card classification)
+
+**Date:** 2026-06-20
+
+**Context:** The first real live execution (`avito_20260620_055017`: 10 Apify items, all non-detail Avito
+search cards, 9 unique + 1 duplicate) exposed runtime defects that the offline fixtures had not. WF16 returned
+`healthy`/`report_eligible=true`/`llm_eligible=true`, `report_candidate_items=0`, `duplicate_items=0`, and
+blank workflow/platform/source-family metadata.
+
+**Root causes & decisions:**
+1. **WF09 `live_source_runs.run_id` was the `agent_request_id`, not the connector `run_id`** → WF16's
+   `live_source_runs`↔`raw_market_records` join (keyed on `source_run_id`/`run_id`) silently failed, blanking
+   all run metadata. Decision: `run_id = cfg.run_id`; also emit `source_run_id` + preserve `agent_request_id`;
+   WF16 join gets a legacy fallback that matches `agent_request_id`. `approval_token_used` now reflects the live
+   safety gate (value never stored). Cost: `external_calls>0` & cost not recovered ⇒ `unknown`/`null`, never `0`.
+2. **Raw records did not carry the search-card signal** (`is_detail`/`detail_fetch_required`/`placeholder_title`/
+   `quality_flags`/…), and WF16 only inferred search cards from placeholder titles. A constructed `text_context`
+   defeated the `missing_description` heuristic, so the run scored healthy. Decision: WF09 emits the full §13
+   observability contract on each raw row; WF16 detects search cards from explicit + backward-compatible fields
+   (`touchpoint_type`/`record_type_hint`/`detail_fetch_required`/`is_detail`/flags/`skip_reason`).
+3. **Duplicate undercount:** WF16 matched only `dedup_status==='duplicate'`, missing `duplicate_in_registry`/
+   `duplicate_in_batch`. Decision: recognize all canonical duplicate statuses.
+4. **Quarantine rule:** a run with `report_candidate_items=0` whose records are all search cards/source
+   candidates is `quarantined` by a **critical** `search_cards_only` flag (overrides the numeric score); an
+   all-`pending` run is never report/LLM eligible. A non-detail card no longer counts toward
+   `exact_evidence_url_rate` (evidence requires detail content). Mirrored identically in
+   `n8n/lib/quality_gate.js` and the WF16 embedded node (drift-proven).
+5. **Summary semantics:** WF09 `Final Summary` separates structurally-valid / source-candidate / confirmed-detail-
+   offer / irrelevant / report-candidate / unique / duplicate; a search card (incl. an unrelated company-
+   registration result) is preserved for review but never counted as a confirmed offer.
+6. **Query origin:** `search_query` is the specific per-record query (start-URL `userData` is now attached and
+   propagated), or `unknown` — never the concatenated configured-query list.
+
+**Proof:** `tests/test_wf16_runtime_searchcards.js` (77 checks) runs the REAL WF09→WF16 nodes on the production-
+shaped run; `make test` → ALL SUITES PASS, **0 external calls, $0**, all workflows `active=false`. Runtime-only
+(real n8n) checks remain: live Apify call, `live_source_runs`/`raw_market_records` header mapping (migration §19–§21).
+
+---
+
 ## DEC-144 — Stage C Closure Patch 3 (end-to-end source lineage; WF04 accounting wired; S3-D21 proof)
 
 **Date:** 2026-06-20

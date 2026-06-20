@@ -23,6 +23,8 @@ const JS_SUITES = [
   ['wf09-multiquery', 'test_wf09_multiquery.js'],
   ['wf10-source-health', 'test_wf10_source_health.js'],
   ['wf12-closure', 'test_wf12_closure.js'],
+  // --- Stage C Runtime Patch 4: first real WF09 -> WF16 live execution regression ---
+  ['wf16-runtime-searchcards', 'test_wf16_runtime_searchcards.js'],
   ['ci-workflow', 'test_ci_workflow.js'],
 ];
 

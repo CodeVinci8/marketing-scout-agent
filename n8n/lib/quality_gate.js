@@ -21,6 +21,7 @@ const CRITICAL_FLAGS = [
   'semantic_validation_failed',
   'system_event_contamination',
   'no_detail_records',
+  'search_cards_only',
   'broken_brand',
   'approval_gate_missing',
   'no_compatible_baseline'
@@ -48,6 +49,7 @@ function computeRunHealth(run, records, cfg) {
   const data_mode = String(run.data_mode || cfg.data_mode || 'live').toLowerCase();
 
   const total = records.length;
+  let search_card = 0;
   let structurally_valid = 0, invalid = 0, unique = 0, duplicate = 0, hard_skipped = 0, irrelevant = 0,
     report_candidate = 0, placeholder = 0, missing_desc = 0, missing_id = 0, missing_pub = 0,
     has_evidence_url = 0, unknown_service = 0, generic_offer = 0, parse_failure = 0, repaired = 0,
@@ -60,6 +62,7 @@ function computeRunHealth(run, records, cfg) {
     if (r.hard_skipped === true) hard_skipped++;
     if (r.irrelevant === true) irrelevant++;
     if (r.report_candidate === true) report_candidate++;
+    if (r.search_card === true) search_card++;
     if (r.placeholder_title === true) placeholder++;
     if (r.missing_description === true) missing_desc++;
     if (r.missing_seller_identity === true) missing_id++;
@@ -117,7 +120,7 @@ function computeRunHealth(run, records, cfg) {
   if (total > 0 && stale === fresh_known && fresh_known > 0) flags.push('stale_source');
   if (total > 0 && placeholder === total) flags.push('placeholder_titles');
   else if (placeholder > 0) flags.push('placeholder_titles');
-  if (total > 0 && (structurally_valid - report_candidate) >= 0 && report_candidate === 0 && (placeholder + missing_desc) >= total) flags.push('search_cards_only');
+  if (total > 0 && report_candidate === 0 && ((search_card > 0 && (search_card + irrelevant + hard_skipped) >= total) || (placeholder + missing_desc) >= total)) flags.push('search_cards_only');
   if (total > 0 && report_candidate === 0 && hard_skipped < total && (degraded > 0)) flags.push('no_detail_records');
   if (rates.missing_identity_rate >= 60) flags.push('missing_seller_identity');
   if (rates.missing_description_rate >= 60) flags.push('missing_descriptions');
@@ -198,6 +201,8 @@ function computeRunHealth(run, records, cfg) {
   let llm_eligible = !noData && quality_status !== 'quarantined' && unique > 0;
   // duplicate-only or irrelevant-only batches are not worth LLM spend.
   if (unique === 0 || (irrelevant + hard_skipped) >= total) llm_eligible = false;
+  // a run whose records are all pending review is never report/LLM eligible (Obj4 #4).
+  if (total > 0 && pending === total) { report_eligible = false; llm_eligible = false; }
 
   // ---- operator next action ----
   let operator_next_action;
