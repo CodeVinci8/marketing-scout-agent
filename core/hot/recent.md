@@ -4,6 +4,34 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-20 (session 16) — Stage C Closure Patch 3 (DEC-144): make the gate real
+
+**Status (exact):** narrow correctness patch closing the Patch-2 audit's blocking findings. **0 external
+calls, $0**, all workflows `active=false`. Local commit only — **not pushed**. `make test` → ALL SUITES PASS
+(19 JS suites + validator + lead_scout).
+
+**Root causes fixed (audit B1/B2/C1/C2/D1/D5/S3-D21):**
+- **Lineage was never produced upstream** → WF10/WF12 gate was a no-op. Now connectors (WF09/WF07/WF13) write
+  `source_run_id`+`data_mode`+`quality_status`+`report_eligible`+`review_status`+`quality_flags` to
+  `raw_market_records`; **WF08 propagates the identical lineage** onto monitor/content/review queues on BOTH
+  deterministic + LLM paths (join key via `source_run_id‖run_id‖agent_request_id`, matching WF16).
+- **`report_gate.rowEligible` rewritten**: merges record-local lineage + matched source_health (stricter
+  wins), **production fail-closed**; fail-open only via explicit `allow_unverified_source` (default false on
+  WF10/WF12). WF10 stamps lineage on outputs; WF12 filters its BODY by it (`__bodyEligible`,
+  `body_records_excluded`) so body ↔ source-quality section never contradict.
+- **WF04 counters wired into real execution** (Normalize+Route + snapshot writer single points; dead
+  `__rr`/`__acct` removed; per-run reset; cost unknown=null).
+- **S3-D21** proven by real WF09 node execution.
+
+**New tests (run the real nodes):** `test_lineage_e2e.js` (33; WF09→WF08→WF10→WF12 negative+matrix),
+`test_wf04_accounting.js` (28; real parse/route/snapshot → Final Summary counters),
+`test_wf09_searchcard.js` (20; search-card quarantine), report_gate +12 (merge/verification + embed-parity).
+
+**See:** `docs/SOURCE_LINEAGE_CONTRACT.md`, `docs/SHEETS_MIGRATION_STAGE_C_HARDENING.md` §14–§18, DEC-144.
+**Next:** operator applies §14–§18 columns → re-run connectors → WF08 → WF16 → WF10 → WF12 (runtime retest).
+
+---
+
 ## Session: 2026-06-19 (session 15) — Stage C Closure Patch 2 (DEC-143)
 
 **Status (exact):** finishes the Stage C work DEC-142 left partial/merged-only/not-wired. **0 external calls,

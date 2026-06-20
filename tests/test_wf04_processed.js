@@ -79,32 +79,8 @@ A.eq('page_type=services', royal.page_type, 'services');
 A.ok('confidence differs across records (not uniform 80)',
   new Set([mkbk.source_confidence, finardi.source_confidence, royal.source_confidence]).size >= 2);
 
-// ---- Final Summary Output: repair/fallback accounting from staticData (S2-D7/D8/D9/D16) ----
-A.section('WF04 — Final Summary repair/fallback accounting (S2-D7/D8/D9/D16)');
-const run = H.makeRun();
-run.staticData.wf04_run = {
-  urls_received: 5, urls_scraped: 5, primary_calls: 5, primary_parse_success: 2, primary_parse_failure: 3,
-  repair_calls: 3, repair_success: 1, repair_failure: 2, deterministic_fallback: 2, degraded: 3, quarantined: 0,
-  snapshots_written: 5, firecrawl_calls: 5, claude_calls: 8
-};
-H.inject(run, 'Set URL List', [{ run_id: 'firecrawl_demo' }, {}, {}, {}, {}]);
-const done = [{ note: 'processed_by_workflow_04' }, { note: 'processed_by_workflow_04' }, { note: 'processed_by_workflow_04' }, { note: 'processed_by_workflow_04' }, { note: 'processed_by_workflow_04' }];
-const summary = H.runCodeNode(run, wf, 'Final Summary Output', done.map(j => ({ json: j })))[0].json;
-A.eq('urls_received', summary.urls_received, 5);
-A.eq('primary_calls', summary.primary_calls, 5);
-A.eq('primary_parse_successes', summary.primary_parse_successes, 2);
-A.eq('primary_parse_failures', summary.primary_parse_failures, 3);
-A.eq('repair_calls', summary.repair_calls, 3);
-A.eq('repair_successes', summary.repair_successes, 1);
-A.eq('repair_failures', summary.repair_failures, 2);
-A.eq('deterministic_fallback_count', summary.deterministic_fallback_count, 2);
-A.ok('repair success distinguishable from primary success/repair failure/fallback',
-  summary.repair_successes === 1 && summary.repair_failures === 2 && summary.primary_parse_successes === 2 && summary.deterministic_fallback_count === 2);
-A.eq('repair_rate_pct = 60', summary.repair_rate_pct, 60);
-A.ok('high repair rate surfaced as degraded in next_action (S2-D9/D16)', /HIGH repair rate/.test(summary.next_action));
-A.eq('degraded_count surfaced', summary.degraded_count, 3);
-A.eq('cost_status=unknown (not zero)', summary.cost_status, 'unknown');
-A.eq('actual_llm_cost_usd null', summary.actual_llm_cost_usd, null);
-A.eq('status completed', summary.status, 'completed');
+// NOTE (Patch 3): the Final Summary repair/fallback accounting is now proven by executing the REAL
+// pipeline nodes end-to-end in tests/test_wf04_accounting.js (no injected staticData). The previous
+// staticData-injection block here was a false-confidence test and has been removed.
 
 A.report('wf04-processed');

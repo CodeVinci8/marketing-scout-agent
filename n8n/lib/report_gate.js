@@ -107,28 +107,64 @@ function buildEligibility(healthRows, cfg) {
   };
 }
 
-// Per-record gate: a record may enter intelligence only when its source run is eligible AND the record
-// itself is not pending review / not an LLM-uncertain deterministic guess / not unopted fixture data.
+// Per-record gate (Patch 3): merge RECORD-LOCAL lineage with the matching source_health verdict — the
+// stricter of the two wins — and FAIL CLOSED in production. A record enters intelligence only when it is
+// affirmatively verified eligible: either source_health matched-and-eligible, or the record self-attests
+// live + healthy + report-eligible. Unverified records (no health match AND no affirmative local lineage,
+// or missing source_run_id) are EXCLUDED by default; including them requires the explicit operator override
+// cfg.allow_unverified_source=true (a non-production setting). This does not rely on a source_health join
+// alone, so it still gates correctly when source_health is empty or the run is unscored.
 function rowEligible(row, elig, cfg) {
   row = row || {};
   cfg = cfg || {};
   const allowFixture = cfg.allow_fixture_report === true;
+  const allowDegraded = cfg.allow_degraded_report === true;
+  const allowUnverified = cfg.allow_unverified_source === true; // explicit non-production/operator fail-open
   const id = str(row.source_run_id);
+  const reasons = [];
+  let warning = '';
+
+  // --- source_health verdict (authoritative when the run is matched) ---
+  let healthMatched = false, healthEligible = false, healthDegradedIncluded = false;
+  if (elig && elig.index && id && Object.prototype.hasOwnProperty.call(elig.index, id)) {
+    healthMatched = true;
+    const d = elig.index[id];
+    healthEligible = d.eligible;
+    healthDegradedIncluded = d.degraded_included;
+    if (!d.eligible) reasons.push('run_excluded:' + d.reason);
+    else warning = d.warning || '';
+  }
+
+  // --- record-local lineage (always evaluated; the stricter of local/health wins) ---
+  const dm = low(row.data_mode);
+  const qs = low(row.quality_status);
   const review = low(row.review_status);
   const parse = low(row.parse_method);
-  const dm = low(row.data_mode);
+  const flags = low(row.quality_flags);
+  const reportFlag = row.report_eligible;
+  const reportFalse = (reportFlag === false || String(reportFlag).toLowerCase() === 'false');
+  if (dm === 'fixture' && !allowFixture) reasons.push(EXCLUDE.FIXTURE);
+  if (dm === 'manual_test' && !allowFixture) reasons.push(EXCLUDE.MANUAL_TEST);
+  if (qs === 'quarantined') reasons.push(EXCLUDE.QUARANTINED);
+  if (qs === 'degraded' && !allowDegraded) reasons.push(EXCLUDE.DEGRADED_NO_OPTIN);
+  if (review === 'pending' || /(^|; )pending_review/.test(flags)) reasons.push(EXCLUDE.PENDING);
+  if (parse === 'deterministic_uncertain_no_llm') reasons.push('parse_method=deterministic_uncertain_no_llm');
+  if (reportFalse) reasons.push(EXCLUDE.NOT_ELIGIBLE);
+  if (/(^|; )stale_source/.test(flags)) reasons.push(EXCLUDE.STALE);
 
-  if (elig && elig.index && id && Object.prototype.hasOwnProperty.call(elig.index, id)) {
-    const d = elig.index[id];
-    if (!d.eligible) return { eligible: false, reason: 'run_excluded:' + d.reason, warning: '' };
-  } else if (cfg.require_source_health === true && id) {
-    return { eligible: false, reason: 'no_source_health', warning: '' };
+  // --- verification gate: production requires affirmative eligibility evidence (fail closed) ---
+  const selfAttestsLive = (dm === 'live' || dm === 'production') &&
+    (qs === '' || qs === 'healthy' || (qs === 'degraded' && allowDegraded)) && !reportFalse;
+  // explicit operator opt-in to a fixture/manual report verifies that data too (it is watermarked downstream)
+  const fixtureOptedIn = allowFixture && (dm === 'fixture' || dm === 'manual_test');
+  const verified = (healthMatched && healthEligible) || selfAttestsLive || fixtureOptedIn;
+  if (reasons.length === 0 && !verified && !allowUnverified) {
+    reasons.push(healthMatched ? 'unverified' : (id ? 'no_source_health' : 'no_lineage'));
   }
-  if (review === 'pending') return { eligible: false, reason: EXCLUDE.PENDING, warning: '' };
-  if (parse === 'deterministic_uncertain_no_llm') return { eligible: false, reason: 'parse_method=deterministic_uncertain_no_llm', warning: '' };
-  if ((dm === 'fixture' || dm === 'manual_test') && !allowFixture) return { eligible: false, reason: 'data_mode=' + dm, warning: '' };
-  const d = (elig && elig.index && id) ? elig.index[id] : null;
-  return { eligible: true, reason: '', warning: (d && d.warning) || '' };
+
+  const eligible = reasons.length === 0;
+  const degraded_included = eligible && (healthDegradedIncluded || (qs === 'degraded' && allowDegraded));
+  return { eligible: eligible, reason: reasons.join('; '), warning: eligible ? warning : '', degraded_included: degraded_included };
 }
 
 // WF12 trend baseline: pick the most recent PRIOR run that is comparable to the current snapshot.

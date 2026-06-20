@@ -5,6 +5,40 @@ Most recent first.
 
 ---
 
+## DEC-144 — Stage C Closure Patch 3 (end-to-end source lineage; WF04 accounting wired; S3-D21 proof)
+
+**Date:** 2026-06-20
+**Context:** The Patch 2 audit found the WF16→WF10/WF12 enforcement was inert on real data (B1/C1/C2/D1/D5):
+WF10 joined on a `source_run_id` that no upstream workflow wrote, and the mode fields (`data_mode`/
+`quality_status`/`review_status`) were absent from the queue rows WF10 reads — so degraded/quarantined/
+fixture runs were never excluded. The audit also found WF04's repair/fallback counters (`__rr`/`__acct`) were
+dead code (never invoked), and S3-D21 (WF09 search-card quarantine) had no direct test.
+**Decision:**
+- **Canonical lineage contract** (`docs/SOURCE_LINEAGE_CONTRACT.md`): connectors (WF09/WF07/WF13) write
+  `source_run_id`+`data_mode`+`quality_status`+`report_eligible`+`review_status`+`quality_flags` onto
+  `raw_market_records`; **WF08** propagates the SAME lineage onto `monitor_queue`/`content_queue`/
+  `review_queue` on BOTH its deterministic and LLM-merge paths, deriving `source_run_id` via the same
+  `source_run_id‖run_id‖agent_request_id` chain WF16 uses to key `source_health` (so the join always
+  resolves). `report_eligible` is decoupled from `data_mode` (mode gating is separate + overridable).
+- **`report_gate.rowEligible` rewritten** to MERGE record-local lineage with the matched `source_health`
+  verdict (stricter wins) and **fail closed in production**: a record is included only if affirmatively
+  verified (health matched-eligible, or self-attests live+healthy, or explicit fixture opt-in). Fail-open
+  requires the explicit `allow_unverified_source=true` override (never the production default — audit D5).
+- **WF10** stamps `source_run_ids`/`data_mode`/`report_eligible` onto every aggregate output;
+  **WF12** filters its rendered body by that stamp (`__bodyEligible`) so the body and the source-quality
+  section can never contradict (audit C1; reports `body_records_excluded`).
+- **WF04 accounting wired into real execution:** outcome counters live at single points (Normalize+Route for
+  repair_success/repair_failure/deterministic_fallback; the snapshot writer for degraded/quarantined/
+  snapshots_written); dead `__rr`/`__acct` removed; per-run reset preserved; cost stays `unknown`/null.
+- **S3-D21** proven by executing the real WF09 nodes on a production-shaped search card.
+**Proof (not documentation):** `tests/test_lineage_e2e.js` runs the REAL WF09→WF08→WF10→WF12 chain and proves
+a quarantined connector run's competitor is excluded from WF10 and absent from the WF12 body;
+`tests/test_wf04_accounting.js` runs the real parse/route/snapshot nodes and asserts accumulated counters;
+`tests/test_wf09_searchcard.js` proves the search-card quarantine. `make test` green, 0 external calls, $0,
+all workflows `active=false`.
+
+---
+
 ## DEC-143 — Stage C Closure Patch 2 (WF16 physically enforced in WF10/WF12; WF04–WF09/WF14 source fixes; CI)
 
 **Date:** 2026-06-19

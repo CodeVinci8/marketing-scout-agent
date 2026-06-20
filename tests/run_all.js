@@ -13,8 +13,11 @@ const JS_SUITES = [
   ['intake-gates', 'test_intake_gates.js'],
   // --- Stage C Closure Patch 2 workflow-level suites ---
   ['report-gate', 'test_report_gate.js'],
+  ['lineage-e2e', 'test_lineage_e2e.js'],
   ['wf04-processed', 'test_wf04_processed.js'],
+  ['wf04-accounting', 'test_wf04_accounting.js'],
   ['wf05-classify', 'test_wf05_classify.js'],
+  ['wf09-searchcard', 'test_wf09_searchcard.js'],
   ['wf06-processed', 'test_wf06_processed.js'],
   ['wf07-cost', 'test_wf07_cost.js'],
   ['wf09-multiquery', 'test_wf09_multiquery.js'],
