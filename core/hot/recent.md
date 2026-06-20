@@ -4,6 +4,30 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-20 (session 19) — Stage 3 closure + Stage 4 (branch stage-3-closure-and-stage-4, DEC-147)
+
+**Status (exact):** new authoritative two-phase spec (Phase A = close Stage 3 runtime contracts; Phase B =
+Stage 4 orchestration). Branch `stage-3-closure-and-stage-4` from `origin/main` (4ba4e52, already contains
+Patch 5). **0 external calls, $0**, all workflows `active=false`, **not pushed**, no AI attribution. Three-commit
+plan: (1) `fix(stage3): unify runtime contracts and quality gates`; (2) `feat(stage4): add production
+orchestration and telegram gateway`; (3) `test(stage4): add end-to-end contracts and deployment docs`.
+
+**Commit 1 LANDED (canonical lineage + WF16 boolean fidelity):**
+- New `n8n/lib/lineage.js` — canonical identity contract (`source_run_id` join key vs `workflow_run_id`),
+  `canonicalSourceRunId`, `coerceSheetBool`.
+- **WF04 mismatch FIXED** (the live `no_compatible_baseline` blocker): `live_source_runs` no longer rewrites
+  `firecrawl_*`→`wf04_*`; emits `source_run_id=run_id=firecrawl_<stamp>` + `workflow_run_id=wf04_<stamp>` +
+  `data_mode`; snapshots carry the same canonical `source_run_id`. Ledger honesty: `approval_token_used=not_required`,
+  separated `primary_calls`/`repair_calls`, cost `unknown`/`null` (never 0).
+- **WF16 §2.3 boolean fidelity:** `Assemble` `cbool()` (mirrors lib) — Sheets string `'FALSE'` now scored invalid.
+- `tests/test_lineage_contract.js` (34 checks). `make test` → ALL SUITES PASS (20 JS suites + validator + lead_scout).
+
+**Open (commit 2/3, see `docs/STAGE_3_CLOSURE_REPORT.md`):** WF04 canonical raw_market_records emission + WF08
+single-owner (§2.2/§2.4), WF10/WF12 production filtering (§2.5/§2.6), §2.7 remainder, and ALL of Stage 4 (Telegram
+gateway, planner, state machine, approval/budget gate, source-adapter contract, idempotency/outbox, dead-letter).
+
+**Next:** continue Phase A canonical-raw-record + WF08 handoff, then build Stage 4. No Claude before Phase D.
+
 ## Session: 2026-06-20 (session 18) — Stage C Runtime Patch 5 (DEC-146): WF09 Apify actor-input regression
 
 **Status (exact):** narrow WF09 fix from the first live retest — two runs stalled after `Build

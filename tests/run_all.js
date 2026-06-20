@@ -27,6 +27,8 @@ const JS_SUITES = [
   ['wf16-runtime-searchcards', 'test_wf16_runtime_searchcards.js'],
   // --- Stage C Runtime Patch 5: WF09 Apify actor-input regression (string startUrls, query origin) ---
   ['wf09-actor-input', 'test_wf09_actor_input.js'],
+  // --- Stage 3 closure: canonical identity/lineage contract + WF16 boolean fidelity ---
+  ['lineage-contract', 'test_lineage_contract.js'],
   ['ci-workflow', 'test_ci_workflow.js'],
 ];
 

@@ -28,6 +28,7 @@ test-js:
 	node tests/test_wf12_closure.js
 	node tests/test_wf16_runtime_searchcards.js
 	node tests/test_wf09_actor_input.js
+	node tests/test_lineage_contract.js
 	node tests/test_ci_workflow.js
 
 test-wf:

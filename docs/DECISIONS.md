@@ -5,6 +5,34 @@ Most recent first.
 
 ---
 
+## DEC-147 — Stage 3 closure: canonical identity/lineage contract + WF16 Sheets-boolean fidelity
+
+**Date:** 2026-06-20
+
+**Context:** The Stage 3 live investigation found WF16 quarantined the WF04 web run with `no_compatible_baseline`.
+Root cause: WF04 wrote downstream rows with `firecrawl_20260620_104531` but `live_source_runs` with
+`wf04_20260620_104531` — `Build live_source_runs Row` deliberately rewrote the canonical id, breaking WF16's
+`source_run_id` join. Separately, WF16's `Assemble` treated the Sheets string `'FALSE'` as truthy.
+
+**Decisions:**
+1. **Canonical lineage contract** (`n8n/lib/lineage.js`): one `source_run_id` per source-connector execution is
+   THE join key carried by raw records, snapshots, source_health, analyzer outputs, aggregation and reports. A
+   workflow-local id (`wf04_*`) is recorded separately as `workflow_run_id` and never replaces `source_run_id`.
+   Joins resolve via `canonicalSourceRunId = source_run_id || run_id(legacy) || agent_request_id`.
+2. **WF04 fix:** `live_source_runs` emits `source_run_id = run_id = firecrawl_<stamp>` + `workflow_run_id =
+   wf04_<stamp>` + `data_mode`; snapshots carry the same canonical `source_run_id`. Ledger honesty:
+   `approval_token_used='not_required'`, separated `primary_calls`/`repair_calls`, cost `unknown`/`null` (never 0).
+3. **WF16 boolean fidelity:** `Assemble` coerces Sheets booleans via an embedded `cbool()` mirroring
+   `lineage.coerceSheetBool` (drift-proven) so explicit `TRUE`/`FALSE`/strings/empty are preserved.
+
+**Scope:** This is commit 1 of the Stage-3-closure-and-Stage-4 effort. It closes the lineage *join* and boolean
+defects (proven by `tests/test_lineage_contract.js`, 34 checks). The WF04 canonical-raw-record emission / WF08
+single-semantic-owner handoff (§2.2/§2.4), WF10/WF12 production filtering (§2.5/§2.6), the §2.7 remainder, and the
+whole Stage 4 orchestration layer (Phase B) are tracked in `docs/STAGE_3_CLOSURE_REPORT.md` as open follow-ups.
+`make test` → ALL SUITES PASS; 0 external calls, $0; all workflows `active=false`.
+
+---
+
 ## DEC-146 — Stage C Runtime Patch 5 (WF09 Apify actor-input regression from the live retest)
 
 **Date:** 2026-06-20
