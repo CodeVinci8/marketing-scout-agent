@@ -39,6 +39,7 @@ IMPORT_ORDER=(
   "18_telegram_agent_gateway.json"
   "19_request_planner.json"
   "20_agent_orchestrator.json"
+  "21_deep_competitor_analysis.json"
   "22_conversation_control.json"
 )
 

@@ -28,8 +28,18 @@ multi-turn memory and deep-analysis e2e`.
   durable_memories/memory_audit_events/context_usage/tracked_sources/source_audit_events). Deploy order += WF22.
 - `make test` → ALL SUITES PASS (29 suites + validator 247 + lead_scout); $0; 0 calls; 26 workflows active=false.
 
-**Open:** commit 2 = `deep_analysis` + `orchestration_policy` libs + WF21 + WF20 reuse node; commit 3 = multi-turn
-conversational E2E + portfolio docs. Continuing autonomously.
+**Commit 2 (context-aware deep analysis) — BUILT (DEC-152):**
+- 2 libs: `deep_analysis` (bounded plan w/ graceful degradation website_only→full; honest unavailable_sources;
+  evidence contract; `assembleDeepReport` separates evidence-backed FACTS from RECOMMENDATIONS — orphan recs
+  never become facts) + `orchestration_policy` (`reuseDecision` reuse/collect/extend; context-answerable intents
+  spend $0; explicit refresh/stale collects; new configured platform extends).
+- Generator: new **WF21 Deep Competitor Analysis** (14 nodes) + WF20 gains `Orchestration Reuse Decision` +
+  `Needs External Call?` branch (21 nodes). Both `active=false`.
+- Tests: `test_deep_analysis_contracts.js` (43) + `test_deep_analysis_workflows.js` (22). Registered.
+- Migration §B3: orchestration_decisions / deep_analysis_findings / deep_analysis_recommendations. Deploy += WF21.
+
+**Open:** commit 3 = multi-turn conversational E2E (`test_agent_e2e.js`) + portfolio docs
+(`docs/CONVERSATIONAL_AGENT.md` with Mermaid). Continuing autonomously.
 
 ---
 

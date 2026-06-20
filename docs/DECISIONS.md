@@ -5,6 +5,42 @@ Most recent first.
 
 ---
 
+## DEC-152 — Context-aware deep competitor analysis + orchestration reuse (WF21 + WF20 ext)
+
+**Date:** 2026-06-21
+
+**Context:** The agent needed (a) a bounded deep-analysis mode that goes beyond homepages but only across
+configured sources, with a hard separation between observed facts and recommendations, and (b) a way for
+follow-up turns ("explain the second", "generate ideas", "compare with last time") to reuse stored evidence
+instead of paying for collection again.
+
+**Decisions:**
+1. **Two pure libraries.** `deep_analysis` (bounded plan with graceful degradation + evidence contract +
+   fact/recommendation separation) and `orchestration_policy` (reuse/collect/extend decision). Unit-tested
+   (`test_deep_analysis_contracts.js`, 43) and embedded into WF21 + WF20 (drift in
+   `test_deep_analysis_workflows.js`, 22).
+2. **Graceful, honest deep plan.** `buildDeepPlan` selects only platforms that are in the allowlist AND (for
+   Telegram/VK) backed by an active tracked source; everything else lands in `unavailable_sources` with a
+   reason. Scope degrades website_only → website_history → website_telegram → website_vk → full. Page limit,
+   external-call count and source/LLM budgets are clamped to config; the plan requires approval.
+3. **Evidence contract; recommendations can never become facts.** A `deepFinding` is a FACT only with a full
+   evidence anchor (source URL/record + source_run_id + excerpt + collected_at + quality + confidence);
+   `validateFinding` rejects anything else. `assembleDeepReport` separates evidence-backed facts from
+   recommendations, and a recommendation that doesn't reference at least one valid finding is held back as an
+   orphan — it is never stored or shown as a fact.
+4. **Conversation-aware reuse (Part 7).** `reuseDecision` returns reuse | collect | extend with a reason and a
+   `needs_external_call` flag: context-answerable intents (report_followup/generate_ideas/compare_periods)
+   reuse the last report with zero external calls; deep analysis on fresh same-platform evidence reuses; a
+   newly-requested *configured* platform extends; stale evidence or an explicit refresh/rerun collects. WF20
+   gained an `Orchestration Reuse Decision` node + a `Needs External Call?` branch that answers from context
+   without a paid call, persisting every decision to `orchestration_decisions`.
+
+**Constraints honored:** WF21 added + WF20 extended, both `active=false`; approval/budget gate reused for deep
+analysis; Claude/Apify nodes guarded; lineage/idempotency preserved; no secrets; `make test` ALL SUITES PASS;
+0 external calls; $0; not pushed; no n8n import.
+
+---
+
 ## DEC-151 — Conversational agent: NL intent routing + bounded multi-layer memory (WF18 ext + WF22)
 
 **Date:** 2026-06-21

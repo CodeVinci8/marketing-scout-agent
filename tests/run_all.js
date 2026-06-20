@@ -40,6 +40,9 @@ const JS_SUITES = [
   // --- Conversational agent: charter, intent router, bounded memory, sources ---
   ['agent-contracts', 'test_agent_contracts.js'],
   ['agent-workflows', 'test_agent_workflows.js'],
+  // --- Deep competitor analysis + conversation-aware orchestration reuse ---
+  ['deep-analysis-contracts', 'test_deep_analysis_contracts.js'],
+  ['deep-analysis-workflows', 'test_deep_analysis_workflows.js'],
   ['ci-workflow', 'test_ci_workflow.js'],
 ];
 

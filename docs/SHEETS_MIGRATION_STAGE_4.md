@@ -197,6 +197,25 @@ summary are. All header orders are exact.
 
 ---
 
+## B3. NEW TABS — deep analysis + conversation-aware orchestration (WF20 + WF21)
+
+### B3.1 `orchestration_decisions` — why a paid call did/didn't happen (WF20)
+`agent_request_id` · `conversation_id` · `intent` · `action` · `reason` · `needs_external_call` ·
+`target_sources` · `ts`
+(`action` ∈ reuse | collect | extend — e.g. "generate ideas" reuses the last report with `needs_external_call=false`.)
+
+### B3.2 `deep_analysis_findings` — evidence-backed FACTS only (WF21)
+`finding_id` · `agent_request_id` · `competitor` · `dimension` · `value` · `source_url` · `source_record_id` ·
+`source_run_id` · `excerpt` · `collected_at` · `quality_status` · `confidence`
+(a finding without a source URL/record + source_run_id + excerpt is rejected — it can never present as a fact.)
+
+### B3.3 `deep_analysis_recommendations` — recommendations, separated from facts (WF21)
+`agent_request_id` · `competitor` · `text` · `derived_from` · `confidence` · `ts`
+(`derived_from` lists the `finding_id`s a recommendation is based on; a recommendation with no supporting
+finding is held back, never stored/shown as a fact.)
+
+---
+
 ## C. Verification checklist (do this once, before `--apply`)
 
 1. [ ] Spreadsheet snapshot/copy taken.

@@ -200,10 +200,17 @@ write('19_request_planner.json', wf('19 — Request Planner (deterministic + gua
 
 // =========================================================================================== WF20 orchestrator
 write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)', [
-  manual('wf20-trig', 'Manual Start', [-700, 0]),
-  code('wf20-cfg', 'Resolve Agent Config', [-480, 0], ['agent_config'],
+  manual('wf20-trig', 'Manual Start', [-940, 0]),
+  code('wf20-cfg', 'Resolve Agent Config', [-720, 0], ['agent_config'],
     ENV + "\nreturn [{json:resolveConfig(__env)}];"),
-  code('wf20-gate', 'Approval & Budget Gate', [-260, 0], ['approval_gate', 'agent_state'],
+  code('wf20-reuse', 'Orchestration Reuse Decision', [-500, 0], ['orchestration_policy'],
+    "var cfg=$('Resolve Agent Config').first().json;\nvar inp=$json||{};\nvar intent=inp.intent||{intent:(inp.request&&inp.request.intent)||'competitor_search',entities:inp.entities||{}};\nvar ctx=inp.ctx||{};\nvar dec=reuseDecision({intent:intent,ctx:ctx,cfg:cfg,now:(new Date()).toISOString()});\nvar rec=decisionRecord(dec,{agent_request_id:(inp.request&&inp.request.agent_request_id)||'req',conversation_id:ctx.conversation_id||'',intent:intent.intent,ts:(new Date()).toISOString()});\nreturn [{json:Object.assign({},inp,{reuse_decision:dec,needs_external_call:dec.needs_external_call,orchestration_decision:rec,cfg:cfg})}];"),
+  sheetsAppend('wf20-apdec', 'Append orchestration_decisions', [-500, 180], 'orchestration_decisions'),
+  ifNode('wf20-needext', 'Needs External Call?', [-380, 0], '={{ $json.needs_external_call }}'),
+  code('wf20-reuseresp', 'Build Reuse Response', [-160, 200], ['conversation_response'],
+    "var inp=$json||{};var dec=inp.reuse_decision||{};\nvar chat=String((inp.request&&inp.request.chat_id)||'');\nvar text=buildConversationalReply({understood:(inp.intent&&inp.intent.intent)||'follow-up',result:'\\u041e\\u0442\\u0432\\u0435\\u0447\\u0430\\u044e \\u043f\\u043e \\u0443\\u0436\\u0435 \\u0441\\u043e\\u0431\\u0440\\u0430\\u043d\\u043d\\u044b\\u043c \\u0434\\u0430\\u043d\\u043d\\u044b\\u043c (\\u0431\\u0435\\u0437 \\u043d\\u043e\\u0432\\u044b\\u0445 \\u043f\\u043b\\u0430\\u0442\\u043d\\u044b\\u0445 \\u0432\\u044b\\u0437\\u043e\\u0432\\u043e\\u0432). \\u041f\\u0440\\u0438\\u0447\\u0438\\u043d\\u0430: '+(dec.reason||'reuse')+'.',next:'\\u043c\\u043e\\u0433\\u0443 \\u043f\\u043e\\u0434\\u0433\\u043e\\u0442\\u043e\\u0432\\u0438\\u0442\\u044c \\u0438\\u0434\\u0435\\u0438 \\u0438\\u043b\\u0438 \\u0441\\u0440\\u0430\\u0432\\u043d\\u0435\\u043d\\u0438\\u0435'});\nvar body={chat_id:chat,text:text};\nreturn [{json:{telegram_send_body:JSON.stringify(body),reuse_reason:dec.reason}}];"),
+  httpTelegram('wf20-sendreuse', 'Send Reuse Reply', [60, 200]),
+  code('wf20-gate', 'Approval & Budget Gate', [-160, -40], ['approval_gate', 'agent_state'],
     "var cfg=$('Resolve Agent Config').first().json;\nvar req=($json&&$json.request)?$json.request:($json||{});\nvar plan=($json&&$json.plan)?$json.plan:{source:'website',est_items:cfg.max_items_per_source,est_external_calls:5,est_source_cost_usd:0.05,est_llm_cost_usd:0.10};\nplan.source=plan.source||(plan.sources&&plan.sources[0])||'website';\nvar ctx={agent_request_id:req.agent_request_id||'req',state:req.state||'approved',approved:req.approved===true||req.state==='approved',cancelled:req.state==='cancelled'||req.cancelled===true,completed_keys:req.completed_keys||[],external_calls_made:0,source_spend_usd:0,llm_spend_usd:0};\nvar canCall=canMakeExternalCall(ctx.state);\nvar g=evaluateGate(plan,ctx,cfg);\nvar allowed=g.allowed&&canCall;\nreturn [{json:{gate_allowed:allowed,gate_reason:allowed?'ok':(g.reason||'state_blocks_external_call'),idempotency_key:g.idempotency_key,plan:plan,request:req,cfg:cfg}}];"),
   ifNode('wf20-if', 'Gate Allowed?', [-40, 0], '={{ $json.gate_allowed }}'),
   execWf('wf20-wf04', 'Run Website Source (WF04)', [180, -160], 'WF04 firecrawl url list'),
@@ -224,7 +231,12 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   httpTelegram('wf20-sendblock', 'Send Blocked Reply', [400, 160])
 ], [
   ['Manual Start', 'Resolve Agent Config'],
-  ['Resolve Agent Config', 'Approval & Budget Gate'],
+  ['Resolve Agent Config', 'Orchestration Reuse Decision'],
+  ['Orchestration Reuse Decision', 'Append orchestration_decisions'],
+  ['Append orchestration_decisions', 'Needs External Call?'],
+  ['Needs External Call?', 'Approval & Budget Gate', 0],
+  ['Needs External Call?', 'Build Reuse Response', 1],
+  ['Build Reuse Response', 'Send Reuse Reply'],
   ['Approval & Budget Gate', 'Gate Allowed?'],
   ['Gate Allowed?', 'Run Website Source (WF04)', 0],
   ['Gate Allowed?', 'Build Blocked Response', 1],
@@ -238,6 +250,46 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   ['Build Delivery Outbox', 'Append telegram_outbox'],
   ['Append telegram_outbox', 'Send Telegram Report'],
   ['Build Blocked Response', 'Send Blocked Reply']
+]));
+
+// =========================================================================================== WF21 deep analysis
+// Bounded deep competitor analysis: build an explicit, approval-gated plan that degrades gracefully across only
+// the configured sources; collect; separate evidence-backed FACTS from RECOMMENDATIONS; deliver.
+write('21_deep_competitor_analysis.json', wf('21 — Deep Competitor Analysis (bounded, evidence-based)', [
+  manual('wf21-trig', 'Manual Start', [-820, 0]),
+  code('wf21-cfg', 'Resolve Agent Config', [-600, 0], ['agent_config'],
+    ENV + "\nreturn [{json:resolveConfig(__env)}];"),
+  sheetsRead('wf21-readsrc', 'Read tracked_sources', [-380, 160], 'tracked_sources'),
+  code('wf21-plan', 'Build Deep Plan', [-160, 0], ['deep_analysis', 'agent_charter'],
+    "var cfg=$('Resolve Agent Config').first().json;\nvar inp=$json||{};\nvar tracked=[];try{tracked=($('Read tracked_sources').all()||[]).map(function(r){return r.json;});}catch(e){}\nvar plan=buildDeepPlan({competitors:inp.competitors||[],requested_platforms:inp.requested_platforms||['website'],cfg:cfg,history_available:inp.history_available===true,tracked_sources:tracked});\nvar caps=availableCapabilities(cfg);var cap=null;for(var i=0;i<caps.length;i++){if(caps[i].id==='deep_competitor_analysis')cap=caps[i];}\nvar req=inp.request||{agent_request_id:inp.agent_request_id||'req',chat_id:inp.chat_id,state:inp.state||'approved',approved:inp.approved===true||inp.state==='approved'};\nreturn [{json:{deep_plan:plan,capability:cap,capability_available:cap?cap.available:true,request:req,cfg:cfg}}];"),
+  code('wf21-gate', 'Deep Approval & Budget Gate', [60, 0], ['approval_gate', 'agent_state'],
+    "var j=$('Build Deep Plan').first().json;var cfg=j.cfg;var dp=j.deep_plan;var req=j.request;\nvar gplan={source:(dp.selected_platforms&&dp.selected_platforms[0])||'website',attempt:1,est_items:dp.page_limit_per_competitor*Math.max(1,(dp.selected_competitors||[]).length),est_external_calls:dp.est_external_calls,est_source_cost_usd:dp.est_source_budget_usd,est_llm_cost_usd:dp.est_llm_budget_usd};\nvar ctx={agent_request_id:req.agent_request_id,state:req.state||'approved',approved:req.approved===true||req.state==='approved',cancelled:req.state==='cancelled',completed_keys:req.completed_keys||[],external_calls_made:0,source_spend_usd:0,llm_spend_usd:0};\nvar canCall=canMakeExternalCall(ctx.state);var g=evaluateGate(gplan,ctx,cfg);\nvar allowed=g.allowed&&canCall&&j.capability_available===true;\nreturn [{json:{gate_allowed:allowed,gate_reason:allowed?'ok':(g.reason||(j.capability_available!==true?'capability_unavailable':'state_blocks_external_call')),deep_plan:dp,request:req,cfg:cfg}}];"),
+  ifNode('wf21-if', 'Deep Gate Allowed?', [280, 0], '={{ $json.gate_allowed }}'),
+  execWf('wf21-wf04', 'Collect Deep Evidence (WF04)', [500, -160], 'WF04 multi-page firecrawl'),
+  code('wf21-assemble', 'Assemble Deep Report', [720, -160], ['deep_analysis'],
+    "var g=$('Deep Approval & Budget Gate').first().json;\nvar inp=$json||{};\nvar comp=(g.deep_plan.selected_competitors&&g.deep_plan.selected_competitors[0])||'';\nvar report=assembleDeepReport(comp,inp.findings||[],inp.recommendations||[]);\nreturn [{json:{deep_report:report,deep_plan:g.deep_plan,request:g.request,cfg:g.cfg}}];"),
+  sheetsAppend('wf21-apf', 'Append deep_analysis_findings', [940, -260], 'deep_analysis_findings'),
+  sheetsAppend('wf21-apr', 'Append deep_analysis_recommendations', [940, -60], 'deep_analysis_recommendations'),
+  code('wf21-reply', 'Build Deep Reply', [1160, -160], ['conversation_response'],
+    "var d=$('Assemble Deep Report').first().json;var rep=d.deep_report;\nvar chat=String((d.request&&d.request.chat_id)||'');\nvar text=postReportReply({summary_text:'\\u0413\\u043b\\u0443\\u0431\\u043e\\u043a\\u0438\\u0439 \\u0430\\u043d\\u0430\\u043b\\u0438\\u0437: '+rep.competitor+'. \\u0424\\u0430\\u043a\\u0442\\u043e\\u0432: '+rep.fact_count+', \\u0440\\u0435\\u043a\\u043e\\u043c\\u0435\\u043d\\u0434\\u0430\\u0446\\u0438\\u0439: '+rep.recommendation_count+'.',ideas:rep.recommendations.map(function(r){return r.text;}),limitations:(d.deep_plan.unavailable_sources||[]).map(function(u){return u.platform+': '+u.reason;})},[]);\nvar body={chat_id:chat,text:text};\nreturn [{json:{telegram_send_body:JSON.stringify(body),fact_count:rep.fact_count,recommendation_count:rep.recommendation_count}}];"),
+  httpTelegram('wf21-send', 'Send Deep Report', [1380, -160]),
+  code('wf21-blocked', 'Build Deep Blocked Reply', [500, 160], ['conversation_response'],
+    "var g=$('Deep Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar body={chat_id:chat,text:clarificationReply('\\u0413\\u043b\\u0443\\u0431\\u043e\\u043a\\u0438\\u0439 \\u0430\\u043d\\u0430\\u043b\\u0438\\u0437 \\u043d\\u0435 \\u0437\\u0430\\u043f\\u0443\\u0449\\u0435\\u043d: '+g.gate_reason+'.')};\nreturn [{json:{telegram_send_body:JSON.stringify(body),gate_reason:g.gate_reason}}];"),
+  httpTelegram('wf21-sendblock', 'Send Deep Blocked', [720, 160])
+], [
+  ['Manual Start', 'Resolve Agent Config'],
+  ['Resolve Agent Config', 'Read tracked_sources'],
+  ['Read tracked_sources', 'Build Deep Plan'],
+  ['Build Deep Plan', 'Deep Approval & Budget Gate'],
+  ['Deep Approval & Budget Gate', 'Deep Gate Allowed?'],
+  ['Deep Gate Allowed?', 'Collect Deep Evidence (WF04)', 0],
+  ['Deep Gate Allowed?', 'Build Deep Blocked Reply', 1],
+  ['Collect Deep Evidence (WF04)', 'Assemble Deep Report'],
+  ['Assemble Deep Report', 'Append deep_analysis_findings'],
+  ['Append deep_analysis_findings', 'Append deep_analysis_recommendations'],
+  ['Append deep_analysis_recommendations', 'Build Deep Reply'],
+  ['Build Deep Reply', 'Send Deep Report'],
+  ['Build Deep Blocked Reply', 'Send Deep Blocked']
 ]));
 
 console.log('Stage 4 workflows generated.');
