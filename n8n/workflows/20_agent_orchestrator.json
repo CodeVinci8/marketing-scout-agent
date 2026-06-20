@@ -1,0 +1,448 @@
+{
+  "name": "20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        0
+      ],
+      "id": "wf20-trig",
+      "name": "Manual Start"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/agent_config.js (drift-proof; test asserts equality)\n// agent_config.js — Stage 4 central configuration contract (B1).\n//\n// ONE place resolves the entire agent runtime config from environment variables + safe defaults,\n// so the operator never hand-edits a Spreadsheet ID (or any limit/flag) inside individual nodes.\n// The orchestrator calls resolveConfig() once and passes the resolved object downstream; every other\n// workflow receives config from the request record instead of carrying its own copy.\n//\n// NO secrets live here or in workflow JSON. Credentials (Google/Telegram/Claude/Apify) stay in the\n// n8n credential store; this module only resolves NON-secret runtime settings + the spreadsheet id\n// (an id, not a secret) from $env. In a Code node call it as resolveConfig($env) — the harness shims\n// $env as {} so the same code runs offline.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) && str(v) !== '' ? n : d; }\nfunction bool(v, d) {\n  if (v === true) return true;\n  if (v === false) return false;\n  const s = str(v).toLowerCase();\n  if (s === 'true' || s === 'yes' || s === '1') return true;\n  if (s === 'false' || s === 'no' || s === '0') return false;\n  return d;\n}\nfunction list(v) { return str(v).split(/[\\s,;]+/).filter(Boolean); }\n\n// Production-safe defaults: fail-closed (approval + source-health required), website-only allowlist,\n// LLM features OFF, tight budgets. Everything is overridable by env or explicit override.\nconst DEFAULTS = {\n  spreadsheet_id: '',\n  telegram_allowed_user_ids: [],\n  max_sources_per_request: 3,\n  max_items_per_source: 25,\n  max_external_calls: 40,\n  source_budget_usd: 0.20,\n  llm_budget_usd: 0.50,\n  default_region: 'Москва/МО',\n  default_niche: 'credit_brokerage',\n  source_allowlist: ['website'],\n  require_approval: true,\n  require_source_health: true,\n  enable_llm_planner: false,\n  enable_llm_summary: false,\n  report_data_mode: 'live'\n};\n\n// Map env var -> resolved config. Unknown/blank env falls back to DEFAULTS; explicit overrides win last.\nfunction resolveConfig(env, overrides) {\n  env = env || {};\n  overrides = overrides || {};\n  const allowedUsers = list(env.MS_TELEGRAM_ALLOWED_USER_IDS);\n  const allowlist = list(env.MS_SOURCE_ALLOWLIST).map(s => s.toLowerCase());\n  const cfg = {\n    spreadsheet_id: str(env.MS_SPREADSHEET_ID) || DEFAULTS.spreadsheet_id,\n    telegram_allowed_user_ids: (allowedUsers.length ? allowedUsers : DEFAULTS.telegram_allowed_user_ids).map(String),\n    max_sources_per_request: num(env.MS_MAX_SOURCES, DEFAULTS.max_sources_per_request),\n    max_items_per_source: num(env.MS_MAX_ITEMS_PER_SOURCE, DEFAULTS.max_items_per_source),\n    max_external_calls: num(env.MS_MAX_EXTERNAL_CALLS, DEFAULTS.max_external_calls),\n    source_budget_usd: num(env.MS_SOURCE_BUDGET_USD, DEFAULTS.source_budget_usd),\n    llm_budget_usd: num(env.MS_LLM_BUDGET_USD, DEFAULTS.llm_budget_usd),\n    default_region: str(env.MS_DEFAULT_REGION) || DEFAULTS.default_region,\n    default_niche: str(env.MS_DEFAULT_NICHE) || DEFAULTS.default_niche,\n    source_allowlist: allowlist.length ? allowlist : DEFAULTS.source_allowlist.slice(),\n    require_approval: bool(env.MS_REQUIRE_APPROVAL, DEFAULTS.require_approval),\n    require_source_health: bool(env.MS_REQUIRE_SOURCE_HEALTH, DEFAULTS.require_source_health),\n    enable_llm_planner: bool(env.MS_ENABLE_LLM_PLANNER, DEFAULTS.enable_llm_planner),\n    enable_llm_summary: bool(env.MS_ENABLE_LLM_SUMMARY, DEFAULTS.enable_llm_summary),\n    report_data_mode: str(env.MS_REPORT_DATA_MODE) || DEFAULTS.report_data_mode\n  };\n  for (const k in overrides) {\n    if (Object.prototype.hasOwnProperty.call(overrides, k)) cfg[k] = overrides[k];\n  }\n  // completeness check the orchestrator surfaces in the execution summary — never starts paid work blind\n  cfg.missing = [];\n  if (!cfg.spreadsheet_id) cfg.missing.push('MS_SPREADSHEET_ID');\n  if (!cfg.telegram_allowed_user_ids.length) cfg.missing.push('MS_TELEGRAM_ALLOWED_USER_IDS');\n  cfg.config_complete = cfg.missing.length === 0;\n  return cfg;\n}\n\nfunction isAllowedUser(cfg, userId) {\n  return ((cfg && cfg.telegram_allowed_user_ids) || []).indexOf(String(userId)) >= 0;\n}\nfunction sourceAllowed(cfg, source) {\n  return ((cfg && cfg.source_allowlist) || []).indexOf(String(source).toLowerCase()) >= 0;\n}\n// --- end embedded agent_config ---\n\n// --- node driver ---\nvar __env=(typeof $env!=='undefined'&&$env)?$env:{};\nreturn [{json:resolveConfig(__env)}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        0
+      ],
+      "id": "wf20-cfg",
+      "name": "Resolve Agent Config"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/approval_gate.js (drift-proof; test asserts equality)\n// approval_gate.js — Stage 4 approval & budget gate (B5).\n//\n// The single chokepoint every paid/external call passes through. It fails CLOSED: a call proceeds only\n// when the request is approved, not cancelled, the source is allowlisted, item/call ceilings and the\n// source + LLM budgets all hold, and this exact unit of work has not already been completed (idempotency\n// key). A blocked gate returns a useful reason; it never throws and never leaks token values.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : d; }\n\nconst GATE_TERMINAL = ['completed', 'partial', 'failed', 'cancelled']; // local: avoids clash when co-embedded with agent_state.TERMINAL\n\n// Deterministic idempotency key for one unit of external work (a source call within a request).\nfunction idempotencyKey(agentRequestId, source, attempt) {\n  return [str(agentRequestId) || 'req', str(source).toLowerCase() || 'src', 'a' + (num(attempt, 1))].join('::');\n}\n\n// ctx: { state, cancelled, approved, completed_keys:[], external_calls_made, source_spend_usd, llm_spend_usd }\n// plan: { source, est_items, est_external_calls, est_source_cost_usd, est_llm_cost_usd }\n// cfg:  resolved agent_config (limits + budgets + allowlist + require_approval)\nfunction evaluateGate(plan, ctx, cfg) {\n  plan = plan || {}; ctx = ctx || {}; cfg = cfg || {};\n  const source = str(plan.source).toLowerCase();\n  const key = idempotencyKey(ctx.agent_request_id || plan.agent_request_id, source, plan.attempt);\n  const reasons = [];\n\n  // 1. lifecycle: cancelled or terminal => hard stop\n  if (ctx.cancelled === true || GATE_TERMINAL.indexOf(str(ctx.state)) >= 0) reasons.push('request_not_active');\n  // 2. approval (when required)\n  if (cfg.require_approval !== false && ctx.approved !== true) reasons.push('not_approved');\n  // 3. source allowlist\n  if ((cfg.source_allowlist || []).indexOf(source) < 0) reasons.push('source_not_allowed');\n  // 4. idempotency: this unit already completed\n  if ((ctx.completed_keys || []).indexOf(key) >= 0) reasons.push('already_completed');\n  // 5. item ceiling\n  if (num(plan.est_items, 0) > num(cfg.max_items_per_source, Infinity)) reasons.push('over_item_limit');\n  // 6. external-call ceiling (cumulative)\n  if (num(ctx.external_calls_made, 0) + num(plan.est_external_calls, 0) > num(cfg.max_external_calls, Infinity)) reasons.push('over_call_limit');\n  // 7. source budget (cumulative)\n  if (num(ctx.source_spend_usd, 0) + num(plan.est_source_cost_usd, 0) > num(cfg.source_budget_usd, Infinity)) reasons.push('over_source_budget');\n  // 8. LLM budget (cumulative)\n  if (num(ctx.llm_spend_usd, 0) + num(plan.est_llm_cost_usd, 0) > num(cfg.llm_budget_usd, Infinity)) reasons.push('over_llm_budget');\n\n  return {\n    allowed: reasons.length === 0,\n    reason: reasons.join('; '),\n    idempotency_key: key,\n    source: source\n  };\n}\n// --- end embedded approval_gate ---\n\n// embedded n8n/lib/agent_state.js (drift-proof; test asserts equality)\n// agent_state.js — Stage 4 durable request state machine (B4).\n//\n// A single request walks a fixed lifecycle. Transitions are validated (no skipping mandatory states),\n// every transition is an event that is persisted (the orchestrator appends to agent_request_events),\n// terminal states are absorbing, and — critically — no external/paid call may run once a request is\n// cancelled or finished. Pure + deterministic; the orchestrator embeds a mirror of this.\n\nconst STATES = [\n  'received', 'classified', 'awaiting_approval', 'approved', 'collecting', 'quality_check',\n  'analyzing', 'aggregating', 'reporting', 'delivering', 'completed', 'partial', 'failed', 'cancelled'\n];\n\nconst TERMINAL = ['completed', 'partial', 'failed', 'cancelled'];\n\n// The mandatory happy-path order. quality_check/analyzing/aggregating/reporting/delivering may be\n// collapsed into a terminal failure/cancel, but may not be skipped forward on the success path.\nconst NEXT = {\n  received: ['classified', 'cancelled', 'failed'],\n  classified: ['awaiting_approval', 'cancelled', 'failed'],\n  awaiting_approval: ['approved', 'cancelled', 'failed'],\n  approved: ['collecting', 'cancelled', 'failed'],\n  collecting: ['quality_check', 'partial', 'cancelled', 'failed'],\n  quality_check: ['analyzing', 'partial', 'cancelled', 'failed'],\n  analyzing: ['aggregating', 'partial', 'cancelled', 'failed'],\n  aggregating: ['reporting', 'partial', 'cancelled', 'failed'],\n  reporting: ['delivering', 'partial', 'cancelled', 'failed'],\n  delivering: ['completed', 'partial', 'failed'],\n  completed: [], partial: [], failed: [], cancelled: []\n};\n\nfunction isTerminal(state) { return TERMINAL.indexOf(String(state)) >= 0; }\n\n// Validate a single transition. cancelled is reachable from any non-terminal state (user /cancel).\nfunction canTransition(from, to) {\n  from = String(from); to = String(to);\n  if (STATES.indexOf(from) < 0 || STATES.indexOf(to) < 0) return false;\n  if (isTerminal(from)) return false;                 // terminal is absorbing\n  if (to === 'cancelled') return true;                // user can cancel any live request\n  return (NEXT[from] || []).indexOf(to) >= 0;\n}\n\n// Apply a transition, returning the new state record + the event to persist. Invalid transitions are\n// rejected (state unchanged, ok=false) rather than throwing, so the orchestrator records a clear event.\nfunction transition(record, to, meta) {\n  record = record || {};\n  const from = String(record.state || 'received');\n  const ts = (meta && meta.ts) || '';\n  if (!canTransition(from, to)) {\n    return {\n      ok: false, state: from,\n      event: { agent_request_id: record.agent_request_id || '', from_state: from, to_state: String(to), accepted: false, reason: 'invalid_transition', ts: ts }\n    };\n  }\n  const next = Object.assign({}, record, { state: to, prev_state: from });\n  return {\n    ok: true, state: to, record: next,\n    event: { agent_request_id: record.agent_request_id || '', from_state: from, to_state: to, accepted: true, reason: (meta && meta.reason) || '', ts: ts }\n  };\n}\n\n// Hard guard used by the approval/budget gate: once cancelled/terminal, NO external call may proceed.\nfunction canMakeExternalCall(state) {\n  const s = String(state);\n  if (s === 'cancelled' || isTerminal(s)) return false;\n  // external work only happens in the collection/analysis window after approval\n  return ['approved', 'collecting', 'quality_check', 'analyzing', 'aggregating', 'reporting'].indexOf(s) >= 0;\n}\n// --- end embedded agent_state ---\n\n// --- node driver ---\nvar cfg=$('Resolve Agent Config').first().json;\nvar req=($json&&$json.request)?$json.request:($json||{});\nvar plan=($json&&$json.plan)?$json.plan:{source:'website',est_items:cfg.max_items_per_source,est_external_calls:5,est_source_cost_usd:0.05,est_llm_cost_usd:0.10};\nplan.source=plan.source||(plan.sources&&plan.sources[0])||'website';\nvar ctx={agent_request_id:req.agent_request_id||'req',state:req.state||'approved',approved:req.approved===true||req.state==='approved',cancelled:req.state==='cancelled'||req.cancelled===true,completed_keys:req.completed_keys||[],external_calls_made:0,source_spend_usd:0,llm_spend_usd:0};\nvar canCall=canMakeExternalCall(ctx.state);\nvar g=evaluateGate(plan,ctx,cfg);\nvar allowed=g.allowed&&canCall;\nreturn [{json:{gate_allowed:allowed,gate_reason:allowed?'ok':(g.reason||'state_blocks_external_call'),idempotency_key:g.idempotency_key,plan:plan,request:req,cfg:cfg}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        0
+      ],
+      "id": "wf20-gate",
+      "name": "Approval & Budget Gate"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.gate_allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -40,
+        0
+      ],
+      "id": "wf20-if",
+      "name": "Gate Allowed?"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_WORKFLOW_ID",
+          "mode": "id",
+          "cachedResultName": "WF04 firecrawl url list"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        180,
+        -160
+      ],
+      "id": "wf20-wf04",
+      "name": "Run Website Source (WF04)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/source_adapter.js (drift-proof; test asserts equality)\n// source_adapter.js — Stage 4 source adapter contract (B6).\n//\n// Every collector (website/Firecrawl WF04, Avito WF09, VK WF11, ...) is wrapped to return ONE canonical\n// shape so the orchestrator never reaches into source-specific fields. normalizeAdapterResult() maps a\n// raw collector summary onto the contract and decides the next orchestration state from the outcome.\n// For the MVP the website family is first-class; Avito is an experimental search-card discovery adapter;\n// VK is optional and its absence must not break the website E2E.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\nconst FAMILIES = {\n  website: { family: 'website', platform: 'website', first_class: true },\n  avito: { family: 'classifieds', platform: 'avito', first_class: false, experimental: true },\n  vk: { family: 'social', platform: 'vk', first_class: false, optional: true }\n};\n\n// raw: a collector's live_source_runs-shaped summary (already produced by WF04/WF09/WF11).\n// Returns the canonical adapter result + the orchestration state this outcome implies.\nfunction normalizeAdapterResult(sourceKey, raw, ctx) {\n  raw = raw || {}; ctx = ctx || {};\n  const fam = FAMILIES[str(sourceKey).toLowerCase()] || { family: 'unknown', platform: str(sourceKey).toLowerCase(), first_class: false };\n  const received = num(raw.items_received, num(raw.items_collected, 0));\n  const written = num(raw.items_written, num(raw.records_written, received));\n  const relevant = num(raw.items_relevant, 0);\n  const quarantined = (str(raw.quality_status).toLowerCase() === 'quarantined') || raw.quarantined === true || str(raw.critical_flags) !== '';\n  const errors = [].concat(raw.errors || []).map(str).filter(Boolean);\n  if (raw.error) errors.unshift(str(raw.error));\n\n  let next_state, status;\n  if (quarantined) { status = 'quarantined'; next_state = 'quality_check'; }\n  else if (errors.length && written === 0) { status = 'failed'; next_state = 'failed'; }\n  else if (written === 0) { status = 'empty'; next_state = 'quality_check'; }\n  else { status = 'ok'; next_state = 'quality_check'; }\n\n  return {\n    agent_request_id: str(raw.agent_request_id) || str(ctx.agent_request_id),\n    source: str(sourceKey).toLowerCase(),\n    source_family: fam.family,\n    platform: str(raw.platform) || fam.platform,\n    data_mode: str(raw.data_mode) || 'live',\n    source_run_id: str(raw.source_run_id) || str(raw.run_id),\n    workflow_run_id: str(raw.workflow_run_id),\n    items_requested: num(raw.items_requested, num(ctx.requested, 0)),\n    items_received: received,\n    items_written: written,\n    items_relevant: relevant,\n    external_calls: num(raw.external_calls, num(raw.api_calls, 0)),\n    cost_status: str(raw.cost_status) || 'unknown',      // never fake $0\n    cost_usd: (raw.cost_usd === undefined || raw.cost_usd === null) ? null : num(raw.cost_usd, null),\n    quarantined: quarantined,\n    first_class: !!fam.first_class,\n    experimental: !!fam.experimental,\n    optional: !!fam.optional,\n    status: status,\n    errors: errors,\n    next_state: next_state\n  };\n}\n\n// Roll several adapter results into the request-level collection outcome: completed / partial / no_data.\nfunction rollupCollection(results) {\n  results = Array.isArray(results) ? results.filter(Boolean) : [];\n  const ok = results.filter(r => r.status === 'ok');\n  const failed = results.filter(r => r.status === 'failed');\n  const quarantined = results.filter(r => r.quarantined);\n  const written = results.reduce((a, r) => a + num(r.items_written, 0), 0);\n  let outcome;\n  if (results.length === 0) outcome = 'no_data';\n  else if (ok.length === 0) outcome = 'no_data';               // all failed / empty / quarantined\n  else if (failed.length || quarantined.length || ok.length < results.length) outcome = 'partial';\n  else outcome = 'complete';\n  return {\n    outcome: outcome,\n    sources_total: results.length,\n    sources_ok: ok.length,\n    sources_failed: failed.length,\n    sources_quarantined: quarantined.length,\n    items_written: written\n  };\n}\n// --- end embedded source_adapter ---\n\n// --- node driver ---\nvar g=$('Approval & Budget Gate').first().json;\nvar raw=($json&&$json.live_source_run)?$json.live_source_run:($json||{});\nvar res=normalizeAdapterResult('website',raw,{agent_request_id:g.request.agent_request_id});\nreturn [{json:{adapter:res,plan:g.plan,request:g.request,cfg:g.cfg}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -160
+      ],
+      "id": "wf20-norm",
+      "name": "Normalize Adapter Result"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_WORKFLOW_ID",
+          "mode": "id",
+          "cachedResultName": "WF16 source quality gate"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        620,
+        -160
+      ],
+      "id": "wf20-wf16",
+      "name": "Run WF16 Quality Gate"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_WORKFLOW_ID",
+          "mode": "id",
+          "cachedResultName": "WF08 touchpoint analyzer"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        840,
+        -160
+      ],
+      "id": "wf20-wf08",
+      "name": "Run WF08 Analyzer"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_WORKFLOW_ID",
+          "mode": "id",
+          "cachedResultName": "WF10 audience aggregator"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1060,
+        -160
+      ],
+      "id": "wf20-wf10",
+      "name": "Run WF10 Aggregator"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_WORKFLOW_ID",
+          "mode": "id",
+          "cachedResultName": "WF12 report builder"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1280,
+        -160
+      ],
+      "id": "wf20-wf12",
+      "name": "Run WF12 Report"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/source_adapter.js (drift-proof; test asserts equality)\n// source_adapter.js — Stage 4 source adapter contract (B6).\n//\n// Every collector (website/Firecrawl WF04, Avito WF09, VK WF11, ...) is wrapped to return ONE canonical\n// shape so the orchestrator never reaches into source-specific fields. normalizeAdapterResult() maps a\n// raw collector summary onto the contract and decides the next orchestration state from the outcome.\n// For the MVP the website family is first-class; Avito is an experimental search-card discovery adapter;\n// VK is optional and its absence must not break the website E2E.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\nconst FAMILIES = {\n  website: { family: 'website', platform: 'website', first_class: true },\n  avito: { family: 'classifieds', platform: 'avito', first_class: false, experimental: true },\n  vk: { family: 'social', platform: 'vk', first_class: false, optional: true }\n};\n\n// raw: a collector's live_source_runs-shaped summary (already produced by WF04/WF09/WF11).\n// Returns the canonical adapter result + the orchestration state this outcome implies.\nfunction normalizeAdapterResult(sourceKey, raw, ctx) {\n  raw = raw || {}; ctx = ctx || {};\n  const fam = FAMILIES[str(sourceKey).toLowerCase()] || { family: 'unknown', platform: str(sourceKey).toLowerCase(), first_class: false };\n  const received = num(raw.items_received, num(raw.items_collected, 0));\n  const written = num(raw.items_written, num(raw.records_written, received));\n  const relevant = num(raw.items_relevant, 0);\n  const quarantined = (str(raw.quality_status).toLowerCase() === 'quarantined') || raw.quarantined === true || str(raw.critical_flags) !== '';\n  const errors = [].concat(raw.errors || []).map(str).filter(Boolean);\n  if (raw.error) errors.unshift(str(raw.error));\n\n  let next_state, status;\n  if (quarantined) { status = 'quarantined'; next_state = 'quality_check'; }\n  else if (errors.length && written === 0) { status = 'failed'; next_state = 'failed'; }\n  else if (written === 0) { status = 'empty'; next_state = 'quality_check'; }\n  else { status = 'ok'; next_state = 'quality_check'; }\n\n  return {\n    agent_request_id: str(raw.agent_request_id) || str(ctx.agent_request_id),\n    source: str(sourceKey).toLowerCase(),\n    source_family: fam.family,\n    platform: str(raw.platform) || fam.platform,\n    data_mode: str(raw.data_mode) || 'live',\n    source_run_id: str(raw.source_run_id) || str(raw.run_id),\n    workflow_run_id: str(raw.workflow_run_id),\n    items_requested: num(raw.items_requested, num(ctx.requested, 0)),\n    items_received: received,\n    items_written: written,\n    items_relevant: relevant,\n    external_calls: num(raw.external_calls, num(raw.api_calls, 0)),\n    cost_status: str(raw.cost_status) || 'unknown',      // never fake $0\n    cost_usd: (raw.cost_usd === undefined || raw.cost_usd === null) ? null : num(raw.cost_usd, null),\n    quarantined: quarantined,\n    first_class: !!fam.first_class,\n    experimental: !!fam.experimental,\n    optional: !!fam.optional,\n    status: status,\n    errors: errors,\n    next_state: next_state\n  };\n}\n\n// Roll several adapter results into the request-level collection outcome: completed / partial / no_data.\nfunction rollupCollection(results) {\n  results = Array.isArray(results) ? results.filter(Boolean) : [];\n  const ok = results.filter(r => r.status === 'ok');\n  const failed = results.filter(r => r.status === 'failed');\n  const quarantined = results.filter(r => r.quarantined);\n  const written = results.reduce((a, r) => a + num(r.items_written, 0), 0);\n  let outcome;\n  if (results.length === 0) outcome = 'no_data';\n  else if (ok.length === 0) outcome = 'no_data';               // all failed / empty / quarantined\n  else if (failed.length || quarantined.length || ok.length < results.length) outcome = 'partial';\n  else outcome = 'complete';\n  return {\n    outcome: outcome,\n    sources_total: results.length,\n    sources_ok: ok.length,\n    sources_failed: failed.length,\n    sources_quarantined: quarantined.length,\n    items_written: written\n  };\n}\n// --- end embedded source_adapter ---\n\n// embedded n8n/lib/execution_summary.js (drift-proof; test asserts equality)\n// execution_summary.js — Stage 4 single canonical execution summary (B9).\n//\n// One diagnostic record for the whole request. It replaces eyeballing dozens of node outputs: from the\n// request state, the collection rollup, the analysis/aggregation/report facts and the delivery status it\n// produces a flat summary + a single \"next operator action\". Costs that are genuinely unknown stay\n// 'unknown' (never fabricated $0).\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\nfunction buildExecutionSummary(parts) {\n  parts = parts || {};\n  const req = parts.request || {};\n  const roll = parts.collection || {};\n  const adapters = Array.isArray(parts.adapters) ? parts.adapters : [];\n  const analysis = parts.analysis || {};\n  const aggregation = parts.aggregation || {};\n  const report = parts.report || {};\n  const delivery = parts.delivery || {};\n\n  const state = str(req.state) || 'received';\n  const sourcesRequested = (parts.plan && parts.plan.sources) || adapters.map(a => a.source);\n  const llmPrimary = num(analysis.llm_primary_calls, 0) + num(report.llm_primary_calls, 0);\n  const llmRepair = num(analysis.llm_repair_calls, 0) + num(report.llm_repair_calls, 0);\n  const sourceCostKnown = adapters.every(a => a.cost_status && a.cost_status !== 'unknown') && adapters.length > 0;\n  const llmCostKnown = (analysis.llm_cost_status && analysis.llm_cost_status !== 'unknown') || llmPrimary === 0;\n\n  const blocking = [];\n  if (!parts.config_complete) blocking.push('central config incomplete');\n  [].concat(parts.errors || []).map(str).filter(Boolean).forEach(e => blocking.push(e));\n\n  // single recommended next action\n  let next_action;\n  if (state === 'cancelled') next_action = 'none — request cancelled by user';\n  else if (state === 'completed') next_action = 'none — report delivered';\n  else if (state === 'partial') next_action = 'review partial report; some sources failed/quarantined';\n  else if (state === 'failed') next_action = blocking.length ? ('resolve: ' + blocking[0]) : 'inspect failed state events';\n  else if (roll.outcome === 'no_data') next_action = 'broaden sources/filters — no eligible data collected';\n  else next_action = 'request in progress (' + state + ')';\n\n  return {\n    agent_request_id: str(req.agent_request_id),\n    final_state: state,\n    sources_requested: sourcesRequested.join(', '),\n    sources_completed: num(roll.sources_ok, adapters.filter(a => a.status === 'ok').length),\n    sources_failed: num(roll.sources_failed, adapters.filter(a => a.status === 'failed').length),\n    sources_quarantined: num(roll.sources_quarantined, adapters.filter(a => a.quarantined).length),\n    records_received: num(roll.items_written, adapters.reduce((a, r) => a + num(r.items_received, 0), 0)),\n    records_unique: num(analysis.records_unique, 0),\n    records_eligible: num(analysis.records_eligible, 0),\n    records_analyzed: num(analysis.records_analyzed, 0),\n    records_reported: num(aggregation.rows_after_filters, num(report.rows_after_filters, 0)),\n    external_calls: adapters.reduce((a, r) => a + num(r.external_calls, 0), 0),\n    llm_primary_calls: llmPrimary,\n    llm_repair_calls: llmRepair,\n    source_cost_status: sourceCostKnown ? 'known' : 'unknown',\n    llm_cost_status: llmCostKnown ? 'known' : 'unknown',\n    report_id: str(report.report_id),\n    delivery_status: str(delivery.send_status) || 'none',\n    blocking_errors: blocking.join('; '),\n    next_operator_action: next_action\n  };\n}\n// --- end embedded execution_summary ---\n\n// --- node driver ---\nvar n=$('Normalize Adapter Result').first().json;\nvar adapters=[n.adapter];\nvar roll=rollupCollection(adapters);\nvar rep=($json&&$json.report)?$json.report:($json||{});\nvar summary=buildExecutionSummary({config_complete:(n.cfg&&n.cfg.config_complete),request:Object.assign({},n.request,{state:roll.outcome==='no_data'?'partial':(roll.outcome==='complete'?'reporting':'partial')}),plan:n.plan,collection:roll,adapters:adapters,analysis:{records_unique:rep.records_unique,records_eligible:rep.records_eligible,records_analyzed:rep.records_analyzed,llm_primary_calls:rep.llm_primary_calls,llm_repair_calls:rep.llm_repair_calls,llm_cost_status:rep.llm_cost_status||'unknown'},aggregation:{rows_after_filters:rep.rows_after_filters},report:rep,delivery:{}});\nreturn [{json:{summary:summary,report:rep,request:n.request,cfg:n.cfg}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        -160
+      ],
+      "id": "wf20-summary",
+      "name": "Build Execution Summary"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/telegram_io.js (drift-proof; test asserts equality)\n// telegram_io.js — Stage 4 Telegram gateway + delivery outbox helpers (B2 + B8).\n//\n// Inbound: parse a Telegram update into a normalized intake record, decide authorization, build a\n// duplicate-proof idempotency key (a re-delivered update_id must create exactly ONE request).\n// Outbound: an outbox record keyed by a payload hash so retries never double-send the user-visible\n// answer; plus safe Markdown escaping and message chunking for Telegram's 4096-char limit.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\n\n// --- inbound -------------------------------------------------------------------------------------------\n// Parse a raw Telegram update (message / callback_query) into the fields the gateway persists.\nfunction parseUpdate(update) {\n  update = update || {};\n  const msg = update.message || update.edited_message || null;\n  const cb = update.callback_query || null;\n  let kind = 'unknown', text = '', chatId = '', userId = '', messageId = '', callbackData = '';\n  if (cb) {\n    kind = 'callback';\n    callbackData = str(cb.data);\n    userId = str(cb.from && cb.from.id);\n    chatId = str(cb.message && cb.message.chat && cb.message.chat.id);\n    messageId = str(cb.message && cb.message.message_id);\n  } else if (msg) {\n    text = str(msg.text);\n    userId = str(msg.from && msg.from.id);\n    chatId = str(msg.chat && msg.chat.id);\n    messageId = str(msg.message_id);\n    if (/^\\/status\\b/.test(text)) kind = 'status';\n    else if (/^\\/cancel\\b/.test(text)) kind = 'cancel';\n    else if (/^\\//.test(text)) kind = 'command';\n    else kind = 'request';\n  }\n  return {\n    kind: kind,\n    update_id: str(update.update_id),\n    chat_id: chatId,\n    user_id: userId,\n    message_id: messageId,\n    text: text,\n    callback_data: callbackData\n  };\n}\n\nfunction isAuthorized(parsed, allowedUserIds) {\n  const ids = (allowedUserIds || []).map(String);\n  return ids.indexOf(str(parsed && parsed.user_id)) >= 0;\n}\n\n// One Telegram update => one idempotency key. A redelivered update_id maps to the same key.\nfunction updateIdempotencyKey(parsed) {\n  parsed = parsed || {};\n  return ['tg', str(parsed.update_id) || ('m' + str(parsed.message_id)), str(parsed.chat_id)].join('::');\n}\n\n// Callback payloads: approve:<agent_request_id> / reject:<agent_request_id>.\nfunction parseCallback(data) {\n  const m = str(data).match(/^(approve|reject|cancel):(.+)$/);\n  if (!m) return { action: '', agent_request_id: '' };\n  return { action: m[1], agent_request_id: str(m[2]) };\n}\nfunction approvalKeyboard(agentRequestId) {\n  return { inline_keyboard: [[\n    { text: '✅ Запустить', callback_data: 'approve:' + str(agentRequestId) },\n    { text: '✖ Отклонить', callback_data: 'reject:' + str(agentRequestId) }\n  ]] };\n}\n\n// --- outbound ------------------------------------------------------------------------------------------\n// Telegram MarkdownV2 reserved chars. Escaping keeps user/report text from breaking the message.\nfunction escapeMarkdown(text) {\n  return str(text).replace(/([_*\\[\\]()~`>#+\\-=|{}.!\\\\])/g, '\\\\$1');\n}\n\n// Split into <=limit chunks on line boundaries where possible (Telegram hard-caps at 4096).\nfunction chunkMessage(text, limit) {\n  limit = limit || 3900;\n  const s = String(text == null ? '' : text);\n  if (s.length <= limit) return [s];\n  const out = [];\n  let buf = '';\n  for (const line of s.split('\\n')) {\n    if ((buf + '\\n' + line).length > limit) {\n      if (buf) out.push(buf);\n      if (line.length > limit) { for (let i = 0; i < line.length; i += limit) out.push(line.slice(i, i + limit)); buf = ''; }\n      else buf = line;\n    } else { buf = buf ? (buf + '\\n' + line) : line; }\n  }\n  if (buf) out.push(buf);\n  return out;\n}\n\n// djb2 — small, stable, dependency-free hash for the outbox dedupe key.\nfunction payloadHash(s) {\n  s = String(s == null ? '' : s);\n  let h = 5381;\n  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;\n  return 'h' + h.toString(16);\n}\n\n// Build an outbox row. delivery_id is deterministic in (agent_request_id, report_id, payload) so the\n// same answer can never be enqueued/sent twice for the same request+report.\nfunction makeDelivery(agentRequestId, reportId, chatId, payload) {\n  const hash = payloadHash(payload);\n  return {\n    delivery_id: ['dlv', str(agentRequestId) || 'req', str(reportId) || 'rep', hash].join('_'),\n    agent_request_id: str(agentRequestId),\n    report_id: str(reportId),\n    chat_id: str(chatId),\n    payload_hash: hash,\n    chunks: chunkMessage(payload).length,\n    send_status: 'pending',\n    attempts: 0,\n    telegram_message_id: '',\n    last_error: ''\n  };\n}\n\n// Idempotent enqueue: if an existing delivery has the same delivery_id and is already sent, skip.\nfunction shouldSend(existingDeliveries, delivery) {\n  const prior = (existingDeliveries || []).filter(d => str(d.delivery_id) === str(delivery.delivery_id));\n  if (prior.some(d => str(d.send_status) === 'sent')) return { send: false, reason: 'already_sent' };\n  return { send: true, reason: '' };\n}\n// --- end embedded telegram_io ---\n\n// --- node driver ---\nvar s=$('Build Execution Summary').first().json;\nvar chat=String((s.request&&s.request.chat_id)||'');\nvar body=(s.report&&s.report.report_markdown)?String(s.report.report_markdown):('Отчёт готов. Итог: '+s.summary.final_state+'. Источники: '+s.summary.sources_requested+'. Записей в отчёте: '+s.summary.records_reported+'.');\nvar dlv=makeDelivery(s.request.agent_request_id,(s.report&&s.report.report_id)||'rep',chat,body);\nvar chunks=chunkMessage(body);\nvar first={chat_id:chat,text:chunks[0]};\nreturn [{json:{delivery:dlv,telegram_send_body:JSON.stringify(first),summary:s.summary}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1720,
+        -160
+      ],
+      "id": "wf20-outbox",
+      "name": "Build Delivery Outbox"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "telegram_outbox",
+          "mode": "name"
+        },
+        "mappingMode": "autoMapInputData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1940,
+        -160
+      ],
+      "id": "wf20-apout",
+      "name": "Append telegram_outbox"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.telegram_send_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        -160
+      ],
+      "id": "wf20-send",
+      "name": "Send Telegram Report"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/telegram_io.js (drift-proof; test asserts equality)\n// telegram_io.js — Stage 4 Telegram gateway + delivery outbox helpers (B2 + B8).\n//\n// Inbound: parse a Telegram update into a normalized intake record, decide authorization, build a\n// duplicate-proof idempotency key (a re-delivered update_id must create exactly ONE request).\n// Outbound: an outbox record keyed by a payload hash so retries never double-send the user-visible\n// answer; plus safe Markdown escaping and message chunking for Telegram's 4096-char limit.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\n\n// --- inbound -------------------------------------------------------------------------------------------\n// Parse a raw Telegram update (message / callback_query) into the fields the gateway persists.\nfunction parseUpdate(update) {\n  update = update || {};\n  const msg = update.message || update.edited_message || null;\n  const cb = update.callback_query || null;\n  let kind = 'unknown', text = '', chatId = '', userId = '', messageId = '', callbackData = '';\n  if (cb) {\n    kind = 'callback';\n    callbackData = str(cb.data);\n    userId = str(cb.from && cb.from.id);\n    chatId = str(cb.message && cb.message.chat && cb.message.chat.id);\n    messageId = str(cb.message && cb.message.message_id);\n  } else if (msg) {\n    text = str(msg.text);\n    userId = str(msg.from && msg.from.id);\n    chatId = str(msg.chat && msg.chat.id);\n    messageId = str(msg.message_id);\n    if (/^\\/status\\b/.test(text)) kind = 'status';\n    else if (/^\\/cancel\\b/.test(text)) kind = 'cancel';\n    else if (/^\\//.test(text)) kind = 'command';\n    else kind = 'request';\n  }\n  return {\n    kind: kind,\n    update_id: str(update.update_id),\n    chat_id: chatId,\n    user_id: userId,\n    message_id: messageId,\n    text: text,\n    callback_data: callbackData\n  };\n}\n\nfunction isAuthorized(parsed, allowedUserIds) {\n  const ids = (allowedUserIds || []).map(String);\n  return ids.indexOf(str(parsed && parsed.user_id)) >= 0;\n}\n\n// One Telegram update => one idempotency key. A redelivered update_id maps to the same key.\nfunction updateIdempotencyKey(parsed) {\n  parsed = parsed || {};\n  return ['tg', str(parsed.update_id) || ('m' + str(parsed.message_id)), str(parsed.chat_id)].join('::');\n}\n\n// Callback payloads: approve:<agent_request_id> / reject:<agent_request_id>.\nfunction parseCallback(data) {\n  const m = str(data).match(/^(approve|reject|cancel):(.+)$/);\n  if (!m) return { action: '', agent_request_id: '' };\n  return { action: m[1], agent_request_id: str(m[2]) };\n}\nfunction approvalKeyboard(agentRequestId) {\n  return { inline_keyboard: [[\n    { text: '✅ Запустить', callback_data: 'approve:' + str(agentRequestId) },\n    { text: '✖ Отклонить', callback_data: 'reject:' + str(agentRequestId) }\n  ]] };\n}\n\n// --- outbound ------------------------------------------------------------------------------------------\n// Telegram MarkdownV2 reserved chars. Escaping keeps user/report text from breaking the message.\nfunction escapeMarkdown(text) {\n  return str(text).replace(/([_*\\[\\]()~`>#+\\-=|{}.!\\\\])/g, '\\\\$1');\n}\n\n// Split into <=limit chunks on line boundaries where possible (Telegram hard-caps at 4096).\nfunction chunkMessage(text, limit) {\n  limit = limit || 3900;\n  const s = String(text == null ? '' : text);\n  if (s.length <= limit) return [s];\n  const out = [];\n  let buf = '';\n  for (const line of s.split('\\n')) {\n    if ((buf + '\\n' + line).length > limit) {\n      if (buf) out.push(buf);\n      if (line.length > limit) { for (let i = 0; i < line.length; i += limit) out.push(line.slice(i, i + limit)); buf = ''; }\n      else buf = line;\n    } else { buf = buf ? (buf + '\\n' + line) : line; }\n  }\n  if (buf) out.push(buf);\n  return out;\n}\n\n// djb2 — small, stable, dependency-free hash for the outbox dedupe key.\nfunction payloadHash(s) {\n  s = String(s == null ? '' : s);\n  let h = 5381;\n  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;\n  return 'h' + h.toString(16);\n}\n\n// Build an outbox row. delivery_id is deterministic in (agent_request_id, report_id, payload) so the\n// same answer can never be enqueued/sent twice for the same request+report.\nfunction makeDelivery(agentRequestId, reportId, chatId, payload) {\n  const hash = payloadHash(payload);\n  return {\n    delivery_id: ['dlv', str(agentRequestId) || 'req', str(reportId) || 'rep', hash].join('_'),\n    agent_request_id: str(agentRequestId),\n    report_id: str(reportId),\n    chat_id: str(chatId),\n    payload_hash: hash,\n    chunks: chunkMessage(payload).length,\n    send_status: 'pending',\n    attempts: 0,\n    telegram_message_id: '',\n    last_error: ''\n  };\n}\n\n// Idempotent enqueue: if an existing delivery has the same delivery_id and is already sent, skip.\nfunction shouldSend(existingDeliveries, delivery) {\n  const prior = (existingDeliveries || []).filter(d => str(d.delivery_id) === str(delivery.delivery_id));\n  if (prior.some(d => str(d.send_status) === 'sent')) return { send: false, reason: 'already_sent' };\n  return { send: true, reason: '' };\n}\n// --- end embedded telegram_io ---\n\n// --- node driver ---\nvar g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar body={chat_id:chat,text:'Запрос не запущен: '+g.gate_reason};\nreturn [{json:{telegram_send_body:JSON.stringify(body),gate_reason:g.gate_reason}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        180,
+        160
+      ],
+      "id": "wf20-blocked",
+      "name": "Build Blocked Response"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.telegram_send_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        160
+      ],
+      "id": "wf20-sendblock",
+      "name": "Send Blocked Reply"
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Resolve Agent Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Agent Config": {
+      "main": [
+        [
+          {
+            "node": "Approval & Budget Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval & Budget Gate": {
+      "main": [
+        [
+          {
+            "node": "Gate Allowed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate Allowed?": {
+      "main": [
+        [
+          {
+            "node": "Run Website Source (WF04)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Blocked Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Website Source (WF04)": {
+      "main": [
+        [
+          {
+            "node": "Normalize Adapter Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Adapter Result": {
+      "main": [
+        [
+          {
+            "node": "Run WF16 Quality Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run WF16 Quality Gate": {
+      "main": [
+        [
+          {
+            "node": "Run WF08 Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run WF08 Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Run WF10 Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run WF10 Aggregator": {
+      "main": [
+        [
+          {
+            "node": "Run WF12 Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run WF12 Report": {
+      "main": [
+        [
+          {
+            "node": "Build Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Execution Summary": {
+      "main": [
+        [
+          {
+            "node": "Build Delivery Outbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Delivery Outbox": {
+      "main": [
+        [
+          {
+            "node": "Append telegram_outbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append telegram_outbox": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Blocked Response": {
+      "main": [
+        [
+          {
+            "node": "Send Blocked Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

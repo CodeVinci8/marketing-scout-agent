@@ -4,6 +4,38 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-21 (session 20) — Stage 4 single-user Telegram agent MVP (branch stage-3-closure-and-stage-4, DEC-150)
+
+**Status (exact):** Phase A (Stage 3 closure) already LANDED as `0d0ab69`
+(`fix(stage3): close production analysis aggregation and reporting gates`). Phase B (Stage 4 MVP) BUILT and
+about to land as `feat(stage4): add telegram agent orchestration MVP`. **0 external calls, $0**, all
+workflows `active=false`, **not pushed**, no n8n import, no AI attribution.
+
+**Phase B (Stage 4) — what's in:**
+- **7 contract libraries** (`n8n/lib/`): `agent_config` (one central config, fail-closed defaults, no
+  secrets), `agent_state` (14-state durable machine, terminal absorbing, cancel-from-any, `canMakeExternalCall`),
+  `request_planner` (deterministic plan + guarded Claude planner + strict JSON validation + budget clamps),
+  `approval_gate` (single paid-call chokepoint; `GATE_TERMINAL` renamed to avoid `const` clash with
+  `agent_state.TERMINAL` when co-embedded; deterministic `idempotencyKey`), `source_adapter` (canonical
+  result + `rollupCollection` complete/partial/no_data; cost never fabricated to 0), `telegram_io`
+  (parse/auth/duplicate-`update_id`/MarkdownV2 escape/3900-chunk/outbox payload-hash dedup),
+  `execution_summary` (one flat canonical summary + single next action).
+- **`tools/gen_stage4_workflows.js`** deterministically generates **WF17** (config, 2 nodes), **WF18**
+  (Telegram gateway, 9), **WF19** (planner, 9), **WF20** (orchestrator, 16) with libs embedded byte-identically
+  between drift markers. Re-running is idempotent.
+- **Tests:** `test_stage4_contracts.js` (72) direct lib units + `test_stage4_workflows.js` (33) drift proof +
+  offline harness node execution. Registered in `run_all.js` + `Makefile`.
+- `make test` → **ALL SUITES PASS** (24 JS suites + validator 241 + lead_scout); 0 external calls; $0;
+  25 workflow JSON all `active=false`.
+
+**Open (Phase C):** sanitized replay fixtures (Apify discovery / Avito cards / CASHMOTOR healthy / CarCapital
+degraded / WF10 / WF12), 15 mocked E2E scenarios, `scripts/deploy_n8n.sh` (validate/dry-run/inactive import),
+one consolidated Sheets migration (Stage 4 tabs: `agent_requests`/`agent_request_events`/`execution_plans`/
+`approval_decisions`/`telegram_outbox`/`dead_letter_events`), portfolio README + Mermaid. Commit
+`test(stage4): add replay e2e deployment and portfolio docs`. Continuing autonomously.
+
+---
+
 ## Session: 2026-06-20 (session 19) — Stage 3 closure + Stage 4 (branch stage-3-closure-and-stage-4, DEC-147)
 
 **Status (exact):** new authoritative two-phase spec (Phase A = close Stage 3 runtime contracts; Phase B =

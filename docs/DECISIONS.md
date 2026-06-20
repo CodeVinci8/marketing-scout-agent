@@ -5,6 +5,56 @@ Most recent first.
 
 ---
 
+## DEC-150 — Stage 4: single-user Telegram agent MVP (WF17–WF20 + seven contract libraries)
+
+**Date:** 2026-06-21
+
+**Context:** Stage 3 closed the per-workflow runtime contracts (DEC-148/149) but the system was still a
+set of manually-triggered workflows. Stage 4 turns it into one operator-facing agent: a Telegram request
+flows through planning → human approval → website collection → quality gate → analysis → aggregation →
+report → delivery, with durable state and a single chokepoint for every paid call. The single-user scope
+is deliberate (one operator, website-first); multi-tenant and multi-source breadth are out of scope.
+
+**Decisions:**
+1. **Library-first, embed-mirrored (extends DEC-142).** Seven pure libraries hold all Stage 4 logic —
+   `agent_config`, `agent_state`, `request_planner`, `approval_gate`, `source_adapter`, `telegram_io`,
+   `execution_summary`. Each is unit-tested directly (`test_stage4_contracts.js`, 72 checks) and embedded
+   byte-identically into the workflow Code nodes between drift markers; `tools/gen_stage4_workflows.js`
+   deterministically (re)generates WF17–WF20 and `test_stage4_workflows.js` asserts embed == library core.
+2. **One central config object, no per-workflow Spreadsheet ID.** WF17 `Resolve Agent Config` reads env
+   (`MS_SPREADSHEET_ID`, `MS_TELEGRAM_ALLOWED_USER_IDS`, budgets, limits, allowlist, feature flags) into a
+   single canonical config consumed by every other Stage 4 workflow. Defaults fail closed
+   (`require_approval=true`, `require_source_health=true`, `source_allowlist=['website']`, planner/summary
+   LLM **off**). Missing required keys set `config_complete=false` rather than guessing. No secrets in JSON.
+3. **Durable state machine with rejected illegal transitions.** `agent_state` defines the 14 lifecycle
+   states (received→…→completed/partial/failed/cancelled). `canTransition` makes terminal states absorbing
+   and lets `cancelled` interrupt any live state; `canMakeExternalCall(state)` is false for terminal states,
+   so a cancelled/completed request can never start new external work even if a stale callback arrives.
+4. **Approval & budget gate is the single paid-call chokepoint (fail-closed).** `approval_gate.evaluateGate`
+   blocks unless: not cancelled/terminal, approved (when required), source allowlisted, under item/call
+   ceilings, under source and LLM budgets, and the deterministic `idempotencyKey(request, source, attempt)`
+   has not already completed. A repeated approval callback or a re-fired source call cannot spend twice.
+   Note: `approval_gate.js` uses `GATE_TERMINAL` (not `TERMINAL`) so it can be co-embedded in the same Code
+   node as `agent_state` (which exports `TERMINAL`) without a `const` redeclaration SyntaxError in sloppy mode.
+5. **Source-adapter contract decouples the orchestrator from source internals.** `normalizeAdapterResult`
+   maps any source's raw output to one canonical shape (status/next_state/cost_status, never a fabricated
+   `0` cost); `rollupCollection` reduces N adapter results to `complete | partial | no_data`. Website is
+   first-class; Avito experimental, VK optional — added behind the allowlist without touching the orchestrator.
+6. **Idempotent Telegram I/O.** `telegram_io.parseUpdate` classifies request/`/status`/`/cancel`/callback/
+   command; duplicate `update_id` (matched against `agent_request_events`) yields one request, not two.
+   Delivery uses an outbox (`makeDelivery` + `shouldSend` payload-hash dedup, MarkdownV2 escaping, 3900-char
+   chunking) so a re-executed delivery branch cannot produce a duplicate user-visible send.
+7. **One canonical execution summary.** `buildExecutionSummary` collapses request state + collection rollup
+   + analysis/aggregation/report facts + delivery into one flat record (records received/eligible/analyzed/
+   reported, external calls, primary vs repair LLM calls, source/LLM cost status, blocking errors, single
+   `next_operator_action`); unknown costs stay `unknown`.
+
+**Constraints honored:** all four workflows `active=false`; production Claude/Apify nodes guarded by runtime
+checks, not physically disabled; `make test` → ALL SUITES PASS (stage4-contracts 72, stage4-workflows 33);
+0 external calls, $0; not pushed; no n8n import.
+
+---
+
 ## DEC-149 — Stage 3 closure: production analysis/aggregation/reporting gates (WF05/06/08/09/10/12)
 
 **Date:** 2026-06-20
