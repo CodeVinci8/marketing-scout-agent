@@ -38,8 +38,20 @@ multi-turn memory and deep-analysis e2e`.
 - Tests: `test_deep_analysis_contracts.js` (43) + `test_deep_analysis_workflows.js` (22). Registered.
 - Migration §B3: orchestration_decisions / deep_analysis_findings / deep_analysis_recommendations. Deploy += WF21.
 
-**Open:** commit 3 = multi-turn conversational E2E (`test_agent_e2e.js`) + portfolio docs
-(`docs/CONVERSATIONAL_AGENT.md` with Mermaid). Continuing autonomously.
+**Commit 3 (multi-turn E2E + docs) — BUILT:**
+- `test_agent_e2e.js` (30) — full mocked dialogue: search→plan→approve(free text)→report→"сравни первых двух
+  подробнее"→deep plan from prior report→approve→deep report (facts vs recommendations)→"добавь их сайты"
+  (resolved from context, added once/idempotent)→"что ещё умеешь?" (only configured caps)→window overflow→
+  rolling summary preserves rep_1→follow-up still resolves CASHMOTOR,CarCapital→"идеи" reuses report, $0 calls.
+  Single external-call counter; 0 external calls.
+- `docs/CONVERSATIONAL_AGENT.md` (Mermaid architecture + sequence + intent schema + memory/compaction + control
+  commands + deep analysis + source availability + reuse + tests + limitations). README points to it.
+- Fix surfaced by E2E: help regex broadened (`умеешь|что ещё`) so "а что ещё ты умеешь?" routes to help; WF18
+  regenerated.
+- Three commits landed: `215a6c8` (intent+memory), `0f13f9f` (deep analysis), + this docs/e2e commit.
+- `make test` → ALL SUITES PASS (32 JS suites + validator 253 + lead_scout); $0; 0 calls; 27 workflows active=false.
+
+**Open:** operator runtime retest (Stage C.1 + the one controlled live E2E). No further code work queued.
 
 ---
 

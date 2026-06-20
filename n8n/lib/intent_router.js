@@ -31,7 +31,7 @@ const TEXT_RULES = [
   ['rerun_request', /запусти.{0,10}снова|повтор|сделай снова|again|rerun|перезапус|next week|на след/i],
   ['report_followup', /(что по|расскажи (о|про)|объясни|подробнее о|поясни|explain|what about|tell me about).{0,40}(конкурент|перв|втор|компан|first|second|them|их)/i],
   ['competitor_search', /найд|поищ|ищ[уи]|подбери|find|search|конкурент|competitor|рынок|market/i],
-  ['help', /что ты умеешь|какие возможност|что ещё (можешь|умеешь)|what (can|else) (you|can)|help|помощь|capabilit/i]
+  ['help', /умеешь|умеете|что ты можешь|какие возможност|что ещё|what (can|else)|\bhelp\b|помощь|capabilit/i]
 ];
 
 function entityExtract(text, ctx) {

@@ -33,8 +33,14 @@ WF16 quality gate → WF08 analysis → WF10 aggregation → WF12 report → Tel
 `request_planner`, `approval_gate`, `source_adapter`, `telegram_io`, `execution_summary`) hold the logic and
 are embedded byte-identically into the workflow Code nodes (drift-tested).
 
-**Read first:** [`docs/STAGE_4_AGENT.md`](docs/STAGE_4_AGENT.md) (architecture + Mermaid + user flow +
-setup), [`docs/SHEETS_MIGRATION_STAGE_4.md`](docs/SHEETS_MIGRATION_STAGE_4.md) (exact tabs/headers),
+A **conversational layer** (DEC-151/152) then turned the button-driven bot into a real natural-language agent:
+free-text intent routing, bounded multi-layer memory, conversational source management (WF18 ext + WF22), and a
+context-aware deep-competitor-analysis mode that separates evidence-backed facts from recommendations (WF21 +
+WF20 reuse). See [`docs/CONVERSATIONAL_AGENT.md`](docs/CONVERSATIONAL_AGENT.md).
+
+**Read first:** [`docs/CONVERSATIONAL_AGENT.md`](docs/CONVERSATIONAL_AGENT.md) (conversation + memory + deep
+analysis), [`docs/STAGE_4_AGENT.md`](docs/STAGE_4_AGENT.md) (architecture + Mermaid + user flow + setup),
+[`docs/SHEETS_MIGRATION_STAGE_4.md`](docs/SHEETS_MIGRATION_STAGE_4.md) (exact tabs/headers),
 `scripts/deploy_n8n.sh` (inactive-by-default import).
 
 **Prior stage — Stage C Hardening + Closure (BUILT).** 16 live-capable workflows (WF00–WF16). WF16 (Source
