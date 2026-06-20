@@ -188,12 +188,23 @@ summary are. All header orders are exact.
 `conversation_id` · `agent_request_id` · `est_input_tokens` · `max_context_tokens` · `sections_included` ·
 `sections_omitted` · `summary_version` · `truncated` · `ts`
 
-### B2.8 `tracked_sources` — monitored public sources (WF22)
-`source_id` · `owner_user_id` · `platform` · `ref` · `key` · `label` · `status` · `added_at` · `updated_at` ·
-`last_checked_at` · `agent_request_id`
+### B2.8 `tracked_sources` — monitored public sources (WF22 writes; WF23 reads + updates)
+`source_id` · `owner_user_id` · `chat_id` · `platform` · `ref` · `key` · `label` · `status` · `added_at` ·
+`updated_at` · `last_checked_at` · `last_success_at` · `next_check_at` · `last_content_hash` · `last_change_at` ·
+`last_status` · `last_error` · `error_count` · `check_interval_hours` · `agent_request_id`
+(`status` ∈ active | paused | removed | **setup_required**. Telegram/VK sources start `setup_required` unless
+their collector is enabled — see §B4. The `last_*`/`next_check_at`/`error_count`/`check_interval_hours` columns
+are the WF23 monitoring lifecycle. `chat_id` is where change notifications are sent.)
 
 ### B2.9 `source_audit_events` — source add/status audit (WF22)
-`event` · `owner_user_id` · `source_id` · `key` · `platform` · `from` · `to` · `ts`
+`event` · `owner_user_id` · `source_id` · `key` · `platform` · `from` · `to` · `status` · `ts`
+
+### B2.10 `source_change_events` — confirmed monitoring changes; notify-once (WF23)
+`change_id` · `source_id` · `owner_user_id` · `platform` · `ref` · `prev_hash` · `new_hash` · `summary` ·
+`status` · `acknowledged` · `ts`
+(`change_id = source_id::new_content_hash` — deterministic, so a confirmed change is recorded and notified
+exactly once. A separate tab from `source_audit_events` because a confirmed content change carries content
+hashes + a notification-dedup key that the add/status audit cannot represent cleanly.)
 
 ---
 
@@ -213,6 +224,27 @@ summary are. All header orders are exact.
 `agent_request_id` · `competitor` · `text` · `derived_from` · `confidence` · `ts`
 (`derived_from` lists the `finding_id`s a recommendation is based on; a recommendation with no supporting
 finding is held back, never stored/shown as a fact.)
+
+---
+
+## B4. Scheduled monitoring config (WF23) + collector truthfulness
+
+WF23 (Scheduled Tracked Source Monitor) reads `tracked_sources`, checks **due** active sources, updates the
+lifecycle columns, persists a `source_change_events` row, and sends one Telegram notification per confirmed
+change. Non-secret env knobs (resolved via the central config; defaults fail-closed/off):
+
+| env var | meaning | default |
+|---|---|---|
+| `MS_MONITOR_INTERVAL_HOURS` | check cadence per source | `24` |
+| `MS_ENABLE_TELEGRAM_COLLECTOR` | mark Telegram sources collectable (real `t.me/s` preview collector, WF11) | `false` |
+| `MS_ENABLE_VK_COLLECTOR` | mark VK sources collectable (requires a configured VK collector + creds, WF13) | `false` |
+
+Collector truthfulness: **website** is collectable via WF04. **Telegram** has a fixture-first/approval-gated
+`t.me/s/<channel>` public-preview collector (WF11) — recent preview posts only, not bot `channel_post`, not
+comments/history; available only when `MS_ENABLE_TELEGRAM_COLLECTOR=true`. **VK** (WF13) has only fixture +
+**disabled** live placeholders — `setup_required` until a real VK collector + credentials exist. Unavailable
+platforms stay visible in `/help` with the reason; deep analysis includes Telegram/VK only when real compatible
+data exists.
 
 ---
 

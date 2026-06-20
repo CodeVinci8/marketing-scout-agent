@@ -74,7 +74,58 @@ function actionButtons(availableCaps) {
   return rows.length ? { inline_keyboard: rows } : null;
 }
 
+// --- proactive post-report continuation (attached to the REAL delivery path) -------------------------------
+// Conversational phrasing per capability for the proactive section. (Claude may rephrase, but the action set
+// comes from the deterministic registry — never invented here.)
+const PROACTIVE_LABELS = {
+  deep_competitor_analysis: 'подробнее сравнить этих конкурентов',
+  generate_ideas: 'предложить идеи для вашего оффера',
+  add_source: 'добавить их источники в мониторинг',
+  rerun_request: 'проверить изменения повторно',
+  compare_periods: 'сравнить с прошлым периодом',
+  manage_sources: 'настроить или проверить источники'
+};
+// State-aware action set, drawn ONLY from available capabilities. A success report offers the rich set; a
+// partial/no-data report offers recovery actions instead of "success" actions.
+function proactiveActions(state, availableCaps) {
+  state = str(state).toLowerCase();
+  const noData = state === 'no_data';
+  const partial = state === 'partial';
+  let wanted;
+  if (noData) wanted = ['rerun_request', 'manage_sources', 'add_source'];
+  else if (partial) wanted = ['rerun_request', 'generate_ideas', 'manage_sources', 'compare_periods'];
+  else wanted = ['deep_competitor_analysis', 'generate_ideas', 'add_source', 'rerun_request', 'compare_periods'];
+  const byId = {}; (availableCaps || []).forEach(c => { if (c) byId[c.id] = c; });
+  return wanted.filter(id => byId[id] && byId[id].available).map(id => ({ id: id, label: PROACTIVE_LABELS[id] || (byId[id].name) }));
+}
+// The proactive sentence — useful WITHOUT buttons, ending with the natural-language invitation.
+function proactiveText(state, availableCaps) {
+  const acts = proactiveActions(state, availableCaps);
+  if (!acts.length) return 'Напишите, что сделать дальше.';
+  return 'Я могу ' + acts.map(a => a.label).join(', ') + '. Просто напишите, что сделать дальше.';
+}
+// Optional keyboard for the proactive actions (intent:<id> == the equivalent free-text request). Caller
+// attaches this to the FINAL message chunk only.
+function proactiveKeyboard(state, availableCaps) {
+  const acts = proactiveActions(state, availableCaps);
+  return acts.length ? { inline_keyboard: acts.map(a => [{ text: a.label, callback_data: 'intent:' + a.id }]) } : null;
+}
+// The full delivery body: IMMUTABLE report facts first (verbatim, never rewritten), then a state-aware
+// proactive continuation. Partial/no-data get an honest one-line status before the continuation.
+function deliveryBody(report, summary, availableCaps) {
+  report = report || {}; summary = summary || {};
+  const state = str(summary.final_state).toLowerCase() || 'completed';
+  const noData = num(summary.records_reported, 0) === 0 && state !== 'completed';
+  const facts = str(report.report_markdown) || str(report.summary_text) ||
+    ('Итог: ' + (str(summary.final_state) || 'completed') + '. Записей в отчёте: ' + num(summary.records_reported, 0) + '.');
+  const lines = [facts];
+  if (noData || state === 'no_data') lines.push('Подходящих данных не собрано.');
+  else if (state === 'partial') lines.push('Отчёт частичный — часть источников не отработала.');
+  lines.push(proactiveText(noData ? 'no_data' : state, availableCaps));
+  return lines.join('\n\n');
+}
+
 module.exports = {
   buildConversationalReply, clarificationReply, followupSuggestions, postReportReply,
-  approvalButtons, actionButtons, str, num
+  approvalButtons, actionButtons, proactiveActions, proactiveText, proactiveKeyboard, deliveryBody, str, num
 };

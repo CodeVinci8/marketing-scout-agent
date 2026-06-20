@@ -4,6 +4,37 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-21 (session 22) — Release hardening: proactive delivery + scheduled monitoring (DEC-153)
+
+**Status (exact):** final automated release-hardening before controlled install. Branch
+`stage-3-closure-and-stage-4`. **0 external calls, $0**, all workflows `active=false`, **not pushed**, no n8n
+import. Three planned commits: (1) `feat(agent): complete proactive report assistance and scheduled
+monitoring`; (2) `fix(release): verify n8n persistence subworkflow and delivery wiring`; (3) `test(release):
+add full project regression and disposable import smoke`.
+
+**Commit 1 — BUILT (DEC-153):**
+- **Proactive delivery in the REAL path:** WF20 `Build Delivery Outbox` now co-embeds conversation_response +
+  agent_charter; `deliveryBody` = immutable facts + state-aware proactive continuation (registry-driven;
+  partial/no-data → recovery actions); keyboard on FINAL chunk only (`intent:<id>` callbacks).
+- **WF23 Scheduled Tracked Source Monitor** (16 nodes, real Schedule Trigger, `active=false`) + new
+  `n8n/lib/source_monitor.js`: due selection, sched/manual idempotency window, content-hash change detection
+  (baseline-then-diff), lifecycle updates, change event persisted BEFORE notify, notify-once (`change_id =
+  source_id::new_hash`). Manual "check now" reuses the contract with a manual window.
+- **Collector truthfulness:** website=WF04; telegram=WF11 fixture-first/approval-gated t.me/s preview (recent
+  posts only, not bot channel_post/comments) — `MS_ENABLE_TELEGRAM_COLLECTOR`; vk=WF13 disabled placeholders →
+  `setup_required`. `tracked_sources.addSource` sets honest initial status + monitoring fields + chat_id.
+- Tests: `test_monitoring.js` (59). Migration: tracked_sources monitoring fields + chat_id, new
+  `source_change_events`, §B4 collector config. Deploy order += WF23. `make test` → ALL PASS (28 workflows,
+  validator 259, $0, 0 calls).
+
+**Was scheduled monitoring present before this block?** NO — no schedule trigger / WF23 existed (verified).
+**n8n CLI:** NOT installed locally → Part 6 will use a static resolver + documented disposable-import command.
+
+**Open:** commit 2 = persistence-wiring + subworkflow/trigger audit (`tools/audit_workflows.js`) + delivery
+proof tests + capability-map doc; commit 3 = full multi-turn monitoring E2E + disposable-import smoke script.
+
+---
+
 ## Session: 2026-06-21 (session 21) — Conversational agent: NL intent + bounded memory + deep analysis (DEC-151/152)
 
 **Status (exact):** transforming the button-driven Stage 4 bot into a real conversational agent. Branch

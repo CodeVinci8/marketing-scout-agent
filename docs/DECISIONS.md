@@ -5,6 +5,40 @@ Most recent first.
 
 ---
 
+## DEC-153 — Release hardening: proactive delivery + real scheduled monitoring (WF20 ext + WF23)
+
+**Date:** 2026-06-21
+
+**Context:** Pre-installation hardening exposed two gaps: (a) the proactive post-report continuation lived only
+in a helper lib — the **actual** WF20 delivery node built a bare factual line — and (b) `tracked_sources` was
+registration-only with no scheduled checking. Also needed: a truthful Telegram/VK capability map and a local
+n8n-compatibility/persistence audit.
+
+**Decisions:**
+1. **Proactive assistance moved into the real delivery path.** WF20 `Build Delivery Outbox` now co-embeds
+   `conversation_response` + `agent_charter` and builds `deliveryBody` = immutable report facts (verbatim) +
+   a state-aware proactive continuation drawn from the deterministic capability registry. Actions are offered
+   only when available; partial/no-data reports offer recovery actions (rerun/sources), not success actions.
+   The optional keyboard (`intent:<id>` callbacks == typed intents) is attached to the **final chunk only**.
+2. **Real scheduled monitor (WF23) with a Schedule Trigger, `active=false` in repo.** New `source_monitor`
+   library: due selection (skips paused/removed/setup_required/not-due), a deterministic check window
+   (`sched_<bucket>` vs `manual_<sec>` for the conversational "check now"), normalized-content hashing, a
+   baseline-then-diff change model (first check is a silent baseline), lifecycle field updates
+   (last_checked/success/next_check/content_hash/change_at/status/error/error_count), a deterministic
+   `change_id = source_id::new_hash`, and notify-once (`shouldNotifyChange` is existence-based). The change
+   event is persisted **before** the Telegram notification.
+3. **Collector truthfulness.** `collectorState`/`tracked_sources.initialStatus`: website is collectable (WF04);
+   Telegram is a fixture-first/approval-gated `t.me/s` public-preview collector (WF11) — recent preview posts
+   only, not bot `channel_post`/comments/history — available only when `MS_ENABLE_TELEGRAM_COLLECTOR=true`; VK
+   (WF13) is fixture + disabled placeholders → `setup_required` until a real collector+creds exist. A source on
+   an unconfigured platform is tracked but `setup_required`, never silently treated as live.
+
+**Constraints honored:** WF20 extended + WF23 added (real Schedule Trigger), both `active=false`; Claude/Apify
+nodes guarded; lineage/idempotency preserved; no secrets; `make test` ALL SUITES PASS (monitoring suite 59);
+0 external calls; $0; not pushed; no n8n import.
+
+---
+
 ## DEC-152 — Context-aware deep competitor analysis + orchestration reuse (WF21 + WF20 ext)
 
 **Date:** 2026-06-21

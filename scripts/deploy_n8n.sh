@@ -41,6 +41,7 @@ IMPORT_ORDER=(
   "20_agent_orchestrator.json"
   "21_deep_competitor_analysis.json"
   "22_conversation_control.json"
+  "23_scheduled_source_monitor.json"
 )
 
 # Required NON-secret runtime config (credentials stay in the n8n credential store, not here).

@@ -38,6 +38,7 @@ test-js:
 	node tests/test_agent_workflows.js
 	node tests/test_deep_analysis_contracts.js
 	node tests/test_deep_analysis_workflows.js
+	node tests/test_monitoring.js
 	node tests/test_agent_e2e.js
 	node tests/test_ci_workflow.js
 

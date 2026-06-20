@@ -36,6 +36,17 @@ function sourceAvailable(cfg, platform) {
   return allow.indexOf(low(platform)) >= 0;
 }
 
+// A newly tracked source is monitorable (active) only when a real collector is configured for its platform.
+// website is always collectable; Telegram/VK are active only when the operator has enabled their collector,
+// otherwise the honest initial state is setup_required (visible, but not checked until configured).
+function initialStatus(platform, cfg) {
+  cfg = cfg || {}; platform = low(platform);
+  if (platform === 'website') return 'active';
+  if (platform === 'telegram_channel') return cfg.enable_telegram_collector === true ? 'active' : 'setup_required';
+  if (platform === 'vk_community') return cfg.enable_vk_collector === true ? 'active' : 'setup_required';
+  return 'setup_required';
+}
+
 // Idempotent add. Blocks unavailable platforms (honest). Returns the new list + outcome + audit event.
 function addSource(existing, raw, ctx) {
   existing = Array.isArray(existing) ? existing : []; ctx = ctx || {};
@@ -43,15 +54,21 @@ function addSource(existing, raw, ctx) {
   if (!n.key) return { sources: existing, added: false, reason: 'unparseable_source', audit: null };
   if (ctx.cfg && !sourceAvailable(ctx.cfg, n.platform)) return { sources: existing, added: false, reason: 'platform_unavailable', platform: n.platform, audit: null };
   const userId = str(ctx.owner_user_id);
+  // duplicate registration returns/updates the existing source rather than creating a second row
   const dup = existing.find(s => str(s.key) === n.key && str(s.owner_user_id) === userId && s.status !== 'removed');
   if (dup) return { sources: existing, added: false, reason: 'already_tracked', source: dup, audit: null };
+  const status = initialStatus(n.platform, ctx.cfg);
   const rec = {
     source_id: 'src_' + userId + '_' + n.key.replace(/[^a-z0-9]+/gi, '_'),
-    owner_user_id: userId, platform: n.platform, ref: n.ref, key: n.key, label: n.label,
-    status: 'active', added_at: str(ctx.ts), updated_at: str(ctx.ts), last_checked_at: '',
+    owner_user_id: userId, chat_id: str(ctx.chat_id), platform: n.platform, ref: n.ref, key: n.key, label: n.label,
+    status: status, added_at: str(ctx.ts), updated_at: str(ctx.ts),
+    // monitoring lifecycle (populated by WF23 scheduled monitor)
+    last_checked_at: '', last_success_at: '', next_check_at: str(ctx.ts), last_content_hash: '',
+    last_change_at: '', last_status: status === 'active' ? 'new' : 'setup_required', last_error: '', error_count: 0,
+    check_interval_hours: (ctx.cfg && ctx.cfg.monitor_interval_hours) || 24,
     agent_request_id: str(ctx.agent_request_id)
   };
-  const audit = { event: 'source_add', owner_user_id: userId, source_id: rec.source_id, key: rec.key, platform: rec.platform, ts: str(ctx.ts) };
+  const audit = { event: 'source_add', owner_user_id: userId, source_id: rec.source_id, key: rec.key, platform: rec.platform, status: status, ts: str(ctx.ts) };
   return { sources: existing.concat([rec]), added: true, reason: '', source: rec, audit: audit };
 }
 

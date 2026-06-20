@@ -25,6 +25,9 @@ function code(id, name, pos, names, driver) {
 function manual(id, name, pos) {
   return { parameters: {}, type: 'n8n-nodes-base.manualTrigger', typeVersion: 1, position: pos, id: id, name: name };
 }
+function scheduleTrigger(id, name, pos, hours) {
+  return { parameters: { rule: { interval: [{ field: 'hours', hoursInterval: hours || 6 }] } }, type: 'n8n-nodes-base.scheduleTrigger', typeVersion: 1.2, position: pos, id: id, name: name };
+}
 function webhook(id, name, pos, p) {
   return { parameters: { httpMethod: 'POST', path: p, options: {} }, type: 'n8n-nodes-base.webhook', typeVersion: 2, position: pos, id: id, name: name };
 }
@@ -222,8 +225,8 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   execWf('wf20-wf12', 'Run WF12 Report', [1280, -160], 'WF12 report builder'),
   code('wf20-summary', 'Build Execution Summary', [1500, -160], ['source_adapter', 'execution_summary'],
     "var n=$('Normalize Adapter Result').first().json;\nvar adapters=[n.adapter];\nvar roll=rollupCollection(adapters);\nvar rep=($json&&$json.report)?$json.report:($json||{});\nvar summary=buildExecutionSummary({config_complete:(n.cfg&&n.cfg.config_complete),request:Object.assign({},n.request,{state:roll.outcome==='no_data'?'partial':(roll.outcome==='complete'?'reporting':'partial')}),plan:n.plan,collection:roll,adapters:adapters,analysis:{records_unique:rep.records_unique,records_eligible:rep.records_eligible,records_analyzed:rep.records_analyzed,llm_primary_calls:rep.llm_primary_calls,llm_repair_calls:rep.llm_repair_calls,llm_cost_status:rep.llm_cost_status||'unknown'},aggregation:{rows_after_filters:rep.rows_after_filters},report:rep,delivery:{}});\nreturn [{json:{summary:summary,report:rep,request:n.request,cfg:n.cfg}}];"),
-  code('wf20-outbox', 'Build Delivery Outbox', [1720, -160], ['telegram_io'],
-    "var s=$('Build Execution Summary').first().json;\nvar chat=String((s.request&&s.request.chat_id)||'');\nvar body=(s.report&&s.report.report_markdown)?String(s.report.report_markdown):('Отчёт готов. Итог: '+s.summary.final_state+'. Источники: '+s.summary.sources_requested+'. Записей в отчёте: '+s.summary.records_reported+'.');\nvar dlv=makeDelivery(s.request.agent_request_id,(s.report&&s.report.report_id)||'rep',chat,body);\nvar chunks=chunkMessage(body);\nvar first={chat_id:chat,text:chunks[0]};\nreturn [{json:{delivery:dlv,telegram_send_body:JSON.stringify(first),summary:s.summary}}];"),
+  code('wf20-outbox', 'Build Delivery Outbox', [1720, -160], ['telegram_io', 'conversation_response', 'agent_charter'],
+    "var s=$('Build Execution Summary').first().json;\nvar cfg=s.cfg||{};\nvar caps=availableCapabilities(cfg);\nvar chat=String((s.request&&s.request.chat_id)||'');\nvar state=String((s.summary&&s.summary.final_state)||'completed');\nvar noData=Number((s.summary&&s.summary.records_reported)||0)===0&&state!=='completed';\nvar stateForActions=noData?'no_data':state;\nvar report=s.report||{};\nvar body=deliveryBody({report_markdown:report.report_markdown,summary_text:report.summary_text},s.summary,caps);\nvar ptxt=proactiveText(stateForActions,caps);\nvar dlv=makeDelivery((s.request&&s.request.agent_request_id)||'req',(report.report_id)||'rep',chat,body);\nvar chunks=chunkMessage(body);\nvar kb=proactiveKeyboard(stateForActions,caps);\nvar bodies=chunks.map(function(t,i){var b={chat_id:chat,text:t};if(i===chunks.length-1&&kb)b.reply_markup=kb;return b;});\nreturn [{json:{delivery:dlv,telegram_send_body:JSON.stringify(bodies[0]),telegram_send_bodies:JSON.stringify(bodies),final_keyboard:kb?JSON.stringify(kb):'',chunk_count:chunks.length,proactive_text:ptxt,summary:s.summary}}];"),
   sheetsAppend('wf20-apout', 'Append telegram_outbox', [1940, -160], 'telegram_outbox'),
   httpTelegram('wf20-send', 'Send Telegram Report', [2160, -160]),
   code('wf20-blocked', 'Build Blocked Response', [180, 160], ['telegram_io'],
@@ -290,6 +293,50 @@ write('21_deep_competitor_analysis.json', wf('21 — Deep Competitor Analysis (b
   ['Append deep_analysis_recommendations', 'Build Deep Reply'],
   ['Build Deep Reply', 'Send Deep Report'],
   ['Build Deep Blocked Reply', 'Send Deep Blocked']
+]));
+
+// =========================================================================================== WF23 scheduled monitor
+// Real Schedule Trigger (active=false in repo). Picks DUE active sources, checks each through the collector
+// that genuinely exists, detects a meaningful change via content hash, updates lifecycle fields, persists a
+// change event BEFORE notifying, and notifies exactly once. Telegram/VK without a configured collector are
+// honestly left setup_required. A manual "check now" path reuses the same contract with a different window.
+write('23_scheduled_source_monitor.json', wf('23 — Scheduled Tracked Source Monitor', [
+  scheduleTrigger('wf23-sched', 'Every 6h Schedule', [-1000, -80], 6),
+  manual('wf23-manual', 'Manual Check Now', [-1000, 140]),
+  code('wf23-stick', 'Scheduled Tick', [-780, -80], [], "return [{json:{mode:'scheduled'}}];"),
+  code('wf23-mtick', 'Manual Mode Tick', [-780, 140], [], "return [{json:{mode:'manual'}}];"),
+  code('wf23-cfg', 'Resolve Agent Config', [-560, 0], ['agent_config'],
+    ENV + "\nvar mode=($json&&$json.mode)||'scheduled';\nvar cfg=resolveConfig(__env);cfg.mode=mode;\nreturn [{json:cfg}];"),
+  sheetsRead('wf23-readsrc', 'Read tracked_sources', [-340, -120], 'tracked_sources'),
+  sheetsRead('wf23-readchg', 'Read source_change_events', [-340, 120], 'source_change_events'),
+  code('wf23-due', 'Select Due Sources', [-120, 0], ['tracked_sources', 'source_monitor'],
+    "var cfg=$('Resolve Agent Config').first().json;var mode=cfg.mode||'scheduled';\nvar now=(new Date()).toISOString();\nvar sources=[];try{sources=($('Read tracked_sources').all()||[]).map(function(r){return r.json;});}catch(e){}\nvar active=sources.filter(function(s){return String(s.status)!=='removed';});\nvar part=dueSources(active,now,cfg,mode);\nvar win=checkWindow(now,cfg.monitor_interval_hours||24,mode);\nvar cap=Number(cfg.max_external_calls||40);\nvar items=part.due.slice(0,cap).map(function(s){return {json:{source:s,mode:mode,now:now,check_window:win,idempotency_key:checkIdempotencyKey(s.source_id,win),cfg:cfg}};});\nif(!items.length)items=[{json:{source:null,mode:mode,now:now,skipped:part.skipped.length,cfg:cfg}}];\nreturn items;"),
+  execWf('wf23-wf04', 'Run Website Check (WF04)', [100, -160], 'WF04 website collection + WF16 quality'),
+  code('wf23-detect', 'Check & Detect Change', [320, 0], ['source_monitor'],
+    "var inp=$json||{};var src=inp.source;\nif(!src){return [{json:{no_due:true,needs_notification:false}}];}\nvar cfg=inp.cfg||{};var now=inp.now||(new Date()).toISOString();\nvar fetched=inp.fetched||inp.content||{};\nvar res={ok:fetched.ok!==false,fields:fetched.fields||{},hash:fetched.hash,error:fetched.error};\nvar applied=applyCheckResult(src,res,now,cfg);\nvar evs=[];try{evs=($('Read source_change_events').all()||[]).map(function(r){return r.json;});}catch(e){}\nvar change=null,needs=false,reason='no_change';\nif(applied.changed){var ev=makeChangeEvent(applied.source,applied.prev_hash,applied.new_hash,fetched.summary||'обновление контента',now);var sn=shouldNotifyChange(evs,ev);change=ev;needs=sn.notify;reason=sn.notify?'changed':sn.reason;}\nreturn [{json:Object.assign({},applied.source,{changed:applied.changed,needs_notification:needs,notify_reason:reason,change_event:change})}];"),
+  sheetsAppend('wf23-upsrc', 'Update tracked_sources', [540, 0], 'tracked_sources'),
+  ifNode('wf23-if', 'Meaningful Change?', [760, 0], '={{ $json.needs_notification }}'),
+  code('wf23-notif', 'Build Change Notification', [980, -120], ['source_monitor', 'conversation_response', 'agent_charter'],
+    "var s=$('Check & Detect Change').first().json;\nvar cfg=$('Resolve Agent Config').first().json;\nvar caps=availableCapabilities(cfg);\nvar ev=s.change_event||{};\nvar chat=String(s.chat_id||s.owner_user_id||'');\nvar text=changeNotificationText(s,ev);\nvar kb=changeNotificationKeyboard(caps);\nvar body={chat_id:chat,text:text};if(kb)body.reply_markup=kb;\nreturn [{json:Object.assign({},ev,{telegram_send_body:JSON.stringify(body),notif_keyboard:kb?JSON.stringify(kb):''})}];"),
+  sheetsAppend('wf23-apchg', 'Append source_change_events', [1200, -120], 'source_change_events'),
+  httpTelegram('wf23-send', 'Send Change Notification', [1420, -120]),
+  code('wf23-nochg', 'No Change — Skip', [980, 140], [], "return [{json:{skipped:true,reason:($json&&$json.notify_reason)||'no_change'}}];")
+], [
+  ['Every 6h Schedule', 'Scheduled Tick'],
+  ['Manual Check Now', 'Manual Mode Tick'],
+  ['Scheduled Tick', 'Resolve Agent Config'],
+  ['Manual Mode Tick', 'Resolve Agent Config'],
+  ['Resolve Agent Config', 'Read tracked_sources'],
+  ['Read tracked_sources', 'Read source_change_events'],
+  ['Read source_change_events', 'Select Due Sources'],
+  ['Select Due Sources', 'Run Website Check (WF04)'],
+  ['Run Website Check (WF04)', 'Check & Detect Change'],
+  ['Check & Detect Change', 'Update tracked_sources'],
+  ['Update tracked_sources', 'Meaningful Change?'],
+  ['Meaningful Change?', 'Build Change Notification', 0],
+  ['Meaningful Change?', 'No Change — Skip', 1],
+  ['Build Change Notification', 'Append source_change_events'],
+  ['Append source_change_events', 'Send Change Notification']
 ]));
 
 console.log('Stage 4 workflows generated.');
