@@ -46,6 +46,10 @@ test-js:
 	node tests/test_report_export.js
 	node tests/test_xlsx_writer.js
 	node tests/test_report_charts.js
+	node tests/test_evidence.js
+	node tests/test_report_compare.js
+	node tests/test_report_filter.js
+	node tests/test_refresh_policy.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

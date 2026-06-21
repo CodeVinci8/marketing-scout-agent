@@ -54,6 +54,11 @@ const JS_SUITES = [
   ['report-export', 'test_report_export.js'],
   ['xlsx-writer', 'test_xlsx_writer.js'],
   ['report-charts', 'test_report_charts.js'],
+  // --- Reporting UX phase: evidence / compare / filtering / smart refresh ---
+  ['evidence', 'test_evidence.js'],
+  ['report-compare', 'test_report_compare.js'],
+  ['report-filter', 'test_report_filter.js'],
+  ['refresh-policy', 'test_refresh_policy.js'],
 ];
 
 let failed = 0;

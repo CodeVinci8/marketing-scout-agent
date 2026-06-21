@@ -28,8 +28,8 @@ const CURRENT = {
   ],
   offers: [
     { competitor: 'Cashmotor', offer: 'Займ под ПТС', price_rate: '4,5%', amount_range: 'от 100 000 до 1 500 000 ₽', term: 'до 48 мес', cta: 'Оставить заявку', promotion: '', collected_at: '2026-06-21T09:00:00+03:00', evidence_url: 'https://cashmotor.ru/pts', evidence_id: 'ev1', source_record_id: 'rec_1', source_run_id: 'wf16_0621' },
-    { competitor: 'CarCapital', offer: 'Рефинансирование', price_rate: '5,9%', amount_range: 'до 3 000 000 ₽', term: 'до 60 мес', cta: 'Рассчитать', promotion: '=HYPERLINK("http://evil","скидка")', collected_at: '2026-06-21T09:05:00+03:00', evidence_url: 'https://carcapital.ru/refi', evidence_id: 'ev2', source_record_id: 'rec_2', source_run_id: 'wf16_0621' },
-    { competitor: 'AvtoDengi', offer: 'Займ под авто', price_rate: '', amount_range: '', term: '', cta: 'Звонок', promotion: '', collected_at: '', evidence_url: 'https://avtodengi.ru/zaim', evidence_id: 'ev3', source_record_id: 'rec_3', source_run_id: 'wf16_0621' }
+    { competitor: 'CarCapital', offer: 'Рефинансирование', price_rate: '5,9%', amount_range: 'до 3 000 000 ₽', term: 'до 60 мес', cta: 'Рассчитать', promotion: '', collected_at: '2026-06-21T09:05:00+03:00', evidence_url: 'https://carcapital.ru/refi', evidence_id: 'ev2', source_record_id: 'rec_2', source_run_id: 'wf16_0621' },
+    { competitor: 'AvtoDengi', offer: 'Займ под авто', price_rate: '', amount_range: '', term: '', cta: 'Звонок', promotion: '=HYPERLINK("http://evil","скидка")', collected_at: '', evidence_url: 'https://avtodengi.ru/zaim', evidence_id: 'ev3', source_record_id: 'rec_3', source_run_id: 'wf16_0621' }
   ],
   evidence: [
     { finding_id: 'f_rate_cashmotor', finding: 'Ставка Cashmotor 4,5%', competitor: 'Cashmotor', excerpt: 'Ставка от 4,5% годовых по займам под ПТС', url: 'https://cashmotor.ru/pts', source_record_id: 'rec_1', source_run_id: 'wf16_0621', source_quality: 'healthy', confidence: 'high', collected_at: '2026-06-21T09:00:00+03:00', available: true },
