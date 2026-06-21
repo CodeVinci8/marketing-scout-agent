@@ -113,7 +113,44 @@
           "mode": "id",
           "cachedResultName": "WF04 multi-page firecrawl"
         },
-        "options": {}
+        "options": {},
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "agent_request_id": "={{ $('Deep Approval & Budget Gate').first().json.request.agent_request_id }}",
+            "source_run_id": "={{ $('Deep Approval & Budget Gate').first().json.request.agent_request_id }}",
+            "data_mode": "={{ $('Deep Approval & Budget Gate').first().json.request.data_mode || 'live' }}"
+          },
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
       },
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,

@@ -140,7 +140,53 @@
           "mode": "id",
           "cachedResultName": "WF04 website collection + WF16 quality"
         },
-        "options": {}
+        "options": {},
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "agent_request_id": "={{ ($json.source && $json.source.agent_request_id) || '' }}",
+            "source_run_id": "={{ $json.idempotency_key }}",
+            "data_mode": "={{ ($json.cfg && $json.cfg.data_mode) || 'live' }}",
+            "urls": "={{ $json.source && $json.source.ref ? [$json.source.ref] : [] }}"
+          },
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "urls",
+              "displayName": "urls",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
       },
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,

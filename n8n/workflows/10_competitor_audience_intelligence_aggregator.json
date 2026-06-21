@@ -54,7 +54,7 @@
         520
       ],
       "parameters": {
-        "jsCode": "// WF10 aggregator config. Deterministic ids; MSK timestamps; no external calls, no LLM (DEC-104).\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nreturn [{ json: {\n  time_window_days:30,\n  enable_historical_comparison:false, // §2 historical trend baseline is OPT-IN, never automatic contamination\n  niche_id:'credit_brokerage',\n  platform_filter:'',\n  region_filter:'Москва/МО',\n  service_type_filter:'',\n  max_examples_per_item:3,\n  write_confidence_seed_rules_if_empty:true,\n  requested_by:'operator',\n  request_type:'market_intelligence_aggregation',\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  // --- Stage C Closure Patch 2: strict run isolation + WF16 source_health enforcement (S3-D5, §10) ---\n  source_run_id_filter:'',\n  agent_request_id_filter:'',\n  data_mode_filter:'',          // '', live, fixture, manual_test\n  report_eligible_filter:'',    // '', 'true', 'false'\n  quality_status_filter:'',     // '', healthy, degraded, quarantined\n  review_status_filter:'',      // '', pending, accepted, ...\n  enforce_source_health:true,   // default ON: drop rows whose source run is not report-eligible\n  require_source_health:true,   // §2 PRODUCTION fail-closed: a row lacking a source_health match is EXCLUDED (set false only for dev/back-compat)\n  allow_degraded_report:false,  // explicit operator opt-in to include degraded runs (with quality warning)\n  allow_fixture_report:false,   // explicit operator opt-in to include fixture/manual_test runs (watermark)\n  allow_unverified_source:false, // PRODUCTION fail-closed: records with no source_health match AND no live/healthy self-attestation are excluded; set true ONLY for non-production/dev runs\n  agent_request_id:'wf10_req_'+stamp,\n  run_id:'wf10_'+stamp,\n  created_at:now\n}}];"
+        "jsCode": "// WF10 aggregator config. Deterministic ids; MSK timestamps; no external calls, no LLM (DEC-104).\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nvar __cfg = {\n  time_window_days:30,\n  enable_historical_comparison:false, // §2 historical trend baseline is OPT-IN, never automatic contamination\n  niche_id:'credit_brokerage',\n  platform_filter:'',\n  region_filter:'Москва/МО',\n  service_type_filter:'',\n  max_examples_per_item:3,\n  write_confidence_seed_rules_if_empty:true,\n  requested_by:'operator',\n  request_type:'market_intelligence_aggregation',\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  // --- Stage C Closure Patch 2: strict run isolation + WF16 source_health enforcement (S3-D5, §10) ---\n  source_run_id_filter:'',\n  agent_request_id_filter:'',\n  data_mode_filter:'',          // '', live, fixture, manual_test\n  report_eligible_filter:'',    // '', 'true', 'false'\n  quality_status_filter:'',     // '', healthy, degraded, quarantined\n  review_status_filter:'',      // '', pending, accepted, ...\n  enforce_source_health:true,   // default ON: drop rows whose source run is not report-eligible\n  require_source_health:true,   // §2 PRODUCTION fail-closed: a row lacking a source_health match is EXCLUDED (set false only for dev/back-compat)\n  allow_degraded_report:false,  // explicit operator opt-in to include degraded runs (with quality warning)\n  allow_fixture_report:false,   // explicit operator opt-in to include fixture/manual_test runs (watermark)\n  allow_unverified_source:false, // PRODUCTION fail-closed: records with no source_health match AND no live/healthy self-attestation are excluded; set true ONLY for non-production/dev runs\n  agent_request_id:'wf10_req_'+stamp,\n  run_id:'wf10_'+stamp,\n  created_at:now\n};\n\nvar __agentIn=(typeof $json==='object'&&$json)?$json:{};\nfunction __ov(ck,ik){var k=ik||ck;var v=__agentIn[k];if(v!==undefined&&v!==null&&v!=='')__cfg[ck]=v;}\n__ov('agent_request_id_filter','agent_request_id');\n__ov('source_run_id_filter','source_run_id');\n__ov('data_mode_filter','data_mode');\n__ov('platform_filter','platform_filter');\n__ov('region_filter','region_filter');\n__ov('service_type_filter','service_type_filter');\n__ov('report_eligible_filter','report_eligible_filter');\n__ov('quality_status_filter','quality_status_filter');\n__ov('review_status_filter','review_status_filter');\n__ov('time_window_days','time_window_days');\n__ov('niche_id','niche_id');\nreturn [{ json: __cfg }];"
       }
     },
     {
@@ -528,6 +528,148 @@
         700
       ],
       "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "workflow_run_id",
+              "displayName": "workflow_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "platform_filter",
+              "displayName": "platform_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "region_filter",
+              "displayName": "region_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "service_type_filter",
+              "displayName": "service_type_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "report_eligible_filter",
+              "displayName": "report_eligible_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "quality_status_filter",
+              "displayName": "quality_status_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "review_status_filter",
+              "displayName": "review_status_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "time_window_days",
+              "displayName": "time_window_days",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "niche_id",
+              "displayName": "niche_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -380,
+        720
+      ],
+      "id": "wf10-subtrig",
+      "name": "When Called by Agent"
     }
   ],
   "connections": {
@@ -715,6 +857,17 @@
         [
           {
             "node": "Aggregate Market Intelligence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Set Aggregator Config",
             "type": "main",
             "index": 0
           }

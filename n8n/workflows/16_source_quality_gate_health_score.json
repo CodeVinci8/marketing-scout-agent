@@ -30,7 +30,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// WF16 config. NO external API (no Claude/Apify/Firecrawl). Reads sheets + computes run health -> source_health.\n// fixture_self_test=true (default) runs the 3 demo cases offline ($0, no creds) so import+run works immediately.\n// Operator sets fixture_self_test=false + write_result=true (with spreadsheet creds) to evaluate real runs.\nfunction pad(n){return String(n).padStart(2,'0');}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction stampNow(){var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+pad(m.getUTCMonth()+1)+pad(m.getUTCDate())+'_'+pad(m.getUTCHours())+pad(m.getUTCMinutes())+pad(m.getUTCSeconds());}\nvar stamp=stampNow();\nreturn [{ json: {\n  workflow:'16 - Source Quality Gate & Health Score',\n  fixture_self_test:true,\n  source_run_id_filter:'',\n  agent_request_id_filter:'',\n  source_family_filter:'',\n  platform_filter:'',\n  freshness_window_days:30,\n  allow_degraded_report:false,\n  write_result:false,\n  dry_run:true,\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  taxonomy_version:'semantic-v2.0',\n  quality_rule_version:'qrule-v1.0',\n  run_id:'wf16_'+stamp,\n  generated_at:moscowIsoNow(),\n  note:'WF16 quality gate. fixture_self_test=true => 3 demo runs (healthy/degraded/quarantined), no sheet reads, $0. Set false to read live_source_runs + raw_market_records (+ registry/queues) filtered by source_run_id_filter/agent_request_id_filter and compute real source_health. write_result=true appends to the source_health tab (needs creds). Default report_eligible policy: live healthy=eligible; degraded excluded unless allow_degraded_report=true (adds report_quality_warning); fixture/manual_test/quarantined/no_data=never eligible. NO external API calls, no Claude.'\n}}];\n"
+        "jsCode": "// WF16 config. NO external API (no Claude/Apify/Firecrawl). Reads sheets + computes run health -> source_health.\n// fixture_self_test=true (default) runs the 3 demo cases offline ($0, no creds) so import+run works immediately.\n// Operator sets fixture_self_test=false + write_result=true (with spreadsheet creds) to evaluate real runs.\nfunction pad(n){return String(n).padStart(2,'0');}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction stampNow(){var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+pad(m.getUTCMonth()+1)+pad(m.getUTCDate())+'_'+pad(m.getUTCHours())+pad(m.getUTCMinutes())+pad(m.getUTCSeconds());}\nvar stamp=stampNow();\nvar __cfg = {\n  workflow:'16 - Source Quality Gate & Health Score',\n  fixture_self_test:true,\n  source_run_id_filter:'',\n  agent_request_id_filter:'',\n  source_family_filter:'',\n  platform_filter:'',\n  freshness_window_days:30,\n  allow_degraded_report:false,\n  write_result:false,\n  dry_run:true,\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  taxonomy_version:'semantic-v2.0',\n  quality_rule_version:'qrule-v1.0',\n  run_id:'wf16_'+stamp,\n  generated_at:moscowIsoNow(),\n  note:'WF16 quality gate. fixture_self_test=true => 3 demo runs (healthy/degraded/quarantined), no sheet reads, $0. Set false to read live_source_runs + raw_market_records (+ registry/queues) filtered by source_run_id_filter/agent_request_id_filter and compute real source_health. write_result=true appends to the source_health tab (needs creds). Default report_eligible policy: live healthy=eligible; degraded excluded unless allow_degraded_report=true (adds report_quality_warning); fixture/manual_test/quarantined/no_data=never eligible. NO external API calls, no Claude.'\n};\n\nvar __agentIn=(typeof $json==='object'&&$json)?$json:{};\nfunction __ov(ck,ik){var k=ik||ck;var v=__agentIn[k];if(v!==undefined&&v!==null&&v!=='')__cfg[ck]=v;}\n__ov('source_run_id_filter','source_run_id');\n__ov('agent_request_id_filter','agent_request_id');\n__ov('platform_filter','platform_filter');\n__ov('source_family_filter','source_family_filter');\n__ov('freshness_window_days','freshness_window_days');\n__ov('fixture_self_test','fixture_self_test');\nif(__agentIn.data_mode&&__agentIn.data_mode!=='fixture'){__cfg.fixture_self_test=false;}\nreturn [{ json: __cfg }];\n"
       },
       "id": "set_wf16_config",
       "name": "Set WF16 Config",
@@ -252,6 +252,108 @@
         1780,
         320
       ]
+    },
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "workflow_run_id",
+              "displayName": "workflow_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "platform_filter",
+              "displayName": "platform_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "source_family_filter",
+              "displayName": "source_family_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "freshness_window_days",
+              "displayName": "freshness_window_days",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "fixture_self_test",
+              "displayName": "fixture_self_test",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        160,
+        400
+      ],
+      "id": "wf16-subtrig",
+      "name": "When Called by Agent"
     }
   ],
   "connections": {
@@ -384,6 +486,17 @@
         [
           {
             "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Set WF16 Config",
             "type": "main",
             "index": 0
           }

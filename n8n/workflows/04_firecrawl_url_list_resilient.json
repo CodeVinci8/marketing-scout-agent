@@ -38,7 +38,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// OPERATOR: edit rawUrls below. MAX 5 URLs (hard cap). First run: use 3.\n// Keep ONLY example.com placeholders committed to the repo — paste real URLs locally.\nconst rawUrls = [\n  'https://example.com/competitor-1',\n  'https://example.com/competitor-2',\n  'https://example.com/competitor-3'\n];\n\nfunction pad(n){ return String(n).padStart(2, '0'); }\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now = moscowIsoNow();\nconst __stamp = moscowStamp();\nconst run_id = 'firecrawl_' + __stamp;\nconst agent_request_id = 'wf04_req_' + __stamp; // distinct request id (not the source_run_id)\n\nconst cleaned = [];\nfor (let u of rawUrls) {\n  if (u == null) continue;\n  u = String(u).trim();\n  if (u === '') continue;\n  cleaned.push(u);\n}\nconst capped = cleaned.slice(0, 5); // HARD CAP: max 5 URLs\n\n// --- Stage C Closure Patch 2: reset run-level repair/fallback accounting (S2-D7/D8/D9/D16) ---\nconst __sd=$getWorkflowStaticData('global');\n__sd.wf04_run={ urls_received:capped.length, urls_scraped:0, primary_calls:0, primary_parse_success:0, primary_parse_failure:0, repair_calls:0, repair_success:0, repair_failure:0, deterministic_fallback:0, degraded:0, quarantined:0, snapshots_written:0, firecrawl_calls:0, claude_calls:0 };\nconst items = [];\nlet idx = 0;\nfor (const u of capped) {\n  idx++;\n  items.push({ json: {\n    target_url: u,\n    source_type: 'scraped_web',\n    platform: 'website',\n    parsed_at: now,\n    source_note: 'firecrawl_url_list_manual',\n    run_id: run_id,\n    agent_request_id: agent_request_id,\n    batch_index: idx,\n    force_reprocess: false\n  }});\n}\nreturn items;"
+        "jsCode": "// OPERATOR: edit rawUrls below. MAX 5 URLs (hard cap). First run: use 3.\n// Keep ONLY example.com placeholders committed to the repo — paste real URLs locally.\nvar __agentIn = (typeof $json === 'object' && $json) ? $json : {};\nconst __exampleUrls = [\n  'https://example.com/competitor-1',\n  'https://example.com/competitor-2',\n  'https://example.com/competitor-3'\n];\nconst rawUrls = (Array.isArray(__agentIn.urls) && __agentIn.urls.length) ? __agentIn.urls : __exampleUrls;\n\nfunction pad(n){ return String(n).padStart(2, '0'); }\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now = moscowIsoNow();\nconst __stamp = moscowStamp();\nconst run_id = (__agentIn.source_run_id || __agentIn.run_id) ? String(__agentIn.source_run_id || __agentIn.run_id) : ('firecrawl_' + __stamp);\nconst agent_request_id = __agentIn.agent_request_id ? String(__agentIn.agent_request_id) : ('wf04_req_' + __stamp); // distinct request id (not the source_run_id)\n\nconst cleaned = [];\nfor (let u of rawUrls) {\n  if (u == null) continue;\n  u = String(u).trim();\n  if (u === '') continue;\n  cleaned.push(u);\n}\nconst capped = cleaned.slice(0, 5); // HARD CAP: max 5 URLs\n\n// --- Stage C Closure Patch 2: reset run-level repair/fallback accounting (S2-D7/D8/D9/D16) ---\nconst __sd=$getWorkflowStaticData('global');\n__sd.wf04_run={ urls_received:capped.length, urls_scraped:0, primary_calls:0, primary_parse_success:0, primary_parse_failure:0, repair_calls:0, repair_success:0, repair_failure:0, deterministic_fallback:0, degraded:0, quarantined:0, snapshots_written:0, firecrawl_calls:0, claude_calls:0 };\nconst items = [];\nlet idx = 0;\nfor (const u of capped) {\n  idx++;\n  items.push({ json: {\n    target_url: u,\n    source_type: 'scraped_web',\n    platform: 'website',\n    parsed_at: now,\n    source_note: 'firecrawl_url_list_manual',\n    run_id: run_id,\n    agent_request_id: agent_request_id,\n    batch_index: idx,\n    force_reprocess: __agentIn.force_reprocess === true\n  }});\n}\nreturn items;"
       }
     },
     {
@@ -761,6 +761,88 @@
           "name": "Google Sheets - Marketing Scout Service Account"
         }
       }
+    },
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "workflow_run_id",
+              "displayName": "workflow_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "urls",
+              "displayName": "urls",
+              "required": false,
+              "type": "array",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "force_reprocess",
+              "displayName": "force_reprocess",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        120,
+        500
+      ],
+      "id": "wf04-subtrig",
+      "name": "When Called by Agent"
     }
   ],
   "connections": {
@@ -1103,6 +1185,17 @@
         [
           {
             "node": "Append raw_market_records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Set URL List",
             "type": "main",
             "index": 0
           }

@@ -118,7 +118,31 @@
     },
     {
       "parameters": {
-        "jsCode": "// embedded n8n/lib/conversation_memory.js (drift-proof; test asserts equality)\n// conversation_memory.js — Part 3 + 4: bounded, multi-layer conversation memory.\n//\n// The full transcript is NEVER sent to Claude. Context is assembled in priority order under a token budget:\n//   L0 charter · L1 current request state · L2 recent message window · L3 rolling summary ·\n//   L4 durable memory · L5 relevant artifacts.\n// Older messages are compacted into a versioned rolling summary that PRESERVES decisions/entities/IDs/\n// references verbatim (the summarizer may never rewrite an ID, report or decision). Durable memory is isolated\n// per Telegram user, supports forget/forget-all with audit (the deleted sensitive value is not retained), and\n// never stores secrets. Standalone + deterministic so it embeds into a Code node.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction low(v) { return str(v).toLowerCase(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\n// ~4 chars per token is good enough for budgeting fixtures (no tokenizer dependency).\nfunction estimateTokens(text) { return Math.ceil(str(text).length / 4); }\n\nconst WINDOW_DEFAULT = 8;\nconst MEMORY_TYPES = ['preference', 'region', 'niche', 'format', 'tracked_competitor', 'selected_source', 'decision', 'monitoring_goal', 'saved_report'];\nconst ID_RX = /\\b(req_[a-z0-9_]+|rep_[a-z0-9_]+|firecrawl_[0-9_]+|apify_[a-z0-9_]+|dlv_[a-z0-9_]+|conv_[a-z0-9_]+)\\b/gi;\nconst SECRET_RX = /token|secret|api[_-]?key|passwor|bearer|bot[0-9]{6,}:|sk-ant|aiza[0-9a-z\\-_]{10,}|xox[bap]-/i;\n\n// ---- L1 current request state -----------------------------------------------------------------------------\nfunction newConversationState(conversationId, userId) {\n  return {\n    conversation_id: str(conversationId), owner_user_id: str(userId),\n    active_agent_request_id: '', current_intent: '', current_state: 'idle', current_plan_id: '',\n    last_report_id: '', last_source_run_ids: [], selected_competitors: [], selected_sources: [],\n    pending_clarification: '', pending_approval: false, current_region: '', current_service: '',\n    comparison_baseline_id: '', no_memory: false, updated_at: ''\n  };\n}\nfunction patchState(state, patch, ts) {\n  return Object.assign({}, state || {}, patch || {}, { updated_at: str(ts) || (state && state.updated_at) || '' });\n}\n\n// ---- L2 recent window -------------------------------------------------------------------------------------\nfunction recentWindow(messages, n) {\n  const m = Array.isArray(messages) ? messages : [];\n  const k = num(n, WINDOW_DEFAULT);\n  return m.slice(Math.max(0, m.length - k));\n}\n\n// ---- L3 rolling summary -----------------------------------------------------------------------------------\n// Trigger when the recent window or approximate token count exceeds the configured threshold.\nfunction shouldSummarize(messages, cfg) {\n  cfg = cfg || {};\n  const m = Array.isArray(messages) ? messages : [];\n  const win = num(cfg.recent_window, WINDOW_DEFAULT);\n  const maxTok = num(cfg.summary_trigger_tokens, 1200);\n  const tok = m.reduce((a, x) => a + estimateTokens(x && x.text), 0);\n  return m.length > win || tok > maxTok;\n}\n\nfunction collectIds(textBlobs) {\n  const ids = []; const seen = {};\n  for (const t of textBlobs) {\n    const s = str(t); let mm;\n    ID_RX.lastIndex = 0;\n    while ((mm = ID_RX.exec(s)) !== null) { const id = mm[1]; if (!seen[id]) { seen[id] = 1; ids.push(id); } }\n  }\n  return ids;\n}\n\n// Compact older messages into a versioned summary. Decisions/entities/references/IDs are PRESERVED verbatim;\n// the previous summary is retained for audit (prev_version). The summarizer never alters an ID/report/decision.\nfunction rollingSummary(prevSummary, olderMessages, opts) {\n  opts = opts || {};\n  const prev = prevSummary || null;\n  const msgs = Array.isArray(olderMessages) ? olderMessages : [];\n  const decisions = [];\n  for (const m of msgs) {\n    const t = str(m && m.text);\n    if (/approve|одобр|подтвержд|reject|отклон|cancel|отмен|добав|pause|пауз|resume|возобнов|rerun|повтор/i.test(t)) {\n      decisions.push({ role: str(m.role), message_id: str(m.message_id), gist: t.slice(0, 140) });\n    }\n  }\n  const preservedIds = collectIds(msgs.map(m => m && m.text).concat(prev ? [prev.text] : []));\n  const entities = [].concat((prev && prev.entities) || [], opts.entities || []);\n  const references = [].concat((prev && prev.references) || [], opts.references || []);\n  const goals = [].concat((prev && prev.goals) || [], opts.goals || []);\n  const unresolved = opts.unresolved || (prev && prev.unresolved) || [];\n  const version = (prev && num(prev.version, 0) || 0) + 1;\n  const dedup = a => { const s = {}; return a.filter(x => { const k = JSON.stringify(x); if (s[k]) return false; s[k] = 1; return true; }); };\n  const text = [\n    'Сводка диалога v' + version + ':',\n    goals.length ? ('Цели: ' + dedup(goals).map(str).join('; ')) : '',\n    decisions.length ? ('Решения: ' + decisions.map(d => d.gist).join(' | ')) : '',\n    entities.length ? ('Сущности: ' + dedup(entities).map(str).join(', ')) : '',\n    preservedIds.length ? ('ID: ' + preservedIds.join(', ')) : '',\n    unresolved.length ? ('Открытые вопросы: ' + dedup(unresolved).map(str).join('; ')) : ''\n  ].filter(Boolean).join('\\n');\n  return {\n    version: version, prev_version: prev ? num(prev.version, 0) : 0,\n    text: text, decisions: decisions, entities: dedup(entities), references: dedup(references),\n    goals: dedup(goals), unresolved: dedup(unresolved), preserved_ids: preservedIds,\n    covers_message_ids: msgs.map(m => str(m && m.message_id)).filter(Boolean),\n    created_at: str(opts.ts)\n  };\n}\n\n// ---- L4 durable memory ------------------------------------------------------------------------------------\nfunction isSecretLike(key, value) {\n  return SECRET_RX.test(str(key)) || SECRET_RX.test(str(typeof value === 'string' ? value : JSON.stringify(value || '')));\n}\nfunction makeMemory(p) {\n  p = p || {};\n  if (MEMORY_TYPES.indexOf(str(p.memory_type)) < 0) return { ok: false, reason: 'bad_memory_type', memory: null };\n  if (isSecretLike(p.key, p.value_json)) return { ok: false, reason: 'secret_blocked', memory: null };\n  const scope = p.conversation_id ? str(p.conversation_id) : 'global';\n  const mem = {\n    memory_id: 'mem_' + str(p.owner_user_id) + '_' + str(p.memory_type) + '_' + str(p.key),\n    owner_user_id: str(p.owner_user_id), scope: scope, conversation_id: p.conversation_id ? str(p.conversation_id) : '',\n    memory_type: str(p.memory_type), key: str(p.key), value_json: p.value_json === undefined ? '' : p.value_json,\n    source_message_id: str(p.source_message_id), confidence: num(p.confidence, 0.8), status: 'active',\n    created_at: str(p.ts), updated_at: str(p.ts), last_used_at: '', expires_at: str(p.expires_at)\n  };\n  return { ok: true, reason: '', memory: mem };\n}\n// Strict per-user isolation: one user can never see another user's memory.\nfunction memoriesForUser(memories, userId) {\n  return (memories || []).filter(m => str(m.owner_user_id) === str(userId) && str(m.status) === 'active');\n}\nfunction memoryView(memories) {\n  return (memories || []).filter(m => str(m.status) === 'active').map(m => ({\n    memory_id: m.memory_id, type: m.memory_type, key: m.key,\n    value: typeof m.value_json === 'string' ? m.value_json : JSON.stringify(m.value_json), confidence: m.confidence\n  }));\n}\n// Forget one memory by id/key/type. The audit event records WHAT was removed (key + value hash), never the\n// raw sensitive value.\nfunction valueHash(v) { const s = typeof v === 'string' ? v : JSON.stringify(v || ''); let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return 'h' + h.toString(16); }\nfunction forgetMemory(memories, selector, ctx) {\n  ctx = ctx || {}; const userId = str(ctx.owner_user_id);\n  const sel = low(selector);\n  const removed = []; const kept = [];\n  for (const m of (memories || [])) {\n    const mine = str(m.owner_user_id) === userId || userId === '';\n    const match = mine && m.status === 'active' && (low(m.memory_id) === sel || low(m.key) === sel || low(m.memory_type) === sel || (sel && low(JSON.stringify(m.value_json)).indexOf(sel) >= 0));\n    if (match) removed.push(m); else kept.push(m);\n  }\n  const audit = removed.map(m => ({\n    event: 'memory_forget', owner_user_id: m.owner_user_id, memory_id: m.memory_id,\n    memory_type: m.memory_type, key: m.key, value_hash: valueHash(m.value_json), ts: str(ctx.ts)\n  }));\n  // tombstone (status removed) rather than drop, so it is excluded from prompts but auditable\n  const out = kept.concat(removed.map(m => Object.assign({}, m, { status: 'removed', updated_at: str(ctx.ts), value_json: '' })));\n  return { memories: out, removed: removed.length, audit: audit };\n}\nfunction forgetAll(memories, ctx) {\n  ctx = ctx || {};\n  if (ctx.confirmed !== true) return { ok: false, reason: 'confirmation_required', memories: memories || [], removed: 0, audit: [] };\n  const userId = str(ctx.owner_user_id);\n  const r = (memories || []).filter(m => str(m.owner_user_id) === userId && m.status === 'active');\n  const audit = r.map(m => ({ event: 'memory_forget_all', owner_user_id: m.owner_user_id, memory_id: m.memory_id, key: m.key, value_hash: valueHash(m.value_json), ts: str(ctx.ts) }));\n  const out = (memories || []).map(m => (str(m.owner_user_id) === userId && m.status === 'active') ? Object.assign({}, m, { status: 'removed', updated_at: str(ctx.ts), value_json: '' }) : m);\n  return { ok: true, reason: '', memories: out, removed: r.length, audit: audit };\n}\n// /new — reset active conversation context but KEEP durable user preferences.\nfunction resetConversation(state, conversationId, ts) {\n  const fresh = newConversationState(conversationId, state && state.owner_user_id);\n  return patchState(fresh, {}, ts);\n}\n\n// ---- L5 artifacts (retrieve only what's needed; never whole Sheets tabs) ----------------------------------\nfunction selectArtifacts(refs, store) {\n  refs = refs || {}; store = store || {};\n  const out = {};\n  if (refs.plan && store.plans) out.plan = (store.plans || []).find(p => str(p.plan_id) === str(refs.plan)) || null;\n  if (refs.request_state) out.request_state = store.request_state || null;\n  if (refs.last_report && store.reports) out.last_report = (store.reports || []).find(r => str(r.report_id) === str(refs.last_report)) || null;\n  if (refs.competitors && store.competitors) {\n    const want = (refs.competitors || []).map(str);\n    out.competitors = (store.competitors || []).filter(c => want.indexOf(str(c.company_name || c.ref)) >= 0);\n  }\n  if (refs.sources && store.tracked_sources) out.tracked_sources = store.tracked_sources;\n  if (refs.baseline && store.reports) out.baseline = (store.reports || []).find(r => str(r.report_id) === str(refs.baseline)) || null;\n  return out;\n}\n\n// ---- retrieval + token budget -----------------------------------------------------------------------------\nconst PRIORITY = ['charter', 'state', 'safety', 'newest', 'artifacts', 'recent', 'summary', 'durable'];\nconst REQUIRED = ['charter', 'state', 'safety', 'newest'];\n\n// Assemble the prompt context under a token budget, in priority order. Required sections (charter, current\n// state, safety/approval constraints, newest user message) are NEVER dropped. Optional sections are added\n// while the budget holds; the rest are recorded as omitted. Returns the assembly + a usage record.\nfunction buildContext(sections, cfg) {\n  sections = sections || {}; cfg = cfg || {};\n  const maxTokens = num(cfg.max_context_tokens, 6000);\n  const included = []; const omitted = []; let used = 0;\n  const parts = [];\n  // 1. required first (always)\n  for (const name of REQUIRED) {\n    const text = str(sections[name]);\n    if (!text) continue;\n    used += estimateTokens(text); included.push(name); parts.push({ name: name, text: text });\n  }\n  let truncated = false;\n  // 2. optional in priority order, within budget\n  for (const name of PRIORITY) {\n    if (REQUIRED.indexOf(name) >= 0) continue;\n    const text = str(sections[name]);\n    if (!text) continue;\n    const t = estimateTokens(text);\n    if (used + t <= maxTokens) { used += t; included.push(name); parts.push({ name: name, text: text }); }\n    else { omitted.push(name); truncated = true; }\n  }\n  return {\n    prompt: parts.map(p => '## ' + p.name + '\\n' + p.text).join('\\n\\n'),\n    sections_included: included, sections_omitted: omitted,\n    est_input_tokens: used, max_context_tokens: maxTokens, truncated: truncated,\n    summary_version: num(sections.summary_version, 0)\n  };\n}\n\nfunction contextUsageRecord(ctxResult, ids) {\n  ids = ids || {};\n  return {\n    conversation_id: str(ids.conversation_id), agent_request_id: str(ids.agent_request_id),\n    est_input_tokens: num(ctxResult.est_input_tokens, 0), max_context_tokens: num(ctxResult.max_context_tokens, 0),\n    sections_included: (ctxResult.sections_included || []).join(','), sections_omitted: (ctxResult.sections_omitted || []).join(','),\n    summary_version: num(ctxResult.summary_version, 0), truncated: !!ctxResult.truncated, ts: str(ids.ts)\n  };\n}\n// --- end embedded conversation_memory ---\n\n// --- node driver ---\nvar d=$('Build Intake Decision').first().json;var r=d.routed;var cfg=r.cfg;\nvar newest=String((d.request&&d.request.request_text)||(r.parsed&&r.parsed.text)||'');\nvar state='conv='+((r.ctx&&r.ctx.conversation_id)||'new')+' intent='+((d.intent&&d.intent.intent)||'')+' arid='+((d.request&&d.request.agent_request_id)||'');\nvar safety=cfg.require_approval!==false?'APPROVAL REQUIRED before paid/external work':'approval not required';\nvar sections={charter:r.charter,state:state,safety:safety,newest:newest,artifacts:'',recent:'',summary:'',summary_version:0};\nvar ctxRes=buildContext(sections,cfg);\nvar usage=contextUsageRecord(ctxRes,{conversation_id:(r.ctx&&r.ctx.conversation_id)||'',agent_request_id:(d.request&&d.request.agent_request_id)||'',ts:(new Date()).toISOString()});\nreturn [{json:{context:ctxRes,context_usage:usage,decision:d}}];"
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "conversation_messages",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        100,
+        320
+      ],
+      "id": "wf18-readmsg",
+      "name": "Read conversation_messages"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/conversation_memory.js (drift-proof; test asserts equality)\n// conversation_memory.js — Part 3 + 4: bounded, multi-layer conversation memory.\n//\n// The full transcript is NEVER sent to Claude. Context is assembled in priority order under a token budget:\n//   L0 charter · L1 current request state · L2 recent message window · L3 rolling summary ·\n//   L4 durable memory · L5 relevant artifacts.\n// Older messages are compacted into a versioned rolling summary that PRESERVES decisions/entities/IDs/\n// references verbatim (the summarizer may never rewrite an ID, report or decision). Durable memory is isolated\n// per Telegram user, supports forget/forget-all with audit (the deleted sensitive value is not retained), and\n// never stores secrets. Standalone + deterministic so it embeds into a Code node.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction low(v) { return str(v).toLowerCase(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\n// ~4 chars per token is good enough for budgeting fixtures (no tokenizer dependency).\nfunction estimateTokens(text) { return Math.ceil(str(text).length / 4); }\n\nconst WINDOW_DEFAULT = 8;\nconst MEMORY_TYPES = ['preference', 'region', 'niche', 'format', 'tracked_competitor', 'selected_source', 'decision', 'monitoring_goal', 'saved_report'];\nconst ID_RX = /\\b(req_[a-z0-9_]+|rep_[a-z0-9_]+|firecrawl_[0-9_]+|apify_[a-z0-9_]+|dlv_[a-z0-9_]+|conv_[a-z0-9_]+)\\b/gi;\nconst SECRET_RX = /token|secret|api[_-]?key|passwor|bearer|bot[0-9]{6,}:|sk-ant|aiza[0-9a-z\\-_]{10,}|xox[bap]-/i;\n\n// ---- L1 current request state -----------------------------------------------------------------------------\nfunction newConversationState(conversationId, userId) {\n  return {\n    conversation_id: str(conversationId), owner_user_id: str(userId),\n    active_agent_request_id: '', current_intent: '', current_state: 'idle', current_plan_id: '',\n    last_report_id: '', last_source_run_ids: [], selected_competitors: [], selected_sources: [],\n    pending_clarification: '', pending_approval: false, current_region: '', current_service: '',\n    comparison_baseline_id: '', no_memory: false, updated_at: ''\n  };\n}\nfunction patchState(state, patch, ts) {\n  return Object.assign({}, state || {}, patch || {}, { updated_at: str(ts) || (state && state.updated_at) || '' });\n}\n\n// ---- L2 recent window -------------------------------------------------------------------------------------\nfunction recentWindow(messages, n) {\n  const m = Array.isArray(messages) ? messages : [];\n  const k = num(n, WINDOW_DEFAULT);\n  return m.slice(Math.max(0, m.length - k));\n}\n\n// ---- L3 rolling summary -----------------------------------------------------------------------------------\n// Trigger when the recent window or approximate token count exceeds the configured threshold.\nfunction shouldSummarize(messages, cfg) {\n  cfg = cfg || {};\n  const m = Array.isArray(messages) ? messages : [];\n  const win = num(cfg.recent_window, WINDOW_DEFAULT);\n  const maxTok = num(cfg.summary_trigger_tokens, 1200);\n  const tok = m.reduce((a, x) => a + estimateTokens(x && x.text), 0);\n  return m.length > win || tok > maxTok;\n}\n\nfunction collectIds(textBlobs) {\n  const ids = []; const seen = {};\n  for (const t of textBlobs) {\n    const s = str(t); let mm;\n    ID_RX.lastIndex = 0;\n    while ((mm = ID_RX.exec(s)) !== null) { const id = mm[1]; if (!seen[id]) { seen[id] = 1; ids.push(id); } }\n  }\n  return ids;\n}\n\n// Compact older messages into a versioned summary. Decisions/entities/references/IDs are PRESERVED verbatim;\n// the previous summary is retained for audit (prev_version). The summarizer never alters an ID/report/decision.\nfunction rollingSummary(prevSummary, olderMessages, opts) {\n  opts = opts || {};\n  const prev = prevSummary || null;\n  const msgs = Array.isArray(olderMessages) ? olderMessages : [];\n  const decisions = [];\n  for (const m of msgs) {\n    const t = str(m && m.text);\n    if (/approve|одобр|подтвержд|reject|отклон|cancel|отмен|добав|pause|пауз|resume|возобнов|rerun|повтор/i.test(t)) {\n      decisions.push({ role: str(m.role), message_id: str(m.message_id), gist: t.slice(0, 140) });\n    }\n  }\n  const preservedIds = collectIds(msgs.map(m => m && m.text).concat(prev ? [prev.text] : []));\n  const entities = [].concat((prev && prev.entities) || [], opts.entities || []);\n  const references = [].concat((prev && prev.references) || [], opts.references || []);\n  const goals = [].concat((prev && prev.goals) || [], opts.goals || []);\n  const unresolved = opts.unresolved || (prev && prev.unresolved) || [];\n  const version = (prev && num(prev.version, 0) || 0) + 1;\n  const dedup = a => { const s = {}; return a.filter(x => { const k = JSON.stringify(x); if (s[k]) return false; s[k] = 1; return true; }); };\n  const text = [\n    'Сводка диалога v' + version + ':',\n    goals.length ? ('Цели: ' + dedup(goals).map(str).join('; ')) : '',\n    decisions.length ? ('Решения: ' + decisions.map(d => d.gist).join(' | ')) : '',\n    entities.length ? ('Сущности: ' + dedup(entities).map(str).join(', ')) : '',\n    preservedIds.length ? ('ID: ' + preservedIds.join(', ')) : '',\n    unresolved.length ? ('Открытые вопросы: ' + dedup(unresolved).map(str).join('; ')) : ''\n  ].filter(Boolean).join('\\n');\n  return {\n    version: version, prev_version: prev ? num(prev.version, 0) : 0,\n    text: text, decisions: decisions, entities: dedup(entities), references: dedup(references),\n    goals: dedup(goals), unresolved: dedup(unresolved), preserved_ids: preservedIds,\n    covers_message_ids: msgs.map(m => str(m && m.message_id)).filter(Boolean),\n    created_at: str(opts.ts)\n  };\n}\n\n// ---- L4 durable memory ------------------------------------------------------------------------------------\nfunction isSecretLike(key, value) {\n  return SECRET_RX.test(str(key)) || SECRET_RX.test(str(typeof value === 'string' ? value : JSON.stringify(value || '')));\n}\nfunction makeMemory(p) {\n  p = p || {};\n  if (MEMORY_TYPES.indexOf(str(p.memory_type)) < 0) return { ok: false, reason: 'bad_memory_type', memory: null };\n  if (isSecretLike(p.key, p.value_json)) return { ok: false, reason: 'secret_blocked', memory: null };\n  const scope = p.conversation_id ? str(p.conversation_id) : 'global';\n  const mem = {\n    memory_id: 'mem_' + str(p.owner_user_id) + '_' + str(p.memory_type) + '_' + str(p.key),\n    owner_user_id: str(p.owner_user_id), scope: scope, conversation_id: p.conversation_id ? str(p.conversation_id) : '',\n    memory_type: str(p.memory_type), key: str(p.key), value_json: p.value_json === undefined ? '' : p.value_json,\n    source_message_id: str(p.source_message_id), confidence: num(p.confidence, 0.8), status: 'active',\n    created_at: str(p.ts), updated_at: str(p.ts), last_used_at: '', expires_at: str(p.expires_at)\n  };\n  return { ok: true, reason: '', memory: mem };\n}\n// Strict per-user isolation: one user can never see another user's memory.\nfunction memoriesForUser(memories, userId) {\n  return (memories || []).filter(m => str(m.owner_user_id) === str(userId) && str(m.status) === 'active');\n}\nfunction memoryView(memories) {\n  return (memories || []).filter(m => str(m.status) === 'active').map(m => ({\n    memory_id: m.memory_id, type: m.memory_type, key: m.key,\n    value: typeof m.value_json === 'string' ? m.value_json : JSON.stringify(m.value_json), confidence: m.confidence\n  }));\n}\n// Forget one memory by id/key/type. The audit event records WHAT was removed (key + value hash), never the\n// raw sensitive value.\nfunction valueHash(v) { const s = typeof v === 'string' ? v : JSON.stringify(v || ''); let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return 'h' + h.toString(16); }\nfunction forgetMemory(memories, selector, ctx) {\n  ctx = ctx || {}; const userId = str(ctx.owner_user_id);\n  const sel = low(selector);\n  const removed = []; const kept = [];\n  for (const m of (memories || [])) {\n    const mine = str(m.owner_user_id) === userId || userId === '';\n    const match = mine && m.status === 'active' && (low(m.memory_id) === sel || low(m.key) === sel || low(m.memory_type) === sel || (sel && low(JSON.stringify(m.value_json)).indexOf(sel) >= 0));\n    if (match) removed.push(m); else kept.push(m);\n  }\n  const audit = removed.map(m => ({\n    event: 'memory_forget', owner_user_id: m.owner_user_id, memory_id: m.memory_id,\n    memory_type: m.memory_type, key: m.key, value_hash: valueHash(m.value_json), ts: str(ctx.ts)\n  }));\n  // tombstone (status removed) rather than drop, so it is excluded from prompts but auditable\n  const out = kept.concat(removed.map(m => Object.assign({}, m, { status: 'removed', updated_at: str(ctx.ts), value_json: '' })));\n  return { memories: out, removed: removed.length, audit: audit };\n}\nfunction forgetAll(memories, ctx) {\n  ctx = ctx || {};\n  if (ctx.confirmed !== true) return { ok: false, reason: 'confirmation_required', memories: memories || [], removed: 0, audit: [] };\n  const userId = str(ctx.owner_user_id);\n  const r = (memories || []).filter(m => str(m.owner_user_id) === userId && m.status === 'active');\n  const audit = r.map(m => ({ event: 'memory_forget_all', owner_user_id: m.owner_user_id, memory_id: m.memory_id, key: m.key, value_hash: valueHash(m.value_json), ts: str(ctx.ts) }));\n  const out = (memories || []).map(m => (str(m.owner_user_id) === userId && m.status === 'active') ? Object.assign({}, m, { status: 'removed', updated_at: str(ctx.ts), value_json: '' }) : m);\n  return { ok: true, reason: '', memories: out, removed: r.length, audit: audit };\n}\n// /new — reset active conversation context but KEEP durable user preferences.\nfunction resetConversation(state, conversationId, ts) {\n  const fresh = newConversationState(conversationId, state && state.owner_user_id);\n  return patchState(fresh, {}, ts);\n}\n\n// ---- L5 artifacts (retrieve only what's needed; never whole Sheets tabs) ----------------------------------\nfunction selectArtifacts(refs, store) {\n  refs = refs || {}; store = store || {};\n  const out = {};\n  if (refs.plan && store.plans) out.plan = (store.plans || []).find(p => str(p.plan_id) === str(refs.plan)) || null;\n  if (refs.request_state) out.request_state = store.request_state || null;\n  if (refs.last_report && store.reports) out.last_report = (store.reports || []).find(r => str(r.report_id) === str(refs.last_report)) || null;\n  if (refs.competitors && store.competitors) {\n    const want = (refs.competitors || []).map(str);\n    out.competitors = (store.competitors || []).filter(c => want.indexOf(str(c.company_name || c.ref)) >= 0);\n  }\n  if (refs.sources && store.tracked_sources) out.tracked_sources = store.tracked_sources;\n  if (refs.baseline && store.reports) out.baseline = (store.reports || []).find(r => str(r.report_id) === str(refs.baseline)) || null;\n  return out;\n}\n\n// ---- retrieval + token budget -----------------------------------------------------------------------------\nconst PRIORITY = ['charter', 'state', 'safety', 'newest', 'artifacts', 'recent', 'summary', 'durable'];\nconst REQUIRED = ['charter', 'state', 'safety', 'newest'];\n\n// Assemble the prompt context under a token budget, in priority order. Required sections (charter, current\n// state, safety/approval constraints, newest user message) are NEVER dropped. Optional sections are added\n// while the budget holds; the rest are recorded as omitted. Returns the assembly + a usage record.\nfunction buildContext(sections, cfg) {\n  sections = sections || {}; cfg = cfg || {};\n  const maxTokens = num(cfg.max_context_tokens, 6000);\n  const included = []; const omitted = []; let used = 0;\n  const parts = [];\n  // 1. required first (always)\n  for (const name of REQUIRED) {\n    const text = str(sections[name]);\n    if (!text) continue;\n    used += estimateTokens(text); included.push(name); parts.push({ name: name, text: text });\n  }\n  let truncated = false;\n  // 2. optional in priority order, within budget\n  for (const name of PRIORITY) {\n    if (REQUIRED.indexOf(name) >= 0) continue;\n    const text = str(sections[name]);\n    if (!text) continue;\n    const t = estimateTokens(text);\n    if (used + t <= maxTokens) { used += t; included.push(name); parts.push({ name: name, text: text }); }\n    else { omitted.push(name); truncated = true; }\n  }\n  return {\n    prompt: parts.map(p => '## ' + p.name + '\\n' + p.text).join('\\n\\n'),\n    sections_included: included, sections_omitted: omitted,\n    est_input_tokens: used, max_context_tokens: maxTokens, truncated: truncated,\n    summary_version: num(sections.summary_version, 0)\n  };\n}\n\nfunction contextUsageRecord(ctxResult, ids) {\n  ids = ids || {};\n  return {\n    conversation_id: str(ids.conversation_id), agent_request_id: str(ids.agent_request_id),\n    est_input_tokens: num(ctxResult.est_input_tokens, 0), max_context_tokens: num(ctxResult.max_context_tokens, 0),\n    sections_included: (ctxResult.sections_included || []).join(','), sections_omitted: (ctxResult.sections_omitted || []).join(','),\n    summary_version: num(ctxResult.summary_version, 0), truncated: !!ctxResult.truncated, ts: str(ids.ts)\n  };\n}\n// --- end embedded conversation_memory ---\n\n// --- node driver ---\nvar d=$('Build Intake Decision').first().json;var r=d.routed;var cfg=r.cfg;var p=r.parsed||{};\nvar convId=(r.ctx&&r.ctx.conversation_id)||('conv_'+(p.chat_id||''));\nvar newest=String((d.request&&d.request.request_text)||p.text||'');\nvar msgs=[];try{msgs=($('Read conversation_messages').all()||[]).map(function(x){return x.json;}).filter(function(m){return String(m.conversation_id)===convId;});}catch(e){}\nmsgs=msgs.concat([{role:'user',message_id:p.message_id,text:newest}]);\nvar win=recentWindow(msgs,cfg.recent_window||8);\nvar summary_row=null;var did=false;\nif(shouldSummarize(msgs,cfg)){var older=msgs.slice(0,msgs.length-win.length);if(older.length){var sum=rollingSummary(null,older,{ts:(new Date()).toISOString()});summary_row={conversation_id:convId,version:sum.version,prev_version:sum.prev_version,text:sum.text,preserved_ids:(sum.preserved_ids||[]).join(','),covers_message_ids:(sum.covers_message_ids||[]).join(','),decisions:JSON.stringify(sum.decisions||[]),entities:(sum.entities||[]).join(','),unresolved:(sum.unresolved||[]).join(','),created_at:sum.created_at};did=true;}}\nvar recentText=win.map(function(m){return (m.role||'user')+': '+String(m.text||'');}).join('\\n');\nvar state='conv='+convId+' intent='+((d.intent&&d.intent.intent)||'')+' arid='+((d.request&&d.request.agent_request_id)||'');\nvar safety=cfg.require_approval!==false?'APPROVAL REQUIRED before paid/external work':'approval not required';\nvar sections={charter:r.charter,state:state,safety:safety,newest:newest,artifacts:'',recent:recentText,summary:summary_row?summary_row.text:'',summary_version:summary_row?summary_row.version:0};\nvar ctxRes=buildContext(sections,cfg);\nvar usage=contextUsageRecord(ctxRes,{conversation_id:convId,agent_request_id:(d.request&&d.request.agent_request_id)||'',ts:(new Date()).toISOString()});\nreturn [{json:{context:ctxRes,context_usage:usage,decision:d,conversation_id:convId,summary_row:summary_row,did_summarize:did}}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -149,7 +173,7 @@
       "typeVersion": 4.5,
       "position": [
         980,
-        -200
+        -260
       ],
       "id": "wf18-apreq",
       "name": "Append agent_requests"
@@ -174,7 +198,7 @@
       "typeVersion": 4.5,
       "position": [
         980,
-        -40
+        -120
       ],
       "id": "wf18-apev",
       "name": "Append agent_request_events"
@@ -199,10 +223,160 @@
       "typeVersion": 4.5,
       "position": [
         980,
-        160
+        20
       ],
       "id": "wf18-apctx",
       "name": "Append context_usage"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n\n// --- node driver ---\nvar c=$('Build Conversation Context').first().json;var d=c.decision;var r=d.routed;var p=r.parsed||{};\nreturn [{json:{conversation_id:c.conversation_id,message_id:p.message_id,role:'user',text:p.text,intent:(d.intent&&d.intent.intent)||'',created_at:(new Date()).toISOString(),archived:false}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        160
+      ],
+      "id": "wf18-pmsg",
+      "name": "Persist Message Row"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "conversation_messages",
+          "mode": "name"
+        },
+        "mappingMode": "autoMapInputData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1200,
+        160
+      ],
+      "id": "wf18-apmsg",
+      "name": "Append conversation_messages"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/conversation_memory.js (drift-proof; test asserts equality)\n// conversation_memory.js — Part 3 + 4: bounded, multi-layer conversation memory.\n//\n// The full transcript is NEVER sent to Claude. Context is assembled in priority order under a token budget:\n//   L0 charter · L1 current request state · L2 recent message window · L3 rolling summary ·\n//   L4 durable memory · L5 relevant artifacts.\n// Older messages are compacted into a versioned rolling summary that PRESERVES decisions/entities/IDs/\n// references verbatim (the summarizer may never rewrite an ID, report or decision). Durable memory is isolated\n// per Telegram user, supports forget/forget-all with audit (the deleted sensitive value is not retained), and\n// never stores secrets. Standalone + deterministic so it embeds into a Code node.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction low(v) { return str(v).toLowerCase(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\n// ~4 chars per token is good enough for budgeting fixtures (no tokenizer dependency).\nfunction estimateTokens(text) { return Math.ceil(str(text).length / 4); }\n\nconst WINDOW_DEFAULT = 8;\nconst MEMORY_TYPES = ['preference', 'region', 'niche', 'format', 'tracked_competitor', 'selected_source', 'decision', 'monitoring_goal', 'saved_report'];\nconst ID_RX = /\\b(req_[a-z0-9_]+|rep_[a-z0-9_]+|firecrawl_[0-9_]+|apify_[a-z0-9_]+|dlv_[a-z0-9_]+|conv_[a-z0-9_]+)\\b/gi;\nconst SECRET_RX = /token|secret|api[_-]?key|passwor|bearer|bot[0-9]{6,}:|sk-ant|aiza[0-9a-z\\-_]{10,}|xox[bap]-/i;\n\n// ---- L1 current request state -----------------------------------------------------------------------------\nfunction newConversationState(conversationId, userId) {\n  return {\n    conversation_id: str(conversationId), owner_user_id: str(userId),\n    active_agent_request_id: '', current_intent: '', current_state: 'idle', current_plan_id: '',\n    last_report_id: '', last_source_run_ids: [], selected_competitors: [], selected_sources: [],\n    pending_clarification: '', pending_approval: false, current_region: '', current_service: '',\n    comparison_baseline_id: '', no_memory: false, updated_at: ''\n  };\n}\nfunction patchState(state, patch, ts) {\n  return Object.assign({}, state || {}, patch || {}, { updated_at: str(ts) || (state && state.updated_at) || '' });\n}\n\n// ---- L2 recent window -------------------------------------------------------------------------------------\nfunction recentWindow(messages, n) {\n  const m = Array.isArray(messages) ? messages : [];\n  const k = num(n, WINDOW_DEFAULT);\n  return m.slice(Math.max(0, m.length - k));\n}\n\n// ---- L3 rolling summary -----------------------------------------------------------------------------------\n// Trigger when the recent window or approximate token count exceeds the configured threshold.\nfunction shouldSummarize(messages, cfg) {\n  cfg = cfg || {};\n  const m = Array.isArray(messages) ? messages : [];\n  const win = num(cfg.recent_window, WINDOW_DEFAULT);\n  const maxTok = num(cfg.summary_trigger_tokens, 1200);\n  const tok = m.reduce((a, x) => a + estimateTokens(x && x.text), 0);\n  return m.length > win || tok > maxTok;\n}\n\nfunction collectIds(textBlobs) {\n  const ids = []; const seen = {};\n  for (const t of textBlobs) {\n    const s = str(t); let mm;\n    ID_RX.lastIndex = 0;\n    while ((mm = ID_RX.exec(s)) !== null) { const id = mm[1]; if (!seen[id]) { seen[id] = 1; ids.push(id); } }\n  }\n  return ids;\n}\n\n// Compact older messages into a versioned summary. Decisions/entities/references/IDs are PRESERVED verbatim;\n// the previous summary is retained for audit (prev_version). The summarizer never alters an ID/report/decision.\nfunction rollingSummary(prevSummary, olderMessages, opts) {\n  opts = opts || {};\n  const prev = prevSummary || null;\n  const msgs = Array.isArray(olderMessages) ? olderMessages : [];\n  const decisions = [];\n  for (const m of msgs) {\n    const t = str(m && m.text);\n    if (/approve|одобр|подтвержд|reject|отклон|cancel|отмен|добав|pause|пауз|resume|возобнов|rerun|повтор/i.test(t)) {\n      decisions.push({ role: str(m.role), message_id: str(m.message_id), gist: t.slice(0, 140) });\n    }\n  }\n  const preservedIds = collectIds(msgs.map(m => m && m.text).concat(prev ? [prev.text] : []));\n  const entities = [].concat((prev && prev.entities) || [], opts.entities || []);\n  const references = [].concat((prev && prev.references) || [], opts.references || []);\n  const goals = [].concat((prev && prev.goals) || [], opts.goals || []);\n  const unresolved = opts.unresolved || (prev && prev.unresolved) || [];\n  const version = (prev && num(prev.version, 0) || 0) + 1;\n  const dedup = a => { const s = {}; return a.filter(x => { const k = JSON.stringify(x); if (s[k]) return false; s[k] = 1; return true; }); };\n  const text = [\n    'Сводка диалога v' + version + ':',\n    goals.length ? ('Цели: ' + dedup(goals).map(str).join('; ')) : '',\n    decisions.length ? ('Решения: ' + decisions.map(d => d.gist).join(' | ')) : '',\n    entities.length ? ('Сущности: ' + dedup(entities).map(str).join(', ')) : '',\n    preservedIds.length ? ('ID: ' + preservedIds.join(', ')) : '',\n    unresolved.length ? ('Открытые вопросы: ' + dedup(unresolved).map(str).join('; ')) : ''\n  ].filter(Boolean).join('\\n');\n  return {\n    version: version, prev_version: prev ? num(prev.version, 0) : 0,\n    text: text, decisions: decisions, entities: dedup(entities), references: dedup(references),\n    goals: dedup(goals), unresolved: dedup(unresolved), preserved_ids: preservedIds,\n    covers_message_ids: msgs.map(m => str(m && m.message_id)).filter(Boolean),\n    created_at: str(opts.ts)\n  };\n}\n\n// ---- L4 durable memory ------------------------------------------------------------------------------------\nfunction isSecretLike(key, value) {\n  return SECRET_RX.test(str(key)) || SECRET_RX.test(str(typeof value === 'string' ? value : JSON.stringify(value || '')));\n}\nfunction makeMemory(p) {\n  p = p || {};\n  if (MEMORY_TYPES.indexOf(str(p.memory_type)) < 0) return { ok: false, reason: 'bad_memory_type', memory: null };\n  if (isSecretLike(p.key, p.value_json)) return { ok: false, reason: 'secret_blocked', memory: null };\n  const scope = p.conversation_id ? str(p.conversation_id) : 'global';\n  const mem = {\n    memory_id: 'mem_' + str(p.owner_user_id) + '_' + str(p.memory_type) + '_' + str(p.key),\n    owner_user_id: str(p.owner_user_id), scope: scope, conversation_id: p.conversation_id ? str(p.conversation_id) : '',\n    memory_type: str(p.memory_type), key: str(p.key), value_json: p.value_json === undefined ? '' : p.value_json,\n    source_message_id: str(p.source_message_id), confidence: num(p.confidence, 0.8), status: 'active',\n    created_at: str(p.ts), updated_at: str(p.ts), last_used_at: '', expires_at: str(p.expires_at)\n  };\n  return { ok: true, reason: '', memory: mem };\n}\n// Strict per-user isolation: one user can never see another user's memory.\nfunction memoriesForUser(memories, userId) {\n  return (memories || []).filter(m => str(m.owner_user_id) === str(userId) && str(m.status) === 'active');\n}\nfunction memoryView(memories) {\n  return (memories || []).filter(m => str(m.status) === 'active').map(m => ({\n    memory_id: m.memory_id, type: m.memory_type, key: m.key,\n    value: typeof m.value_json === 'string' ? m.value_json : JSON.stringify(m.value_json), confidence: m.confidence\n  }));\n}\n// Forget one memory by id/key/type. The audit event records WHAT was removed (key + value hash), never the\n// raw sensitive value.\nfunction valueHash(v) { const s = typeof v === 'string' ? v : JSON.stringify(v || ''); let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return 'h' + h.toString(16); }\nfunction forgetMemory(memories, selector, ctx) {\n  ctx = ctx || {}; const userId = str(ctx.owner_user_id);\n  const sel = low(selector);\n  const removed = []; const kept = [];\n  for (const m of (memories || [])) {\n    const mine = str(m.owner_user_id) === userId || userId === '';\n    const match = mine && m.status === 'active' && (low(m.memory_id) === sel || low(m.key) === sel || low(m.memory_type) === sel || (sel && low(JSON.stringify(m.value_json)).indexOf(sel) >= 0));\n    if (match) removed.push(m); else kept.push(m);\n  }\n  const audit = removed.map(m => ({\n    event: 'memory_forget', owner_user_id: m.owner_user_id, memory_id: m.memory_id,\n    memory_type: m.memory_type, key: m.key, value_hash: valueHash(m.value_json), ts: str(ctx.ts)\n  }));\n  // tombstone (status removed) rather than drop, so it is excluded from prompts but auditable\n  const out = kept.concat(removed.map(m => Object.assign({}, m, { status: 'removed', updated_at: str(ctx.ts), value_json: '' })));\n  return { memories: out, removed: removed.length, audit: audit };\n}\nfunction forgetAll(memories, ctx) {\n  ctx = ctx || {};\n  if (ctx.confirmed !== true) return { ok: false, reason: 'confirmation_required', memories: memories || [], removed: 0, audit: [] };\n  const userId = str(ctx.owner_user_id);\n  const r = (memories || []).filter(m => str(m.owner_user_id) === userId && m.status === 'active');\n  const audit = r.map(m => ({ event: 'memory_forget_all', owner_user_id: m.owner_user_id, memory_id: m.memory_id, key: m.key, value_hash: valueHash(m.value_json), ts: str(ctx.ts) }));\n  const out = (memories || []).map(m => (str(m.owner_user_id) === userId && m.status === 'active') ? Object.assign({}, m, { status: 'removed', updated_at: str(ctx.ts), value_json: '' }) : m);\n  return { ok: true, reason: '', memories: out, removed: r.length, audit: audit };\n}\n// /new — reset active conversation context but KEEP durable user preferences.\nfunction resetConversation(state, conversationId, ts) {\n  const fresh = newConversationState(conversationId, state && state.owner_user_id);\n  return patchState(fresh, {}, ts);\n}\n\n// ---- L5 artifacts (retrieve only what's needed; never whole Sheets tabs) ----------------------------------\nfunction selectArtifacts(refs, store) {\n  refs = refs || {}; store = store || {};\n  const out = {};\n  if (refs.plan && store.plans) out.plan = (store.plans || []).find(p => str(p.plan_id) === str(refs.plan)) || null;\n  if (refs.request_state) out.request_state = store.request_state || null;\n  if (refs.last_report && store.reports) out.last_report = (store.reports || []).find(r => str(r.report_id) === str(refs.last_report)) || null;\n  if (refs.competitors && store.competitors) {\n    const want = (refs.competitors || []).map(str);\n    out.competitors = (store.competitors || []).filter(c => want.indexOf(str(c.company_name || c.ref)) >= 0);\n  }\n  if (refs.sources && store.tracked_sources) out.tracked_sources = store.tracked_sources;\n  if (refs.baseline && store.reports) out.baseline = (store.reports || []).find(r => str(r.report_id) === str(refs.baseline)) || null;\n  return out;\n}\n\n// ---- retrieval + token budget -----------------------------------------------------------------------------\nconst PRIORITY = ['charter', 'state', 'safety', 'newest', 'artifacts', 'recent', 'summary', 'durable'];\nconst REQUIRED = ['charter', 'state', 'safety', 'newest'];\n\n// Assemble the prompt context under a token budget, in priority order. Required sections (charter, current\n// state, safety/approval constraints, newest user message) are NEVER dropped. Optional sections are added\n// while the budget holds; the rest are recorded as omitted. Returns the assembly + a usage record.\nfunction buildContext(sections, cfg) {\n  sections = sections || {}; cfg = cfg || {};\n  const maxTokens = num(cfg.max_context_tokens, 6000);\n  const included = []; const omitted = []; let used = 0;\n  const parts = [];\n  // 1. required first (always)\n  for (const name of REQUIRED) {\n    const text = str(sections[name]);\n    if (!text) continue;\n    used += estimateTokens(text); included.push(name); parts.push({ name: name, text: text });\n  }\n  let truncated = false;\n  // 2. optional in priority order, within budget\n  for (const name of PRIORITY) {\n    if (REQUIRED.indexOf(name) >= 0) continue;\n    const text = str(sections[name]);\n    if (!text) continue;\n    const t = estimateTokens(text);\n    if (used + t <= maxTokens) { used += t; included.push(name); parts.push({ name: name, text: text }); }\n    else { omitted.push(name); truncated = true; }\n  }\n  return {\n    prompt: parts.map(p => '## ' + p.name + '\\n' + p.text).join('\\n\\n'),\n    sections_included: included, sections_omitted: omitted,\n    est_input_tokens: used, max_context_tokens: maxTokens, truncated: truncated,\n    summary_version: num(sections.summary_version, 0)\n  };\n}\n\nfunction contextUsageRecord(ctxResult, ids) {\n  ids = ids || {};\n  return {\n    conversation_id: str(ids.conversation_id), agent_request_id: str(ids.agent_request_id),\n    est_input_tokens: num(ctxResult.est_input_tokens, 0), max_context_tokens: num(ctxResult.max_context_tokens, 0),\n    sections_included: (ctxResult.sections_included || []).join(','), sections_omitted: (ctxResult.sections_omitted || []).join(','),\n    summary_version: num(ctxResult.summary_version, 0), truncated: !!ctxResult.truncated, ts: str(ids.ts)\n  };\n}\n// --- end embedded conversation_memory ---\n\n// --- node driver ---\nvar c=$('Build Conversation Context').first().json;var d=c.decision;var r=d.routed;var p=r.parsed||{};\nvar base=newConversationState(c.conversation_id,p.user_id);\nvar row=patchState(base,{chat_id:p.chat_id,active_agent_request_id:(d.request&&d.request.agent_request_id)||'',current_intent:(d.intent&&d.intent.intent)||'',current_state:(d.request&&d.request.state)||'received',pending_approval:!!(d.external&&d.start_work)},(new Date()).toISOString());\nreturn [{json:row}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        300
+      ],
+      "id": "wf18-pstate",
+      "name": "Persist State Row"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "conversation_state",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": [
+            "conversation_id"
+          ],
+          "schema": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1200,
+        300
+      ],
+      "id": "wf18-upstate",
+      "name": "Upsert conversation_state"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.did_summarize }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        980,
+        440
+      ],
+      "id": "wf18-ifsum",
+      "name": "Summary Created?"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n\n// --- node driver ---\nvar c=$('Build Conversation Context').first().json;return [{json:c.summary_row||{conversation_id:c.conversation_id}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        440
+      ],
+      "id": "wf18-shapesum",
+      "name": "Shape Summary Row"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "conversation_summaries",
+          "mode": "name"
+        },
+        "mappingMode": "autoMapInputData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1420,
+        440
+      ],
+      "id": "wf18-apsum",
+      "name": "Append conversation_summaries"
     },
     {
       "parameters": {
@@ -285,6 +459,17 @@
       "main": [
         [
           {
+            "node": "Read conversation_messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read conversation_messages": {
+      "main": [
+        [
+          {
             "node": "Route Intent",
             "type": "main",
             "index": 0
@@ -329,6 +514,65 @@
           },
           {
             "node": "Append context_usage",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Persist Message Row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Persist State Row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Summary Created?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Message Row": {
+      "main": [
+        [
+          {
+            "node": "Append conversation_messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist State Row": {
+      "main": [
+        [
+          {
+            "node": "Upsert conversation_state",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary Created?": {
+      "main": [
+        [
+          {
+            "node": "Shape Summary Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Summary Row": {
+      "main": [
+        [
+          {
+            "node": "Append conversation_summaries",
             "type": "main",
             "index": 0
           }

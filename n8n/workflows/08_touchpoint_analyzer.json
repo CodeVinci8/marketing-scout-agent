@@ -54,7 +54,7 @@
         320
       ],
       "parameters": {
-        "jsCode": "// Analyzer config. deterministic_first by default, LLM enrichment OFF. No external calls by default.\n// MSK time (DEC-083): operational timestamps + run_id use explicit Moscow time +03:00.\nfunction pad(n){return String(n).padStart(2,'0');}\nfunction moscowIsoNow(){const m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){const m=new Date(Date.now()+10800000);return m.getUTCFullYear()+pad(m.getUTCMonth()+1)+pad(m.getUTCDate())+'_'+pad(m.getUTCHours())+pad(m.getUTCMinutes())+pad(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nreturn [{ json: {\n  llm_enabled:false,                 // MASTER kill switch (DEC-119). false => NO Claude call (safe offline default).\n  analysis_mode:'llm_primary',       // §2.1 PRODUCTION target mode. Claude is the PRIMARY semantic classifier for\n                                     // substantive live records (may override WF09/WF11 hints from POST_EVIDENCE).\n                                     // Deterministic logic = Stage A pre-gate + dedup + system-event + hard-negative +\n                                     // safety + freshness + fallback + free fixture/offline classifier (semantic_core).\n                                     // Runs only when llm_enabled=true (operator approval). Until then the deterministic\n                                     // offline classifier (evidence-based, taxonomy-correct) produces semantic-v2 rows.\n  data_mode:'fixture',               // §13 fixture | live | manual_test — set to the mode you actually run.\n  taxonomy_version:'semantic-v2.0',\n  semantic_schema_version:'semantic-v2',\n  freshness_window_days:30,\n  llm_enrichment:false,\n  llm_enrichment_test_mode:false,\n  llm_test_batch_indexes:[1,7,11,12],\n  test_mode:true,\n  max_records:12,\n  analyze_statuses:['approved','new'],\n  production_statuses:['approved'],\n  agent_request_id_filter:'',\n  source_run_id_filter:'',            // §2.4 exact source-run isolation (canonical join key)\n  force_reprocess:false,              // §2.4 exactly-once: re-analyze an already-analyzed source_record only when true\n  require_quality_eligible:true,      // §2.6 record-level gate: degraded/quarantined/pending never reach analysis\n  analysis_run_id:'analysis_'+stamp,  // one analyzer execution id (lineage)\n  require_llm_approval:true,          // §1 runtime guard: an explicit token is required to call Claude\n  llm_approval_token:'',              // operator pastes the approved token here for an LLM run (value never logged)\n  expected_llm_approval_token:'WF08_LLM_APPROVED',\n  llm_budget_usd:0.50,                // §1 hard budget; a per-call estimate above this blocks the call\n  estimated_llm_cost_per_call_usd:0.01,\n  request_cancelled:false,            // §1 a cancelled request never calls Claude\n  platform_filter:'',\n  source_type_filter:'',\n  run_id:'touchpoint_'+stamp,\n  generated_at:now,\n  note:'COST-CONTROL MODE (DEC-119): llm_enabled=false is the MASTER kill switch — when false, NO record reaches Claude nodes regardless of llm_enrichment / llm_enrichment_test_mode / deterministic_needs_llm; uncertain records route to review_queue with parse_method=deterministic_uncertain_no_llm, estimated_analysis_cost_usd=0. Set llm_enabled=true (explicit operator approval) to re-enable the existing LLM path. deterministic_first + llm_enrichment=false: obvious records route WITHOUT Claude (deterministic_pre_route / deterministic_irrelevant_skip). Only deterministic_needs_llm=true records call Claude. Future mode: analysis_mode=llm_enriched + llm_enrichment=true enriches non-irrelevant records (deterministic fallback still applies). LLM 4-record test: set llm_enrichment_test_mode=true (sends only llm_test_batch_indexes through Claude). Source handoff (Stage 3.3): set agent_request_id_filter/platform_filter/source_type_filter (empty by default) to process only rows from one connector run; these apply BEFORE max_records and BEFORE per-record processing, and are independent of llm_test_batch_indexes (do NOT use batch indexes for source handoff). production: set test_mode=false -> only approved analyzed and irrelevant excluded.'\n}}];"
+        "jsCode": "// Analyzer config. deterministic_first by default, LLM enrichment OFF. No external calls by default.\n// MSK time (DEC-083): operational timestamps + run_id use explicit Moscow time +03:00.\nfunction pad(n){return String(n).padStart(2,'0');}\nfunction moscowIsoNow(){const m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){const m=new Date(Date.now()+10800000);return m.getUTCFullYear()+pad(m.getUTCMonth()+1)+pad(m.getUTCDate())+'_'+pad(m.getUTCHours())+pad(m.getUTCMinutes())+pad(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nvar __cfg = {\n  llm_enabled:false,                 // MASTER kill switch (DEC-119). false => NO Claude call (safe offline default).\n  analysis_mode:'llm_primary',       // §2.1 PRODUCTION target mode. Claude is the PRIMARY semantic classifier for\n                                     // substantive live records (may override WF09/WF11 hints from POST_EVIDENCE).\n                                     // Deterministic logic = Stage A pre-gate + dedup + system-event + hard-negative +\n                                     // safety + freshness + fallback + free fixture/offline classifier (semantic_core).\n                                     // Runs only when llm_enabled=true (operator approval). Until then the deterministic\n                                     // offline classifier (evidence-based, taxonomy-correct) produces semantic-v2 rows.\n  data_mode:'fixture',               // §13 fixture | live | manual_test — set to the mode you actually run.\n  taxonomy_version:'semantic-v2.0',\n  semantic_schema_version:'semantic-v2',\n  freshness_window_days:30,\n  llm_enrichment:false,\n  llm_enrichment_test_mode:false,\n  llm_test_batch_indexes:[1,7,11,12],\n  test_mode:true,\n  max_records:12,\n  analyze_statuses:['approved','new'],\n  production_statuses:['approved'],\n  agent_request_id_filter:'',\n  source_run_id_filter:'',            // §2.4 exact source-run isolation (canonical join key)\n  force_reprocess:false,              // §2.4 exactly-once: re-analyze an already-analyzed source_record only when true\n  require_quality_eligible:true,      // §2.6 record-level gate: degraded/quarantined/pending never reach analysis\n  analysis_run_id:'analysis_'+stamp,  // one analyzer execution id (lineage)\n  require_llm_approval:true,          // §1 runtime guard: an explicit token is required to call Claude\n  llm_approval_token:'',              // operator pastes the approved token here for an LLM run (value never logged)\n  expected_llm_approval_token:'WF08_LLM_APPROVED',\n  llm_budget_usd:0.50,                // §1 hard budget; a per-call estimate above this blocks the call\n  estimated_llm_cost_per_call_usd:0.01,\n  request_cancelled:false,            // §1 a cancelled request never calls Claude\n  platform_filter:'',\n  source_type_filter:'',\n  run_id:'touchpoint_'+stamp,\n  generated_at:now,\n  note:'COST-CONTROL MODE (DEC-119): llm_enabled=false is the MASTER kill switch — when false, NO record reaches Claude nodes regardless of llm_enrichment / llm_enrichment_test_mode / deterministic_needs_llm; uncertain records route to review_queue with parse_method=deterministic_uncertain_no_llm, estimated_analysis_cost_usd=0. Set llm_enabled=true (explicit operator approval) to re-enable the existing LLM path. deterministic_first + llm_enrichment=false: obvious records route WITHOUT Claude (deterministic_pre_route / deterministic_irrelevant_skip). Only deterministic_needs_llm=true records call Claude. Future mode: analysis_mode=llm_enriched + llm_enrichment=true enriches non-irrelevant records (deterministic fallback still applies). LLM 4-record test: set llm_enrichment_test_mode=true (sends only llm_test_batch_indexes through Claude). Source handoff (Stage 3.3): set agent_request_id_filter/platform_filter/source_type_filter (empty by default) to process only rows from one connector run; these apply BEFORE max_records and BEFORE per-record processing, and are independent of llm_test_batch_indexes (do NOT use batch indexes for source handoff). production: set test_mode=false -> only approved analyzed and irrelevant excluded.'\n};\n\nvar __agentIn=(typeof $json==='object'&&$json)?$json:{};\nfunction __ov(ck,ik){var k=ik||ck;var v=__agentIn[k];if(v!==undefined&&v!==null&&v!=='')__cfg[ck]=v;}\n__ov('agent_request_id_filter','agent_request_id');\n__ov('source_run_id_filter','source_run_id');\n__ov('data_mode','data_mode');\n__ov('force_reprocess','force_reprocess');\n__ov('platform_filter','platform_filter');\n__ov('source_type_filter','source_type_filter');\n__ov('llm_enabled','llm_enabled');\n__ov('llm_approval_token','llm_approval_token');\n__ov('llm_budget_usd','llm_budget_usd');\n__ov('request_cancelled','request_cancelled');\n__ov('max_records','max_records');\nreturn [{ json: __cfg }];"
       }
     },
     {
@@ -486,6 +486,148 @@
           "name": "Google Sheets - Marketing Scout Service Account"
         }
       }
+    },
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "workflow_run_id",
+              "displayName": "workflow_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "force_reprocess",
+              "displayName": "force_reprocess",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "platform_filter",
+              "displayName": "platform_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "source_type_filter",
+              "displayName": "source_type_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "llm_enabled",
+              "displayName": "llm_enabled",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "llm_approval_token",
+              "displayName": "llm_approval_token",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "llm_budget_usd",
+              "displayName": "llm_budget_usd",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "request_cancelled",
+              "displayName": "request_cancelled",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "max_records",
+              "displayName": "max_records",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        120,
+        520
+      ],
+      "id": "wf08-subtrig",
+      "name": "When Called by Agent"
     }
   ],
   "connections": {
@@ -718,6 +860,17 @@
         [
           {
             "node": "Append analysis_runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Set Analyzer Config",
             "type": "main",
             "index": 0
           }

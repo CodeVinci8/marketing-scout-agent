@@ -52,7 +52,7 @@
         320
       ],
       "parameters": {
-        "jsCode": "// WF12 Market Intelligence Report Builder config — v0.3 stakeholder report (DEC-112/118/122/128).\n// $0 by default: no Claude, no Telegram send, no external API. Reads WF10 tabs + competitor_site_snapshots\n// + public_lead_signals; writes ONE market_intelligence_reports row (25 cols, MARKET_INTELLIGENCE_REPORT_SCHEMA.md v0.3),\n// ONE agent_requests row and ONE live_source_runs row.\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst stamp=moscowStamp();\nreturn [{ json: {\n  // --- hard-off defaults (DEC-112): the deterministic report is complete without any of these.\n  enable_llm_summary:false,          // optional Claude summary branch — guarded, HTTP node DISABLED\n  llm_approval_token:'',             // must equal 'I_APPROVE_CLAUDE_REPORT_SUMMARY' (explicit operator approval)\n  llm_model:'claude-sonnet-4-6',     // project stack model (CLAUDE.md); pricing for cost tracking below\n  llm_max_tokens:1200,               // hard output cap for the summary\n  llm_max_input_chars:8000,          // budget guard (DEC-128): prompt facts hard-capped at this size\n  llm_max_estimated_cost_usd:0.10,   // budget guard (DEC-128): throw BEFORE the HTTP node if estimate exceeds\n  llm_input_price_per_mtok:3.0,      // USD per 1M input tokens (claude-sonnet-4-6)\n  llm_output_price_per_mtok:15.0,    // USD per 1M output tokens (claude-sonnet-4-6)\n  telegram_send:false,               // Telegram delivery — NOT implemented (delivered_to stays 'none')\n  report_type:'on_demand',           // on_demand / weekly_digest / no_data_notice (auto-set on no_data)\n  niche_id:'credit_brokerage',\n  region:'Москва/МО',\n  top_n:3,\n  max_offer_chars:90,                // v0.3: long competitor offers are shortened for readability\n  requested_by:'operator',\n  // --- Stage C Closure Patch 2: WF16 source_health enforcement + explicit fixture-report mode (§11.5/§11.7) ---\n  enforce_source_health:true,\n  require_source_health:true,\n  allow_degraded_report:false,   // explicit opt-in to include degraded runs (renders a visible warning)\n  allow_fixture_report:false,    // explicit opt-in to generate a fixture/manual_test report (renders watermark)\n  report_data_mode:'live',       // live | fixture | manual_test\n  allow_unverified_source:false, // PRODUCTION fail-closed (see WF10); set true ONLY for non-production/dev runs\n  report_id:'report_'+stamp,\n  run_id:'wf12_'+stamp,\n  agent_request_id:'wf12_req_'+stamp,\n  created_at:moscowIsoNow()\n}}];"
+        "jsCode": "// WF12 Market Intelligence Report Builder config — v0.3 stakeholder report (DEC-112/118/122/128).\n// $0 by default: no Claude, no Telegram send, no external API. Reads WF10 tabs + competitor_site_snapshots\n// + public_lead_signals; writes ONE market_intelligence_reports row (25 cols, MARKET_INTELLIGENCE_REPORT_SCHEMA.md v0.3),\n// ONE agent_requests row and ONE live_source_runs row.\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst stamp=moscowStamp();\nvar __cfg = {\n  // --- hard-off defaults (DEC-112): the deterministic report is complete without any of these.\n  enable_llm_summary:false,          // optional Claude summary branch — guarded, HTTP node DISABLED\n  llm_approval_token:'',             // must equal 'I_APPROVE_CLAUDE_REPORT_SUMMARY' (explicit operator approval)\n  llm_model:'claude-sonnet-4-6',     // project stack model (CLAUDE.md); pricing for cost tracking below\n  llm_max_tokens:1200,               // hard output cap for the summary\n  llm_max_input_chars:8000,          // budget guard (DEC-128): prompt facts hard-capped at this size\n  llm_max_estimated_cost_usd:0.10,   // budget guard (DEC-128): throw BEFORE the HTTP node if estimate exceeds\n  llm_input_price_per_mtok:3.0,      // USD per 1M input tokens (claude-sonnet-4-6)\n  llm_output_price_per_mtok:15.0,    // USD per 1M output tokens (claude-sonnet-4-6)\n  telegram_send:false,               // Telegram delivery — NOT implemented (delivered_to stays 'none')\n  report_type:'on_demand',           // on_demand / weekly_digest / no_data_notice (auto-set on no_data)\n  niche_id:'credit_brokerage',\n  region:'Москва/МО',\n  top_n:3,\n  max_offer_chars:90,                // v0.3: long competitor offers are shortened for readability\n  requested_by:'operator',\n  // --- Stage C Closure Patch 2: WF16 source_health enforcement + explicit fixture-report mode (§11.5/§11.7) ---\n  enforce_source_health:true,\n  require_source_health:true,\n  allow_degraded_report:false,   // explicit opt-in to include degraded runs (renders a visible warning)\n  allow_fixture_report:false,    // explicit opt-in to generate a fixture/manual_test report (renders watermark)\n  report_data_mode:'live',       // live | fixture | manual_test\n  allow_unverified_source:false, // PRODUCTION fail-closed (see WF10); set true ONLY for non-production/dev runs\n  report_id:'report_'+stamp,\n  run_id:'wf12_'+stamp,\n  agent_request_id:'wf12_req_'+stamp,\n  created_at:moscowIsoNow()\n};\n\nvar __agentIn=(typeof $json==='object'&&$json)?$json:{};\nfunction __ov(ck,ik){var k=ik||ck;var v=__agentIn[k];if(v!==undefined&&v!==null&&v!=='')__cfg[ck]=v;}\n__ov('agent_request_id','agent_request_id');\n__ov('report_data_mode','data_mode');\n__ov('report_type','report_type');\n__ov('niche_id','niche_id');\n__ov('region','region');\n__ov('top_n','top_n');\n__ov('enable_llm_summary','enable_llm_summary');\n__ov('llm_approval_token','llm_approval_token');\nreturn [{ json: __cfg }];"
       }
     },
     {
@@ -540,6 +540,128 @@
         80
       ],
       "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "workflow_run_id",
+              "displayName": "workflow_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "report_type",
+              "displayName": "report_type",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "niche_id",
+              "displayName": "niche_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "region",
+              "displayName": "region",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "top_n",
+              "displayName": "top_n",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "enable_llm_summary",
+              "displayName": "enable_llm_summary",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "llm_approval_token",
+              "displayName": "llm_approval_token",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -440,
+        520
+      ],
+      "id": "wf12-subtrig",
+      "name": "When Called by Agent"
     }
   ],
   "connections": {
@@ -764,6 +886,17 @@
         [
           {
             "node": "Merge Claude Summary Into Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Set Report Config",
             "type": "main",
             "index": 0
           }

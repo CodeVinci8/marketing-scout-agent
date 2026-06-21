@@ -52,6 +52,18 @@ function sheetsRead(id, name, pos, tab) {
     type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name
   };
 }
+// appendOrUpdate (upsert) keyed by matchCol — used for the single-latest-row conversation_state.
+function sheetsUpsert(id, name, pos, tab, matchCol) {
+  return {
+    parameters: {
+      operation: 'appendOrUpdate',
+      documentId: { __rl: true, value: '={{ $env.MS_SPREADSHEET_ID || "PASTE_SPREADSHEET_ID" }}', mode: 'id' },
+      sheetName: { __rl: true, value: tab, mode: 'name' },
+      columns: { mappingMode: 'autoMapInputData', matchingColumns: [matchCol], schema: [] }, options: {}
+    },
+    type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name
+  };
+}
 function ifNode(id, name, pos, expr) {
   return {
     parameters: { conditions: { options: { caseSensitive: true, typeValidation: 'strict' }, combinator: 'and',
@@ -59,9 +71,20 @@ function ifNode(id, name, pos, expr) {
     type: 'n8n-nodes-base.if', typeVersion: 2, position: pos, id: id, name: name
   };
 }
-function execWf(id, name, pos, note) {
-  return { parameters: { workflowId: { __rl: true, value: 'PASTE_WORKFLOW_ID', mode: 'id', cachedResultName: note }, options: {} },
-    type: 'n8n-nodes-base.executeWorkflow', typeVersion: 1.1, position: pos, id: id, name: name };
+// execWf: invoke a callable sub-workflow. `inputs` (optional) maps the callable's declared Execute Sub-workflow
+// Trigger fields -> value expressions, so the parent passes NAMED canonical fields (agent_request_id, source_run_id,
+// data_mode, ...) rather than relying on positional/`.first()` consumption inside the callable.
+function execWf(id, name, pos, note, inputs) {
+  var params = { workflowId: { __rl: true, value: 'PASTE_WORKFLOW_ID', mode: 'id', cachedResultName: note }, options: {} };
+  if (inputs && Object.keys(inputs).length) {
+    var keys = Object.keys(inputs);
+    params.workflowInputs = {
+      mappingMode: 'defineBelow', value: inputs,
+      schema: keys.map(function (k) { return { id: k, displayName: k, required: false, type: 'string', display: true, removed: false }; }),
+      matchingColumns: [], attemptToConvertTypes: false, convertFieldsToString: false
+    };
+  }
+  return { parameters: params, type: 'n8n-nodes-base.executeWorkflow', typeVersion: 1.1, position: pos, id: id, name: name };
 }
 function httpClaude(id, name, pos) {
   return {
@@ -122,11 +145,22 @@ write('18_telegram_agent_gateway.json', wf('18 — Telegram Agent Gateway (conve
     "var cfg=$('Resolve Agent Config').first().json;\nvar p=$('Parse Telegram Update').first().json;\nfunction J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}\nvar ctx={};try{var rows=($('Read conversation_state').all()||[]).map(function(r){return r.json;}).filter(function(r){return String(r.owner_user_id||r.user_id)===String(p.user_id);});if(rows.length)ctx=Object.assign({},rows[rows.length-1]);}catch(e){}\nif(ctx.last_report)ctx.last_report=J(ctx.last_report);\nif(ctx.selected_competitors)ctx.selected_competitors=J(ctx.selected_competitors);\nvar routed=routeIntent(p,ctx,cfg);\nvar caps=availableCapabilities(cfg);\nvar capId=routed.intent?routed.intent.intent:'clarify_request';\nvar cap=null;for(var i=0;i<caps.length;i++){if(caps[i].id===capId)cap=caps[i];}\nreturn [{json:{parsed:p,route:routed.route,intent:routed.intent,clarification:routed.clarification,capability:cap,capability_available:cap?cap.available:true,cfg:cfg,ctx:ctx,charter:charterText()}}];"),
   code('wf18-intake', 'Build Intake Decision', [540, 0], ['agent_state'],
     "var r=$('Route Intent').first().json;var p=r.parsed;\nvar seen={};try{($('Read agent_request_events').all()||[]).forEach(function(x){var k=(x.json&&x.json.idempotency_key)||'';if(k)seen[k]=1;});}catch(e){}\nvar dup=!!seen[p.idempotency_key];\nvar stamp=(new Date()).toISOString();\nif(!p.authorized){return [{json:{decision:'unauthorized',start_work:false,routed:r}}];}\nif(dup){return [{json:{decision:'duplicate',start_work:false,routed:r}}];}\nvar intent=r.intent||{intent:'clarify_request',requested_action:'clarify'};\nvar external=intent.requested_action==='build_plan';\nvar startable=external&&r.capability_available===true&&r.route==='deterministic';\nvar arid='req_'+(p.update_id||p.message_id||stamp.replace(/[^0-9]/g,''));\nvar rec={agent_request_id:arid,update_id:p.update_id,chat_id:p.chat_id,user_id:p.user_id,request_text:p.text,kind:p.kind,intent:intent.intent,requested_action:intent.requested_action,idempotency_key:p.idempotency_key,created_at:stamp,state:'received'};\nvar t=transition(rec,'classified',{ts:stamp});\nreturn [{json:{decision:'accepted',start_work:startable,external:external,request:rec,intent:intent,event:t.event,routed:r}}];"),
+  sheetsRead('wf18-readmsg', 'Read conversation_messages', [100, 320], 'conversation_messages'),
   code('wf18-ctx', 'Build Conversation Context', [760, 0], ['conversation_memory'],
-    "var d=$('Build Intake Decision').first().json;var r=d.routed;var cfg=r.cfg;\nvar newest=String((d.request&&d.request.request_text)||(r.parsed&&r.parsed.text)||'');\nvar state='conv='+((r.ctx&&r.ctx.conversation_id)||'new')+' intent='+((d.intent&&d.intent.intent)||'')+' arid='+((d.request&&d.request.agent_request_id)||'');\nvar safety=cfg.require_approval!==false?'APPROVAL REQUIRED before paid/external work':'approval not required';\nvar sections={charter:r.charter,state:state,safety:safety,newest:newest,artifacts:'',recent:'',summary:'',summary_version:0};\nvar ctxRes=buildContext(sections,cfg);\nvar usage=contextUsageRecord(ctxRes,{conversation_id:(r.ctx&&r.ctx.conversation_id)||'',agent_request_id:(d.request&&d.request.agent_request_id)||'',ts:(new Date()).toISOString()});\nreturn [{json:{context:ctxRes,context_usage:usage,decision:d}}];"),
-  sheetsAppend('wf18-apreq', 'Append agent_requests', [980, -200], 'agent_requests'),
-  sheetsAppend('wf18-apev', 'Append agent_request_events', [980, -40], 'agent_request_events'),
-  sheetsAppend('wf18-apctx', 'Append context_usage', [980, 160], 'context_usage'),
+    "var d=$('Build Intake Decision').first().json;var r=d.routed;var cfg=r.cfg;var p=r.parsed||{};\nvar convId=(r.ctx&&r.ctx.conversation_id)||('conv_'+(p.chat_id||''));\nvar newest=String((d.request&&d.request.request_text)||p.text||'');\nvar msgs=[];try{msgs=($('Read conversation_messages').all()||[]).map(function(x){return x.json;}).filter(function(m){return String(m.conversation_id)===convId;});}catch(e){}\nmsgs=msgs.concat([{role:'user',message_id:p.message_id,text:newest}]);\nvar win=recentWindow(msgs,cfg.recent_window||8);\nvar summary_row=null;var did=false;\nif(shouldSummarize(msgs,cfg)){var older=msgs.slice(0,msgs.length-win.length);if(older.length){var sum=rollingSummary(null,older,{ts:(new Date()).toISOString()});summary_row={conversation_id:convId,version:sum.version,prev_version:sum.prev_version,text:sum.text,preserved_ids:(sum.preserved_ids||[]).join(','),covers_message_ids:(sum.covers_message_ids||[]).join(','),decisions:JSON.stringify(sum.decisions||[]),entities:(sum.entities||[]).join(','),unresolved:(sum.unresolved||[]).join(','),created_at:sum.created_at};did=true;}}\nvar recentText=win.map(function(m){return (m.role||'user')+': '+String(m.text||'');}).join('\\n');\nvar state='conv='+convId+' intent='+((d.intent&&d.intent.intent)||'')+' arid='+((d.request&&d.request.agent_request_id)||'');\nvar safety=cfg.require_approval!==false?'APPROVAL REQUIRED before paid/external work':'approval not required';\nvar sections={charter:r.charter,state:state,safety:safety,newest:newest,artifacts:'',recent:recentText,summary:summary_row?summary_row.text:'',summary_version:summary_row?summary_row.version:0};\nvar ctxRes=buildContext(sections,cfg);\nvar usage=contextUsageRecord(ctxRes,{conversation_id:convId,agent_request_id:(d.request&&d.request.agent_request_id)||'',ts:(new Date()).toISOString()});\nreturn [{json:{context:ctxRes,context_usage:usage,decision:d,conversation_id:convId,summary_row:summary_row,did_summarize:did}}];"),
+  sheetsAppend('wf18-apreq', 'Append agent_requests', [980, -260], 'agent_requests'),
+  sheetsAppend('wf18-apev', 'Append agent_request_events', [980, -120], 'agent_request_events'),
+  sheetsAppend('wf18-apctx', 'Append context_usage', [980, 20], 'context_usage'),
+  code('wf18-pmsg', 'Persist Message Row', [980, 160], [],
+    "var c=$('Build Conversation Context').first().json;var d=c.decision;var r=d.routed;var p=r.parsed||{};\nreturn [{json:{conversation_id:c.conversation_id,message_id:p.message_id,role:'user',text:p.text,intent:(d.intent&&d.intent.intent)||'',created_at:(new Date()).toISOString(),archived:false}}];"),
+  sheetsAppend('wf18-apmsg', 'Append conversation_messages', [1200, 160], 'conversation_messages'),
+  code('wf18-pstate', 'Persist State Row', [980, 300], ['conversation_memory'],
+    "var c=$('Build Conversation Context').first().json;var d=c.decision;var r=d.routed;var p=r.parsed||{};\nvar base=newConversationState(c.conversation_id,p.user_id);\nvar row=patchState(base,{chat_id:p.chat_id,active_agent_request_id:(d.request&&d.request.agent_request_id)||'',current_intent:(d.intent&&d.intent.intent)||'',current_state:(d.request&&d.request.state)||'received',pending_approval:!!(d.external&&d.start_work)},(new Date()).toISOString());\nreturn [{json:row}];"),
+  sheetsUpsert('wf18-upstate', 'Upsert conversation_state', [1200, 300], 'conversation_state', 'conversation_id'),
+  ifNode('wf18-ifsum', 'Summary Created?', [980, 440], '={{ $json.did_summarize }}'),
+  code('wf18-shapesum', 'Shape Summary Row', [1200, 440], [],
+    "var c=$('Build Conversation Context').first().json;return [{json:c.summary_row||{conversation_id:c.conversation_id}}];"),
+  sheetsAppend('wf18-apsum', 'Append conversation_summaries', [1420, 440], 'conversation_summaries'),
   code('wf18-reply', 'Build Conversational Reply', [1200, 0], ['conversation_response', 'agent_charter'],
     "var c=$('Build Conversation Context').first().json;var d=c.decision;var r=d.routed;var cfg=r.cfg;\nvar chat=String((d.request&&d.request.chat_id)||(r.parsed&&r.parsed.chat_id)||'');\nvar caps=availableCapabilities(cfg);var text,kb=null;\nif(d.decision==='unauthorized'){text='Доступ запрещён.';}\nelse if(d.decision==='duplicate'){text='Запрос уже принят (дубликат обновления).';}\nelse if(r.route==='clarify'){text=clarificationReply(r.clarification);}\nelse if(d.external&&r.capability_available!==true){text='Это действие сейчас недоступно: '+((r.capability&&r.capability.unavailable_reason)||'нужна настройка источников')+'.';}\nelse if(d.external&&d.start_work){text=buildConversationalReply({understood:(r.capability&&r.capability.name)||d.intent.intent,next:'строю план и пришлю на подтверждение',requires_approval:true,source_scope:(cfg.source_allowlist||[]).join(', '),budget_ceiling:'\\u2264'+cfg.max_external_calls+' \\u0432\\u044b\\u0437\\u043e\\u0432\\u043e\\u0432, ~$'+cfg.source_budget_usd});kb=actionButtons(caps);}\nelse if(d.intent&&d.intent.intent==='help'){text=capabilityCatalogText(cfg);}\nelse{text=buildConversationalReply({understood:(r.capability&&r.capability.name)||(d.intent&&d.intent.intent),next:'готов помочь'});}\nvar body={chat_id:chat,text:text};if(kb)body.reply_markup=kb;\nreturn [{json:{telegram_send_body:JSON.stringify(body),decision:d.decision,intent:(d.intent&&d.intent.intent)||'clarify_request',start_work:d.start_work}}];"),
   httpTelegram('wf18-send', 'Send Telegram Reply', [1420, 0])
@@ -135,12 +169,20 @@ write('18_telegram_agent_gateway.json', wf('18 — Telegram Agent Gateway (conve
   ['Resolve Agent Config', 'Parse Telegram Update'],
   ['Parse Telegram Update', 'Read agent_request_events'],
   ['Read agent_request_events', 'Read conversation_state'],
-  ['Read conversation_state', 'Route Intent'],
+  ['Read conversation_state', 'Read conversation_messages'],
+  ['Read conversation_messages', 'Route Intent'],
   ['Route Intent', 'Build Intake Decision'],
   ['Build Intake Decision', 'Build Conversation Context'],
   ['Build Conversation Context', 'Append agent_requests'],
   ['Build Conversation Context', 'Append agent_request_events'],
   ['Build Conversation Context', 'Append context_usage'],
+  ['Build Conversation Context', 'Persist Message Row'],
+  ['Persist Message Row', 'Append conversation_messages'],
+  ['Build Conversation Context', 'Persist State Row'],
+  ['Persist State Row', 'Upsert conversation_state'],
+  ['Build Conversation Context', 'Summary Created?'],
+  ['Summary Created?', 'Shape Summary Row', 0],
+  ['Shape Summary Row', 'Append conversation_summaries'],
   ['Append agent_requests', 'Build Conversational Reply'],
   ['Build Conversational Reply', 'Send Telegram Reply']
 ]));
@@ -216,19 +258,44 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   code('wf20-gate', 'Approval & Budget Gate', [-160, -40], ['approval_gate', 'agent_state'],
     "var cfg=$('Resolve Agent Config').first().json;\nvar req=($json&&$json.request)?$json.request:($json||{});\nvar plan=($json&&$json.plan)?$json.plan:{source:'website',est_items:cfg.max_items_per_source,est_external_calls:5,est_source_cost_usd:0.05,est_llm_cost_usd:0.10};\nplan.source=plan.source||(plan.sources&&plan.sources[0])||'website';\nvar ctx={agent_request_id:req.agent_request_id||'req',state:req.state||'approved',approved:req.approved===true||req.state==='approved',cancelled:req.state==='cancelled'||req.cancelled===true,completed_keys:req.completed_keys||[],external_calls_made:0,source_spend_usd:0,llm_spend_usd:0};\nvar canCall=canMakeExternalCall(ctx.state);\nvar g=evaluateGate(plan,ctx,cfg);\nvar allowed=g.allowed&&canCall;\nreturn [{json:{gate_allowed:allowed,gate_reason:allowed?'ok':(g.reason||'state_blocks_external_call'),idempotency_key:g.idempotency_key,plan:plan,request:req,cfg:cfg}}];"),
   ifNode('wf20-if', 'Gate Allowed?', [-40, 0], '={{ $json.gate_allowed }}'),
-  execWf('wf20-wf04', 'Run Website Source (WF04)', [180, -160], 'WF04 firecrawl url list'),
+  execWf('wf20-wf04', 'Run Website Source (WF04)', [180, -160], 'WF04 firecrawl url list', {
+    agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
+    source_run_id: "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
+    workflow_run_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
+    data_mode: "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}",
+    urls: "={{ $('Approval & Budget Gate').first().json.request.urls || [] }}"
+  }),
   code('wf20-norm', 'Normalize Adapter Result', [400, -160], ['source_adapter'],
     "var g=$('Approval & Budget Gate').first().json;\nvar raw=($json&&$json.live_source_run)?$json.live_source_run:($json||{});\nvar res=normalizeAdapterResult('website',raw,{agent_request_id:g.request.agent_request_id});\nreturn [{json:{adapter:res,plan:g.plan,request:g.request,cfg:g.cfg}}];"),
-  execWf('wf20-wf16', 'Run WF16 Quality Gate', [620, -160], 'WF16 source quality gate'),
-  execWf('wf20-wf08', 'Run WF08 Analyzer', [840, -160], 'WF08 touchpoint analyzer'),
-  execWf('wf20-wf10', 'Run WF10 Aggregator', [1060, -160], 'WF10 audience aggregator'),
-  execWf('wf20-wf12', 'Run WF12 Report', [1280, -160], 'WF12 report builder'),
+  execWf('wf20-wf16', 'Run WF16 Quality Gate', [620, -160], 'WF16 source quality gate', {
+    agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
+    source_run_id: "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
+    data_mode: "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}",
+    platform_filter: 'website'
+  }),
+  execWf('wf20-wf08', 'Run WF08 Analyzer', [840, -160], 'WF08 touchpoint analyzer', {
+    agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
+    source_run_id: "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
+    data_mode: "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}"
+  }),
+  execWf('wf20-wf10', 'Run WF10 Aggregator', [1060, -160], 'WF10 audience aggregator', {
+    agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
+    source_run_id: "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
+    data_mode: "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}"
+  }),
+  execWf('wf20-wf12', 'Run WF12 Report', [1280, -160], 'WF12 report builder', {
+    agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
+    data_mode: "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}"
+  }),
   code('wf20-summary', 'Build Execution Summary', [1500, -160], ['source_adapter', 'execution_summary'],
     "var n=$('Normalize Adapter Result').first().json;\nvar adapters=[n.adapter];\nvar roll=rollupCollection(adapters);\nvar rep=($json&&$json.report)?$json.report:($json||{});\nvar summary=buildExecutionSummary({config_complete:(n.cfg&&n.cfg.config_complete),request:Object.assign({},n.request,{state:roll.outcome==='no_data'?'partial':(roll.outcome==='complete'?'reporting':'partial')}),plan:n.plan,collection:roll,adapters:adapters,analysis:{records_unique:rep.records_unique,records_eligible:rep.records_eligible,records_analyzed:rep.records_analyzed,llm_primary_calls:rep.llm_primary_calls,llm_repair_calls:rep.llm_repair_calls,llm_cost_status:rep.llm_cost_status||'unknown'},aggregation:{rows_after_filters:rep.rows_after_filters},report:rep,delivery:{}});\nreturn [{json:{summary:summary,report:rep,request:n.request,cfg:n.cfg}}];"),
   code('wf20-outbox', 'Build Delivery Outbox', [1720, -160], ['telegram_io', 'conversation_response', 'agent_charter'],
     "var s=$('Build Execution Summary').first().json;\nvar cfg=s.cfg||{};\nvar caps=availableCapabilities(cfg);\nvar chat=String((s.request&&s.request.chat_id)||'');\nvar state=String((s.summary&&s.summary.final_state)||'completed');\nvar noData=Number((s.summary&&s.summary.records_reported)||0)===0&&state!=='completed';\nvar stateForActions=noData?'no_data':state;\nvar report=s.report||{};\nvar body=deliveryBody({report_markdown:report.report_markdown,summary_text:report.summary_text},s.summary,caps);\nvar ptxt=proactiveText(stateForActions,caps);\nvar dlv=makeDelivery((s.request&&s.request.agent_request_id)||'req',(report.report_id)||'rep',chat,body);\nvar chunks=chunkMessage(body);\nvar kb=proactiveKeyboard(stateForActions,caps);\nvar bodies=chunks.map(function(t,i){var b={chat_id:chat,text:t};if(i===chunks.length-1&&kb)b.reply_markup=kb;return b;});\nreturn [{json:{delivery:dlv,telegram_send_body:JSON.stringify(bodies[0]),telegram_send_bodies:JSON.stringify(bodies),final_keyboard:kb?JSON.stringify(kb):'',chunk_count:chunks.length,proactive_text:ptxt,summary:s.summary}}];"),
   sheetsAppend('wf20-apout', 'Append telegram_outbox', [1940, -160], 'telegram_outbox'),
   httpTelegram('wf20-send', 'Send Telegram Report', [2160, -160]),
+  code('wf20-shapesum', 'Shape Execution Summary Row', [1500, 60], [],
+    "var s=$('Build Execution Summary').first().json;return [{json:s.summary}];"),
+  sheetsAppend('wf20-apsum', 'Append execution_summaries', [1720, 60], 'execution_summaries'),
   code('wf20-blocked', 'Build Blocked Response', [180, 160], ['telegram_io'],
     "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar body={chat_id:chat,text:'Запрос не запущен: '+g.gate_reason};\nreturn [{json:{telegram_send_body:JSON.stringify(body),gate_reason:g.gate_reason}}];"),
   httpTelegram('wf20-sendblock', 'Send Blocked Reply', [400, 160])
@@ -250,6 +317,8 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   ['Run WF10 Aggregator', 'Run WF12 Report'],
   ['Run WF12 Report', 'Build Execution Summary'],
   ['Build Execution Summary', 'Build Delivery Outbox'],
+  ['Build Execution Summary', 'Shape Execution Summary Row'],
+  ['Shape Execution Summary Row', 'Append execution_summaries'],
   ['Build Delivery Outbox', 'Append telegram_outbox'],
   ['Append telegram_outbox', 'Send Telegram Report'],
   ['Build Blocked Response', 'Send Blocked Reply']
@@ -268,7 +337,11 @@ write('21_deep_competitor_analysis.json', wf('21 — Deep Competitor Analysis (b
   code('wf21-gate', 'Deep Approval & Budget Gate', [60, 0], ['approval_gate', 'agent_state'],
     "var j=$('Build Deep Plan').first().json;var cfg=j.cfg;var dp=j.deep_plan;var req=j.request;\nvar gplan={source:(dp.selected_platforms&&dp.selected_platforms[0])||'website',attempt:1,est_items:dp.page_limit_per_competitor*Math.max(1,(dp.selected_competitors||[]).length),est_external_calls:dp.est_external_calls,est_source_cost_usd:dp.est_source_budget_usd,est_llm_cost_usd:dp.est_llm_budget_usd};\nvar ctx={agent_request_id:req.agent_request_id,state:req.state||'approved',approved:req.approved===true||req.state==='approved',cancelled:req.state==='cancelled',completed_keys:req.completed_keys||[],external_calls_made:0,source_spend_usd:0,llm_spend_usd:0};\nvar canCall=canMakeExternalCall(ctx.state);var g=evaluateGate(gplan,ctx,cfg);\nvar allowed=g.allowed&&canCall&&j.capability_available===true;\nreturn [{json:{gate_allowed:allowed,gate_reason:allowed?'ok':(g.reason||(j.capability_available!==true?'capability_unavailable':'state_blocks_external_call')),deep_plan:dp,request:req,cfg:cfg}}];"),
   ifNode('wf21-if', 'Deep Gate Allowed?', [280, 0], '={{ $json.gate_allowed }}'),
-  execWf('wf21-wf04', 'Collect Deep Evidence (WF04)', [500, -160], 'WF04 multi-page firecrawl'),
+  execWf('wf21-wf04', 'Collect Deep Evidence (WF04)', [500, -160], 'WF04 multi-page firecrawl', {
+    agent_request_id: "={{ $('Deep Approval & Budget Gate').first().json.request.agent_request_id }}",
+    source_run_id: "={{ $('Deep Approval & Budget Gate').first().json.request.agent_request_id }}",
+    data_mode: "={{ $('Deep Approval & Budget Gate').first().json.request.data_mode || 'live' }}"
+  }),
   code('wf21-assemble', 'Assemble Deep Report', [720, -160], ['deep_analysis'],
     "var g=$('Deep Approval & Budget Gate').first().json;\nvar inp=$json||{};\nvar comp=(g.deep_plan.selected_competitors&&g.deep_plan.selected_competitors[0])||'';\nvar report=assembleDeepReport(comp,inp.findings||[],inp.recommendations||[]);\nreturn [{json:{deep_report:report,deep_plan:g.deep_plan,request:g.request,cfg:g.cfg}}];"),
   sheetsAppend('wf21-apf', 'Append deep_analysis_findings', [940, -260], 'deep_analysis_findings'),
@@ -311,7 +384,12 @@ write('23_scheduled_source_monitor.json', wf('23 — Scheduled Tracked Source Mo
   sheetsRead('wf23-readchg', 'Read source_change_events', [-340, 120], 'source_change_events'),
   code('wf23-due', 'Select Due Sources', [-120, 0], ['tracked_sources', 'source_monitor'],
     "var cfg=$('Resolve Agent Config').first().json;var mode=cfg.mode||'scheduled';\nvar now=(new Date()).toISOString();\nvar sources=[];try{sources=($('Read tracked_sources').all()||[]).map(function(r){return r.json;});}catch(e){}\nvar active=sources.filter(function(s){return String(s.status)!=='removed';});\nvar part=dueSources(active,now,cfg,mode);\nvar win=checkWindow(now,cfg.monitor_interval_hours||24,mode);\nvar cap=Number(cfg.max_external_calls||40);\nvar items=part.due.slice(0,cap).map(function(s){return {json:{source:s,mode:mode,now:now,check_window:win,idempotency_key:checkIdempotencyKey(s.source_id,win),cfg:cfg}};});\nif(!items.length)items=[{json:{source:null,mode:mode,now:now,skipped:part.skipped.length,cfg:cfg}}];\nreturn items;"),
-  execWf('wf23-wf04', 'Run Website Check (WF04)', [100, -160], 'WF04 website collection + WF16 quality'),
+  execWf('wf23-wf04', 'Run Website Check (WF04)', [100, -160], 'WF04 website collection + WF16 quality', {
+    agent_request_id: "={{ ($json.source && $json.source.agent_request_id) || '' }}",
+    source_run_id: "={{ $json.idempotency_key }}",
+    data_mode: "={{ ($json.cfg && $json.cfg.data_mode) || 'live' }}",
+    urls: "={{ $json.source && $json.source.ref ? [$json.source.ref] : [] }}"
+  }),
   code('wf23-detect', 'Check & Detect Change', [320, 0], ['source_monitor'],
     "var inp=$json||{};var src=inp.source;\nif(!src){return [{json:{no_due:true,needs_notification:false}}];}\nvar cfg=inp.cfg||{};var now=inp.now||(new Date()).toISOString();\nvar fetched=inp.fetched||inp.content||{};\nvar res={ok:fetched.ok!==false,fields:fetched.fields||{},hash:fetched.hash,error:fetched.error};\nvar applied=applyCheckResult(src,res,now,cfg);\nvar evs=[];try{evs=($('Read source_change_events').all()||[]).map(function(r){return r.json;});}catch(e){}\nvar change=null,needs=false,reason='no_change';\nif(applied.changed){var ev=makeChangeEvent(applied.source,applied.prev_hash,applied.new_hash,fetched.summary||'обновление контента',now);var sn=shouldNotifyChange(evs,ev);change=ev;needs=sn.notify;reason=sn.notify?'changed':sn.reason;}\nreturn [{json:Object.assign({},applied.source,{changed:applied.changed,needs_notification:needs,notify_reason:reason,change_event:change})}];"),
   sheetsAppend('wf23-upsrc', 'Update tracked_sources', [540, 0], 'tracked_sources'),

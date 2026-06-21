@@ -175,7 +175,62 @@
           "mode": "id",
           "cachedResultName": "WF04 firecrawl url list"
         },
-        "options": {}
+        "options": {},
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "agent_request_id": "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
+            "source_run_id": "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
+            "workflow_run_id": "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
+            "data_mode": "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}",
+            "urls": "={{ $('Approval & Budget Gate').first().json.request.urls || [] }}"
+          },
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "workflow_run_id",
+              "displayName": "workflow_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "urls",
+              "displayName": "urls",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
       },
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
@@ -207,7 +262,53 @@
           "mode": "id",
           "cachedResultName": "WF16 source quality gate"
         },
-        "options": {}
+        "options": {},
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "agent_request_id": "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
+            "source_run_id": "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
+            "data_mode": "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}",
+            "platform_filter": "website"
+          },
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "platform_filter",
+              "displayName": "platform_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
       },
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
@@ -226,7 +327,44 @@
           "mode": "id",
           "cachedResultName": "WF08 touchpoint analyzer"
         },
-        "options": {}
+        "options": {},
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "agent_request_id": "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
+            "source_run_id": "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
+            "data_mode": "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}"
+          },
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
       },
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
@@ -245,7 +383,44 @@
           "mode": "id",
           "cachedResultName": "WF10 audience aggregator"
         },
-        "options": {}
+        "options": {},
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "agent_request_id": "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
+            "source_run_id": "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
+            "data_mode": "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}"
+          },
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
       },
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
@@ -264,7 +439,35 @@
           "mode": "id",
           "cachedResultName": "WF12 report builder"
         },
-        "options": {}
+        "options": {},
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "agent_request_id": "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
+            "data_mode": "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}"
+          },
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
       },
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
@@ -343,6 +546,44 @@
       ],
       "id": "wf20-send",
       "name": "Send Telegram Report"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n\n// --- node driver ---\nvar s=$('Build Execution Summary').first().json;return [{json:s.summary}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        60
+      ],
+      "id": "wf20-shapesum",
+      "name": "Shape Execution Summary Row"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "execution_summaries",
+          "mode": "name"
+        },
+        "mappingMode": "autoMapInputData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1720,
+        60
+      ],
+      "id": "wf20-apsum",
+      "name": "Append execution_summaries"
     },
     {
       "parameters": {
@@ -550,6 +791,22 @@
         [
           {
             "node": "Build Delivery Outbox",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Shape Execution Summary Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Execution Summary Row": {
+      "main": [
+        [
+          {
+            "node": "Append execution_summaries",
             "type": "main",
             "index": 0
           }

@@ -46,6 +46,8 @@ const JS_SUITES = [
   // --- Proactive delivery + scheduled tracked-source monitoring (WF23) ---
   ['monitoring', 'test_monitoring.js'],
   ['agent-e2e', 'test_agent_e2e.js'],
+  // --- Release hardening: n8n topology/trigger audit + persistence + delivery proof ---
+  ['release-audit', 'test_release_audit.js'],
   ['ci-workflow', 'test_ci_workflow.js'],
 ];
 
