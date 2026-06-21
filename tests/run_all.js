@@ -50,6 +50,10 @@ const JS_SUITES = [
   ['release-audit', 'test_release_audit.js'],
   ['release-e2e', 'test_release_e2e.js'],
   ['ci-workflow', 'test_ci_workflow.js'],
+  // --- Reporting UX phase: scoped CSV/XLSX/chart exports ---
+  ['report-export', 'test_report_export.js'],
+  ['xlsx-writer', 'test_xlsx_writer.js'],
+  ['report-charts', 'test_report_charts.js'],
 ];
 
 let failed = 0;
