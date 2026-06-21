@@ -5,6 +5,35 @@ Most recent first.
 
 ---
 
+## DEC-155 — Reporting UX & release-verification phase (WF24-26, scope/progress/digest, VK, storage, safety)
+
+**Date:** 2026-06-21
+
+**Decision:** On branch `feat/reporting-ux-and-release-verification` (baseline `b7a95c1`), add the reporting/UX,
+optional VK collector, storage-contract and URL-safety layers as **zero-dependency libraries embedded into real
+generated workflows** with the existing drift-proof pattern. New workflows **WF24** (report export/filter/compare/
+refresh/evidence + Telegram document/photo + attachment outbox), **WF25** (weekly digest, schedule inactive),
+**WF26** (VK public community collector, credential-gated). `scope_preview` wired into WF19's approval message;
+`progress_tracker` into WF20; VK monitoring edge into WF23. `agent_charter` + `intent_router` gain `export_report/
+show_chart/show_evidence/filter_report/refresh_sources/weekly_digest/manage_digest` with RU NL routing. New
+storage layer: `config/sheets_contracts.json` (40 tabs) + `tools/validate_sheet_contracts.js` + `sheet_audit.js`
++ `retention_policy.js`. New safety layer: `url_safety.js` (SSRF + prompt-injection) and `telegram_channel.js`
+(honest bot-update vs setup_required history).
+
+**Why:** A library + unit test is not integration. The phase requires the proven libraries to be reachable through
+actual n8n paths, scoped by `(owner_user_id, agent_request_id, report_id)`, with honest capability truth (cost
+never fabricated; VK/Telegram setup_required until configured; no recollection for exports/digests).
+
+**How it stays safe:** every workflow `active=false`; `$0`, 0 external calls in all tests; VK/Telegram tokens only
+in the n8n credential store (never in JSON/logs/fixtures); XLSX uses Node `zlib` (requires
+`NODE_FUNCTION_ALLOW_BUILTIN=zlib` at deploy); retention is dry-run by default with a global protection floor;
+generator `libCore` now strips local cross-requires so report libs embed cleanly (drift-safe for existing WFs).
+
+**Status:** VK collector + Telegram bot-update path are **structurally implemented, offline-tested,
+live-unverified**. Not pushed/merged/imported. `make test` ALL SUITES PASS.
+
+---
+
 ## DEC-154 — Callable Stage 1-3 workflows made runtime-invocable via Execute Sub-workflow Triggers
 
 **Date:** 2026-06-21

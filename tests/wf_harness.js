@@ -34,9 +34,17 @@ function runCodeNode(run, wf, name, inputItems) {
     get item() { return { json: (inputItems[0] && inputItems[0].json) || {} }; }
   };
   const $getWorkflowStaticData = () => run.staticData;
-  const fn = new Function('$', '$input', '$getWorkflowStaticData', '$json', code);
+  // Faithful to an n8n Code node with NODE_FUNCTION_ALLOW_BUILTIN restricted to PURE built-ins only (zlib/crypto/
+  // buffer/util) — needed for the real XLSX writer (zlib). No I/O/network module is ever exposed, so the offline
+  // guarantee (no network, $0) holds. Deploy docs must set NODE_FUNCTION_ALLOW_BUILTIN=zlib (or *) for XLSX export.
+  const SAFE_BUILTINS = ['zlib', 'crypto', 'buffer', 'util', 'string_decoder'];
+  const requireShim = (name) => {
+    if (SAFE_BUILTINS.indexOf(String(name)) >= 0) return require(String(name));
+    throw new Error('require("' + name + '") is not allowed in the offline Code-node harness');
+  };
+  const fn = new Function('$', '$input', '$getWorkflowStaticData', '$json', 'require', 'Buffer', code);
   const $json = (inputItems[0] && inputItems[0].json) || {};
-  const res = fn($, $input, $getWorkflowStaticData, $json);
+  const res = fn($, $input, $getWorkflowStaticData, $json, requireShim, Buffer);
   const items = Array.isArray(res) ? res : (res ? [res] : []);
   run.outputs[name] = items;
   return items;

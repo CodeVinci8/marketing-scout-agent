@@ -15,14 +15,27 @@ function num(v, d) { const n = Number(v); return isFinite(n) ? n : d; }
 // contract test asserts this set stays in sync with the capability registry.
 const INTENT_IDS = [
   'competitor_search', 'deep_competitor_analysis', 'clarify_request', 'report_followup', 'generate_ideas',
-  'add_source', 'manage_sources', 'compare_periods', 'rerun_request', 'status', 'cancel', 'help', 'manage_memory'
+  'add_source', 'manage_sources', 'compare_periods', 'rerun_request', 'status', 'cancel', 'help', 'manage_memory',
+  // reporting UX intents (operate on the last report / stored data)
+  'export_report', 'show_chart', 'show_evidence', 'filter_report', 'refresh_sources', 'weekly_digest', 'manage_digest'
 ];
 const REQUESTED_ACTIONS = ['build_plan', 'answer_from_context', 'manage_sources', 'manage_memory', 'approve', 'reject', 'status', 'cancel', 'help', 'clarify'];
-const APPROVAL_INTENTS = ['competitor_search', 'deep_competitor_analysis', 'rerun_request'];
-const CONTEXT_INTENTS = ['deep_competitor_analysis', 'report_followup', 'generate_ideas', 'compare_periods', 'add_source', 'manage_sources', 'rerun_request'];
+const APPROVAL_INTENTS = ['competitor_search', 'deep_competitor_analysis', 'rerun_request', 'refresh_sources'];
+const CONTEXT_INTENTS = ['deep_competitor_analysis', 'report_followup', 'generate_ideas', 'compare_periods', 'add_source', 'manage_sources', 'rerun_request',
+  'export_report', 'show_chart', 'show_evidence', 'filter_report'];
+// reporting intents that only make sense once a report exists (same guard as report_followup/ideas/compare)
+const HISTORY_REQUIRED_INTENTS = ['report_followup', 'generate_ideas', 'compare_periods', 'export_report', 'show_chart', 'show_evidence', 'filter_report'];
 
 // Keyword rules — literal Russian/English (NO \w/\b on Cyrillic). Ordered: most specific first.
 const TEXT_RULES = [
+  // --- reporting UX rules first (most specific) so they win over generic search/source rules ---
+  ['weekly_digest', /недельн[а-яё]*\s*сводк|сводк[а-яё]*\s*за\s*недел|что\s*измен[а-яё]*\s*за\s*(эту\s*)?недел|за\s*эту\s*неделю|weekly\s*digest/i],
+  ['manage_digest', /(включ|выключ|отключ|enable|disable|turn (on|off)).{0,25}(еженедельн|недельн|сводк|digest)|(еженедельн[а-яё]*\s*отчёт)/i],
+  ['export_report', /пришли\s*таблиц|таблиц[ауы]|экспорт|выгруз|скачать|сделай\s*(excel|эксель|таблиц)|\bexcel\b|\bxlsx\b|\bcsv\b|в\s*файл/i],
+  ['show_chart', /график|диаграмм|chart|визуализ|построй\s*(график|диаграмм)/i],
+  ['show_evidence', /доказательств|пруф[ыов]?|evidence|цитат[аыу]|подтвержден[а-яё]*\s*(фактом|источник)/i],
+  ['refresh_sources', /(обнов[а-яё]*|пересобери|собери\s*заново|refresh|пере-?проверь).{0,30}(устаревш|источник|данны|сайт)|обнови\s*(только\s*)?устаревш/i],
+  ['filter_report', /(покажи|оставь|только|фильтр|отфильтр|отсортир|сортир).{0,40}(ставк|%|процент|ниже|выше|дешевле|дороже|качеств|healthy|degraded|акци)|ставк[аи]\s*(ниже|выше|меньше|больше)/i],
   ['deep_competitor_analysis', /подробн|глубж|глубок|детальн|разбери|deep (dive|analy)|in more detail/i],
   ['compare_periods', /сравн[а-яё]*\s*(с\s*)?(прошл|предыдущ|раньше|last|previous|прошлым)|по сравнению с прошл/i],
   ['generate_ideas', /иде[ия]|придум|адаптир|adapt|what ideas|ideas (we|to)|контент-?план/i],
@@ -140,9 +153,9 @@ function deterministicIntent(parsed, ctx) {
   }
   for (const [intentId, rx] of TEXT_RULES) {
     if (rx.test(text)) {
-      // report_followup/ideas/compare only make sense with a prior report
-      if ((intentId === 'report_followup' || intentId === 'generate_ideas' || intentId === 'compare_periods') && !(ctx.last_report || ctx.last_report_id)) {
-        // no report yet -> treat an "ideas/compare" ask as needing a search first (clarify)
+      // report_followup/ideas/compare/export/chart/evidence/filter only make sense with a prior report
+      if (HISTORY_REQUIRED_INTENTS.indexOf(intentId) >= 0 && !(ctx.last_report || ctx.last_report_id)) {
+        // no report yet -> treat the ask as needing a search first (clarify)
         continue;
       }
       return Object.assign(buildIntent(intentId, 0.85, ent, ctx), { from: 'rule' });
@@ -211,7 +224,7 @@ function routeIntent(parsed, ctx, cfg) {
 }
 
 module.exports = {
-  INTENT_IDS, REQUESTED_ACTIONS, APPROVAL_INTENTS, CONTEXT_INTENTS,
+  INTENT_IDS, REQUESTED_ACTIONS, APPROVAL_INTENTS, CONTEXT_INTENTS, HISTORY_REQUIRED_INTENTS,
   entityExtract, resolveReferences, deterministicIntent, classifierFacts,
   validateIntentJSON, clarificationFor, routeIntent, str, low, num
 };

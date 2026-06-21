@@ -53,6 +53,9 @@ IMPORT_ORDER=(
   "21_deep_competitor_analysis.json"
   "22_conversation_control.json"
   "23_scheduled_source_monitor.json"
+  "24_report_export_delivery.json"
+  "25_weekly_digest.json"
+  "26_vk_public_community_collector.json"
 )
 
 # Required NON-secret runtime config (credentials stay in the n8n credential store, not here).

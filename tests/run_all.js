@@ -50,6 +50,29 @@ const JS_SUITES = [
   ['release-audit', 'test_release_audit.js'],
   ['release-e2e', 'test_release_e2e.js'],
   ['ci-workflow', 'test_ci_workflow.js'],
+  // --- Reporting UX phase: scoped CSV/XLSX/chart exports ---
+  ['report-export', 'test_report_export.js'],
+  ['xlsx-writer', 'test_xlsx_writer.js'],
+  ['report-charts', 'test_report_charts.js'],
+  // --- Reporting UX phase: evidence / compare / filtering / smart refresh ---
+  ['evidence', 'test_evidence.js'],
+  ['report-compare', 'test_report_compare.js'],
+  ['report-filter', 'test_report_filter.js'],
+  ['refresh-policy', 'test_refresh_policy.js'],
+  // --- Reporting UX phase: scope/cost preview + progress UX + weekly digest ---
+  ['scope-preview', 'test_scope_preview.js'],
+  ['progress-tracker', 'test_progress_tracker.js'],
+  ['weekly-digest', 'test_weekly_digest.js'],
+  // --- Reporting UX phase: real n8n workflow integration (WF24 export/delivery, WF25 digest, WF19/WF20 wiring) ---
+  ['reporting-workflows', 'test_reporting_workflows.js'],
+  // --- Sources: bounded VK public-community collector (lib + WF26 + WF23 integration), fully offline ---
+  ['vk-collector', 'test_vk_collector.js'],
+  // --- Storage: sheets contract validator + runtime content auditor + before/after verifier + retention ---
+  ['sheets-contracts', 'test_sheets_contracts.js'],
+  // --- Safety: SSRF defense + prompt-injection guard + honest Telegram channel capability ---
+  ['url-safety', 'test_url_safety.js'],
+  // --- Capstone: full offline conversational E2E (request->preview->report->exports->VK->digest->audit) ---
+  ['reporting-e2e', 'test_reporting_e2e.js'],
 ];
 
 let failed = 0;
@@ -88,6 +111,19 @@ try {
   process.stdout.write((e.stdout || '') + '\n  (python validator exit non-zero)\n');
   failed++;
   summary.push(['validate_workflows.py', '?', '?', 'FAIL']);
+}
+
+// Sheets contract validator (static: every workflow Sheets node targets a declared tab; no drift).
+try {
+  const out = execFileSync('node', [path.join(__dirname, '..', 'tools', 'validate_sheet_contracts.js')], { encoding: 'utf8' });
+  const m = out.match(/(\d+) passed, (\d+) failed/);
+  const ok = m && m[2] === '0';
+  if (!ok) { failed++; process.stdout.write(out); }
+  summary.push(['validate_sheet_contracts', m ? m[1] : '?', m ? m[2] : '?', ok ? 'PASS' : 'FAIL']);
+} catch (e) {
+  process.stdout.write((e.stdout || '') + '\n  (sheet contract validator exit non-zero)\n');
+  failed++;
+  summary.push(['validate_sheet_contracts', '?', '?', 'FAIL']);
 }
 
 // Legacy Lead Scout harness (WF12/13/14) — must remain green.

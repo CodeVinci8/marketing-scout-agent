@@ -1,0 +1,801 @@
+{
+  "generated_by": "tools/gen_workflow_manifest.js",
+  "purpose": "Data-driven capability + archive-safety classification for every workflow. Default action is RETAIN; nothing is archived while any caller/test/deploy/trigger references it (Section 1 of the reporting-UX phase).",
+  "workflow_count": 31,
+  "capability_classes": [
+    "production_entrypoint",
+    "production_dependency",
+    "optional_source_adapter",
+    "manual_diagnostic",
+    "legacy_referenced"
+  ],
+  "deploy_import_order": [
+    "17_agent_settings_config.json",
+    "18_telegram_agent_gateway.json",
+    "19_request_planner.json",
+    "20_agent_orchestrator.json",
+    "21_deep_competitor_analysis.json",
+    "22_conversation_control.json",
+    "23_scheduled_source_monitor.json",
+    "24_report_export_delivery.json",
+    "25_weekly_digest.json",
+    "26_vk_public_community_collector.json"
+  ],
+  "trigger_workflows_always": [
+    "18_telegram_agent_gateway.json"
+  ],
+  "trigger_workflows_when_monitoring": [
+    "23_scheduled_source_monitor.json"
+  ],
+  "archive_safe_candidates": [
+    "00_healthcheck_manual_test.json",
+    "01_google_sheets_append_row_test.json",
+    "02_claude_api_single_record_analysis.json",
+    "02_claude_api_single_record_v2_baseline_raw_json.json",
+    "02_claude_api_single_record_v2_extended_tests.json",
+    "02_claude_api_single_record_v2_resilient_router_production.json",
+    "02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json",
+    "03_firecrawl_single_url_resilient.json",
+    "15_live_source_run_logger.json"
+  ],
+  "workflows": [
+    {
+      "file": "00_healthcheck_manual_test.json",
+      "wf_number": "WF00",
+      "name": "00 - Healthcheck Manual Test",
+      "node_count": 5,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "manual_diagnostic",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": false,
+      "archive_safe_candidate": true,
+      "retain_reason": "",
+      "action": "review_for_archive"
+    },
+    {
+      "file": "01_google_sheets_append_row_test.json",
+      "wf_number": "WF01",
+      "name": "01 - Google Sheets Append Row Test",
+      "node_count": 6,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "manual_diagnostic",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": false,
+      "archive_safe_candidate": true,
+      "retain_reason": "",
+      "action": "review_for_archive"
+    },
+    {
+      "file": "02_claude_api_single_record_analysis.json",
+      "wf_number": "WF02",
+      "name": "02 - Claude API Single Record Analysis",
+      "node_count": 9,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "manual_diagnostic",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": false,
+      "archive_safe_candidate": true,
+      "retain_reason": "",
+      "action": "review_for_archive"
+    },
+    {
+      "file": "02_claude_api_single_record_v2_baseline_raw_json.json",
+      "wf_number": "WF02",
+      "name": "02 - Claude API Single Record Analysis v2 TEST HARNESS",
+      "node_count": 10,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "manual_diagnostic",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": false,
+      "archive_safe_candidate": true,
+      "retain_reason": "",
+      "action": "review_for_archive"
+    },
+    {
+      "file": "02_claude_api_single_record_v2_extended_tests.json",
+      "wf_number": "WF02",
+      "name": "02 - Claude API Single Record Analysis v2 EXTENDED TESTS",
+      "node_count": 10,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "manual_diagnostic",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": false,
+      "archive_safe_candidate": true,
+      "retain_reason": "",
+      "action": "review_for_archive"
+    },
+    {
+      "file": "02_claude_api_single_record_v2_resilient_router_production.json",
+      "wf_number": "WF02",
+      "name": "02 - Claude API Single Record Analysis v2 RESILIENT ROUTER PRODUCTION",
+      "node_count": 12,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "manual_diagnostic",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": false,
+      "archive_safe_candidate": true,
+      "retain_reason": "",
+      "action": "review_for_archive"
+    },
+    {
+      "file": "02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json",
+      "wf_number": "WF02",
+      "name": "02 - Claude API Single Record Analysis v2 RESILIENT ROUTER TEST DYNAMIC SHEET",
+      "node_count": 15,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "manual_diagnostic",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": false,
+      "archive_safe_candidate": true,
+      "retain_reason": "",
+      "action": "review_for_archive"
+    },
+    {
+      "file": "03_firecrawl_single_url_resilient.json",
+      "wf_number": "WF03",
+      "name": "03 - Firecrawl Single URL to Resilient Analyzer",
+      "node_count": 17,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "manual_diagnostic",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": false,
+      "archive_safe_candidate": true,
+      "retain_reason": "",
+      "action": "review_for_archive"
+    },
+    {
+      "file": "04_firecrawl_url_list_resilient.json",
+      "wf_number": "WF04",
+      "name": "04 - Firecrawl URL List Mini-Batch to Resilient Analyzer",
+      "node_count": 35,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [
+        "20_agent_orchestrator.json",
+        "21_deep_competitor_analysis.json",
+        "23_scheduled_source_monitor.json"
+      ],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "called_by:20_agent_orchestrator.json,21_deep_competitor_analysis.json,23_scheduled_source_monitor.json; referenced_by_test",
+      "action": "retain"
+    },
+    {
+      "file": "05_apify_search_candidate_discovery.json",
+      "wf_number": "WF05",
+      "name": "05 - Apify Search Candidate Discovery",
+      "node_count": 15,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "legacy_referenced",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
+    },
+    {
+      "file": "06_approved_candidates_runner.json",
+      "wf_number": "WF06",
+      "name": "06 - Approved Candidates Runner",
+      "node_count": 10,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "legacy_referenced",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
+    },
+    {
+      "file": "07_manual_touchpoint_intake.json",
+      "wf_number": "WF07",
+      "name": "07 - Manual Touchpoint Intake",
+      "node_count": 16,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "legacy_referenced",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
+    },
+    {
+      "file": "08_touchpoint_analyzer.json",
+      "wf_number": "WF08",
+      "name": "08 - Touchpoint Analyzer",
+      "node_count": 25,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [
+        "20_agent_orchestrator.json"
+      ],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test",
+      "action": "retain"
+    },
+    {
+      "file": "09_avito_classifieds_listing_connector.json",
+      "wf_number": "WF09",
+      "name": "09 - Avito Classifieds Listing Connector",
+      "node_count": 21,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "optional_source_adapter",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
+    },
+    {
+      "file": "10_competitor_audience_intelligence_aggregator.json",
+      "wf_number": "WF10",
+      "name": "10 - Competitor Audience Intelligence Aggregator",
+      "node_count": 24,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [
+        "20_agent_orchestrator.json"
+      ],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test",
+      "action": "retain"
+    },
+    {
+      "file": "11_social_source_connector_foundation.json",
+      "wf_number": "WF11",
+      "name": "11 - Social Source Connector Foundation (Telegram Public Channel Preview)",
+      "node_count": 23,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "optional_source_adapter",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
+    },
+    {
+      "file": "12_market_intelligence_report_builder.json",
+      "wf_number": "WF12",
+      "name": "12 - Market Intelligence Report Builder (Stakeholder v0.3)",
+      "node_count": 24,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [
+        "20_agent_orchestrator.json"
+      ],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test",
+      "action": "retain"
+    },
+    {
+      "file": "13_public_discussion_or_reviews_connector_foundation.json",
+      "wf_number": "WF13",
+      "name": "13 - VK Public Discussion / Lead Source Connector (Stage 3.5)",
+      "node_count": 24,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "optional_source_adapter",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
+    },
+    {
+      "file": "14_public_lead_signal_triage.json",
+      "wf_number": "WF14",
+      "name": "14 - Lead Scout Triage & Scoring (Deterministic, Stage 3.5)",
+      "node_count": 15,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "legacy_referenced",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
+    },
+    {
+      "file": "15_live_source_run_logger.json",
+      "wf_number": "WF15",
+      "name": "15 - Live Source Run Logger (Manual)",
+      "node_count": 7,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "manual_diagnostic",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": false,
+      "archive_safe_candidate": true,
+      "retain_reason": "",
+      "action": "review_for_archive"
+    },
+    {
+      "file": "16_source_quality_gate_health_score.json",
+      "wf_number": "WF16",
+      "name": "16 - Source Quality Gate & Health Score",
+      "node_count": 14,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [
+        "20_agent_orchestrator.json"
+      ],
+      "calls": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test",
+      "action": "retain"
+    },
+    {
+      "file": "17_agent_settings_config.json",
+      "wf_number": "WF17",
+      "name": "17 — Agent Settings & Config Loader",
+      "node_count": 2,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "action": "retain"
+    },
+    {
+      "file": "18_telegram_agent_gateway.json",
+      "wf_number": "WF18",
+      "name": "18 — Telegram Agent Gateway (conversational)",
+      "node_count": 21,
+      "active": false,
+      "trigger_classes": [
+        "webhook"
+      ],
+      "classification": [
+        "public"
+      ],
+      "capability_class": "production_entrypoint",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": true,
+      "trigger_always": true,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test; in_deploy_import_order; trigger_entrypoint",
+      "action": "retain"
+    },
+    {
+      "file": "19_request_planner.json",
+      "wf_number": "WF19",
+      "name": "19 — Request Planner (deterministic + guarded Claude)",
+      "node_count": 9,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "action": "retain"
+    },
+    {
+      "file": "20_agent_orchestrator.json",
+      "wf_number": "WF20",
+      "name": "20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)",
+      "node_count": 25,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [],
+      "calls": [
+        "04_firecrawl_url_list_resilient.json",
+        "08_touchpoint_analyzer.json",
+        "10_competitor_audience_intelligence_aggregator.json",
+        "12_market_intelligence_report_builder.json",
+        "16_source_quality_gate_health_score.json"
+      ],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "action": "retain"
+    },
+    {
+      "file": "21_deep_competitor_analysis.json",
+      "wf_number": "WF21",
+      "name": "21 — Deep Competitor Analysis (bounded, evidence-based)",
+      "node_count": 14,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [],
+      "calls": [
+        "04_firecrawl_url_list_resilient.json"
+      ],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "action": "retain"
+    },
+    {
+      "file": "22_conversation_control.json",
+      "wf_number": "WF22",
+      "name": "22 — Conversation Control & Sources",
+      "node_count": 9,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger"
+      ],
+      "classification": [
+        "manual-only"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "action": "retain"
+    },
+    {
+      "file": "23_scheduled_source_monitor.json",
+      "wf_number": "WF23",
+      "name": "23 — Scheduled Tracked Source Monitor",
+      "node_count": 17,
+      "active": false,
+      "trigger_classes": [
+        "scheduleTrigger",
+        "manualTrigger"
+      ],
+      "classification": [
+        "scheduled",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_entrypoint",
+      "called_by": [],
+      "calls": [
+        "04_firecrawl_url_list_resilient.json",
+        "26_vk_public_community_collector.json"
+      ],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": true,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test; in_deploy_import_order; trigger_entrypoint",
+      "action": "retain"
+    },
+    {
+      "file": "24_report_export_delivery.json",
+      "wf_number": "WF24",
+      "name": "24 — Report Export, Filter, Compare, Refresh & Delivery",
+      "node_count": 17,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "action": "retain"
+    },
+    {
+      "file": "25_weekly_digest.json",
+      "wf_number": "WF25",
+      "name": "25 — Weekly Digest (stored data only, one per owner per ISO week)",
+      "node_count": 19,
+      "active": false,
+      "trigger_classes": [
+        "scheduleTrigger",
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "scheduled",
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_entrypoint",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "action": "retain"
+    },
+    {
+      "file": "26_vk_public_community_collector.json",
+      "wf_number": "WF26",
+      "name": "26 — VK Public Community Collector (bounded, official API)",
+      "node_count": 24,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [
+        "23_scheduled_source_monitor.json"
+      ],
+      "calls": [],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "called_by:23_scheduled_source_monitor.json; referenced_by_test; in_deploy_import_order",
+      "action": "retain"
+    }
+  ]
+}

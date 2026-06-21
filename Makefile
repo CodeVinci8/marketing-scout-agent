@@ -43,6 +43,21 @@ test-js:
 	node tests/test_release_audit.js
 	node tests/test_release_e2e.js
 	node tests/test_ci_workflow.js
+	node tests/test_report_export.js
+	node tests/test_xlsx_writer.js
+	node tests/test_report_charts.js
+	node tests/test_evidence.js
+	node tests/test_report_compare.js
+	node tests/test_report_filter.js
+	node tests/test_refresh_policy.js
+	node tests/test_scope_preview.js
+	node tests/test_progress_tracker.js
+	node tests/test_weekly_digest.js
+	node tests/test_reporting_workflows.js
+	node tests/test_vk_collector.js
+	node tests/test_sheets_contracts.js
+	node tests/test_url_safety.js
+	node tests/test_reporting_e2e.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

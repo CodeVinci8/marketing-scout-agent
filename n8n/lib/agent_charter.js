@@ -109,6 +109,49 @@ const CAPABILITIES = [
     intent_examples: ['/help', 'что ты умеешь?', 'what else can you help me with'],
     required_config: [], required_credentials: [],
     platforms: [], requires_approval: false, external_calls: false, requires_history: false
+  },
+  // --- reporting UX capabilities (operate on the LAST report; reuse stored data, no new collection) ---
+  {
+    id: 'export_report', name: 'Экспорт отчёта (CSV/Excel)',
+    intent_examples: ['пришли таблицу', 'сделай Excel', 'экспортируй CSV'],
+    required_config: [], required_credentials: [],
+    platforms: [], requires_approval: false, external_calls: false, requires_history: true
+  },
+  {
+    id: 'show_chart', name: 'График по отчёту',
+    intent_examples: ['покажи график', 'построй диаграмму по ставкам'],
+    required_config: [], required_credentials: [],
+    platforms: [], requires_approval: false, external_calls: false, requires_history: true
+  },
+  {
+    id: 'show_evidence', name: 'Доказательства',
+    intent_examples: ['покажи доказательства', 'покажи источники фактов'],
+    required_config: [], required_credentials: [],
+    platforms: [], requires_approval: false, external_calls: false, requires_history: true
+  },
+  {
+    id: 'filter_report', name: 'Фильтр/сортировка отчёта',
+    intent_examples: ['покажи только ставки ниже 5%', 'оставь только healthy источники'],
+    required_config: [], required_credentials: [],
+    platforms: [], requires_approval: false, external_calls: false, requires_history: true
+  },
+  {
+    id: 'refresh_sources', name: 'Обновить устаревшие источники',
+    intent_examples: ['обнови только устаревшие источники', 'пересобери устаревшие данные'],
+    required_config: ['source_allowlist'], required_credentials: ['apify_or_firecrawl'],
+    platforms: ['website'], requires_approval: true, external_calls: true, requires_history: false
+  },
+  {
+    id: 'weekly_digest', name: 'Недельная сводка',
+    intent_examples: ['пришли недельную сводку', 'что изменилось за эту неделю?'],
+    required_config: [], required_credentials: [],
+    platforms: [], requires_approval: false, external_calls: false, requires_history: false
+  },
+  {
+    id: 'manage_digest', name: 'Еженедельный отчёт (вкл/выкл)',
+    intent_examples: ['включи еженедельный отчёт', 'выключи еженедельный отчёт'],
+    required_config: [], required_credentials: [],
+    platforms: [], requires_approval: false, external_calls: false, requires_history: false
   }
 ];
 

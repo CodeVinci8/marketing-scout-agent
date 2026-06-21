@@ -5,6 +5,34 @@ Most recent first.
 
 ---
 
+## 2026-06-21 (session 23) — Reporting UX & release-verification phase (DEC-155)
+
+**Agent role:** project-engineer · **Scope:** reporting outputs, conversation UX, optional VK collector, honest
+Telegram channel capability, URL safety, storage contracts + retention, full offline E2E + docs. Branch
+`feat/reporting-ux-and-release-verification` (baseline `b7a95c1`). **0 external calls, $0**, all 31 workflows
+`active=false`, **not pushed/merged/imported**, no credentials, no AI attribution.
+
+**New libraries (`n8n/lib/`):** `scope_preview`, `progress_tracker`, `weekly_digest`, `report_export`/
+`report_package`/`xlsx_writer`/`report_charts` (wired this phase), `evidence`/`report_compare`/`report_filter`/
+`refresh_policy` (wired), `vk_collector`, `telegram_channel`, `url_safety`, `sheet_audit`, `retention_policy`.
+
+**New/changed workflows (`active=false`):** WF24 export/delivery, WF25 weekly digest, WF26 VK collector; WF19
+(scope preview), WF20 (progress), WF23 (VK monitoring edge), WF18/21 re-synced for charter/router additions.
+
+**Config/tools/docs:** `config/sheets_contracts.json` (40 tabs) + `tools/validate_sheet_contracts.js`;
+`config/workflow_manifest.json` (31); `docs/SOURCE_CAPABILITY_MATRIX.md`,
+`docs/REPORTING_UX_AND_RELEASE_VERIFICATION.md`. deploy `IMPORT_ORDER` extended (WF24-26).
+
+**Commits (local only):** `6478ac0`, `8fc91bf`, `673a5bd`, `9cc2068`, `b9bec47`, + test(release) e2e/docs.
+
+**Tests:** 8 new suites (scope-preview 27, progress-tracker 38, weekly-digest 31, reporting-workflows 74,
+vk-collector 84, sheets-contracts 32, url-safety 62, reporting-e2e 37). `make test` ALL SUITES PASS, external
+calls=0, live cost=$0. VK + Telegram bot-update = structurally implemented, offline-tested, **live-unverified**.
+
+**Next session should start with:** `core/hot/recent.md` → `docs/REPORTING_UX_AND_RELEASE_VERIFICATION.md`.
+
+---
+
 ## 2026-06-21 (session 22, commits 2-3) — Release hardening: callable triggers + full regression (DEC-154)
 
 **Agent role:** project-engineer · **Scope:** operator-authorized fix of the five callable Stage 1-3 workflow
