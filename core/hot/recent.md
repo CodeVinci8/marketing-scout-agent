@@ -28,10 +28,28 @@ add full project regression and disposable import smoke`.
   validator 259, $0, 0 calls).
 
 **Was scheduled monitoring present before this block?** NO — no schedule trigger / WF23 existed (verified).
-**n8n CLI:** NOT installed locally → Part 6 will use a static resolver + documented disposable-import command.
+**n8n CLI:** NOT installed locally → static resolver (`tools/audit_workflows.js`) + documented disposable-import.
 
-**Open:** commit 2 = persistence-wiring + subworkflow/trigger audit (`tools/audit_workflows.js`) + delivery
-proof tests + capability-map doc; commit 3 = full multi-turn monitoring E2E + disposable-import smoke script.
+**Commit 2 — DONE `35990e5` (DEC-154):** operator-authorized fix of callable triggers.
+- **Execute Sub-workflow Triggers added** to WF04/08/10/12/16 (node *When Called by Agent*), each preserving its
+  Manual Trigger for standalone diagnosis. Each declares a canonical input contract (`agent_request_id`,
+  `source_run_id`, `workflow_run_id`, `data_mode`, + per-workflow filters/budget/force flags). The config node
+  merges those inputs over its defaults; manual mode (empty input) is **byte-identical** (all Stage 1-3 suites
+  still pass). WF20/21/23 now pass **named** canonical fields via `workflowInputs` (no `.first()` reliance in the
+  callable). `audit_workflows.js` now **hard-fails** if a callable lacks the trigger or is publicly exposed.
+- **Persistence/delivery wiring proven:** WF18 reconstructs context from Sheets (conversation_state read+upsert,
+  messages read+append, summaries); WF20 persists execution_summaries + telegram_outbox before send.
+- **`deploy_n8n.sh --activate-triggers`** finished: WF18 always, WF23 only when `MS_MONITORING_ENABLED=true`;
+  version detection; explicit confirm; never activates a callable; refuses if n8n CLI absent. `test_release_audit.js`
+  → 98 checks. `docs/N8N_COMPAT_AND_TOPOLOGY.md` updated (gap RESOLVED + classification + contracts).
+
+**Commit 3 — DONE (this session):** `test_release_e2e.js` (62) — full 20-step multi-turn monitoring E2E
+(search→clarify→approve→collect→quality→report→proactive→deep facts/recs→add source→idempotent dup→scheduled
+no-change→meaningful change→one notification→reuse evidence→compaction→follow-up resolves competitors) + negative
+paths (unauth, dup update, invalid plan, unapproved/cancelled/over-budget gate, fail-closed source health,
+all-quarantined no-data, Telegram retry/never-resend, dup monitor window, missing tg/vk collector, deleted memory,
+ephemeral no-state). `scripts/n8n_import_smoke.sh` = disposable temp-folder import (prints exact command when n8n
+absent). `make test` → ALL PASS (34 suites, validator 259, $0, 0 calls, all `active=false`). **Not pushed.**
 
 ---
 

@@ -5,6 +5,39 @@ Most recent first.
 
 ---
 
+## DEC-154 — Callable Stage 1-3 workflows made runtime-invocable via Execute Sub-workflow Triggers
+
+**Date:** 2026-06-21
+
+**Decision:** With explicit operator authorization, add an **Execute Sub-workflow Trigger**
+(`n8n-nodes-base.executeWorkflowTrigger`, node *When Called by Agent*) to the five callable workflows
+**WF04, WF08, WF10, WF12, WF16**, keeping each existing **Manual Trigger** for standalone diagnosis. Each trigger
+declares an explicit canonical input contract; the existing config node merges those inputs over its defaults.
+The parent (WF20/21/23) now passes **named** canonical fields (`agent_request_id`, `source_run_id`, `data_mode`,
+`urls`, `platform_filter`, …) through `workflowInputs`, instead of relying on positional/`.first()` consumption.
+
+**Why:** Execute Sub-workflow can only invoke a workflow that contains a sub-workflow trigger. Previously the
+callables exposed only a Manual Trigger, so the orchestrator's edges resolved statically but would not run at
+runtime. A prior session documented this as an operator action because CLAUDE.md forbids editing real workflow
+exports without confirmation; this session received that confirmation.
+
+**How the change stays safe (no business-logic rewrite):**
+- Manual mode delivers an empty input item, so the merge is a no-op and manual behavior is **byte-identical** —
+  every Stage 1-3 suite still passes unchanged.
+- Canonical inputs map onto fields that already exist (`source_run_id`→`source_run_id_filter`,
+  `agent_request_id`→`agent_request_id_filter`, `data_mode` flips WF16 `fixture_self_test` off for live runs),
+  preserving lineage/approval/quality/idempotency/budget semantics.
+- No public webhook is added to any callable; callables remain reachable only via Execute Sub-workflow.
+
+**Enforcement:** `tools/audit_workflows.js` now treats a callable **without** a Sub-workflow Trigger, or a callable
+exposed via a **public webhook**, as a **hard error** (the release audit fails). `deploy_n8n.sh --activate-triggers`
+activates only WF18 (always) and WF23 (when `MS_MONITORING_ENABLED=true`); it never activates a callable.
+
+**Verified by:** `tests/test_release_audit.js` (98) + `tests/test_release_e2e.js` (62); `make test` ALL PASS,
+$0, 0 external calls, all workflows `active=false`. Linked: [[project-stage4-mvp-built]], DEC-153, DEC-150.
+
+---
+
 ## DEC-153 — Release hardening: proactive delivery + real scheduled monitoring (WF20 ext + WF23)
 
 **Date:** 2026-06-21
