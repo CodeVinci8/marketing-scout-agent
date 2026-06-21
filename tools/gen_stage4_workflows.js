@@ -136,6 +136,19 @@ function httpTelegramFile(id, name, pos, apiMethod, formField, binaryField) {
     type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
   };
 }
+// Official VK API call. The access token comes ONLY from the n8n credential store (httpQueryAuth adds
+// access_token); it never appears in workflow JSON, params, logs or fixtures. method/params come from the
+// vk_collector descriptors. Guarded upstream by the credential gate (never called when setup_required).
+function httpVk(id, name, pos) {
+  return {
+    parameters: {
+      method: 'GET', url: '=https://api.vk.com/method/{{ $json.vk_method }}',
+      authentication: 'genericCredentialType', genericAuthType: 'httpQueryAuth',
+      sendQuery: true, specifyQuery: 'json', jsonQuery: '={{ JSON.stringify($json.vk_params) }}', options: {}
+    },
+    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
+  };
+}
 // Execute Sub-workflow Trigger ("When Called by Agent") declaring NAMED canonical input fields (mirrors WF04/08
 // callable contract so the parent passes named fields, not positional/.first()). Array fields use type 'array'.
 function subTrigger(id, name, pos, fields) {
@@ -454,9 +467,20 @@ write('23_scheduled_source_monitor.json', wf('23 — Scheduled Tracked Source Mo
     "var s=$('Check & Detect Change').first().json;\nvar cfg=$('Resolve Agent Config').first().json;\nvar caps=availableCapabilities(cfg);\nvar ev=s.change_event||{};\nvar chat=String(s.chat_id||s.owner_user_id||'');\nvar text=changeNotificationText(s,ev);\nvar kb=changeNotificationKeyboard(caps);\nvar body={chat_id:chat,text:text};if(kb)body.reply_markup=kb;\nreturn [{json:Object.assign({},ev,{telegram_send_body:JSON.stringify(body),notif_keyboard:kb?JSON.stringify(kb):''})}];"),
   sheetsAppend('wf23-apchg', 'Append source_change_events', [1200, -120], 'source_change_events'),
   httpTelegram('wf23-send', 'Send Change Notification', [1420, -120]),
-  code('wf23-nochg', 'No Change — Skip', [980, 140], [], "return [{json:{skipped:true,reason:($json&&$json.notify_reason)||'no_change'}}];")
+  code('wf23-nochg', 'No Change — Skip', [980, 140], [], "return [{json:{skipped:true,reason:($json&&$json.notify_reason)||'no_change'}}];"),
+  // VK tracked sources are checked through the dedicated WF26 collector, which self-gates by platform +
+  // credential (a non-VK ref or a missing token => setup_required, no spend). Parallel branch off due sources.
+  execWf('wf23-wf26', 'Run VK Check (WF26)', [100, 320], 'WF26 VK public community collector', {
+    owner_user_id: "={{ ($json.source && $json.source.owner_user_id) || '' }}",
+    agent_request_id: "={{ ($json.source && $json.source.agent_request_id) || '' }}",
+    source_run_id: "={{ $json.idempotency_key }}",
+    community: "={{ ($json.source && $json.source.platform === 'vk_community') ? $json.source.ref : '' }}",
+    data_mode: "={{ ($json.cfg && $json.cfg.data_mode) || 'live' }}",
+    mode: "={{ $json.mode || 'scheduled' }}"
+  })
 ], [
   ['Every 6h Schedule', 'Scheduled Tick'],
+  ['Select Due Sources', 'Run VK Check (WF26)'],
   ['Manual Check Now', 'Manual Mode Tick'],
   ['Scheduled Tick', 'Resolve Agent Config'],
   ['Manual Mode Tick', 'Resolve Agent Config'],
@@ -635,6 +659,103 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:dg.text}),di
   ['Shape Digest Row', 'Append weekly_digests'],
   ['Append weekly_digests', 'Build Digest Message'],
   ['Build Digest Message', 'Send Digest']
+]));
+
+// =========================================================================================== WF26 VK collector
+// Bounded, production-shaped OPTIONAL VK public-community wall collector. Resolves a community (groups.getById),
+// reads PUBLIC wall posts (wall.get) within bounds, builds canonical records, detects new/edited posts for
+// monitoring and persists change events. The access token lives ONLY in the n8n credential store; a missing
+// token / disabled collector yields setup_required and NO HTTP call (no spend). active=false; live-unverified.
+write('26_vk_public_community_collector.json', wf('26 — VK Public Community Collector (bounded, official API)', [
+  manual('wf26-trig', 'Manual Start', [-1200, 0]),
+  subTrigger('wf26-sub', 'When Called by Agent', [-1200, 220], ['owner_user_id', 'agent_request_id', 'source_run_id', 'workflow_run_id', 'community', 'data_mode', 'mode']),
+  code('wf26-cfg', 'Resolve Agent Config', [-980, 0], ['agent_config'],
+    ENV + "\nreturn [{json:resolveConfig(__env)}];"),
+  code('wf26-gate', 'VK Credential Gate', [-760, 0], ['vk_collector'], `
+var cfg=$('Resolve Agent Config').first().json;
+var inp=$json||{};
+var cred=credentialState(cfg);
+var ident=normalizeCommunity(inp.community||(inp.source&&inp.source.ref)||'');
+var configured=cred.ok&&ident.ok;
+return [{json:{configured:configured,credential:cred,identity:ident,cfg:cfg,owner_user_id:String(inp.owner_user_id||(inp.source&&inp.source.owner_user_id)||''),agent_request_id:String(inp.agent_request_id||''),source_run_id:String(inp.source_run_id||''),workflow_run_id:String(inp.workflow_run_id||''),data_mode:String(inp.data_mode||'live'),mode:String(inp.mode||'manual')}}];`),
+  ifNode('wf26-if', 'VK Configured?', [-540, 0], '={{ $json.configured }}'),
+  code('wf26-resolvereq', 'Build Resolve Request', [-320, -140], ['vk_collector'], `
+var g=$('VK Credential Gate').first().json;var req=resolveRequest(g.identity,g.cfg);
+return [{json:Object.assign({},g,{vk_method:req.method,vk_params:req.params})}];`),
+  httpVk('wf26-resolve', 'VK groups.getById', [-100, -140]),
+  code('wf26-parsecomm', 'Parse Community', [120, -140], ['vk_collector'], `
+var g=$('VK Credential Gate').first().json;var res=parseResolution($json||{});
+if(!res.ok)return [{json:Object.assign({},g,{resolved:false,error:res.error})}];
+var ident=Object.assign({},g.identity,res.community);
+return [{json:Object.assign({},g,{resolved:true,identity:ident})}];`),
+  code('wf26-wallreq', 'Build Wall Request', [340, -140], ['vk_collector'], `
+var c=$('Parse Community').first().json;if(!c.resolved)return [{json:c}];
+var req=wallRequest(c.identity,c.cfg,0);var plan=paginationPlan(c.cfg);
+return [{json:Object.assign({},c,{vk_method:req.method,vk_params:req.params,pagination:plan})}];`),
+  httpVk('wf26-wall', 'VK wall.get', [560, -140]),
+  sheetsRead('wf26-readstate', 'Read vk_post_state', [560, 40], 'vk_post_state'),
+  sheetsRead('wf26-readchg', 'Read source_change_events', [560, 200], 'source_change_events'),
+  code('wf26-parsewall', 'Parse Wall & Detect Changes', [780, -140], ['vk_collector'], `
+var c=$('Parse Community').first().json;
+if(!c.resolved){return [{json:{ok:false,error:c.error,records:[],events:[]}}];}
+var ctx={agent_request_id:c.agent_request_id,source_run_id:c.source_run_id,workflow_run_id:c.workflow_run_id,owner_user_id:c.owner_user_id,now:(new Date()).toISOString(),data_mode:c.data_mode};
+var parsed=parseWall($json||{},c.identity,ctx,{});
+if(!parsed.ok){return [{json:{ok:false,error:parsed.error,records:[],events:[]}}];}
+var stateRows=[];try{stateRows=($('Read vk_post_state').all()||[]).map(function(r){return r.json;}).filter(function(s){return String(s.owner_user_id)===String(c.owner_user_id)&&String(s.community_id)===String(c.identity.community_id);});}catch(e){}
+var prev={};var hasPrior=stateRows.length>0;stateRows.forEach(function(s){prev[String(s.owner_id)+'_'+String(s.post_id)]={post_version:s.post_version,content_hash:s.content_hash,is_pinned:s.is_pinned};});
+var emitBaseline=c.mode==='manual';
+var det=detectChanges(prev,parsed.posts,{has_prior_state:hasPrior,emit_baseline:emitBaseline});
+var existing=[];try{existing=($('Read source_change_events').all()||[]).map(function(r){return r.json;});}catch(e){}
+var fresh=det.events.filter(function(ev){return shouldNotify(existing,ev).notify;});
+return [{json:{ok:true,baseline:det.baseline,records:parsed.posts,events:fresh,new_count:det.new_count,edited_count:det.edited_count,community:c.identity,owner_user_id:c.owner_user_id,external_calls_note:'bounded by pagination plan'}}];`),
+  code('wf26-shaperecs', 'Shape VK Posts', [1000, -240], [], `
+var d=$('Parse Wall & Detect Changes').first().json;return (d.records||[]).map(function(r){return {json:r};});`),
+  sheetsAppend('wf26-aprecs', 'Append vk_posts', [1220, -240], 'vk_posts'),
+  code('wf26-shapestate', 'Shape VK Post State', [1000, -100], ['vk_collector'], `
+var d=$('Parse Wall & Detect Changes').first().json;
+return (d.records||[]).map(function(r){return {json:{owner_user_id:r.owner_user_id,community_id:r.community_id,owner_id:r.owner_id,post_id:r.post_id,post_version:r.post_version,content_hash:r.content_hash,is_pinned:r.is_pinned,updated_at:r.collected_at}};});`),
+  sheetsAppend('wf26-apstate', 'Append vk_post_state', [1220, -100], 'vk_post_state'),
+  ifNode('wf26-ifchg', 'VK Change?', [1000, 60], '={{ ($json.events && $json.events.length) > 0 }}'),
+  code('wf26-shapeevents', 'Shape VK Change Events', [1220, 60], [], `
+var d=$('Parse Wall & Detect Changes').first().json;return (d.events||[]).map(function(e){return {json:e};});`),
+  sheetsAppend('wf26-apchg', 'Append source_change_events', [1440, 60], 'source_change_events'),
+  code('wf26-alert', 'Build VK Alert', [1440, 200], ['conversation_response', 'agent_charter'], `
+var d=$('Parse Wall & Detect Changes').first().json;var chat=String(d.owner_user_id||'');
+var ev=(d.events||[])[0]||{};
+var text=clarificationReply('VK '+(d.community&&d.community.canonical_url||'')+': новых постов '+(d.new_count||0)+', изменённых '+(d.edited_count||0)+'. '+(ev.canonical_url?('Например: '+ev.canonical_url):''));
+return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),new_count:d.new_count,edited_count:d.edited_count}}];`),
+  httpTelegram('wf26-send', 'Send VK Alert', [1660, 200]),
+  code('wf26-setup', 'Build Setup-Required Reply', [-320, 160], ['vk_collector', 'conversation_response'], `
+var g=$('VK Credential Gate').first().json;var chat=String(g.owner_user_id||'');
+var reason=(g.credential&&g.credential.reason)||(g.identity&&g.identity.reason)||'vk_setup_required';
+var text=clarificationReply('VK источник пока не настроен ('+reason+'). Нужен токен VK в хранилище учётных данных n8n и включённый VK-сборщик. Сбор не выполнялся, средства не потрачены.');
+return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),status:'setup_required',reason:reason,external_calls:0}}];`),
+  httpTelegram('wf26-sendsetup', 'Send Setup Required', [-100, 160])
+], [
+  ['Manual Start', 'Resolve Agent Config'],
+  ['When Called by Agent', 'Resolve Agent Config'],
+  ['Resolve Agent Config', 'VK Credential Gate'],
+  ['VK Credential Gate', 'VK Configured?'],
+  ['VK Configured?', 'Build Resolve Request', 0],
+  ['VK Configured?', 'Build Setup-Required Reply', 1],
+  ['Build Setup-Required Reply', 'Send Setup Required'],
+  ['Build Resolve Request', 'VK groups.getById'],
+  ['VK groups.getById', 'Parse Community'],
+  ['Parse Community', 'Build Wall Request'],
+  ['Build Wall Request', 'VK wall.get'],
+  ['VK wall.get', 'Read vk_post_state'],
+  ['Read vk_post_state', 'Read source_change_events'],
+  ['Read source_change_events', 'Parse Wall & Detect Changes'],
+  ['Parse Wall & Detect Changes', 'Shape VK Posts'],
+  ['Shape VK Posts', 'Append vk_posts'],
+  ['Parse Wall & Detect Changes', 'Shape VK Post State'],
+  ['Shape VK Post State', 'Append vk_post_state'],
+  ['Parse Wall & Detect Changes', 'VK Change?'],
+  ['VK Change?', 'Shape VK Change Events', 0],
+  ['VK Change?', 'Build VK Alert', 1],
+  ['Shape VK Change Events', 'Append source_change_events'],
+  ['Append source_change_events', 'Build VK Alert'],
+  ['Build VK Alert', 'Send VK Alert']
 ]));
 
 console.log('Stage 4 workflows generated.');

@@ -333,6 +333,89 @@
       ],
       "id": "wf23-nochg",
       "name": "No Change — Skip"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "PASTE_WORKFLOW_ID",
+          "mode": "id",
+          "cachedResultName": "WF26 VK public community collector"
+        },
+        "options": {},
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "owner_user_id": "={{ ($json.source && $json.source.owner_user_id) || '' }}",
+            "agent_request_id": "={{ ($json.source && $json.source.agent_request_id) || '' }}",
+            "source_run_id": "={{ $json.idempotency_key }}",
+            "community": "={{ ($json.source && $json.source.platform === 'vk_community') ? $json.source.ref : '' }}",
+            "data_mode": "={{ ($json.cfg && $json.cfg.data_mode) || 'live' }}",
+            "mode": "={{ $json.mode || 'scheduled' }}"
+          },
+          "schema": [
+            {
+              "id": "owner_user_id",
+              "displayName": "owner_user_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "community",
+              "displayName": "community",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "mode",
+              "displayName": "mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        100,
+        320
+      ],
+      "id": "wf23-wf26",
+      "name": "Run VK Check (WF26)"
     }
   ],
   "connections": {
@@ -341,6 +424,22 @@
         [
           {
             "node": "Scheduled Tick",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Due Sources": {
+      "main": [
+        [
+          {
+            "node": "Run VK Check (WF26)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Run Website Check (WF04)",
             "type": "main",
             "index": 0
           }
@@ -407,17 +506,6 @@
         [
           {
             "node": "Select Due Sources",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Select Due Sources": {
-      "main": [
-        [
-          {
-            "node": "Run Website Check (WF04)",
             "type": "main",
             "index": 0
           }

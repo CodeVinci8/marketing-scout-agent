@@ -1,7 +1,7 @@
 {
   "generated_by": "tools/gen_workflow_manifest.js",
   "purpose": "Data-driven capability + archive-safety classification for every workflow. Default action is RETAIN; nothing is archived while any caller/test/deploy/trigger references it (Section 1 of the reporting-UX phase).",
-  "workflow_count": 30,
+  "workflow_count": 31,
   "capability_classes": [
     "production_entrypoint",
     "production_dependency",
@@ -18,7 +18,8 @@
     "22_conversation_control.json",
     "23_scheduled_source_monitor.json",
     "24_report_export_delivery.json",
-    "25_weekly_digest.json"
+    "25_weekly_digest.json",
+    "26_vk_public_community_collector.json"
   ],
   "trigger_workflows_always": [
     "18_telegram_agent_gateway.json"
@@ -693,7 +694,7 @@
       "file": "23_scheduled_source_monitor.json",
       "wf_number": "WF23",
       "name": "23 — Scheduled Tracked Source Monitor",
-      "node_count": 16,
+      "node_count": 17,
       "active": false,
       "trigger_classes": [
         "scheduleTrigger",
@@ -706,7 +707,8 @@
       "capability_class": "production_entrypoint",
       "called_by": [],
       "calls": [
-        "04_firecrawl_url_list_resilient.json"
+        "04_firecrawl_url_list_resilient.json",
+        "26_vk_public_community_collector.json"
       ],
       "imported_by_deploy": true,
       "trigger_always": false,
@@ -766,6 +768,33 @@
       "referenced_by_test": true,
       "archive_safe_candidate": false,
       "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "action": "retain"
+    },
+    {
+      "file": "26_vk_public_community_collector.json",
+      "wf_number": "WF26",
+      "name": "26 — VK Public Community Collector (bounded, official API)",
+      "node_count": 24,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [
+        "23_scheduled_source_monitor.json"
+      ],
+      "calls": [],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "called_by:23_scheduled_source_monitor.json; referenced_by_test; in_deploy_import_order",
       "action": "retain"
     }
   ]

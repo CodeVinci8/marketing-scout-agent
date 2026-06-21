@@ -54,6 +54,7 @@ test-js:
 	node tests/test_progress_tracker.js
 	node tests/test_weekly_digest.js
 	node tests/test_reporting_workflows.js
+	node tests/test_vk_collector.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

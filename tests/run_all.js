@@ -65,6 +65,8 @@ const JS_SUITES = [
   ['weekly-digest', 'test_weekly_digest.js'],
   // --- Reporting UX phase: real n8n workflow integration (WF24 export/delivery, WF25 digest, WF19/WF20 wiring) ---
   ['reporting-workflows', 'test_reporting_workflows.js'],
+  // --- Sources: bounded VK public-community collector (lib + WF26 + WF23 integration), fully offline ---
+  ['vk-collector', 'test_vk_collector.js'],
 ];
 
 let failed = 0;
