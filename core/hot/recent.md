@@ -4,6 +4,204 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-21 (session 22) — Release hardening: proactive delivery + scheduled monitoring (DEC-153)
+
+**Status (exact):** final automated release-hardening before controlled install. Branch
+`stage-3-closure-and-stage-4`. **0 external calls, $0**, all workflows `active=false`, **not pushed**, no n8n
+import. Three planned commits: (1) `feat(agent): complete proactive report assistance and scheduled
+monitoring`; (2) `fix(release): verify n8n persistence subworkflow and delivery wiring`; (3) `test(release):
+add full project regression and disposable import smoke`.
+
+**Commit 1 — BUILT (DEC-153):**
+- **Proactive delivery in the REAL path:** WF20 `Build Delivery Outbox` now co-embeds conversation_response +
+  agent_charter; `deliveryBody` = immutable facts + state-aware proactive continuation (registry-driven;
+  partial/no-data → recovery actions); keyboard on FINAL chunk only (`intent:<id>` callbacks).
+- **WF23 Scheduled Tracked Source Monitor** (16 nodes, real Schedule Trigger, `active=false`) + new
+  `n8n/lib/source_monitor.js`: due selection, sched/manual idempotency window, content-hash change detection
+  (baseline-then-diff), lifecycle updates, change event persisted BEFORE notify, notify-once (`change_id =
+  source_id::new_hash`). Manual "check now" reuses the contract with a manual window.
+- **Collector truthfulness:** website=WF04; telegram=WF11 fixture-first/approval-gated t.me/s preview (recent
+  posts only, not bot channel_post/comments) — `MS_ENABLE_TELEGRAM_COLLECTOR`; vk=WF13 disabled placeholders →
+  `setup_required`. `tracked_sources.addSource` sets honest initial status + monitoring fields + chat_id.
+- Tests: `test_monitoring.js` (59). Migration: tracked_sources monitoring fields + chat_id, new
+  `source_change_events`, §B4 collector config. Deploy order += WF23. `make test` → ALL PASS (28 workflows,
+  validator 259, $0, 0 calls).
+
+**Was scheduled monitoring present before this block?** NO — no schedule trigger / WF23 existed (verified).
+**n8n CLI:** NOT installed locally → static resolver (`tools/audit_workflows.js`) + documented disposable-import.
+
+**Commit 2 — DONE `35990e5` (DEC-154):** operator-authorized fix of callable triggers.
+- **Execute Sub-workflow Triggers added** to WF04/08/10/12/16 (node *When Called by Agent*), each preserving its
+  Manual Trigger for standalone diagnosis. Each declares a canonical input contract (`agent_request_id`,
+  `source_run_id`, `workflow_run_id`, `data_mode`, + per-workflow filters/budget/force flags). The config node
+  merges those inputs over its defaults; manual mode (empty input) is **byte-identical** (all Stage 1-3 suites
+  still pass). WF20/21/23 now pass **named** canonical fields via `workflowInputs` (no `.first()` reliance in the
+  callable). `audit_workflows.js` now **hard-fails** if a callable lacks the trigger or is publicly exposed.
+- **Persistence/delivery wiring proven:** WF18 reconstructs context from Sheets (conversation_state read+upsert,
+  messages read+append, summaries); WF20 persists execution_summaries + telegram_outbox before send.
+- **`deploy_n8n.sh --activate-triggers`** finished: WF18 always, WF23 only when `MS_MONITORING_ENABLED=true`;
+  version detection; explicit confirm; never activates a callable; refuses if n8n CLI absent. `test_release_audit.js`
+  → 98 checks. `docs/N8N_COMPAT_AND_TOPOLOGY.md` updated (gap RESOLVED + classification + contracts).
+
+**Commit 3 — DONE (this session):** `test_release_e2e.js` (62) — full 20-step multi-turn monitoring E2E
+(search→clarify→approve→collect→quality→report→proactive→deep facts/recs→add source→idempotent dup→scheduled
+no-change→meaningful change→one notification→reuse evidence→compaction→follow-up resolves competitors) + negative
+paths (unauth, dup update, invalid plan, unapproved/cancelled/over-budget gate, fail-closed source health,
+all-quarantined no-data, Telegram retry/never-resend, dup monitor window, missing tg/vk collector, deleted memory,
+ephemeral no-state). `scripts/n8n_import_smoke.sh` = disposable temp-folder import (prints exact command when n8n
+absent). `make test` → ALL PASS (34 suites, validator 259, $0, 0 calls, all `active=false`). **Not pushed.**
+
+---
+
+## Session: 2026-06-21 (session 21) — Conversational agent: NL intent + bounded memory + deep analysis (DEC-151/152)
+
+**Status (exact):** transforming the button-driven Stage 4 bot into a real conversational agent. Branch
+`stage-3-closure-and-stage-4`. **0 external calls, $0**, all workflows `active=false`, **not pushed**, no n8n
+import, no AI attribution. Three planned commits: (1) `feat(agent): add conversational intent routing and
+bounded memory`; (2) `feat(agent): add context-aware deep competitor analysis`; (3) `test(agent): add
+multi-turn memory and deep-analysis e2e`.
+
+**Commit 1 (conversational intent + memory) — BUILT:**
+- 5 libs in `n8n/lib/`: `agent_charter` (immutable versioned charter + deterministic capability registry;
+  availability from allowlist; Claude can't invent IDs), `intent_router` (deterministic-first; guarded Claude
+  classifier with strict `validateIntentJSON`; clarification fallback; `intent:<id>` button == typed intent;
+  no external work from unvalidated intent), `conversation_memory` (L1 state, L2 window=8, L3 versioned rolling
+  summary preserving IDs/decisions verbatim, L4 per-user durable memory + forget/forget_all audit with value
+  HASH not raw, L5 artifacts, token-budgeted `buildContext` never drops charter/state/safety/newest),
+  `conversation_response` (useful text w/o buttons + post-report NL invitation; optional buttons only),
+  `tracked_sources` (add/list/pause/resume/remove/check; idempotent; honest platform availability).
+- Generator extended: WF18 now conversational (13 nodes: Route Intent, Build Conversation Context, Build
+  Conversational Reply) + new **WF22 Conversation Control & Sources** (9 nodes). Both `active=false`.
+- Tests: `test_agent_contracts.js` (109) + `test_agent_workflows.js` (30 drift+harness). Registered.
+- Migration extended (§B2: conversations/conversation_messages/conversation_state/conversation_summaries/
+  durable_memories/memory_audit_events/context_usage/tracked_sources/source_audit_events). Deploy order += WF22.
+- `make test` → ALL SUITES PASS (29 suites + validator 247 + lead_scout); $0; 0 calls; 26 workflows active=false.
+
+**Commit 2 (context-aware deep analysis) — BUILT (DEC-152):**
+- 2 libs: `deep_analysis` (bounded plan w/ graceful degradation website_only→full; honest unavailable_sources;
+  evidence contract; `assembleDeepReport` separates evidence-backed FACTS from RECOMMENDATIONS — orphan recs
+  never become facts) + `orchestration_policy` (`reuseDecision` reuse/collect/extend; context-answerable intents
+  spend $0; explicit refresh/stale collects; new configured platform extends).
+- Generator: new **WF21 Deep Competitor Analysis** (14 nodes) + WF20 gains `Orchestration Reuse Decision` +
+  `Needs External Call?` branch (21 nodes). Both `active=false`.
+- Tests: `test_deep_analysis_contracts.js` (43) + `test_deep_analysis_workflows.js` (22). Registered.
+- Migration §B3: orchestration_decisions / deep_analysis_findings / deep_analysis_recommendations. Deploy += WF21.
+
+**Commit 3 (multi-turn E2E + docs) — BUILT:**
+- `test_agent_e2e.js` (30) — full mocked dialogue: search→plan→approve(free text)→report→"сравни первых двух
+  подробнее"→deep plan from prior report→approve→deep report (facts vs recommendations)→"добавь их сайты"
+  (resolved from context, added once/idempotent)→"что ещё умеешь?" (only configured caps)→window overflow→
+  rolling summary preserves rep_1→follow-up still resolves CASHMOTOR,CarCapital→"идеи" reuses report, $0 calls.
+  Single external-call counter; 0 external calls.
+- `docs/CONVERSATIONAL_AGENT.md` (Mermaid architecture + sequence + intent schema + memory/compaction + control
+  commands + deep analysis + source availability + reuse + tests + limitations). README points to it.
+- Fix surfaced by E2E: help regex broadened (`умеешь|что ещё`) so "а что ещё ты умеешь?" routes to help; WF18
+  regenerated.
+- Three commits landed: `215a6c8` (intent+memory), `0f13f9f` (deep analysis), + this docs/e2e commit.
+- `make test` → ALL SUITES PASS (32 JS suites + validator 253 + lead_scout); $0; 0 calls; 27 workflows active=false.
+
+**Open:** operator runtime retest (Stage C.1 + the one controlled live E2E). No further code work queued.
+
+---
+
+## Session: 2026-06-21 (session 20) — Stage 4 single-user Telegram agent MVP (branch stage-3-closure-and-stage-4, DEC-150)
+
+**Status (exact):** Phase A (Stage 3 closure) already LANDED as `0d0ab69`
+(`fix(stage3): close production analysis aggregation and reporting gates`). Phase B (Stage 4 MVP) BUILT and
+about to land as `feat(stage4): add telegram agent orchestration MVP`. **0 external calls, $0**, all
+workflows `active=false`, **not pushed**, no n8n import, no AI attribution.
+
+**Phase B (Stage 4) — what's in:**
+- **7 contract libraries** (`n8n/lib/`): `agent_config` (one central config, fail-closed defaults, no
+  secrets), `agent_state` (14-state durable machine, terminal absorbing, cancel-from-any, `canMakeExternalCall`),
+  `request_planner` (deterministic plan + guarded Claude planner + strict JSON validation + budget clamps),
+  `approval_gate` (single paid-call chokepoint; `GATE_TERMINAL` renamed to avoid `const` clash with
+  `agent_state.TERMINAL` when co-embedded; deterministic `idempotencyKey`), `source_adapter` (canonical
+  result + `rollupCollection` complete/partial/no_data; cost never fabricated to 0), `telegram_io`
+  (parse/auth/duplicate-`update_id`/MarkdownV2 escape/3900-chunk/outbox payload-hash dedup),
+  `execution_summary` (one flat canonical summary + single next action).
+- **`tools/gen_stage4_workflows.js`** deterministically generates **WF17** (config, 2 nodes), **WF18**
+  (Telegram gateway, 9), **WF19** (planner, 9), **WF20** (orchestrator, 16) with libs embedded byte-identically
+  between drift markers. Re-running is idempotent.
+- **Tests:** `test_stage4_contracts.js` (72) direct lib units + `test_stage4_workflows.js` (33) drift proof +
+  offline harness node execution. Registered in `run_all.js` + `Makefile`.
+- `make test` → **ALL SUITES PASS** (24 JS suites + validator 241 + lead_scout); 0 external calls; $0;
+  25 workflow JSON all `active=false`.
+
+**Phase C (testing/deploy/docs) — LANDED as `test(stage4): add replay e2e deployment and portfolio docs`:**
+- `n8n/fixtures/stage4/replay_fixtures.json` (sanitized: Apify SERP discovery / Avito search cards /
+  CASHMOTOR healthy Firecrawl / CarCapital degraded / source_health / WF08 / WF10 / WF12).
+- `tests/test_stage4_e2e.js` (62 checks) — mocked replay driving all 7 libs through the full lifecycle:
+  16 scenarios (duplicate-update, unauthorized, unapproved, cancelled/terminal-blocked, gate pass, off-allowlist,
+  budget/call/item overflow, deterministic idempotency, no-double-spend, healthy-proceeds, degraded-blocked,
+  partial state, all-quarantined no_data, invalid-planner-JSON 0 calls, summary-OFF 0 LLM, delivery-retry dedupe)
+  + full happy path Telegram→…→completed + illegal-transition rejection. Single external-call counter proves 0
+  calls on every negative path. Registered in run_all.js + Makefile.
+- `scripts/deploy_n8n.sh` — DRY-RUN default (validate JSON + config check + print plan, offline, no n8n);
+  `--apply` imports WF17→WF18→WF19→WF20 inactive, never touches credentials.
+- `docs/SHEETS_MIGRATION_STAGE_4.md` — 7 new tabs (exact headers: agent_requests/agent_request_events/
+  execution_plans/approval_decisions/telegram_outbox/execution_summaries/dead_letter_events) + existing-tab
+  append-only deps + verification checklist.
+- `docs/STAGE_4_AGENT.md` (Mermaid architecture + Telegram sequence + state machine + setup + controlled live
+  E2E + known limitations) + README updated to Stage 4.
+- **Fix surfaced by E2E:** `execution_summary.js` next-action ordering — `no_data` now precedes the generic
+  `partial` message (all-quarantined ⇒ "broaden sources", not "review partial report"); WF20 embed regenerated.
+- `make test` → **ALL SUITES PASS** (25 JS suites + validator 241 + lead_scout); 0 external calls; $0;
+  25 workflow JSON `active=false`. **Not pushed**, no n8n import, no AI attribution.
+
+**Open:** operator runtime retest (Stage C.1 + Stage 4 controlled live E2E). No further code work queued.
+
+---
+
+## Session: 2026-06-20 (session 19) — Stage 3 closure + Stage 4 (branch stage-3-closure-and-stage-4, DEC-147)
+
+**Status (exact):** new authoritative two-phase spec (Phase A = close Stage 3 runtime contracts; Phase B =
+Stage 4 orchestration). Branch `stage-3-closure-and-stage-4` from `origin/main` (4ba4e52, already contains
+Patch 5). **0 external calls, $0**, all workflows `active=false`, **not pushed**, no AI attribution. Three-commit
+plan: (1) `fix(stage3): unify runtime contracts and quality gates`; (2) `feat(stage4): add production
+orchestration and telegram gateway`; (3) `test(stage4): add end-to-end contracts and deployment docs`.
+
+**Commit 1 LANDED (canonical lineage + WF16 boolean fidelity):**
+- New `n8n/lib/lineage.js` — canonical identity contract (`source_run_id` join key vs `workflow_run_id`),
+  `canonicalSourceRunId`, `coerceSheetBool`.
+- **WF04 mismatch FIXED** (the live `no_compatible_baseline` blocker): `live_source_runs` no longer rewrites
+  `firecrawl_*`→`wf04_*`; emits `source_run_id=run_id=firecrawl_<stamp>` + `workflow_run_id=wf04_<stamp>` +
+  `data_mode`; snapshots carry the same canonical `source_run_id`. Ledger honesty: `approval_token_used=not_required`,
+  separated `primary_calls`/`repair_calls`, cost `unknown`/`null` (never 0).
+- **WF16 §2.3 boolean fidelity:** `Assemble` `cbool()` (mirrors lib) — Sheets string `'FALSE'` now scored invalid.
+- `tests/test_lineage_contract.js` (34 checks). `make test` → ALL SUITES PASS (20 JS suites + validator + lead_scout).
+
+**Commit 2 LANDED — `fix(stage3): connect website source quality and analysis pipeline` (DEC-148):**
+- **WF04 = website source adapter:** new `Build Canonical Raw Record` emits one canonical `raw_market_records`
+  row per scraped URL (full lineage + `source_record_id` + `analysis_status=pending`); WF04 extraction kept as
+  source hints; snapshots/transport preserved. + `Append raw_market_records` node.
+- **WF08 = single semantic owner:** `Filter & Select Records` + `source_run_id_filter` + record-level quality gate
+  (degraded/quarantined/pending blocked, per-record) + exactly-once via new `analysis_runs` ledger
+  (`Read analysis_runs` + `Build/Append analysis_runs Row`; key=`source_run_id::source_record_id`; `force_reprocess`).
+- WF16 scores WF04 rows by `source_run_id`. `tests/test_website_pipeline.js` (36 checks) on
+  `firecrawl_20260620_104531` (CASHMOTOR healthy→WF08 once; CarCapital degraded blocked; lineage identical).
+  `make test` → ALL SUITES PASS (21 JS suites). Sheets: `raw_market_records` WF04 cols + `analysis_runs` tab (§24/§25).
+
+**Commit 3 IN PROGRESS — `fix(stage3): close production analysis aggregation and reporting gates` (DEC-149):**
+- **WF10/WF12 fail-closed verification:** `rowEligible` no longer lets a live row self-attest past a missing
+  `source_health` join when `require_source_health=true` (production default in both WF10 + WF12); explicit
+  `allow_unverified_source=true` is the only dev bypass. Embedded mirrors stay byte-identical to
+  `n8n/lib/report_gate.js` (drift-proof).
+- **Guarded LLM (not disabled nodes):** WF08 `Prepare Record` guard (enabled+token+quality+not-cancelled+
+  not-analyzed+budget); WF12 `Claude Summary Approval Gate`/`Build Claude Summary Prompt` (enable flag+token+
+  eligible facts+budget+idempotency); OFF⇒0 calls; invalid⇒1 repair⇒deterministic fallback; unknown cost=null.
+- **WF12 isolation parity:** report scoped by run stamp + (additive) `agent_request_id`; `report_data_mode=live`
+  excludes fixture/manual snapshots; lineage-carrying snapshots held to the same `__bodyEligible` gate as profiles.
+- **WF05** executable pre-Apify approval/budget gate (token never logged); `items_relevant`=direct competitors;
+  truthful `approval_token_used`. **WF06** regex root detection (no `new URL(`, sandbox-safe). **WF09** search
+  cards `items_relevant=0` + `Detail enrichment required; do not run WF08` (enrichment = documented limitation).
+- `tests/test_stage3_gates.js` (47 checks) + updated `test_lineage_e2e.js`/`test_report_gate.js`.
+  `make test` → ALL SUITES PASS (22 JS suites + validator + lead_scout); $0; 0 external calls; active=false.
+
+**Open:** ALL of Stage 4 (Phase B — Telegram gateway, planner, state machine, approval/budget gate,
+source-adapter contract, idempotency/outbox, dead-letter) + Phase C (replay fixtures, mocked E2E, deploy script,
+consolidated migration, portfolio docs). Continuing autonomously per the single-user MVP directive.
+
 ## Session: 2026-06-20 (session 18) — Stage C Runtime Patch 5 (DEC-146): WF09 Apify actor-input regression
 
 **Status (exact):** narrow WF09 fix from the first live retest — two runs stalled after `Build

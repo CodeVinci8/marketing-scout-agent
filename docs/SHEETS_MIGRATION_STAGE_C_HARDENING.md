@@ -223,3 +223,27 @@ unchanged from §19–§20. What changed in WF09:
 No migration step. Re-run WF09 live: the Apify node now returns real listings (10 expected), `Build
 raw_market_records Rows` writes them with per-record `search_query`/`source_search_url`, and a degenerate
 empty actor response yields zero rows + an explicit error summary instead of a stalled run.
+
+## 24. Stage 3 closure — WF04 canonical raw record + WF08 exactly-once (producers: WF04 `Build Canonical Raw Record`, WF08 `Build analysis_runs Row`)
+**`raw_market_records`** now also receives WF04 website rows (`Append raw_market_records`, `autoMapInputData`).
+The tab must hold the canonical lineage + observability columns already used by WF09 plus:
+`source_record_id`, `workflow_run_id`, `analysis_status` (`pending`|`analyzed`), `quality_status`,
+`report_eligible`, `review_status`, `quality_flags`, `firecrawl_calls`, `primary_calls`, `repair_calls`,
+`cost_status`, `actual_source_cost_usd`. (WF04 sets `source_type=scraped_web`, `platform=website`,
+`touchpoint_type=competitor_website`, `dedup_status=unique`, `approval_status=new`.)
+
+**New tab `analysis_runs`** (WF08 exactly-once idempotency ledger). Headers:
+`analysis_run_id`, `analysis_idempotency_key` (= `source_run_id::source_record_id`), `source_run_id`,
+`source_record_id`, `agent_request_id`, `platform`, `source_type`, `data_mode`, `analysis_status`,
+`analyzed_at`, `analysis_mode`, `llm_used`, `notes`. WF08 reads it (via the new `Read analysis_runs` node)
+to skip already-analyzed records and appends one row per selected record.
+
+`live_source_runs` / `competitor_site_snapshots` use the canonical-lineage columns from §20 (commit
+`0367f3f`): `source_run_id`, `workflow_run_id`, `data_mode`.
+
+## 25. Operator order (Stage 3 closure website slice)
+1. Add the `raw_market_records` columns in §24 and create the `analysis_runs` tab. 2. Re-import WF04 + WF08.
+3. Re-run WF04 (live) → each scraped URL writes a canonical `raw_market_records` row (`analysis_status=pending`).
+4. Run WF16 filtered by `source_run_id_filter=firecrawl_<stamp>` → records are scored (no `no_compatible_baseline`).
+5. Run WF08 with `source_run_id_filter=firecrawl_<stamp>` → only healthy/eligible records are analyzed, each once;
+   re-running does not re-analyze (set `force_reprocess=true` to intentionally re-analyze).

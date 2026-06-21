@@ -27,6 +27,28 @@ const JS_SUITES = [
   ['wf16-runtime-searchcards', 'test_wf16_runtime_searchcards.js'],
   // --- Stage C Runtime Patch 5: WF09 Apify actor-input regression (string startUrls, query origin) ---
   ['wf09-actor-input', 'test_wf09_actor_input.js'],
+  // --- Stage 3 closure: canonical identity/lineage contract + WF16 boolean fidelity ---
+  ['lineage-contract', 'test_lineage_contract.js'],
+  // --- Stage 3 closure: WF04 -> WF16 -> WF08 website source quality & analysis pipeline ---
+  ['website-pipeline', 'test_website_pipeline.js'],
+  // --- Stage 3 closure: production analysis/aggregation/reporting gates (WF05/06/08/09/10/12) ---
+  ['stage3-gates', 'test_stage3_gates.js'],
+  // --- Stage 4: single-user Telegram agent MVP (libs + generated WF17-20) ---
+  ['stage4-contracts', 'test_stage4_contracts.js'],
+  ['stage4-workflows', 'test_stage4_workflows.js'],
+  ['stage4-e2e', 'test_stage4_e2e.js'],
+  // --- Conversational agent: charter, intent router, bounded memory, sources ---
+  ['agent-contracts', 'test_agent_contracts.js'],
+  ['agent-workflows', 'test_agent_workflows.js'],
+  // --- Deep competitor analysis + conversation-aware orchestration reuse ---
+  ['deep-analysis-contracts', 'test_deep_analysis_contracts.js'],
+  ['deep-analysis-workflows', 'test_deep_analysis_workflows.js'],
+  // --- Proactive delivery + scheduled tracked-source monitoring (WF23) ---
+  ['monitoring', 'test_monitoring.js'],
+  ['agent-e2e', 'test_agent_e2e.js'],
+  // --- Release hardening: n8n topology/trigger audit + persistence + delivery proof + full E2E ---
+  ['release-audit', 'test_release_audit.js'],
+  ['release-e2e', 'test_release_e2e.js'],
   ['ci-workflow', 'test_ci_workflow.js'],
 ];
 

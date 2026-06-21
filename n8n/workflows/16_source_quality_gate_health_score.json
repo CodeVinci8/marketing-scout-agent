@@ -30,7 +30,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// WF16 config. NO external API (no Claude/Apify/Firecrawl). Reads sheets + computes run health -> source_health.\n// fixture_self_test=true (default) runs the 3 demo cases offline ($0, no creds) so import+run works immediately.\n// Operator sets fixture_self_test=false + write_result=true (with spreadsheet creds) to evaluate real runs.\nfunction pad(n){return String(n).padStart(2,'0');}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction stampNow(){var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+pad(m.getUTCMonth()+1)+pad(m.getUTCDate())+'_'+pad(m.getUTCHours())+pad(m.getUTCMinutes())+pad(m.getUTCSeconds());}\nvar stamp=stampNow();\nreturn [{ json: {\n  workflow:'16 - Source Quality Gate & Health Score',\n  fixture_self_test:true,\n  source_run_id_filter:'',\n  agent_request_id_filter:'',\n  source_family_filter:'',\n  platform_filter:'',\n  freshness_window_days:30,\n  allow_degraded_report:false,\n  write_result:false,\n  dry_run:true,\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  taxonomy_version:'semantic-v2.0',\n  quality_rule_version:'qrule-v1.0',\n  run_id:'wf16_'+stamp,\n  generated_at:moscowIsoNow(),\n  note:'WF16 quality gate. fixture_self_test=true => 3 demo runs (healthy/degraded/quarantined), no sheet reads, $0. Set false to read live_source_runs + raw_market_records (+ registry/queues) filtered by source_run_id_filter/agent_request_id_filter and compute real source_health. write_result=true appends to the source_health tab (needs creds). Default report_eligible policy: live healthy=eligible; degraded excluded unless allow_degraded_report=true (adds report_quality_warning); fixture/manual_test/quarantined/no_data=never eligible. NO external API calls, no Claude.'\n}}];\n"
+        "jsCode": "// WF16 config. NO external API (no Claude/Apify/Firecrawl). Reads sheets + computes run health -> source_health.\n// fixture_self_test=true (default) runs the 3 demo cases offline ($0, no creds) so import+run works immediately.\n// Operator sets fixture_self_test=false + write_result=true (with spreadsheet creds) to evaluate real runs.\nfunction pad(n){return String(n).padStart(2,'0');}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction stampNow(){var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+pad(m.getUTCMonth()+1)+pad(m.getUTCDate())+'_'+pad(m.getUTCHours())+pad(m.getUTCMinutes())+pad(m.getUTCSeconds());}\nvar stamp=stampNow();\nvar __cfg = {\n  workflow:'16 - Source Quality Gate & Health Score',\n  fixture_self_test:true,\n  source_run_id_filter:'',\n  agent_request_id_filter:'',\n  source_family_filter:'',\n  platform_filter:'',\n  freshness_window_days:30,\n  allow_degraded_report:false,\n  write_result:false,\n  dry_run:true,\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  taxonomy_version:'semantic-v2.0',\n  quality_rule_version:'qrule-v1.0',\n  run_id:'wf16_'+stamp,\n  generated_at:moscowIsoNow(),\n  note:'WF16 quality gate. fixture_self_test=true => 3 demo runs (healthy/degraded/quarantined), no sheet reads, $0. Set false to read live_source_runs + raw_market_records (+ registry/queues) filtered by source_run_id_filter/agent_request_id_filter and compute real source_health. write_result=true appends to the source_health tab (needs creds). Default report_eligible policy: live healthy=eligible; degraded excluded unless allow_degraded_report=true (adds report_quality_warning); fixture/manual_test/quarantined/no_data=never eligible. NO external API calls, no Claude.'\n};\n\nvar __agentIn=(typeof $json==='object'&&$json)?$json:{};\nfunction __ov(ck,ik){var k=ik||ck;var v=__agentIn[k];if(v!==undefined&&v!==null&&v!=='')__cfg[ck]=v;}\n__ov('source_run_id_filter','source_run_id');\n__ov('agent_request_id_filter','agent_request_id');\n__ov('platform_filter','platform_filter');\n__ov('source_family_filter','source_family_filter');\n__ov('freshness_window_days','freshness_window_days');\n__ov('fixture_self_test','fixture_self_test');\nif(__agentIn.data_mode&&__agentIn.data_mode!=='fixture'){__cfg.fixture_self_test=false;}\nreturn [{ json: __cfg }];\n"
       },
       "id": "set_wf16_config",
       "name": "Set WF16 Config",
@@ -160,7 +160,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// LIVE assembly: read live_source_runs + raw_market_records (+ registry/queues), group records by source_run_id,\n// normalize each row into a quality descriptor, emit one run-bundle per run. Deterministic, NO external API.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction readNode(name){ try{ return $(name).all().map(function(i){return i.json;}).filter(Boolean); }catch(e){ return []; } }\nfunction detectPlaceholder(t){ t=str(t); if(!t)return false; if(/ещ[её]\\s*\\d+\\s*фото/i.test(t))return true; if(/^\\s*\\+?\\d+\\s*фото\\s*$/i.test(t))return true; return false; }\nfunction detectSysEvent(t){ t=str(t); return /channel name was changed to|канал переименован|(сменил|изменил)\\s+название\\s+канала|(сменил|изменил|обновил)\\s+фото\\s+канала/i.test(t); }\nvar cfg=$('Set WF16 Config').first().json;\nvar runIdF=str(cfg.source_run_id_filter);\nvar reqF=str(cfg.agent_request_id_filter);\nvar famF=low(cfg.source_family_filter);\nvar platF=low(cfg.platform_filter);\nvar runsRows=readNode('Read live_source_runs');\nvar raw=readNode('Read raw_market_records');\nvar registry=readNode('Read market_record_registry');\n// registry dedup_status lookup by record_id/dedup_key\nvar dedupByKey={};\nregistry.forEach(function(g){ var k=str(g.dedup_key)||str(g.record_id); if(k)dedupByKey[k]=low(g.dedup_status||'unique'); });\n// group raw rows by source_run_id (fall back to agent_request_id)\nvar groups={};\nraw.forEach(function(r){\n  var rid=str(r.source_run_id)||str(r.run_id)||str(r.agent_request_id);\n  if(!rid)return;\n  if(runIdF && rid!==runIdF)return;\n  if(reqF && str(r.agent_request_id)!==reqF)return;\n  (groups[rid]=groups[rid]||[]).push(r);\n});\nfunction normalize(r){\n  var rth=low(r.record_type_hint);\n  var title=str(r.title||r.offer_text);\n  var text=str(r.text_context||r.description);\n  var svc=low(r.service_hint||r.service_primary||r.normalized_service_type);\n  var placeholder=detectPlaceholder(title);\n  var sysev=detectSysEvent(text)||rth==='system_event';\n  var dedup=low(r.dedup_status)|| dedupByKey[str(r.dedup_key)] || dedupByKey[str(r.record_id)] || 'unique';\n  var ttype=low(r.touchpoint_type);\n  var detailReq=(r.detail_fetch_required===true||low(r.detail_fetch_required)==='true');\n  var isDetail=(r.is_detail===true||low(r.is_detail)==='true');\n  var qflagsStr=low(r.quality_flags);\n  var skipR=low(r.skip_reason);\n  var searchCard=placeholder||ttype==='search_card'||rth==='source_candidate'||detailReq||qflagsStr.indexOf('search_card')>=0||qflagsStr.indexOf('no_detail_record')>=0||skipR==='detail_enrichment_required'||(r.is_detail!==undefined&&!isDetail&&(ttype==='search_card'||rth==='source_candidate'));\n  var isDuplicate=(dedup==='duplicate'||dedup==='duplicate_in_registry'||dedup==='duplicate_in_batch'||dedup.indexOf('duplicate')===0);\n  var _ev=r.exact_evidence_url; var hasEvidence;\n  if(_ev===true||low(_ev)==='true')hasEvidence=true;\n  else if(_ev===false||low(_ev)==='false')hasEvidence=false;\n  else hasEvidence=(!searchCard)&&(str(r.post_url)!==''||str(r.listing_url)!==''||str(r.source_url)!=='');\n  var hardSkip=(r.hard_skip===true||low(r.hard_skip)==='true');\n  var irr=(rth==='irrelevant'||rth==='irrelevant_live_false_positive'||rth==='irrelevant_source');\n  var pending=(low(r.review_status)==='pending'||low(r.parse_method)==='deterministic_uncertain_no_llm');\n  var generic=(low(r.interest_topic)==='competitor channel ad copy')||(low(r.offer_text)===''&&rth==='competitor_activity');\n  var reportCand=!placeholder&&!sysev&&!irr&&!hardSkip&&!pending&&!searchCard&&dedup==='unique';\n  return {\n    structurally_valid:(r.is_valid_listing!==false)&&(str(r.record_id)!==''||str(r.dedup_key)!==''),\n    unique:dedup==='unique'&&!isDuplicate, duplicate:isDuplicate,\n    hard_skipped:hardSkip||sysev, irrelevant:irr, report_candidate:reportCand,\n    search_card:searchCard, degraded:(low(r.quality_status)==='degraded'||r.degraded===true),\n    placeholder_title:placeholder,\n    missing_description:(text.length<30),\n    missing_seller_identity:(str(r.profile_name)===''&&str(r.competitor_name)===''&&str(r.author_handle)===''&&str(r.seller_name)===''),\n    missing_published_at:(str(r.published_at)===''),\n    exact_evidence_url:hasEvidence,\n    unknown_service:(svc===''||svc==='unknown'),\n    generic_offer:generic, system_event:sysev, pending_review:pending,\n    published_at:str(r.published_at)\n  };\n}\nvar out=[];\nObject.keys(groups).forEach(function(rid){\n  var _grp=groups[rid]||[];\n  var _reqId=str((_grp[0]||{}).agent_request_id);\n  var runRow=runsRows.filter(function(x){return (str(x.source_run_id)||str(x.run_id))===rid;})[0]\n    ||(_reqId?runsRows.filter(function(x){return str(x.agent_request_id)===_reqId||str(x.run_id)===_reqId;})[0]:null)\n    ||{};\n  if(famF && low(runRow.source_family)!==famF) return;\n  if(platF && low(runRow.platform)!==platF) return;\n  var records=groups[rid].map(normalize);\n  var run=Object.assign({source_run_id:rid,data_mode:low(runRow.mode)===''?'live':(low(runRow.mode)||'live')},runRow,{source_run_id:rid});\n  if(run.data_mode===undefined||run.data_mode==='') run.data_mode='live';\n  out.push({json:{is_run_bundle:true, run:run, records:records}});\n});\nif(out.length===0){ out.push({json:{is_run_bundle:true, run:{source_run_id:runIdF||'none',data_mode:'live',items_received:0}, records:[]}}); }\nreturn out;\n"
+        "jsCode": "// LIVE assembly: read live_source_runs + raw_market_records (+ registry/queues), group records by source_run_id,\n// normalize each row into a quality descriptor, emit one run-bundle per run. Deterministic, NO external API.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\n// §2.3 Sheets boolean fidelity: explicit TRUE/FALSE/strings/empty preserved (mirrors n8n/lib/lineage.coerceSheetBool).\nfunction cbool(v,d){if(v===true||v===false)return v;var s=low(v);if(s==='')return d;if(s==='true'||s==='yes'||s==='1')return true;if(s==='false'||s==='no'||s==='0')return false;return d;}\nfunction readNode(name){ try{ return $(name).all().map(function(i){return i.json;}).filter(Boolean); }catch(e){ return []; } }\nfunction detectPlaceholder(t){ t=str(t); if(!t)return false; if(/ещ[её]\\s*\\d+\\s*фото/i.test(t))return true; if(/^\\s*\\+?\\d+\\s*фото\\s*$/i.test(t))return true; return false; }\nfunction detectSysEvent(t){ t=str(t); return /channel name was changed to|канал переименован|(сменил|изменил)\\s+название\\s+канала|(сменил|изменил|обновил)\\s+фото\\s+канала/i.test(t); }\nvar cfg=$('Set WF16 Config').first().json;\nvar runIdF=str(cfg.source_run_id_filter);\nvar reqF=str(cfg.agent_request_id_filter);\nvar famF=low(cfg.source_family_filter);\nvar platF=low(cfg.platform_filter);\nvar runsRows=readNode('Read live_source_runs');\nvar raw=readNode('Read raw_market_records');\nvar registry=readNode('Read market_record_registry');\n// registry dedup_status lookup by record_id/dedup_key\nvar dedupByKey={};\nregistry.forEach(function(g){ var k=str(g.dedup_key)||str(g.record_id); if(k)dedupByKey[k]=low(g.dedup_status||'unique'); });\n// group raw rows by source_run_id (fall back to agent_request_id)\nvar groups={};\nraw.forEach(function(r){\n  var rid=str(r.source_run_id)||str(r.run_id)||str(r.agent_request_id);\n  if(!rid)return;\n  if(runIdF && rid!==runIdF)return;\n  if(reqF && str(r.agent_request_id)!==reqF)return;\n  (groups[rid]=groups[rid]||[]).push(r);\n});\nfunction normalize(r){\n  var rth=low(r.record_type_hint);\n  var title=str(r.title||r.offer_text);\n  var text=str(r.text_context||r.description);\n  var svc=low(r.service_hint||r.service_primary||r.normalized_service_type);\n  var placeholder=detectPlaceholder(title);\n  var sysev=detectSysEvent(text)||rth==='system_event';\n  var dedup=low(r.dedup_status)|| dedupByKey[str(r.dedup_key)] || dedupByKey[str(r.record_id)] || 'unique';\n  var ttype=low(r.touchpoint_type);\n  var detailReq=(r.detail_fetch_required===true||low(r.detail_fetch_required)==='true');\n  var isDetail=(r.is_detail===true||low(r.is_detail)==='true');\n  var qflagsStr=low(r.quality_flags);\n  var skipR=low(r.skip_reason);\n  var searchCard=placeholder||ttype==='search_card'||rth==='source_candidate'||detailReq||qflagsStr.indexOf('search_card')>=0||qflagsStr.indexOf('no_detail_record')>=0||skipR==='detail_enrichment_required'||(r.is_detail!==undefined&&!isDetail&&(ttype==='search_card'||rth==='source_candidate'));\n  var isDuplicate=(dedup==='duplicate'||dedup==='duplicate_in_registry'||dedup==='duplicate_in_batch'||dedup.indexOf('duplicate')===0);\n  var _ev=r.exact_evidence_url; var hasEvidence;\n  if(_ev===true||low(_ev)==='true')hasEvidence=true;\n  else if(_ev===false||low(_ev)==='false')hasEvidence=false;\n  else hasEvidence=(!searchCard)&&(str(r.post_url)!==''||str(r.listing_url)!==''||str(r.source_url)!=='');\n  var hardSkip=(r.hard_skip===true||low(r.hard_skip)==='true');\n  var irr=(rth==='irrelevant'||rth==='irrelevant_live_false_positive'||rth==='irrelevant_source');\n  var pending=(low(r.review_status)==='pending'||low(r.parse_method)==='deterministic_uncertain_no_llm');\n  var generic=(low(r.interest_topic)==='competitor channel ad copy')||(low(r.offer_text)===''&&rth==='competitor_activity');\n  var reportCand=!placeholder&&!sysev&&!irr&&!hardSkip&&!pending&&!searchCard&&dedup==='unique';\n  return {\n    structurally_valid:(cbool(r.is_valid_listing,true)!==false)&&(str(r.record_id)!==''||str(r.dedup_key)!==''),\n    unique:dedup==='unique'&&!isDuplicate, duplicate:isDuplicate,\n    hard_skipped:hardSkip||sysev, irrelevant:irr, report_candidate:reportCand,\n    search_card:searchCard, degraded:(low(r.quality_status)==='degraded'||r.degraded===true),\n    placeholder_title:placeholder,\n    missing_description:(text.length<30),\n    missing_seller_identity:(str(r.profile_name)===''&&str(r.competitor_name)===''&&str(r.author_handle)===''&&str(r.seller_name)===''),\n    missing_published_at:(str(r.published_at)===''),\n    exact_evidence_url:hasEvidence,\n    unknown_service:(svc===''||svc==='unknown'),\n    generic_offer:generic, system_event:sysev, pending_review:pending,\n    published_at:str(r.published_at)\n  };\n}\nvar out=[];\nObject.keys(groups).forEach(function(rid){\n  var _grp=groups[rid]||[];\n  var _reqId=str((_grp[0]||{}).agent_request_id);\n  var runRow=runsRows.filter(function(x){return (str(x.source_run_id)||str(x.run_id))===rid;})[0]\n    ||(_reqId?runsRows.filter(function(x){return str(x.agent_request_id)===_reqId||str(x.run_id)===_reqId;})[0]:null)\n    ||{};\n  if(famF && low(runRow.source_family)!==famF) return;\n  if(platF && low(runRow.platform)!==platF) return;\n  var records=groups[rid].map(normalize);\n  var run=Object.assign({source_run_id:rid,data_mode:low(runRow.mode)===''?'live':(low(runRow.mode)||'live')},runRow,{source_run_id:rid});\n  if(run.data_mode===undefined||run.data_mode==='') run.data_mode='live';\n  out.push({json:{is_run_bundle:true, run:run, records:records}});\n});\nif(out.length===0){ out.push({json:{is_run_bundle:true, run:{source_run_id:runIdF||'none',data_mode:'live',items_received:0}, records:[]}}); }\nreturn out;\n"
       },
       "id": "assemble_run_bundles",
       "name": "Assemble Run Bundles",
@@ -252,6 +252,108 @@
         1780,
         320
       ]
+    },
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "workflow_run_id",
+              "displayName": "workflow_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "platform_filter",
+              "displayName": "platform_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "source_family_filter",
+              "displayName": "source_family_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "freshness_window_days",
+              "displayName": "freshness_window_days",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "fixture_self_test",
+              "displayName": "fixture_self_test",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        160,
+        400
+      ],
+      "id": "wf16-subtrig",
+      "name": "When Called by Agent"
     }
   ],
   "connections": {
@@ -384,6 +486,17 @@
         [
           {
             "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Set WF16 Config",
             "type": "main",
             "index": 0
           }

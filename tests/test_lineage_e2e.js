@@ -81,7 +81,9 @@ const goodProfile = posAgg.competitor_profiles[0];
 const goodAngle = posAgg.market_angles[0];
 
 A.section('WF10 — mode / verification matrix on production-shaped rows');
-A.eq('empty source_health + live self-attest -> included', aggregate(live.q, []).stats.rows_after_filters, 1);
+// fail-closed (production default require_source_health=true): self-attestation cannot bypass a missing health join
+A.eq('empty source_health + live self-attest -> EXCLUDED (fail-closed default)', aggregate(live.q, []).stats.rows_after_filters, 0);
+A.eq('empty source_health + live self-attest + require_source_health=false -> included (dev opt-in)', aggregate(live.q, [], { require_source_health: false }).stats.rows_after_filters, 1);
 A.eq('fixture data_mode (default) -> excluded', aggregate(queueRow('fixture').q, []).stats.rows_after_filters, 0);
 A.eq('fixture + allow_fixture_report -> included', aggregate(queueRow('fixture').q, [], { allow_fixture_report: true }).stats.rows_after_filters, 1);
 A.eq('manual_test (default) -> excluded', aggregate(queueRow('manual_test').q, []).stats.rows_after_filters, 0);

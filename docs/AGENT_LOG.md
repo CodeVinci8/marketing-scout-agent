@@ -5,6 +5,29 @@ Most recent first.
 
 ---
 
+## 2026-06-21 (session 22, commits 2-3) — Release hardening: callable triggers + full regression (DEC-154)
+
+**Agent role:** project-engineer · **Scope:** operator-authorized fix of the five callable Stage 1-3 workflow
+exports + parent named-input wiring + audit hardening + `--activate-triggers` + full regression/E2E + disposable
+import smoke. Branch `stage-3-closure-and-stage-4`. **0 external calls, $0**, all workflows `active=false`, **not
+pushed**, no n8n import, no AI attribution.
+
+**Changed workflow exports (`active=false`):** WF04/08/10/12/16 each gain an Execute Sub-workflow Trigger (node
+*When Called by Agent*) wired into the existing config node; Manual Trigger preserved; config node merges canonical
+inputs (no-op in manual mode). WF20/21/23 regenerated to pass **named** canonical fields via `workflowInputs`.
+
+**Tools/scripts/tests/docs:** `tools/audit_workflows.js` (hard-fail on missing trigger / public callable +
+contracts + classification); `scripts/deploy_n8n.sh` (`--activate-triggers`: WF18 always, WF23 when
+`MS_MONITORING_ENABLED=true`, version detect, post-import id capture, never activates a callable);
+`tests/test_release_audit.js` (98), `tests/test_release_e2e.js` (62, full 20-step monitoring E2E + negative paths);
+`scripts/n8n_import_smoke.sh` (disposable temp-folder import); `docs/N8N_COMPAT_AND_TOPOLOGY.md` (gap RESOLVED).
+Registered in `run_all.js` + Makefile. `make test` → ALL PASS (34 suites + validator 259 + lead_scout, $0, 0 calls).
+
+**Commits:** `35990e5 fix(release): verify n8n persistence subworkflow and delivery wiring`; commit 3
+`test(release): add full project regression and disposable import smoke`. **Not pushed.**
+
+---
+
 ## 2026-06-19 (session 13) — Stage C.1 consolidated patch (DEC-141)
 
 **Agent role:** project-engineer · **Scope:** corrective patch from REAL operator n8n runtime evidence + operator-

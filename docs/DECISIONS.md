@@ -5,6 +5,301 @@ Most recent first.
 
 ---
 
+## DEC-154 — Callable Stage 1-3 workflows made runtime-invocable via Execute Sub-workflow Triggers
+
+**Date:** 2026-06-21
+
+**Decision:** With explicit operator authorization, add an **Execute Sub-workflow Trigger**
+(`n8n-nodes-base.executeWorkflowTrigger`, node *When Called by Agent*) to the five callable workflows
+**WF04, WF08, WF10, WF12, WF16**, keeping each existing **Manual Trigger** for standalone diagnosis. Each trigger
+declares an explicit canonical input contract; the existing config node merges those inputs over its defaults.
+The parent (WF20/21/23) now passes **named** canonical fields (`agent_request_id`, `source_run_id`, `data_mode`,
+`urls`, `platform_filter`, …) through `workflowInputs`, instead of relying on positional/`.first()` consumption.
+
+**Why:** Execute Sub-workflow can only invoke a workflow that contains a sub-workflow trigger. Previously the
+callables exposed only a Manual Trigger, so the orchestrator's edges resolved statically but would not run at
+runtime. A prior session documented this as an operator action because CLAUDE.md forbids editing real workflow
+exports without confirmation; this session received that confirmation.
+
+**How the change stays safe (no business-logic rewrite):**
+- Manual mode delivers an empty input item, so the merge is a no-op and manual behavior is **byte-identical** —
+  every Stage 1-3 suite still passes unchanged.
+- Canonical inputs map onto fields that already exist (`source_run_id`→`source_run_id_filter`,
+  `agent_request_id`→`agent_request_id_filter`, `data_mode` flips WF16 `fixture_self_test` off for live runs),
+  preserving lineage/approval/quality/idempotency/budget semantics.
+- No public webhook is added to any callable; callables remain reachable only via Execute Sub-workflow.
+
+**Enforcement:** `tools/audit_workflows.js` now treats a callable **without** a Sub-workflow Trigger, or a callable
+exposed via a **public webhook**, as a **hard error** (the release audit fails). `deploy_n8n.sh --activate-triggers`
+activates only WF18 (always) and WF23 (when `MS_MONITORING_ENABLED=true`); it never activates a callable.
+
+**Verified by:** `tests/test_release_audit.js` (98) + `tests/test_release_e2e.js` (62); `make test` ALL PASS,
+$0, 0 external calls, all workflows `active=false`. Linked: [[project-stage4-mvp-built]], DEC-153, DEC-150.
+
+---
+
+## DEC-153 — Release hardening: proactive delivery + real scheduled monitoring (WF20 ext + WF23)
+
+**Date:** 2026-06-21
+
+**Context:** Pre-installation hardening exposed two gaps: (a) the proactive post-report continuation lived only
+in a helper lib — the **actual** WF20 delivery node built a bare factual line — and (b) `tracked_sources` was
+registration-only with no scheduled checking. Also needed: a truthful Telegram/VK capability map and a local
+n8n-compatibility/persistence audit.
+
+**Decisions:**
+1. **Proactive assistance moved into the real delivery path.** WF20 `Build Delivery Outbox` now co-embeds
+   `conversation_response` + `agent_charter` and builds `deliveryBody` = immutable report facts (verbatim) +
+   a state-aware proactive continuation drawn from the deterministic capability registry. Actions are offered
+   only when available; partial/no-data reports offer recovery actions (rerun/sources), not success actions.
+   The optional keyboard (`intent:<id>` callbacks == typed intents) is attached to the **final chunk only**.
+2. **Real scheduled monitor (WF23) with a Schedule Trigger, `active=false` in repo.** New `source_monitor`
+   library: due selection (skips paused/removed/setup_required/not-due), a deterministic check window
+   (`sched_<bucket>` vs `manual_<sec>` for the conversational "check now"), normalized-content hashing, a
+   baseline-then-diff change model (first check is a silent baseline), lifecycle field updates
+   (last_checked/success/next_check/content_hash/change_at/status/error/error_count), a deterministic
+   `change_id = source_id::new_hash`, and notify-once (`shouldNotifyChange` is existence-based). The change
+   event is persisted **before** the Telegram notification.
+3. **Collector truthfulness.** `collectorState`/`tracked_sources.initialStatus`: website is collectable (WF04);
+   Telegram is a fixture-first/approval-gated `t.me/s` public-preview collector (WF11) — recent preview posts
+   only, not bot `channel_post`/comments/history — available only when `MS_ENABLE_TELEGRAM_COLLECTOR=true`; VK
+   (WF13) is fixture + disabled placeholders → `setup_required` until a real collector+creds exist. A source on
+   an unconfigured platform is tracked but `setup_required`, never silently treated as live.
+
+**Constraints honored:** WF20 extended + WF23 added (real Schedule Trigger), both `active=false`; Claude/Apify
+nodes guarded; lineage/idempotency preserved; no secrets; `make test` ALL SUITES PASS (monitoring suite 59);
+0 external calls; $0; not pushed; no n8n import.
+
+---
+
+## DEC-152 — Context-aware deep competitor analysis + orchestration reuse (WF21 + WF20 ext)
+
+**Date:** 2026-06-21
+
+**Context:** The agent needed (a) a bounded deep-analysis mode that goes beyond homepages but only across
+configured sources, with a hard separation between observed facts and recommendations, and (b) a way for
+follow-up turns ("explain the second", "generate ideas", "compare with last time") to reuse stored evidence
+instead of paying for collection again.
+
+**Decisions:**
+1. **Two pure libraries.** `deep_analysis` (bounded plan with graceful degradation + evidence contract +
+   fact/recommendation separation) and `orchestration_policy` (reuse/collect/extend decision). Unit-tested
+   (`test_deep_analysis_contracts.js`, 43) and embedded into WF21 + WF20 (drift in
+   `test_deep_analysis_workflows.js`, 22).
+2. **Graceful, honest deep plan.** `buildDeepPlan` selects only platforms that are in the allowlist AND (for
+   Telegram/VK) backed by an active tracked source; everything else lands in `unavailable_sources` with a
+   reason. Scope degrades website_only → website_history → website_telegram → website_vk → full. Page limit,
+   external-call count and source/LLM budgets are clamped to config; the plan requires approval.
+3. **Evidence contract; recommendations can never become facts.** A `deepFinding` is a FACT only with a full
+   evidence anchor (source URL/record + source_run_id + excerpt + collected_at + quality + confidence);
+   `validateFinding` rejects anything else. `assembleDeepReport` separates evidence-backed facts from
+   recommendations, and a recommendation that doesn't reference at least one valid finding is held back as an
+   orphan — it is never stored or shown as a fact.
+4. **Conversation-aware reuse (Part 7).** `reuseDecision` returns reuse | collect | extend with a reason and a
+   `needs_external_call` flag: context-answerable intents (report_followup/generate_ideas/compare_periods)
+   reuse the last report with zero external calls; deep analysis on fresh same-platform evidence reuses; a
+   newly-requested *configured* platform extends; stale evidence or an explicit refresh/rerun collects. WF20
+   gained an `Orchestration Reuse Decision` node + a `Needs External Call?` branch that answers from context
+   without a paid call, persisting every decision to `orchestration_decisions`.
+
+**Constraints honored:** WF21 added + WF20 extended, both `active=false`; approval/budget gate reused for deep
+analysis; Claude/Apify nodes guarded; lineage/idempotency preserved; no secrets; `make test` ALL SUITES PASS;
+0 external calls; $0; not pushed; no n8n import.
+
+---
+
+## DEC-151 — Conversational agent: NL intent routing + bounded multi-layer memory (WF18 ext + WF22)
+
+**Date:** 2026-06-21
+
+**Context:** Stage 4 (DEC-150) was a button-driven workflow interface. The product goal is a real conversational
+Marketing Scout: free-form natural language is the primary interface, buttons are optional accelerators, and the
+agent must resolve contextual references ("the first two", "them", "the previous report") without sending the
+whole transcript to Claude every turn.
+
+**Decisions:**
+1. **Library-first again (extends DEC-142/150).** Five new pure libraries — `agent_charter`, `intent_router`,
+   `conversation_memory`, `conversation_response`, `tracked_sources` — hold all logic, are unit-tested
+   (`test_agent_contracts.js`, 109 checks) and embedded byte-identically into WF18/WF22 Code nodes (drift
+   asserted by `test_agent_workflows.js`). No cross-lib `require` in embeddable libs (the embed strips only
+   `use strict`/`module.exports`); shared helpers are `function` declarations so co-embedding two libs in one
+   node is legal in sloppy mode; top-level `const` names are unique per lib to avoid redeclaration SyntaxErrors.
+2. **Immutable charter + deterministic capability registry.** `agent_charter` injects a compact versioned
+   charter every turn and is the single source of truth for runnable capability IDs. Claude may select/phrase a
+   capability but cannot invent an ID or callback — only registry IDs route. Availability is derived from cfg
+   (a platform is available only if it is in the source allowlist), so the agent never claims Telegram/VK access
+   it lacks.
+3. **Deterministic-first intent routing.** `intent_router` resolves obvious commands/callbacks and clear
+   keyword phrases with zero LLM; genuinely ambiguous free text goes to a GUARDED Claude classifier whose JSON
+   is validated against a strict schema (`validateIntentJSON`); anything invalid/unsupported falls back to ONE
+   clarification question. **No external collection starts from an unvalidated intent** — `start_work` requires
+   `requested_action==='build_plan'` AND an available capability AND a deterministic route. Optional buttons use
+   `intent:<capability_id>` callbacks, so a button is exactly equivalent to typing the request.
+4. **Bounded multi-layer memory (the full transcript is never sent).** `conversation_memory` implements L1 state,
+   L2 recent window (default 8), L3 versioned rolling summary that PRESERVES decisions/entities/IDs/references
+   verbatim (a regex collects IDs and they are copied unchanged; the previous summary is retained for audit),
+   L4 durable per-user memory, and L5 artifact selection. `buildContext` assembles sections in a fixed priority
+   order under a token budget and NEVER drops charter / current state / safety-approval constraints / the newest
+   user message; omitted sections + truncation are recorded in `context_usage`.
+5. **Memory control + isolation.** `/new` resets active context but keeps durable preferences; `/forget` and
+   `/forget_all` (confirmation-gated) tombstone memory and write an audit event that keeps a value HASH, never
+   the raw value; memory is strictly isolated by Telegram user; a no-memory mode is supported per request.
+   `makeMemory` refuses to store token/secret-like values.
+6. **Conversational source management.** `tracked_sources` adds/lists/pauses/resumes/removes/checks public
+   sources purely from text; adds are idempotent; a platform not in the allowlist is honestly refused; refs can
+   be resolved from context ("add their sites" uses last-report competitor URLs).
+
+**Constraints honored:** WF18 extended + WF22 added, both `active=false`; Claude nodes guarded, not disabled;
+messages are not reloaded in full each turn; no secrets in Sheets/JSON; `make test` ALL SUITES PASS (agent
+contracts 109 + agent workflows 30); 0 external calls; $0; not pushed; no n8n import.
+
+---
+
+## DEC-150 — Stage 4: single-user Telegram agent MVP (WF17–WF20 + seven contract libraries)
+
+**Date:** 2026-06-21
+
+**Context:** Stage 3 closed the per-workflow runtime contracts (DEC-148/149) but the system was still a
+set of manually-triggered workflows. Stage 4 turns it into one operator-facing agent: a Telegram request
+flows through planning → human approval → website collection → quality gate → analysis → aggregation →
+report → delivery, with durable state and a single chokepoint for every paid call. The single-user scope
+is deliberate (one operator, website-first); multi-tenant and multi-source breadth are out of scope.
+
+**Decisions:**
+1. **Library-first, embed-mirrored (extends DEC-142).** Seven pure libraries hold all Stage 4 logic —
+   `agent_config`, `agent_state`, `request_planner`, `approval_gate`, `source_adapter`, `telegram_io`,
+   `execution_summary`. Each is unit-tested directly (`test_stage4_contracts.js`, 72 checks) and embedded
+   byte-identically into the workflow Code nodes between drift markers; `tools/gen_stage4_workflows.js`
+   deterministically (re)generates WF17–WF20 and `test_stage4_workflows.js` asserts embed == library core.
+2. **One central config object, no per-workflow Spreadsheet ID.** WF17 `Resolve Agent Config` reads env
+   (`MS_SPREADSHEET_ID`, `MS_TELEGRAM_ALLOWED_USER_IDS`, budgets, limits, allowlist, feature flags) into a
+   single canonical config consumed by every other Stage 4 workflow. Defaults fail closed
+   (`require_approval=true`, `require_source_health=true`, `source_allowlist=['website']`, planner/summary
+   LLM **off**). Missing required keys set `config_complete=false` rather than guessing. No secrets in JSON.
+3. **Durable state machine with rejected illegal transitions.** `agent_state` defines the 14 lifecycle
+   states (received→…→completed/partial/failed/cancelled). `canTransition` makes terminal states absorbing
+   and lets `cancelled` interrupt any live state; `canMakeExternalCall(state)` is false for terminal states,
+   so a cancelled/completed request can never start new external work even if a stale callback arrives.
+4. **Approval & budget gate is the single paid-call chokepoint (fail-closed).** `approval_gate.evaluateGate`
+   blocks unless: not cancelled/terminal, approved (when required), source allowlisted, under item/call
+   ceilings, under source and LLM budgets, and the deterministic `idempotencyKey(request, source, attempt)`
+   has not already completed. A repeated approval callback or a re-fired source call cannot spend twice.
+   Note: `approval_gate.js` uses `GATE_TERMINAL` (not `TERMINAL`) so it can be co-embedded in the same Code
+   node as `agent_state` (which exports `TERMINAL`) without a `const` redeclaration SyntaxError in sloppy mode.
+5. **Source-adapter contract decouples the orchestrator from source internals.** `normalizeAdapterResult`
+   maps any source's raw output to one canonical shape (status/next_state/cost_status, never a fabricated
+   `0` cost); `rollupCollection` reduces N adapter results to `complete | partial | no_data`. Website is
+   first-class; Avito experimental, VK optional — added behind the allowlist without touching the orchestrator.
+6. **Idempotent Telegram I/O.** `telegram_io.parseUpdate` classifies request/`/status`/`/cancel`/callback/
+   command; duplicate `update_id` (matched against `agent_request_events`) yields one request, not two.
+   Delivery uses an outbox (`makeDelivery` + `shouldSend` payload-hash dedup, MarkdownV2 escaping, 3900-char
+   chunking) so a re-executed delivery branch cannot produce a duplicate user-visible send.
+7. **One canonical execution summary.** `buildExecutionSummary` collapses request state + collection rollup
+   + analysis/aggregation/report facts + delivery into one flat record (records received/eligible/analyzed/
+   reported, external calls, primary vs repair LLM calls, source/LLM cost status, blocking errors, single
+   `next_operator_action`); unknown costs stay `unknown`.
+
+**Constraints honored:** all four workflows `active=false`; production Claude/Apify nodes guarded by runtime
+checks, not physically disabled; `make test` → ALL SUITES PASS (stage4-contracts 72, stage4-workflows 33);
+0 external calls, $0; not pushed; no n8n import.
+
+---
+
+## DEC-149 — Stage 3 closure: production analysis/aggregation/reporting gates (WF05/06/08/09/10/12)
+
+**Date:** 2026-06-20
+
+**Context:** The website pipeline (DEC-148) flowed data, but the production-facing gates were either
+permissive or self-attesting: WF10 let a `data_mode=live` row pass without a matching `source_health` join,
+the Claude nodes in WF08/WF12 were guarded only by hand-disabling, WF05 had no executable pre-Apify gate,
+WF06 root detection used `new URL` (unavailable in the n8n sandbox), and WF09 counted search cards as
+confirmed offers. These are the remaining Phase-A production blockers.
+
+**Decisions:**
+1. **Fail-closed verification (WF10 + WF12 + `n8n/lib/report_gate.js`).** In `rowEligible`, live
+   self-attestation no longer verifies a row when `require_source_health=true` (the production default):
+   `verified = (healthMatched && healthEligible) || (selfAttestsLive && cfg.require_source_health !== true)
+   || fixtureOptedIn`. A missing `source_health` join is now excluded unless the operator sets the explicit
+   dev bypass `allow_unverified_source=true`. The embedded mirrors in WF10/WF12 stay byte-identical to the
+   library (drift-proof test). `require_source_health` defaults to `true` in both WF10 and WF12 config.
+2. **Guarded LLM execution, not disabled nodes.** WF08 `Prepare Record` and WF12 `Claude Summary Approval
+   Gate`/`Build Claude Summary Prompt` carry executable runtime guards (enabled flag + valid approval token
+   + canonical quality-eligibility + not-cancelled + not-previously-analyzed/summarized + per-call budget).
+   `llm_enabled/enable_llm_summary=false` ⇒ zero Claude calls; invalid primary ⇒ one bounded repair ⇒
+   deterministic fallback; primary/repair counted separately; unknown cost stays `null`. The Claude HTTP
+   nodes remain `disabled:false` in JSON.
+3. **WF12 report isolation parity.** Report data is isolated by the current run stamp **and** (additively)
+   by `agent_request_id` when rows carry it; `report_data_mode=live` now excludes fixture/manual snapshots,
+   and lineage-carrying snapshots are held to the same `__bodyEligible` gate as profiles — a snapshot can no
+   longer survive a gate that excluded its source run.
+4. **WF05** gains an executable approval/budget IIFE that throws before the Apify request when unapproved
+   (token value never logged); `items_relevant` counts direct competitors, `approval_token_used` is truthful.
+5. **WF06** root detection is regex-based and sandbox-safe (no `new URL(` call).
+6. **WF09** search cards are source candidates: `items_relevant=0` for a search-card-only run, which emits
+   exactly `Detail enrichment required; do not run WF08`. (Search-card→offer enrichment stays a documented
+   source limitation, not closed here.)
+
+**Scope:** commit `fix(stage3): close production analysis aggregation and reporting gates`. Proven by
+`tests/test_stage3_gates.js` (47 checks) plus updated `test_lineage_e2e.js`/`test_report_gate.js`.
+`make test` → ALL SUITES PASS; external calls=0; live cost=$0; all workflows `active=false`.
+
+---
+
+## DEC-148 — Stage 3 closure: connect the website source quality & analysis pipeline (WF04→WF16→WF08)
+
+**Date:** 2026-06-20
+
+**Context:** After the lineage join was fixed (DEC-147), WF04 still wrote final business-route rows but no
+canonical `raw_market_records`, so WF16 could not score WF04 web data and WF08 (the analyzer) never saw it —
+risking double semantic analysis (WF04 Claude + WF08 Claude on the same page).
+
+**Decisions:**
+1. **WF04 is the website source adapter.** New `Build Canonical Raw Record` node emits ONE canonical
+   `raw_market_records` row per scraped URL with full lineage (`agent_request_id`, `source_run_id`,
+   `workflow_run_id`, `source_record_id`, `data_mode`), structural/quality fields and `analysis_status='pending'`.
+   WF04's own extraction is retained only as source hints/evidence; transport/Firecrawl/cleaning/snapshots stay.
+2. **WF08 is the single semantic owner.** It consumes the canonical record exactly once: `Filter & Select
+   Records` adds `source_run_id_filter`, a record-level quality gate (degraded/quarantined/pending blocked —
+   mixed runs gate per record), and exactly-once idempotency via a new `analysis_runs` ledger
+   (`analysis_idempotency_key = source_run_id::source_record_id`; `force_reprocess=true` overrides).
+3. **WF16** scores the WF04 canonical rows by `source_run_id` (no `no_compatible_baseline`).
+
+**Scope:** commit 2 of the Stage-3-closure effort (`fix(stage3): connect website source quality and analysis
+pipeline`). Proven by `tests/test_website_pipeline.js` (36 checks) on `firecrawl_20260620_104531` (CASHMOTOR
+healthy reaches WF08 once; CarCapital degraded blocked; lineage identical WF04==WF16==WF08; repeated run = no
+duplicate). New Sheets: `raw_market_records` WF04 columns + `analysis_runs` tab (migration §24/§25). Open
+follow-up: WF08 LLM via runtime guard (not a node kill switch). `make test` → ALL SUITES PASS; $0; active=false.
+
+---
+
+## DEC-147 — Stage 3 closure: canonical identity/lineage contract + WF16 Sheets-boolean fidelity
+
+**Date:** 2026-06-20
+
+**Context:** The Stage 3 live investigation found WF16 quarantined the WF04 web run with `no_compatible_baseline`.
+Root cause: WF04 wrote downstream rows with `firecrawl_20260620_104531` but `live_source_runs` with
+`wf04_20260620_104531` — `Build live_source_runs Row` deliberately rewrote the canonical id, breaking WF16's
+`source_run_id` join. Separately, WF16's `Assemble` treated the Sheets string `'FALSE'` as truthy.
+
+**Decisions:**
+1. **Canonical lineage contract** (`n8n/lib/lineage.js`): one `source_run_id` per source-connector execution is
+   THE join key carried by raw records, snapshots, source_health, analyzer outputs, aggregation and reports. A
+   workflow-local id (`wf04_*`) is recorded separately as `workflow_run_id` and never replaces `source_run_id`.
+   Joins resolve via `canonicalSourceRunId = source_run_id || run_id(legacy) || agent_request_id`.
+2. **WF04 fix:** `live_source_runs` emits `source_run_id = run_id = firecrawl_<stamp>` + `workflow_run_id =
+   wf04_<stamp>` + `data_mode`; snapshots carry the same canonical `source_run_id`. Ledger honesty:
+   `approval_token_used='not_required'`, separated `primary_calls`/`repair_calls`, cost `unknown`/`null` (never 0).
+3. **WF16 boolean fidelity:** `Assemble` coerces Sheets booleans via an embedded `cbool()` mirroring
+   `lineage.coerceSheetBool` (drift-proven) so explicit `TRUE`/`FALSE`/strings/empty are preserved.
+
+**Scope:** This is commit 1 of the Stage-3-closure-and-Stage-4 effort. It closes the lineage *join* and boolean
+defects (proven by `tests/test_lineage_contract.js`, 34 checks). The WF04 canonical-raw-record emission / WF08
+single-semantic-owner handoff (§2.2/§2.4), WF10/WF12 production filtering (§2.5/§2.6), the §2.7 remainder, and the
+whole Stage 4 orchestration layer (Phase B) are tracked in `docs/STAGE_3_CLOSURE_REPORT.md` as open follow-ups.
+`make test` → ALL SUITES PASS; 0 external calls, $0; all workflows `active=false`.
+
+---
+
 ## DEC-146 — Stage C Runtime Patch 5 (WF09 Apify actor-input regression from the live retest)
 
 **Date:** 2026-06-20

@@ -1,0 +1,246 @@
+{
+  "name": "19 — Request Planner (deterministic + guarded Claude)",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        0
+      ],
+      "id": "wf19-trig",
+      "name": "Manual Start"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/agent_config.js (drift-proof; test asserts equality)\n// agent_config.js — Stage 4 central configuration contract (B1).\n//\n// ONE place resolves the entire agent runtime config from environment variables + safe defaults,\n// so the operator never hand-edits a Spreadsheet ID (or any limit/flag) inside individual nodes.\n// The orchestrator calls resolveConfig() once and passes the resolved object downstream; every other\n// workflow receives config from the request record instead of carrying its own copy.\n//\n// NO secrets live here or in workflow JSON. Credentials (Google/Telegram/Claude/Apify) stay in the\n// n8n credential store; this module only resolves NON-secret runtime settings + the spreadsheet id\n// (an id, not a secret) from $env. In a Code node call it as resolveConfig($env) — the harness shims\n// $env as {} so the same code runs offline.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) && str(v) !== '' ? n : d; }\nfunction bool(v, d) {\n  if (v === true) return true;\n  if (v === false) return false;\n  const s = str(v).toLowerCase();\n  if (s === 'true' || s === 'yes' || s === '1') return true;\n  if (s === 'false' || s === 'no' || s === '0') return false;\n  return d;\n}\nfunction list(v) { return str(v).split(/[\\s,;]+/).filter(Boolean); }\n\n// Production-safe defaults: fail-closed (approval + source-health required), website-only allowlist,\n// LLM features OFF, tight budgets. Everything is overridable by env or explicit override.\nconst DEFAULTS = {\n  spreadsheet_id: '',\n  telegram_allowed_user_ids: [],\n  max_sources_per_request: 3,\n  max_items_per_source: 25,\n  max_external_calls: 40,\n  source_budget_usd: 0.20,\n  llm_budget_usd: 0.50,\n  default_region: 'Москва/МО',\n  default_niche: 'credit_brokerage',\n  source_allowlist: ['website'],\n  require_approval: true,\n  require_source_health: true,\n  enable_llm_planner: false,\n  enable_llm_summary: false,\n  report_data_mode: 'live'\n};\n\n// Map env var -> resolved config. Unknown/blank env falls back to DEFAULTS; explicit overrides win last.\nfunction resolveConfig(env, overrides) {\n  env = env || {};\n  overrides = overrides || {};\n  const allowedUsers = list(env.MS_TELEGRAM_ALLOWED_USER_IDS);\n  const allowlist = list(env.MS_SOURCE_ALLOWLIST).map(s => s.toLowerCase());\n  const cfg = {\n    spreadsheet_id: str(env.MS_SPREADSHEET_ID) || DEFAULTS.spreadsheet_id,\n    telegram_allowed_user_ids: (allowedUsers.length ? allowedUsers : DEFAULTS.telegram_allowed_user_ids).map(String),\n    max_sources_per_request: num(env.MS_MAX_SOURCES, DEFAULTS.max_sources_per_request),\n    max_items_per_source: num(env.MS_MAX_ITEMS_PER_SOURCE, DEFAULTS.max_items_per_source),\n    max_external_calls: num(env.MS_MAX_EXTERNAL_CALLS, DEFAULTS.max_external_calls),\n    source_budget_usd: num(env.MS_SOURCE_BUDGET_USD, DEFAULTS.source_budget_usd),\n    llm_budget_usd: num(env.MS_LLM_BUDGET_USD, DEFAULTS.llm_budget_usd),\n    default_region: str(env.MS_DEFAULT_REGION) || DEFAULTS.default_region,\n    default_niche: str(env.MS_DEFAULT_NICHE) || DEFAULTS.default_niche,\n    source_allowlist: allowlist.length ? allowlist : DEFAULTS.source_allowlist.slice(),\n    require_approval: bool(env.MS_REQUIRE_APPROVAL, DEFAULTS.require_approval),\n    require_source_health: bool(env.MS_REQUIRE_SOURCE_HEALTH, DEFAULTS.require_source_health),\n    enable_llm_planner: bool(env.MS_ENABLE_LLM_PLANNER, DEFAULTS.enable_llm_planner),\n    enable_llm_summary: bool(env.MS_ENABLE_LLM_SUMMARY, DEFAULTS.enable_llm_summary),\n    report_data_mode: str(env.MS_REPORT_DATA_MODE) || DEFAULTS.report_data_mode\n  };\n  for (const k in overrides) {\n    if (Object.prototype.hasOwnProperty.call(overrides, k)) cfg[k] = overrides[k];\n  }\n  // completeness check the orchestrator surfaces in the execution summary — never starts paid work blind\n  cfg.missing = [];\n  if (!cfg.spreadsheet_id) cfg.missing.push('MS_SPREADSHEET_ID');\n  if (!cfg.telegram_allowed_user_ids.length) cfg.missing.push('MS_TELEGRAM_ALLOWED_USER_IDS');\n  cfg.config_complete = cfg.missing.length === 0;\n  return cfg;\n}\n\nfunction isAllowedUser(cfg, userId) {\n  return ((cfg && cfg.telegram_allowed_user_ids) || []).indexOf(String(userId)) >= 0;\n}\nfunction sourceAllowed(cfg, source) {\n  return ((cfg && cfg.source_allowlist) || []).indexOf(String(source).toLowerCase()) >= 0;\n}\n// --- end embedded agent_config ---\n\n// --- node driver ---\nvar __env=(typeof $env!=='undefined'&&$env)?$env:{};\nreturn [{json:resolveConfig(__env)}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        0
+      ],
+      "id": "wf19-cfg",
+      "name": "Resolve Agent Config"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/request_planner.js (drift-proof; test asserts equality)\n// request_planner.js — Stage 4 request planner (B3).\n//\n// Turns a plain-text Telegram request into a bounded, schema-valid execution plan. Obvious fields are\n// parsed deterministically (region, niche, sources, intent) so a plan ALWAYS exists even with the LLM\n// planner off. The Claude planner is optional and guarded; its JSON is validated against the same schema\n// and, on any invalid/over-budget output, the deterministic plan is used — invalid LLM output can never\n// start external work.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction low(v) { return str(v).toLowerCase(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : d; }\n\n// Region/niche dictionaries kept tiny + deterministic (the brokerage MVP). Region defaults from cfg.\nconst REGION_HINTS = [\n  [/москв|msk|moscow|мо\\b/i, 'Москва/МО'],\n  [/питер|спб|петербург|spb/i, 'Санкт-Петербург'],\n  [/росси|по рф|вся страна/i, 'Россия']\n];\nconst NICHE_HINTS = [\n  [/птс|залог авто|займ под авто|autopawn/i, 'pts_loan'],\n  [/брокер|кредитн|кредит наличными|рефинанс/i, 'credit_brokerage'],\n  [/микрозайм|мфо|до зарплаты/i, 'microloans']\n];\nconst SOURCE_HINTS = [\n  [/сайт|website|firecrawl|конкурент.{0,12}сайт/i, 'website'],\n  [/avito|авито|объявлен/i, 'avito'],\n  [/vk|вконтакте|соцсет/i, 'vk']\n];\n\nfunction deterministicPlan(text, cfg) {\n  cfg = cfg || {};\n  const t = str(text);\n  let region = cfg.default_region || 'Москва/МО';\n  for (const [rx, v] of REGION_HINTS) { if (rx.test(t)) { region = v; break; } }\n  let niche = cfg.default_niche || 'credit_brokerage';\n  for (const [rx, v] of NICHE_HINTS) { if (rx.test(t)) { niche = v; break; } }\n  const sources = [];\n  for (const [rx, v] of SOURCE_HINTS) { if (rx.test(t)) sources.push(v); }\n  // default to the first-class website path when nothing specific is asked, intersect with allowlist\n  let requested = sources.length ? sources : ['website'];\n  const allow = (cfg.source_allowlist || ['website']).map(low);\n  requested = requested.filter(s => allow.indexOf(s) >= 0);\n  if (!requested.length) requested = allow.slice(0, 1);\n  const maxItems = num(cfg.max_items_per_source, 25);\n  const maxCalls = num(cfg.max_external_calls, 40);\n  return normalizePlan({\n    intent: 'competitor_market_scan',\n    niche: niche,\n    service: niche,\n    region: region,\n    sources: requested,\n    max_items: maxItems,\n    max_external_calls: Math.min(maxCalls, requested.length * Math.max(2, Math.ceil(maxItems / 5))),\n    est_source_cost_usd: Number(cfg.source_budget_usd || 0.20),\n    est_llm_cost_usd: Number(cfg.llm_budget_usd || 0.50),\n    expected_output: 'competitor_market_report',\n    requires_approval: cfg.require_approval !== false,\n    plan_source: 'deterministic'\n  }, cfg);\n}\n\n// Coerce any plan object onto the strict schema with safe clamps; returns a normalized plan.\nfunction normalizePlan(p, cfg) {\n  p = p || {}; cfg = cfg || {};\n  const allow = (cfg.source_allowlist || ['website']).map(low);\n  let sources = (Array.isArray(p.sources) ? p.sources : str(p.sources).split(/[\\s,;]+/)).map(low).filter(Boolean)\n    .filter(s => allow.indexOf(s) >= 0);\n  if (!sources.length) sources = allow.slice(0, 1);\n  return {\n    intent: str(p.intent) || 'competitor_market_scan',\n    niche: str(p.niche) || str(p.service) || (cfg.default_niche || 'credit_brokerage'),\n    service: str(p.service) || str(p.niche) || (cfg.default_niche || 'credit_brokerage'),\n    region: str(p.region) || (cfg.default_region || 'Москва/МО'),\n    sources: sources,\n    max_items: Math.min(num(p.max_items, num(cfg.max_items_per_source, 25)), num(cfg.max_items_per_source, 25)),\n    max_external_calls: Math.min(num(p.max_external_calls, num(cfg.max_external_calls, 40)), num(cfg.max_external_calls, 40)),\n    est_source_cost_usd: Math.min(num(p.est_source_cost_usd, num(cfg.source_budget_usd, 0.20)), num(cfg.source_budget_usd, 0.20)),\n    est_llm_cost_usd: Math.min(num(p.est_llm_cost_usd, num(cfg.llm_budget_usd, 0.50)), num(cfg.llm_budget_usd, 0.50)),\n    expected_output: str(p.expected_output) || 'competitor_market_report',\n    requires_approval: p.requires_approval === false ? false : (cfg.require_approval !== false),\n    plan_source: str(p.plan_source) || 'deterministic'\n  };\n}\n\n// Validate raw LLM planner JSON. Returns { valid, plan, reason }. Anything malformed => valid:false and\n// the caller MUST fall back to the deterministic plan (no external work off an invalid plan).\nfunction validatePlanJSON(rawText, cfg) {\n  let obj;\n  try { obj = typeof rawText === 'string' ? JSON.parse(rawText) : rawText; }\n  catch (e) { return { valid: false, plan: null, reason: 'not_json' }; }\n  if (!obj || typeof obj !== 'object') return { valid: false, plan: null, reason: 'not_object' };\n  const sources = Array.isArray(obj.sources) ? obj.sources : null;\n  if (!sources || !sources.length) return { valid: false, plan: null, reason: 'no_sources' };\n  if (!(num(obj.max_items, 0) > 0)) return { valid: false, plan: null, reason: 'bad_max_items' };\n  if (!str(obj.region)) return { valid: false, plan: null, reason: 'no_region' };\n  const plan = normalizePlan(obj, cfg);\n  plan.plan_source = 'llm';\n  return { valid: true, plan: plan, reason: '' };\n}\n\n// Render the plan for the Telegram approval message (readable, bounded, no secrets).\nfunction planToApprovalText(plan) {\n  plan = plan || {};\n  return [\n    'План запроса (подтвердите перед запуском):',\n    '• Интент: ' + str(plan.intent),\n    '• Ниша/услуга: ' + str(plan.niche),\n    '• Регион: ' + str(plan.region),\n    '• Источники: ' + (plan.sources || []).join(', '),\n    '• Лимит элементов/источник: ' + num(plan.max_items, 0),\n    '• Лимит внешних вызовов: ' + num(plan.max_external_calls, 0),\n    '• Бюджет источников: ~$' + num(plan.est_source_cost_usd, 0),\n    '• Бюджет LLM: ~$' + num(plan.est_llm_cost_usd, 0),\n    '• Результат: ' + str(plan.expected_output),\n    '• План построен: ' + str(plan.plan_source)\n  ].join('\\n');\n}\n// --- end embedded request_planner ---\n\n// --- node driver ---\nvar cfg=$('Resolve Agent Config').first().json;\nvar text=String(($json&&($json.request_text||$json.text))||'');\nvar plan=deterministicPlan(text,cfg);\nreturn [{json:{request_text:text,plan:plan,cfg:cfg}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -40,
+        0
+      ],
+      "id": "wf19-det",
+      "name": "Deterministic Plan"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/approval_gate.js (drift-proof; test asserts equality)\n// approval_gate.js — Stage 4 approval & budget gate (B5).\n//\n// The single chokepoint every paid/external call passes through. It fails CLOSED: a call proceeds only\n// when the request is approved, not cancelled, the source is allowlisted, item/call ceilings and the\n// source + LLM budgets all hold, and this exact unit of work has not already been completed (idempotency\n// key). A blocked gate returns a useful reason; it never throws and never leaks token values.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : d; }\n\nconst GATE_TERMINAL = ['completed', 'partial', 'failed', 'cancelled']; // local: avoids clash when co-embedded with agent_state.TERMINAL\n\n// Deterministic idempotency key for one unit of external work (a source call within a request).\nfunction idempotencyKey(agentRequestId, source, attempt) {\n  return [str(agentRequestId) || 'req', str(source).toLowerCase() || 'src', 'a' + (num(attempt, 1))].join('::');\n}\n\n// ctx: { state, cancelled, approved, completed_keys:[], external_calls_made, source_spend_usd, llm_spend_usd }\n// plan: { source, est_items, est_external_calls, est_source_cost_usd, est_llm_cost_usd }\n// cfg:  resolved agent_config (limits + budgets + allowlist + require_approval)\nfunction evaluateGate(plan, ctx, cfg) {\n  plan = plan || {}; ctx = ctx || {}; cfg = cfg || {};\n  const source = str(plan.source).toLowerCase();\n  const key = idempotencyKey(ctx.agent_request_id || plan.agent_request_id, source, plan.attempt);\n  const reasons = [];\n\n  // 1. lifecycle: cancelled or terminal => hard stop\n  if (ctx.cancelled === true || GATE_TERMINAL.indexOf(str(ctx.state)) >= 0) reasons.push('request_not_active');\n  // 2. approval (when required)\n  if (cfg.require_approval !== false && ctx.approved !== true) reasons.push('not_approved');\n  // 3. source allowlist\n  if ((cfg.source_allowlist || []).indexOf(source) < 0) reasons.push('source_not_allowed');\n  // 4. idempotency: this unit already completed\n  if ((ctx.completed_keys || []).indexOf(key) >= 0) reasons.push('already_completed');\n  // 5. item ceiling\n  if (num(plan.est_items, 0) > num(cfg.max_items_per_source, Infinity)) reasons.push('over_item_limit');\n  // 6. external-call ceiling (cumulative)\n  if (num(ctx.external_calls_made, 0) + num(plan.est_external_calls, 0) > num(cfg.max_external_calls, Infinity)) reasons.push('over_call_limit');\n  // 7. source budget (cumulative)\n  if (num(ctx.source_spend_usd, 0) + num(plan.est_source_cost_usd, 0) > num(cfg.source_budget_usd, Infinity)) reasons.push('over_source_budget');\n  // 8. LLM budget (cumulative)\n  if (num(ctx.llm_spend_usd, 0) + num(plan.est_llm_cost_usd, 0) > num(cfg.llm_budget_usd, Infinity)) reasons.push('over_llm_budget');\n\n  return {\n    allowed: reasons.length === 0,\n    reason: reasons.join('; '),\n    idempotency_key: key,\n    source: source\n  };\n}\n// --- end embedded approval_gate ---\n\n// --- node driver ---\nvar j=$('Deterministic Plan').first().json;var cfg=j.cfg;\nvar approvalTok=String(($json&&$json.planner_approval_token)||'');\nvar enabled=cfg.enable_llm_planner===true;\nvar tokOk=approvalTok==='WF19_PLANNER_APPROVED';\nvar budgetOk=Number(cfg.llm_budget_usd)>=0.01;\nvar call_llm=enabled&&tokOk&&budgetOk;\nvar reason=!enabled?'planner_llm_disabled':(!tokOk?'planner_token_invalid':(!budgetOk?'over_llm_budget':'ok'));\nreturn [{json:Object.assign({},j,{call_llm:call_llm,llm_guard_reason:reason})}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        180,
+        0
+      ],
+      "id": "wf19-guard",
+      "name": "Planner LLM Guard"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.call_llm }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "id": "wf19-if",
+      "name": "LLM Planner Enabled?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/request_planner.js (drift-proof; test asserts equality)\n// request_planner.js — Stage 4 request planner (B3).\n//\n// Turns a plain-text Telegram request into a bounded, schema-valid execution plan. Obvious fields are\n// parsed deterministically (region, niche, sources, intent) so a plan ALWAYS exists even with the LLM\n// planner off. The Claude planner is optional and guarded; its JSON is validated against the same schema\n// and, on any invalid/over-budget output, the deterministic plan is used — invalid LLM output can never\n// start external work.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction low(v) { return str(v).toLowerCase(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : d; }\n\n// Region/niche dictionaries kept tiny + deterministic (the brokerage MVP). Region defaults from cfg.\nconst REGION_HINTS = [\n  [/москв|msk|moscow|мо\\b/i, 'Москва/МО'],\n  [/питер|спб|петербург|spb/i, 'Санкт-Петербург'],\n  [/росси|по рф|вся страна/i, 'Россия']\n];\nconst NICHE_HINTS = [\n  [/птс|залог авто|займ под авто|autopawn/i, 'pts_loan'],\n  [/брокер|кредитн|кредит наличными|рефинанс/i, 'credit_brokerage'],\n  [/микрозайм|мфо|до зарплаты/i, 'microloans']\n];\nconst SOURCE_HINTS = [\n  [/сайт|website|firecrawl|конкурент.{0,12}сайт/i, 'website'],\n  [/avito|авито|объявлен/i, 'avito'],\n  [/vk|вконтакте|соцсет/i, 'vk']\n];\n\nfunction deterministicPlan(text, cfg) {\n  cfg = cfg || {};\n  const t = str(text);\n  let region = cfg.default_region || 'Москва/МО';\n  for (const [rx, v] of REGION_HINTS) { if (rx.test(t)) { region = v; break; } }\n  let niche = cfg.default_niche || 'credit_brokerage';\n  for (const [rx, v] of NICHE_HINTS) { if (rx.test(t)) { niche = v; break; } }\n  const sources = [];\n  for (const [rx, v] of SOURCE_HINTS) { if (rx.test(t)) sources.push(v); }\n  // default to the first-class website path when nothing specific is asked, intersect with allowlist\n  let requested = sources.length ? sources : ['website'];\n  const allow = (cfg.source_allowlist || ['website']).map(low);\n  requested = requested.filter(s => allow.indexOf(s) >= 0);\n  if (!requested.length) requested = allow.slice(0, 1);\n  const maxItems = num(cfg.max_items_per_source, 25);\n  const maxCalls = num(cfg.max_external_calls, 40);\n  return normalizePlan({\n    intent: 'competitor_market_scan',\n    niche: niche,\n    service: niche,\n    region: region,\n    sources: requested,\n    max_items: maxItems,\n    max_external_calls: Math.min(maxCalls, requested.length * Math.max(2, Math.ceil(maxItems / 5))),\n    est_source_cost_usd: Number(cfg.source_budget_usd || 0.20),\n    est_llm_cost_usd: Number(cfg.llm_budget_usd || 0.50),\n    expected_output: 'competitor_market_report',\n    requires_approval: cfg.require_approval !== false,\n    plan_source: 'deterministic'\n  }, cfg);\n}\n\n// Coerce any plan object onto the strict schema with safe clamps; returns a normalized plan.\nfunction normalizePlan(p, cfg) {\n  p = p || {}; cfg = cfg || {};\n  const allow = (cfg.source_allowlist || ['website']).map(low);\n  let sources = (Array.isArray(p.sources) ? p.sources : str(p.sources).split(/[\\s,;]+/)).map(low).filter(Boolean)\n    .filter(s => allow.indexOf(s) >= 0);\n  if (!sources.length) sources = allow.slice(0, 1);\n  return {\n    intent: str(p.intent) || 'competitor_market_scan',\n    niche: str(p.niche) || str(p.service) || (cfg.default_niche || 'credit_brokerage'),\n    service: str(p.service) || str(p.niche) || (cfg.default_niche || 'credit_brokerage'),\n    region: str(p.region) || (cfg.default_region || 'Москва/МО'),\n    sources: sources,\n    max_items: Math.min(num(p.max_items, num(cfg.max_items_per_source, 25)), num(cfg.max_items_per_source, 25)),\n    max_external_calls: Math.min(num(p.max_external_calls, num(cfg.max_external_calls, 40)), num(cfg.max_external_calls, 40)),\n    est_source_cost_usd: Math.min(num(p.est_source_cost_usd, num(cfg.source_budget_usd, 0.20)), num(cfg.source_budget_usd, 0.20)),\n    est_llm_cost_usd: Math.min(num(p.est_llm_cost_usd, num(cfg.llm_budget_usd, 0.50)), num(cfg.llm_budget_usd, 0.50)),\n    expected_output: str(p.expected_output) || 'competitor_market_report',\n    requires_approval: p.requires_approval === false ? false : (cfg.require_approval !== false),\n    plan_source: str(p.plan_source) || 'deterministic'\n  };\n}\n\n// Validate raw LLM planner JSON. Returns { valid, plan, reason }. Anything malformed => valid:false and\n// the caller MUST fall back to the deterministic plan (no external work off an invalid plan).\nfunction validatePlanJSON(rawText, cfg) {\n  let obj;\n  try { obj = typeof rawText === 'string' ? JSON.parse(rawText) : rawText; }\n  catch (e) { return { valid: false, plan: null, reason: 'not_json' }; }\n  if (!obj || typeof obj !== 'object') return { valid: false, plan: null, reason: 'not_object' };\n  const sources = Array.isArray(obj.sources) ? obj.sources : null;\n  if (!sources || !sources.length) return { valid: false, plan: null, reason: 'no_sources' };\n  if (!(num(obj.max_items, 0) > 0)) return { valid: false, plan: null, reason: 'bad_max_items' };\n  if (!str(obj.region)) return { valid: false, plan: null, reason: 'no_region' };\n  const plan = normalizePlan(obj, cfg);\n  plan.plan_source = 'llm';\n  return { valid: true, plan: plan, reason: '' };\n}\n\n// Render the plan for the Telegram approval message (readable, bounded, no secrets).\nfunction planToApprovalText(plan) {\n  plan = plan || {};\n  return [\n    'План запроса (подтвердите перед запуском):',\n    '• Интент: ' + str(plan.intent),\n    '• Ниша/услуга: ' + str(plan.niche),\n    '• Регион: ' + str(plan.region),\n    '• Источники: ' + (plan.sources || []).join(', '),\n    '• Лимит элементов/источник: ' + num(plan.max_items, 0),\n    '• Лимит внешних вызовов: ' + num(plan.max_external_calls, 0),\n    '• Бюджет источников: ~$' + num(plan.est_source_cost_usd, 0),\n    '• Бюджет LLM: ~$' + num(plan.est_llm_cost_usd, 0),\n    '• Результат: ' + str(plan.expected_output),\n    '• План построен: ' + str(plan.plan_source)\n  ].join('\\n');\n}\n// --- end embedded request_planner ---\n\n// --- node driver ---\nvar j=$('Planner LLM Guard').first().json;\nif(j.call_llm!==true){throw new Error('planner budget/guard: refused');}\nvar facts={request_text:j.request_text,allowlist:j.cfg.source_allowlist,default_region:j.cfg.default_region,default_niche:j.cfg.default_niche,max_items:j.cfg.max_items_per_source};\nvar sys='Return ONLY strict JSON for an execution plan: {intent,niche,service,region,sources[],max_items,max_external_calls,expected_output}. Use only allowlisted sources.';\nvar body={model:'claude-sonnet-4-6',max_tokens:512,system:sys,messages:[{role:'user',content:JSON.stringify(facts)}]};\nreturn [{json:Object.assign({},j,{claude_request_body:JSON.stringify(body)})}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        -120
+      ],
+      "id": "wf19-prompt",
+      "name": "Build Planner Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.claude_request_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        840,
+        -120
+      ],
+      "id": "wf19-claude",
+      "name": "Claude Planner API Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/request_planner.js (drift-proof; test asserts equality)\n// request_planner.js — Stage 4 request planner (B3).\n//\n// Turns a plain-text Telegram request into a bounded, schema-valid execution plan. Obvious fields are\n// parsed deterministically (region, niche, sources, intent) so a plan ALWAYS exists even with the LLM\n// planner off. The Claude planner is optional and guarded; its JSON is validated against the same schema\n// and, on any invalid/over-budget output, the deterministic plan is used — invalid LLM output can never\n// start external work.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction low(v) { return str(v).toLowerCase(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : d; }\n\n// Region/niche dictionaries kept tiny + deterministic (the brokerage MVP). Region defaults from cfg.\nconst REGION_HINTS = [\n  [/москв|msk|moscow|мо\\b/i, 'Москва/МО'],\n  [/питер|спб|петербург|spb/i, 'Санкт-Петербург'],\n  [/росси|по рф|вся страна/i, 'Россия']\n];\nconst NICHE_HINTS = [\n  [/птс|залог авто|займ под авто|autopawn/i, 'pts_loan'],\n  [/брокер|кредитн|кредит наличными|рефинанс/i, 'credit_brokerage'],\n  [/микрозайм|мфо|до зарплаты/i, 'microloans']\n];\nconst SOURCE_HINTS = [\n  [/сайт|website|firecrawl|конкурент.{0,12}сайт/i, 'website'],\n  [/avito|авито|объявлен/i, 'avito'],\n  [/vk|вконтакте|соцсет/i, 'vk']\n];\n\nfunction deterministicPlan(text, cfg) {\n  cfg = cfg || {};\n  const t = str(text);\n  let region = cfg.default_region || 'Москва/МО';\n  for (const [rx, v] of REGION_HINTS) { if (rx.test(t)) { region = v; break; } }\n  let niche = cfg.default_niche || 'credit_brokerage';\n  for (const [rx, v] of NICHE_HINTS) { if (rx.test(t)) { niche = v; break; } }\n  const sources = [];\n  for (const [rx, v] of SOURCE_HINTS) { if (rx.test(t)) sources.push(v); }\n  // default to the first-class website path when nothing specific is asked, intersect with allowlist\n  let requested = sources.length ? sources : ['website'];\n  const allow = (cfg.source_allowlist || ['website']).map(low);\n  requested = requested.filter(s => allow.indexOf(s) >= 0);\n  if (!requested.length) requested = allow.slice(0, 1);\n  const maxItems = num(cfg.max_items_per_source, 25);\n  const maxCalls = num(cfg.max_external_calls, 40);\n  return normalizePlan({\n    intent: 'competitor_market_scan',\n    niche: niche,\n    service: niche,\n    region: region,\n    sources: requested,\n    max_items: maxItems,\n    max_external_calls: Math.min(maxCalls, requested.length * Math.max(2, Math.ceil(maxItems / 5))),\n    est_source_cost_usd: Number(cfg.source_budget_usd || 0.20),\n    est_llm_cost_usd: Number(cfg.llm_budget_usd || 0.50),\n    expected_output: 'competitor_market_report',\n    requires_approval: cfg.require_approval !== false,\n    plan_source: 'deterministic'\n  }, cfg);\n}\n\n// Coerce any plan object onto the strict schema with safe clamps; returns a normalized plan.\nfunction normalizePlan(p, cfg) {\n  p = p || {}; cfg = cfg || {};\n  const allow = (cfg.source_allowlist || ['website']).map(low);\n  let sources = (Array.isArray(p.sources) ? p.sources : str(p.sources).split(/[\\s,;]+/)).map(low).filter(Boolean)\n    .filter(s => allow.indexOf(s) >= 0);\n  if (!sources.length) sources = allow.slice(0, 1);\n  return {\n    intent: str(p.intent) || 'competitor_market_scan',\n    niche: str(p.niche) || str(p.service) || (cfg.default_niche || 'credit_brokerage'),\n    service: str(p.service) || str(p.niche) || (cfg.default_niche || 'credit_brokerage'),\n    region: str(p.region) || (cfg.default_region || 'Москва/МО'),\n    sources: sources,\n    max_items: Math.min(num(p.max_items, num(cfg.max_items_per_source, 25)), num(cfg.max_items_per_source, 25)),\n    max_external_calls: Math.min(num(p.max_external_calls, num(cfg.max_external_calls, 40)), num(cfg.max_external_calls, 40)),\n    est_source_cost_usd: Math.min(num(p.est_source_cost_usd, num(cfg.source_budget_usd, 0.20)), num(cfg.source_budget_usd, 0.20)),\n    est_llm_cost_usd: Math.min(num(p.est_llm_cost_usd, num(cfg.llm_budget_usd, 0.50)), num(cfg.llm_budget_usd, 0.50)),\n    expected_output: str(p.expected_output) || 'competitor_market_report',\n    requires_approval: p.requires_approval === false ? false : (cfg.require_approval !== false),\n    plan_source: str(p.plan_source) || 'deterministic'\n  };\n}\n\n// Validate raw LLM planner JSON. Returns { valid, plan, reason }. Anything malformed => valid:false and\n// the caller MUST fall back to the deterministic plan (no external work off an invalid plan).\nfunction validatePlanJSON(rawText, cfg) {\n  let obj;\n  try { obj = typeof rawText === 'string' ? JSON.parse(rawText) : rawText; }\n  catch (e) { return { valid: false, plan: null, reason: 'not_json' }; }\n  if (!obj || typeof obj !== 'object') return { valid: false, plan: null, reason: 'not_object' };\n  const sources = Array.isArray(obj.sources) ? obj.sources : null;\n  if (!sources || !sources.length) return { valid: false, plan: null, reason: 'no_sources' };\n  if (!(num(obj.max_items, 0) > 0)) return { valid: false, plan: null, reason: 'bad_max_items' };\n  if (!str(obj.region)) return { valid: false, plan: null, reason: 'no_region' };\n  const plan = normalizePlan(obj, cfg);\n  plan.plan_source = 'llm';\n  return { valid: true, plan: plan, reason: '' };\n}\n\n// Render the plan for the Telegram approval message (readable, bounded, no secrets).\nfunction planToApprovalText(plan) {\n  plan = plan || {};\n  return [\n    'План запроса (подтвердите перед запуском):',\n    '• Интент: ' + str(plan.intent),\n    '• Ниша/услуга: ' + str(plan.niche),\n    '• Регион: ' + str(plan.region),\n    '• Источники: ' + (plan.sources || []).join(', '),\n    '• Лимит элементов/источник: ' + num(plan.max_items, 0),\n    '• Лимит внешних вызовов: ' + num(plan.max_external_calls, 0),\n    '• Бюджет источников: ~$' + num(plan.est_source_cost_usd, 0),\n    '• Бюджет LLM: ~$' + num(plan.est_llm_cost_usd, 0),\n    '• Результат: ' + str(plan.expected_output),\n    '• План построен: ' + str(plan.plan_source)\n  ].join('\\n');\n}\n// --- end embedded request_planner ---\n\n// --- node driver ---\nvar j=$('Build Planner Prompt').first().json;var cfg=j.cfg;\nvar text='';try{var c=($json&&$json.content)||[];for(var i=0;i<c.length;i++){if(c[i]&&c[i].type==='text')text+=String(c[i].text||'');}}catch(e){}\nvar v=validatePlanJSON(text,cfg);\nvar plan=v.valid?v.plan:deterministicPlan(j.request_text,cfg);\nreturn [{json:{plan:plan,plan_valid:v.valid,plan_reason:v.reason,plan_source:plan.plan_source,cfg:cfg}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        -120
+      ],
+      "id": "wf19-validate",
+      "name": "Validate Plan"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/request_planner.js (drift-proof; test asserts equality)\n// request_planner.js — Stage 4 request planner (B3).\n//\n// Turns a plain-text Telegram request into a bounded, schema-valid execution plan. Obvious fields are\n// parsed deterministically (region, niche, sources, intent) so a plan ALWAYS exists even with the LLM\n// planner off. The Claude planner is optional and guarded; its JSON is validated against the same schema\n// and, on any invalid/over-budget output, the deterministic plan is used — invalid LLM output can never\n// start external work.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction low(v) { return str(v).toLowerCase(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : d; }\n\n// Region/niche dictionaries kept tiny + deterministic (the brokerage MVP). Region defaults from cfg.\nconst REGION_HINTS = [\n  [/москв|msk|moscow|мо\\b/i, 'Москва/МО'],\n  [/питер|спб|петербург|spb/i, 'Санкт-Петербург'],\n  [/росси|по рф|вся страна/i, 'Россия']\n];\nconst NICHE_HINTS = [\n  [/птс|залог авто|займ под авто|autopawn/i, 'pts_loan'],\n  [/брокер|кредитн|кредит наличными|рефинанс/i, 'credit_brokerage'],\n  [/микрозайм|мфо|до зарплаты/i, 'microloans']\n];\nconst SOURCE_HINTS = [\n  [/сайт|website|firecrawl|конкурент.{0,12}сайт/i, 'website'],\n  [/avito|авито|объявлен/i, 'avito'],\n  [/vk|вконтакте|соцсет/i, 'vk']\n];\n\nfunction deterministicPlan(text, cfg) {\n  cfg = cfg || {};\n  const t = str(text);\n  let region = cfg.default_region || 'Москва/МО';\n  for (const [rx, v] of REGION_HINTS) { if (rx.test(t)) { region = v; break; } }\n  let niche = cfg.default_niche || 'credit_brokerage';\n  for (const [rx, v] of NICHE_HINTS) { if (rx.test(t)) { niche = v; break; } }\n  const sources = [];\n  for (const [rx, v] of SOURCE_HINTS) { if (rx.test(t)) sources.push(v); }\n  // default to the first-class website path when nothing specific is asked, intersect with allowlist\n  let requested = sources.length ? sources : ['website'];\n  const allow = (cfg.source_allowlist || ['website']).map(low);\n  requested = requested.filter(s => allow.indexOf(s) >= 0);\n  if (!requested.length) requested = allow.slice(0, 1);\n  const maxItems = num(cfg.max_items_per_source, 25);\n  const maxCalls = num(cfg.max_external_calls, 40);\n  return normalizePlan({\n    intent: 'competitor_market_scan',\n    niche: niche,\n    service: niche,\n    region: region,\n    sources: requested,\n    max_items: maxItems,\n    max_external_calls: Math.min(maxCalls, requested.length * Math.max(2, Math.ceil(maxItems / 5))),\n    est_source_cost_usd: Number(cfg.source_budget_usd || 0.20),\n    est_llm_cost_usd: Number(cfg.llm_budget_usd || 0.50),\n    expected_output: 'competitor_market_report',\n    requires_approval: cfg.require_approval !== false,\n    plan_source: 'deterministic'\n  }, cfg);\n}\n\n// Coerce any plan object onto the strict schema with safe clamps; returns a normalized plan.\nfunction normalizePlan(p, cfg) {\n  p = p || {}; cfg = cfg || {};\n  const allow = (cfg.source_allowlist || ['website']).map(low);\n  let sources = (Array.isArray(p.sources) ? p.sources : str(p.sources).split(/[\\s,;]+/)).map(low).filter(Boolean)\n    .filter(s => allow.indexOf(s) >= 0);\n  if (!sources.length) sources = allow.slice(0, 1);\n  return {\n    intent: str(p.intent) || 'competitor_market_scan',\n    niche: str(p.niche) || str(p.service) || (cfg.default_niche || 'credit_brokerage'),\n    service: str(p.service) || str(p.niche) || (cfg.default_niche || 'credit_brokerage'),\n    region: str(p.region) || (cfg.default_region || 'Москва/МО'),\n    sources: sources,\n    max_items: Math.min(num(p.max_items, num(cfg.max_items_per_source, 25)), num(cfg.max_items_per_source, 25)),\n    max_external_calls: Math.min(num(p.max_external_calls, num(cfg.max_external_calls, 40)), num(cfg.max_external_calls, 40)),\n    est_source_cost_usd: Math.min(num(p.est_source_cost_usd, num(cfg.source_budget_usd, 0.20)), num(cfg.source_budget_usd, 0.20)),\n    est_llm_cost_usd: Math.min(num(p.est_llm_cost_usd, num(cfg.llm_budget_usd, 0.50)), num(cfg.llm_budget_usd, 0.50)),\n    expected_output: str(p.expected_output) || 'competitor_market_report',\n    requires_approval: p.requires_approval === false ? false : (cfg.require_approval !== false),\n    plan_source: str(p.plan_source) || 'deterministic'\n  };\n}\n\n// Validate raw LLM planner JSON. Returns { valid, plan, reason }. Anything malformed => valid:false and\n// the caller MUST fall back to the deterministic plan (no external work off an invalid plan).\nfunction validatePlanJSON(rawText, cfg) {\n  let obj;\n  try { obj = typeof rawText === 'string' ? JSON.parse(rawText) : rawText; }\n  catch (e) { return { valid: false, plan: null, reason: 'not_json' }; }\n  if (!obj || typeof obj !== 'object') return { valid: false, plan: null, reason: 'not_object' };\n  const sources = Array.isArray(obj.sources) ? obj.sources : null;\n  if (!sources || !sources.length) return { valid: false, plan: null, reason: 'no_sources' };\n  if (!(num(obj.max_items, 0) > 0)) return { valid: false, plan: null, reason: 'bad_max_items' };\n  if (!str(obj.region)) return { valid: false, plan: null, reason: 'no_region' };\n  const plan = normalizePlan(obj, cfg);\n  plan.plan_source = 'llm';\n  return { valid: true, plan: plan, reason: '' };\n}\n\n// Render the plan for the Telegram approval message (readable, bounded, no secrets).\nfunction planToApprovalText(plan) {\n  plan = plan || {};\n  return [\n    'План запроса (подтвердите перед запуском):',\n    '• Интент: ' + str(plan.intent),\n    '• Ниша/услуга: ' + str(plan.niche),\n    '• Регион: ' + str(plan.region),\n    '• Источники: ' + (plan.sources || []).join(', '),\n    '• Лимит элементов/источник: ' + num(plan.max_items, 0),\n    '• Лимит внешних вызовов: ' + num(plan.max_external_calls, 0),\n    '• Бюджет источников: ~$' + num(plan.est_source_cost_usd, 0),\n    '• Бюджет LLM: ~$' + num(plan.est_llm_cost_usd, 0),\n    '• Результат: ' + str(plan.expected_output),\n    '• План построен: ' + str(plan.plan_source)\n  ].join('\\n');\n}\n// --- end embedded request_planner ---\n\n// embedded n8n/lib/telegram_io.js (drift-proof; test asserts equality)\n// telegram_io.js — Stage 4 Telegram gateway + delivery outbox helpers (B2 + B8).\n//\n// Inbound: parse a Telegram update into a normalized intake record, decide authorization, build a\n// duplicate-proof idempotency key (a re-delivered update_id must create exactly ONE request).\n// Outbound: an outbox record keyed by a payload hash so retries never double-send the user-visible\n// answer; plus safe Markdown escaping and message chunking for Telegram's 4096-char limit.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\n\n// --- inbound -------------------------------------------------------------------------------------------\n// Parse a raw Telegram update (message / callback_query) into the fields the gateway persists.\nfunction parseUpdate(update) {\n  update = update || {};\n  const msg = update.message || update.edited_message || null;\n  const cb = update.callback_query || null;\n  let kind = 'unknown', text = '', chatId = '', userId = '', messageId = '', callbackData = '';\n  if (cb) {\n    kind = 'callback';\n    callbackData = str(cb.data);\n    userId = str(cb.from && cb.from.id);\n    chatId = str(cb.message && cb.message.chat && cb.message.chat.id);\n    messageId = str(cb.message && cb.message.message_id);\n  } else if (msg) {\n    text = str(msg.text);\n    userId = str(msg.from && msg.from.id);\n    chatId = str(msg.chat && msg.chat.id);\n    messageId = str(msg.message_id);\n    if (/^\\/status\\b/.test(text)) kind = 'status';\n    else if (/^\\/cancel\\b/.test(text)) kind = 'cancel';\n    else if (/^\\//.test(text)) kind = 'command';\n    else kind = 'request';\n  }\n  return {\n    kind: kind,\n    update_id: str(update.update_id),\n    chat_id: chatId,\n    user_id: userId,\n    message_id: messageId,\n    text: text,\n    callback_data: callbackData\n  };\n}\n\nfunction isAuthorized(parsed, allowedUserIds) {\n  const ids = (allowedUserIds || []).map(String);\n  return ids.indexOf(str(parsed && parsed.user_id)) >= 0;\n}\n\n// One Telegram update => one idempotency key. A redelivered update_id maps to the same key.\nfunction updateIdempotencyKey(parsed) {\n  parsed = parsed || {};\n  return ['tg', str(parsed.update_id) || ('m' + str(parsed.message_id)), str(parsed.chat_id)].join('::');\n}\n\n// Callback payloads: approve:<agent_request_id> / reject:<agent_request_id>.\nfunction parseCallback(data) {\n  const m = str(data).match(/^(approve|reject|cancel):(.+)$/);\n  if (!m) return { action: '', agent_request_id: '' };\n  return { action: m[1], agent_request_id: str(m[2]) };\n}\nfunction approvalKeyboard(agentRequestId) {\n  return { inline_keyboard: [[\n    { text: '✅ Запустить', callback_data: 'approve:' + str(agentRequestId) },\n    { text: '✖ Отклонить', callback_data: 'reject:' + str(agentRequestId) }\n  ]] };\n}\n\n// --- outbound ------------------------------------------------------------------------------------------\n// Telegram MarkdownV2 reserved chars. Escaping keeps user/report text from breaking the message.\nfunction escapeMarkdown(text) {\n  return str(text).replace(/([_*\\[\\]()~`>#+\\-=|{}.!\\\\])/g, '\\\\$1');\n}\n\n// Split into <=limit chunks on line boundaries where possible (Telegram hard-caps at 4096).\nfunction chunkMessage(text, limit) {\n  limit = limit || 3900;\n  const s = String(text == null ? '' : text);\n  if (s.length <= limit) return [s];\n  const out = [];\n  let buf = '';\n  for (const line of s.split('\\n')) {\n    if ((buf + '\\n' + line).length > limit) {\n      if (buf) out.push(buf);\n      if (line.length > limit) { for (let i = 0; i < line.length; i += limit) out.push(line.slice(i, i + limit)); buf = ''; }\n      else buf = line;\n    } else { buf = buf ? (buf + '\\n' + line) : line; }\n  }\n  if (buf) out.push(buf);\n  return out;\n}\n\n// djb2 — small, stable, dependency-free hash for the outbox dedupe key.\nfunction payloadHash(s) {\n  s = String(s == null ? '' : s);\n  let h = 5381;\n  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;\n  return 'h' + h.toString(16);\n}\n\n// Build an outbox row. delivery_id is deterministic in (agent_request_id, report_id, payload) so the\n// same answer can never be enqueued/sent twice for the same request+report.\nfunction makeDelivery(agentRequestId, reportId, chatId, payload) {\n  const hash = payloadHash(payload);\n  return {\n    delivery_id: ['dlv', str(agentRequestId) || 'req', str(reportId) || 'rep', hash].join('_'),\n    agent_request_id: str(agentRequestId),\n    report_id: str(reportId),\n    chat_id: str(chatId),\n    payload_hash: hash,\n    chunks: chunkMessage(payload).length,\n    send_status: 'pending',\n    attempts: 0,\n    telegram_message_id: '',\n    last_error: ''\n  };\n}\n\n// Idempotent enqueue: if an existing delivery has the same delivery_id and is already sent, skip.\nfunction shouldSend(existingDeliveries, delivery) {\n  const prior = (existingDeliveries || []).filter(d => str(d.delivery_id) === str(delivery.delivery_id));\n  if (prior.some(d => str(d.send_status) === 'sent')) return { send: false, reason: 'already_sent' };\n  return { send: true, reason: '' };\n}\n// --- end embedded telegram_io ---\n\n// --- node driver ---\nvar src;try{src=$('Validate Plan').first().json;}catch(e){src=$('Deterministic Plan').first().json;}\nvar plan=src.plan;\nvar text=planToApprovalText(plan);\nvar arid=String(($json&&$json.agent_request_id)||'req_pending');\nvar kb=approvalKeyboard(arid);\nreturn [{json:{plan:plan,plan_source:plan.plan_source,approval_text:text,approval_keyboard:kb}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        120
+      ],
+      "id": "wf19-approval",
+      "name": "Build Approval Message"
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Resolve Agent Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Agent Config": {
+      "main": [
+        [
+          {
+            "node": "Deterministic Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deterministic Plan": {
+      "main": [
+        [
+          {
+            "node": "Planner LLM Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planner LLM Guard": {
+      "main": [
+        [
+          {
+            "node": "LLM Planner Enabled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Planner Enabled?": {
+      "main": [
+        [
+          {
+            "node": "Build Planner Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Approval Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Planner Prompt": {
+      "main": [
+        [
+          {
+            "node": "Claude Planner API Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Planner API Request": {
+      "main": [
+        [
+          {
+            "node": "Validate Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Plan": {
+      "main": [
+        [
+          {
+            "node": "Build Approval Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

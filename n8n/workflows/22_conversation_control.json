@@ -1,0 +1,254 @@
+{
+  "name": "22 — Conversation Control & Sources",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        0
+      ],
+      "id": "wf22-trig",
+      "name": "Manual Start"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/agent_config.js (drift-proof; test asserts equality)\n// agent_config.js — Stage 4 central configuration contract (B1).\n//\n// ONE place resolves the entire agent runtime config from environment variables + safe defaults,\n// so the operator never hand-edits a Spreadsheet ID (or any limit/flag) inside individual nodes.\n// The orchestrator calls resolveConfig() once and passes the resolved object downstream; every other\n// workflow receives config from the request record instead of carrying its own copy.\n//\n// NO secrets live here or in workflow JSON. Credentials (Google/Telegram/Claude/Apify) stay in the\n// n8n credential store; this module only resolves NON-secret runtime settings + the spreadsheet id\n// (an id, not a secret) from $env. In a Code node call it as resolveConfig($env) — the harness shims\n// $env as {} so the same code runs offline.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) && str(v) !== '' ? n : d; }\nfunction bool(v, d) {\n  if (v === true) return true;\n  if (v === false) return false;\n  const s = str(v).toLowerCase();\n  if (s === 'true' || s === 'yes' || s === '1') return true;\n  if (s === 'false' || s === 'no' || s === '0') return false;\n  return d;\n}\nfunction list(v) { return str(v).split(/[\\s,;]+/).filter(Boolean); }\n\n// Production-safe defaults: fail-closed (approval + source-health required), website-only allowlist,\n// LLM features OFF, tight budgets. Everything is overridable by env or explicit override.\nconst DEFAULTS = {\n  spreadsheet_id: '',\n  telegram_allowed_user_ids: [],\n  max_sources_per_request: 3,\n  max_items_per_source: 25,\n  max_external_calls: 40,\n  source_budget_usd: 0.20,\n  llm_budget_usd: 0.50,\n  default_region: 'Москва/МО',\n  default_niche: 'credit_brokerage',\n  source_allowlist: ['website'],\n  require_approval: true,\n  require_source_health: true,\n  enable_llm_planner: false,\n  enable_llm_summary: false,\n  report_data_mode: 'live'\n};\n\n// Map env var -> resolved config. Unknown/blank env falls back to DEFAULTS; explicit overrides win last.\nfunction resolveConfig(env, overrides) {\n  env = env || {};\n  overrides = overrides || {};\n  const allowedUsers = list(env.MS_TELEGRAM_ALLOWED_USER_IDS);\n  const allowlist = list(env.MS_SOURCE_ALLOWLIST).map(s => s.toLowerCase());\n  const cfg = {\n    spreadsheet_id: str(env.MS_SPREADSHEET_ID) || DEFAULTS.spreadsheet_id,\n    telegram_allowed_user_ids: (allowedUsers.length ? allowedUsers : DEFAULTS.telegram_allowed_user_ids).map(String),\n    max_sources_per_request: num(env.MS_MAX_SOURCES, DEFAULTS.max_sources_per_request),\n    max_items_per_source: num(env.MS_MAX_ITEMS_PER_SOURCE, DEFAULTS.max_items_per_source),\n    max_external_calls: num(env.MS_MAX_EXTERNAL_CALLS, DEFAULTS.max_external_calls),\n    source_budget_usd: num(env.MS_SOURCE_BUDGET_USD, DEFAULTS.source_budget_usd),\n    llm_budget_usd: num(env.MS_LLM_BUDGET_USD, DEFAULTS.llm_budget_usd),\n    default_region: str(env.MS_DEFAULT_REGION) || DEFAULTS.default_region,\n    default_niche: str(env.MS_DEFAULT_NICHE) || DEFAULTS.default_niche,\n    source_allowlist: allowlist.length ? allowlist : DEFAULTS.source_allowlist.slice(),\n    require_approval: bool(env.MS_REQUIRE_APPROVAL, DEFAULTS.require_approval),\n    require_source_health: bool(env.MS_REQUIRE_SOURCE_HEALTH, DEFAULTS.require_source_health),\n    enable_llm_planner: bool(env.MS_ENABLE_LLM_PLANNER, DEFAULTS.enable_llm_planner),\n    enable_llm_summary: bool(env.MS_ENABLE_LLM_SUMMARY, DEFAULTS.enable_llm_summary),\n    report_data_mode: str(env.MS_REPORT_DATA_MODE) || DEFAULTS.report_data_mode\n  };\n  for (const k in overrides) {\n    if (Object.prototype.hasOwnProperty.call(overrides, k)) cfg[k] = overrides[k];\n  }\n  // completeness check the orchestrator surfaces in the execution summary — never starts paid work blind\n  cfg.missing = [];\n  if (!cfg.spreadsheet_id) cfg.missing.push('MS_SPREADSHEET_ID');\n  if (!cfg.telegram_allowed_user_ids.length) cfg.missing.push('MS_TELEGRAM_ALLOWED_USER_IDS');\n  cfg.config_complete = cfg.missing.length === 0;\n  return cfg;\n}\n\nfunction isAllowedUser(cfg, userId) {\n  return ((cfg && cfg.telegram_allowed_user_ids) || []).indexOf(String(userId)) >= 0;\n}\nfunction sourceAllowed(cfg, source) {\n  return ((cfg && cfg.source_allowlist) || []).indexOf(String(source).toLowerCase()) >= 0;\n}\n// --- end embedded agent_config ---\n\n// --- node driver ---\nvar __env=(typeof $env!=='undefined'&&$env)?$env:{};\nreturn [{json:resolveConfig(__env)}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -340,
+        0
+      ],
+      "id": "wf22-cfg",
+      "name": "Resolve Agent Config"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "durable_memories",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -120,
+        -120
+      ],
+      "id": "wf22-readmem",
+      "name": "Read durable_memories"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "tracked_sources",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -120,
+        120
+      ],
+      "id": "wf22-readsrc",
+      "name": "Read tracked_sources"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/conversation_memory.js (drift-proof; test asserts equality)\n// conversation_memory.js — Part 3 + 4: bounded, multi-layer conversation memory.\n//\n// The full transcript is NEVER sent to Claude. Context is assembled in priority order under a token budget:\n//   L0 charter · L1 current request state · L2 recent message window · L3 rolling summary ·\n//   L4 durable memory · L5 relevant artifacts.\n// Older messages are compacted into a versioned rolling summary that PRESERVES decisions/entities/IDs/\n// references verbatim (the summarizer may never rewrite an ID, report or decision). Durable memory is isolated\n// per Telegram user, supports forget/forget-all with audit (the deleted sensitive value is not retained), and\n// never stores secrets. Standalone + deterministic so it embeds into a Code node.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction low(v) { return str(v).toLowerCase(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\n// ~4 chars per token is good enough for budgeting fixtures (no tokenizer dependency).\nfunction estimateTokens(text) { return Math.ceil(str(text).length / 4); }\n\nconst WINDOW_DEFAULT = 8;\nconst MEMORY_TYPES = ['preference', 'region', 'niche', 'format', 'tracked_competitor', 'selected_source', 'decision', 'monitoring_goal', 'saved_report'];\nconst ID_RX = /\\b(req_[a-z0-9_]+|rep_[a-z0-9_]+|firecrawl_[0-9_]+|apify_[a-z0-9_]+|dlv_[a-z0-9_]+|conv_[a-z0-9_]+)\\b/gi;\nconst SECRET_RX = /token|secret|api[_-]?key|passwor|bearer|bot[0-9]{6,}:|sk-ant|aiza[0-9a-z\\-_]{10,}|xox[bap]-/i;\n\n// ---- L1 current request state -----------------------------------------------------------------------------\nfunction newConversationState(conversationId, userId) {\n  return {\n    conversation_id: str(conversationId), owner_user_id: str(userId),\n    active_agent_request_id: '', current_intent: '', current_state: 'idle', current_plan_id: '',\n    last_report_id: '', last_source_run_ids: [], selected_competitors: [], selected_sources: [],\n    pending_clarification: '', pending_approval: false, current_region: '', current_service: '',\n    comparison_baseline_id: '', no_memory: false, updated_at: ''\n  };\n}\nfunction patchState(state, patch, ts) {\n  return Object.assign({}, state || {}, patch || {}, { updated_at: str(ts) || (state && state.updated_at) || '' });\n}\n\n// ---- L2 recent window -------------------------------------------------------------------------------------\nfunction recentWindow(messages, n) {\n  const m = Array.isArray(messages) ? messages : [];\n  const k = num(n, WINDOW_DEFAULT);\n  return m.slice(Math.max(0, m.length - k));\n}\n\n// ---- L3 rolling summary -----------------------------------------------------------------------------------\n// Trigger when the recent window or approximate token count exceeds the configured threshold.\nfunction shouldSummarize(messages, cfg) {\n  cfg = cfg || {};\n  const m = Array.isArray(messages) ? messages : [];\n  const win = num(cfg.recent_window, WINDOW_DEFAULT);\n  const maxTok = num(cfg.summary_trigger_tokens, 1200);\n  const tok = m.reduce((a, x) => a + estimateTokens(x && x.text), 0);\n  return m.length > win || tok > maxTok;\n}\n\nfunction collectIds(textBlobs) {\n  const ids = []; const seen = {};\n  for (const t of textBlobs) {\n    const s = str(t); let mm;\n    ID_RX.lastIndex = 0;\n    while ((mm = ID_RX.exec(s)) !== null) { const id = mm[1]; if (!seen[id]) { seen[id] = 1; ids.push(id); } }\n  }\n  return ids;\n}\n\n// Compact older messages into a versioned summary. Decisions/entities/references/IDs are PRESERVED verbatim;\n// the previous summary is retained for audit (prev_version). The summarizer never alters an ID/report/decision.\nfunction rollingSummary(prevSummary, olderMessages, opts) {\n  opts = opts || {};\n  const prev = prevSummary || null;\n  const msgs = Array.isArray(olderMessages) ? olderMessages : [];\n  const decisions = [];\n  for (const m of msgs) {\n    const t = str(m && m.text);\n    if (/approve|одобр|подтвержд|reject|отклон|cancel|отмен|добав|pause|пауз|resume|возобнов|rerun|повтор/i.test(t)) {\n      decisions.push({ role: str(m.role), message_id: str(m.message_id), gist: t.slice(0, 140) });\n    }\n  }\n  const preservedIds = collectIds(msgs.map(m => m && m.text).concat(prev ? [prev.text] : []));\n  const entities = [].concat((prev && prev.entities) || [], opts.entities || []);\n  const references = [].concat((prev && prev.references) || [], opts.references || []);\n  const goals = [].concat((prev && prev.goals) || [], opts.goals || []);\n  const unresolved = opts.unresolved || (prev && prev.unresolved) || [];\n  const version = (prev && num(prev.version, 0) || 0) + 1;\n  const dedup = a => { const s = {}; return a.filter(x => { const k = JSON.stringify(x); if (s[k]) return false; s[k] = 1; return true; }); };\n  const text = [\n    'Сводка диалога v' + version + ':',\n    goals.length ? ('Цели: ' + dedup(goals).map(str).join('; ')) : '',\n    decisions.length ? ('Решения: ' + decisions.map(d => d.gist).join(' | ')) : '',\n    entities.length ? ('Сущности: ' + dedup(entities).map(str).join(', ')) : '',\n    preservedIds.length ? ('ID: ' + preservedIds.join(', ')) : '',\n    unresolved.length ? ('Открытые вопросы: ' + dedup(unresolved).map(str).join('; ')) : ''\n  ].filter(Boolean).join('\\n');\n  return {\n    version: version, prev_version: prev ? num(prev.version, 0) : 0,\n    text: text, decisions: decisions, entities: dedup(entities), references: dedup(references),\n    goals: dedup(goals), unresolved: dedup(unresolved), preserved_ids: preservedIds,\n    covers_message_ids: msgs.map(m => str(m && m.message_id)).filter(Boolean),\n    created_at: str(opts.ts)\n  };\n}\n\n// ---- L4 durable memory ------------------------------------------------------------------------------------\nfunction isSecretLike(key, value) {\n  return SECRET_RX.test(str(key)) || SECRET_RX.test(str(typeof value === 'string' ? value : JSON.stringify(value || '')));\n}\nfunction makeMemory(p) {\n  p = p || {};\n  if (MEMORY_TYPES.indexOf(str(p.memory_type)) < 0) return { ok: false, reason: 'bad_memory_type', memory: null };\n  if (isSecretLike(p.key, p.value_json)) return { ok: false, reason: 'secret_blocked', memory: null };\n  const scope = p.conversation_id ? str(p.conversation_id) : 'global';\n  const mem = {\n    memory_id: 'mem_' + str(p.owner_user_id) + '_' + str(p.memory_type) + '_' + str(p.key),\n    owner_user_id: str(p.owner_user_id), scope: scope, conversation_id: p.conversation_id ? str(p.conversation_id) : '',\n    memory_type: str(p.memory_type), key: str(p.key), value_json: p.value_json === undefined ? '' : p.value_json,\n    source_message_id: str(p.source_message_id), confidence: num(p.confidence, 0.8), status: 'active',\n    created_at: str(p.ts), updated_at: str(p.ts), last_used_at: '', expires_at: str(p.expires_at)\n  };\n  return { ok: true, reason: '', memory: mem };\n}\n// Strict per-user isolation: one user can never see another user's memory.\nfunction memoriesForUser(memories, userId) {\n  return (memories || []).filter(m => str(m.owner_user_id) === str(userId) && str(m.status) === 'active');\n}\nfunction memoryView(memories) {\n  return (memories || []).filter(m => str(m.status) === 'active').map(m => ({\n    memory_id: m.memory_id, type: m.memory_type, key: m.key,\n    value: typeof m.value_json === 'string' ? m.value_json : JSON.stringify(m.value_json), confidence: m.confidence\n  }));\n}\n// Forget one memory by id/key/type. The audit event records WHAT was removed (key + value hash), never the\n// raw sensitive value.\nfunction valueHash(v) { const s = typeof v === 'string' ? v : JSON.stringify(v || ''); let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return 'h' + h.toString(16); }\nfunction forgetMemory(memories, selector, ctx) {\n  ctx = ctx || {}; const userId = str(ctx.owner_user_id);\n  const sel = low(selector);\n  const removed = []; const kept = [];\n  for (const m of (memories || [])) {\n    const mine = str(m.owner_user_id) === userId || userId === '';\n    const match = mine && m.status === 'active' && (low(m.memory_id) === sel || low(m.key) === sel || low(m.memory_type) === sel || (sel && low(JSON.stringify(m.value_json)).indexOf(sel) >= 0));\n    if (match) removed.push(m); else kept.push(m);\n  }\n  const audit = removed.map(m => ({\n    event: 'memory_forget', owner_user_id: m.owner_user_id, memory_id: m.memory_id,\n    memory_type: m.memory_type, key: m.key, value_hash: valueHash(m.value_json), ts: str(ctx.ts)\n  }));\n  // tombstone (status removed) rather than drop, so it is excluded from prompts but auditable\n  const out = kept.concat(removed.map(m => Object.assign({}, m, { status: 'removed', updated_at: str(ctx.ts), value_json: '' })));\n  return { memories: out, removed: removed.length, audit: audit };\n}\nfunction forgetAll(memories, ctx) {\n  ctx = ctx || {};\n  if (ctx.confirmed !== true) return { ok: false, reason: 'confirmation_required', memories: memories || [], removed: 0, audit: [] };\n  const userId = str(ctx.owner_user_id);\n  const r = (memories || []).filter(m => str(m.owner_user_id) === userId && m.status === 'active');\n  const audit = r.map(m => ({ event: 'memory_forget_all', owner_user_id: m.owner_user_id, memory_id: m.memory_id, key: m.key, value_hash: valueHash(m.value_json), ts: str(ctx.ts) }));\n  const out = (memories || []).map(m => (str(m.owner_user_id) === userId && m.status === 'active') ? Object.assign({}, m, { status: 'removed', updated_at: str(ctx.ts), value_json: '' }) : m);\n  return { ok: true, reason: '', memories: out, removed: r.length, audit: audit };\n}\n// /new — reset active conversation context but KEEP durable user preferences.\nfunction resetConversation(state, conversationId, ts) {\n  const fresh = newConversationState(conversationId, state && state.owner_user_id);\n  return patchState(fresh, {}, ts);\n}\n\n// ---- L5 artifacts (retrieve only what's needed; never whole Sheets tabs) ----------------------------------\nfunction selectArtifacts(refs, store) {\n  refs = refs || {}; store = store || {};\n  const out = {};\n  if (refs.plan && store.plans) out.plan = (store.plans || []).find(p => str(p.plan_id) === str(refs.plan)) || null;\n  if (refs.request_state) out.request_state = store.request_state || null;\n  if (refs.last_report && store.reports) out.last_report = (store.reports || []).find(r => str(r.report_id) === str(refs.last_report)) || null;\n  if (refs.competitors && store.competitors) {\n    const want = (refs.competitors || []).map(str);\n    out.competitors = (store.competitors || []).filter(c => want.indexOf(str(c.company_name || c.ref)) >= 0);\n  }\n  if (refs.sources && store.tracked_sources) out.tracked_sources = store.tracked_sources;\n  if (refs.baseline && store.reports) out.baseline = (store.reports || []).find(r => str(r.report_id) === str(refs.baseline)) || null;\n  return out;\n}\n\n// ---- retrieval + token budget -----------------------------------------------------------------------------\nconst PRIORITY = ['charter', 'state', 'safety', 'newest', 'artifacts', 'recent', 'summary', 'durable'];\nconst REQUIRED = ['charter', 'state', 'safety', 'newest'];\n\n// Assemble the prompt context under a token budget, in priority order. Required sections (charter, current\n// state, safety/approval constraints, newest user message) are NEVER dropped. Optional sections are added\n// while the budget holds; the rest are recorded as omitted. Returns the assembly + a usage record.\nfunction buildContext(sections, cfg) {\n  sections = sections || {}; cfg = cfg || {};\n  const maxTokens = num(cfg.max_context_tokens, 6000);\n  const included = []; const omitted = []; let used = 0;\n  const parts = [];\n  // 1. required first (always)\n  for (const name of REQUIRED) {\n    const text = str(sections[name]);\n    if (!text) continue;\n    used += estimateTokens(text); included.push(name); parts.push({ name: name, text: text });\n  }\n  let truncated = false;\n  // 2. optional in priority order, within budget\n  for (const name of PRIORITY) {\n    if (REQUIRED.indexOf(name) >= 0) continue;\n    const text = str(sections[name]);\n    if (!text) continue;\n    const t = estimateTokens(text);\n    if (used + t <= maxTokens) { used += t; included.push(name); parts.push({ name: name, text: text }); }\n    else { omitted.push(name); truncated = true; }\n  }\n  return {\n    prompt: parts.map(p => '## ' + p.name + '\\n' + p.text).join('\\n\\n'),\n    sections_included: included, sections_omitted: omitted,\n    est_input_tokens: used, max_context_tokens: maxTokens, truncated: truncated,\n    summary_version: num(sections.summary_version, 0)\n  };\n}\n\nfunction contextUsageRecord(ctxResult, ids) {\n  ids = ids || {};\n  return {\n    conversation_id: str(ids.conversation_id), agent_request_id: str(ids.agent_request_id),\n    est_input_tokens: num(ctxResult.est_input_tokens, 0), max_context_tokens: num(ctxResult.max_context_tokens, 0),\n    sections_included: (ctxResult.sections_included || []).join(','), sections_omitted: (ctxResult.sections_omitted || []).join(','),\n    summary_version: num(ctxResult.summary_version, 0), truncated: !!ctxResult.truncated, ts: str(ids.ts)\n  };\n}\n// --- end embedded conversation_memory ---\n\n// embedded n8n/lib/tracked_sources.js (drift-proof; test asserts equality)\n// tracked_sources.js — public-source management (add / list / pause / resume / remove / check).\n//\n// A user can manage the public sources the agent monitors purely conversationally (\"add their sites\",\n// \"pause the second source\"). Adds are idempotent (a source already tracked is never duplicated), platform\n// availability is honest (a platform not in the source allowlist cannot be added), and every state change is\n// audited. Source refs can be resolved from conversation context (competitor root URLs in the last report).\n// Standalone + deterministic; stores no secrets.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction low(v) { return str(v).toLowerCase(); }\n\nconst PLATFORMS = ['website', 'telegram_channel', 'vk_community'];\nconst STATUSES = ['active', 'paused', 'removed'];\n\n// Detect the platform + canonical ref from a raw URL/handle.\nfunction normalizeSourceRef(raw) {\n  const s = str(raw);\n  const l = low(s);\n  if (/(^|\\/\\/|\\.)?(t\\.me|telegram\\.me)\\//.test(l) || /^@[a-z0-9_]+$/i.test(s) || /^tg:/.test(l)) {\n    let handle = s.replace(/^https?:\\/\\//i, '').replace(/^(t\\.me|telegram\\.me)\\//i, '').replace(/^@/, '').replace(/^tg:\\/\\//i, '').replace(/\\/+$/, '');\n    return { platform: 'telegram_channel', ref: '@' + low(handle), label: '@' + handle, key: 'telegram_channel::' + low(handle) };\n  }\n  if (/vk\\.com\\//.test(l) || /^vk:/.test(l)) {\n    let handle = s.replace(/^https?:\\/\\//i, '').replace(/^vk\\.com\\//i, '').replace(/^vk:\\/\\//i, '').replace(/\\/+$/, '');\n    return { platform: 'vk_community', ref: 'vk.com/' + low(handle), label: 'vk.com/' + handle, key: 'vk_community::' + low(handle) };\n  }\n  // default: website root\n  let host = s.replace(/^https?:\\/\\//i, '').replace(/\\/.*$/, '').replace(/^www\\./i, '').replace(/\\/+$/, '');\n  if (!host) return { platform: 'website', ref: '', label: '', key: '' };\n  return { platform: 'website', ref: 'https://' + low(host) + '/', label: low(host), key: 'website::' + low(host) };\n}\n\nfunction sourceAvailable(cfg, platform) {\n  const allow = ((cfg && cfg.source_allowlist) || []).map(low);\n  return allow.indexOf(low(platform)) >= 0;\n}\n\n// A newly tracked source is monitorable (active) only when a real collector is configured for its platform.\n// website is always collectable; Telegram/VK are active only when the operator has enabled their collector,\n// otherwise the honest initial state is setup_required (visible, but not checked until configured).\nfunction initialStatus(platform, cfg) {\n  cfg = cfg || {}; platform = low(platform);\n  if (platform === 'website') return 'active';\n  if (platform === 'telegram_channel') return cfg.enable_telegram_collector === true ? 'active' : 'setup_required';\n  if (platform === 'vk_community') return cfg.enable_vk_collector === true ? 'active' : 'setup_required';\n  return 'setup_required';\n}\n\n// Idempotent add. Blocks unavailable platforms (honest). Returns the new list + outcome + audit event.\nfunction addSource(existing, raw, ctx) {\n  existing = Array.isArray(existing) ? existing : []; ctx = ctx || {};\n  const n = normalizeSourceRef(raw);\n  if (!n.key) return { sources: existing, added: false, reason: 'unparseable_source', audit: null };\n  if (ctx.cfg && !sourceAvailable(ctx.cfg, n.platform)) return { sources: existing, added: false, reason: 'platform_unavailable', platform: n.platform, audit: null };\n  const userId = str(ctx.owner_user_id);\n  // duplicate registration returns/updates the existing source rather than creating a second row\n  const dup = existing.find(s => str(s.key) === n.key && str(s.owner_user_id) === userId && s.status !== 'removed');\n  if (dup) return { sources: existing, added: false, reason: 'already_tracked', source: dup, audit: null };\n  const status = initialStatus(n.platform, ctx.cfg);\n  const rec = {\n    source_id: 'src_' + userId + '_' + n.key.replace(/[^a-z0-9]+/gi, '_'),\n    owner_user_id: userId, chat_id: str(ctx.chat_id), platform: n.platform, ref: n.ref, key: n.key, label: n.label,\n    status: status, added_at: str(ctx.ts), updated_at: str(ctx.ts),\n    // monitoring lifecycle (populated by WF23 scheduled monitor)\n    last_checked_at: '', last_success_at: '', next_check_at: str(ctx.ts), last_content_hash: '',\n    last_change_at: '', last_status: status === 'active' ? 'new' : 'setup_required', last_error: '', error_count: 0,\n    check_interval_hours: (ctx.cfg && ctx.cfg.monitor_interval_hours) || 24,\n    agent_request_id: str(ctx.agent_request_id)\n  };\n  const audit = { event: 'source_add', owner_user_id: userId, source_id: rec.source_id, key: rec.key, platform: rec.platform, status: status, ts: str(ctx.ts) };\n  return { sources: existing.concat([rec]), added: true, reason: '', source: rec, audit: audit };\n}\n\nfunction listSources(existing, userId) {\n  return (existing || []).filter(s => str(s.owner_user_id) === str(userId) && s.status !== 'removed');\n}\n\n// pause / resume / remove with validated transitions + audit.\nfunction setSourceStatus(existing, key, status, ctx) {\n  existing = Array.isArray(existing) ? existing : []; ctx = ctx || {};\n  status = low(status);\n  if (STATUSES.indexOf(status) < 0) return { sources: existing, changed: false, reason: 'bad_status', audit: null };\n  const userId = str(ctx.owner_user_id);\n  let changed = false, audit = null;\n  const out = existing.map(s => {\n    if ((str(s.key) === str(key) || str(s.source_id) === str(key)) && str(s.owner_user_id) === userId && s.status !== 'removed') {\n      if (s.status === status) return s; // idempotent\n      changed = true;\n      audit = { event: 'source_status', owner_user_id: userId, source_id: s.source_id, key: s.key, from: s.status, to: status, ts: str(ctx.ts) };\n      return Object.assign({}, s, { status: status, updated_at: str(ctx.ts) });\n    }\n    return s;\n  });\n  return { sources: out, changed: changed, reason: changed ? '' : 'not_found_or_unchanged', audit: audit };\n}\n\nfunction checkSource(existing, key, ctx) {\n  ctx = ctx || {};\n  const s = (existing || []).find(x => (str(x.key) === str(key) || str(x.source_id) === str(key)) && str(x.owner_user_id) === str(ctx.owner_user_id));\n  if (!s) return { found: false, status: '', last_checked_at: '' };\n  return { found: true, status: s.status, platform: s.platform, ref: s.ref, last_checked_at: s.last_checked_at };\n}\n\n// Resolve source refs from conversation context — e.g. \"add their sites to monitoring\" uses the competitor\n// root URLs from the last report / selected competitors.\nfunction resolveSourcesFromContext(ctx) {\n  ctx = ctx || {};\n  const comps = (ctx.selected_competitors && ctx.selected_competitors.length) ? ctx.selected_competitors\n    : ((ctx.last_report && ctx.last_report.competitors) || []);\n  const refs = [];\n  for (const c of comps) {\n    const url = str(c && (c.root_url || c.evidence_url || c.url));\n    if (url) refs.push(url);\n  }\n  return refs;\n}\n// --- end embedded tracked_sources ---\n\n// --- node driver ---\nvar cfg=$('Resolve Agent Config').first().json;\nvar inp=$json||{};var owner=String(inp.owner_user_id||'');\nvar memories=[];try{memories=($('Read durable_memories').all()||[]).map(function(r){return r.json;});}catch(e){}\nvar sources=[];try{sources=($('Read tracked_sources').all()||[]).map(function(r){return r.json;});}catch(e){}\nvar ts=(new Date()).toISOString();\nvar out={domain:inp.domain,op:inp.op,owner_user_id:owner,chat_id:String(inp.chat_id||''),reply:'',memory_audit:[],source_audit:[],memories:memories,sources:sources};\nif(inp.domain==='memory'){\n if(inp.op==='memory'||inp.op==='view'){out.reply='\\u041f\\u0430\\u043c\\u044f\\u0442\\u044c: '+JSON.stringify(memoryView(memoriesForUser(memories,owner)));}\n else if(inp.op==='forget'){var f=forgetMemory(memories,inp.arg,{owner_user_id:owner,ts:ts});out.memories=f.memories;out.memory_audit=f.audit;out.reply=f.removed?('\\u0423\\u0434\\u0430\\u043b\\u0435\\u043d\\u043e: '+f.removed):'\\u041d\\u0435 \\u043d\\u0430\\u0448\\u0451\\u043b.';}\n else if(inp.op==='forget_all'){var fa=forgetAll(memories,{owner_user_id:owner,confirmed:inp.confirmed===true,ts:ts});if(!fa.ok){out.reply='\\u041f\\u043e\\u0434\\u0442\\u0432\\u0435\\u0440\\u0434\\u0438\\u0442\\u0435 \\u0443\\u0434\\u0430\\u043b\\u0435\\u043d\\u0438\\u0435.';}else{out.memories=fa.memories;out.memory_audit=fa.audit;out.reply='\\u041f\\u0430\\u043c\\u044f\\u0442\\u044c \\u043e\\u0447\\u0438\\u0449\\u0435\\u043d\\u0430 ('+fa.removed+').';}}\n else if(inp.op==='new'){out.reply='\\u041d\\u043e\\u0432\\u044b\\u0439 \\u043a\\u043e\\u043d\\u0442\\u0435\\u043a\\u0441\\u0442. \\u041f\\u0440\\u0435\\u0434\\u043f\\u043e\\u0447\\u0442\\u0435\\u043d\\u0438\\u044f \\u0441\\u043e\\u0445\\u0440\\u0430\\u043d\\u0435\\u043d\\u044b.';}\n else if(inp.op==='context'){out.reply='\\u041a\\u043e\\u043d\\u0442\\u0435\\u043a\\u0441\\u0442: '+(inp.arg||'(\\u043f\\u0443\\u0441\\u0442\\u043e)');}\n else{out.reply='\\u041a\\u043e\\u043c\\u0430\\u043d\\u0434\\u0430 \\u043f\\u0430\\u043c\\u044f\\u0442\\u0438 \\u043d\\u0435 \\u0440\\u0430\\u0441\\u043f\\u043e\\u0437\\u043d\\u0430\\u043d\\u0430.';}\n}else if(inp.domain==='source'){\n if(inp.op==='add'){var a=addSource(sources,inp.arg,{owner_user_id:owner,cfg:cfg,ts:ts});out.sources=a.sources;if(a.audit)out.source_audit=[a.audit];out.reply=a.added?('\\u0418\\u0441\\u0442\\u043e\\u0447\\u043d\\u0438\\u043a \\u0434\\u043e\\u0431\\u0430\\u0432\\u043b\\u0435\\u043d: '+a.source.label):('\\u041d\\u0435 \\u0434\\u043e\\u0431\\u0430\\u0432\\u043b\\u0435\\u043d: '+a.reason);}\n else if(inp.op==='list'){out.reply='\\u0418\\u0441\\u0442\\u043e\\u0447\\u043d\\u0438\\u043a\\u0438: '+JSON.stringify(listSources(sources,owner).map(function(s){return s.label+' ['+s.status+']';}));}\n else if(inp.op==='pause'||inp.op==='resume'||inp.op==='remove'){var st=inp.op==='pause'?'paused':(inp.op==='resume'?'active':'removed');var r2=setSourceStatus(sources,inp.arg,st,{owner_user_id:owner,ts:ts});out.sources=r2.sources;if(r2.audit)out.source_audit=[r2.audit];out.reply=r2.changed?('\\u0418\\u0441\\u0442\\u043e\\u0447\\u043d\\u0438\\u043a: '+inp.op):('\\u041d\\u0435 \\u0438\\u0437\\u043c\\u0435\\u043d\\u0435\\u043d\\u043e: '+r2.reason);}\n else if(inp.op==='check'){out.reply='\\u0421\\u0442\\u0430\\u0442\\u0443\\u0441: '+JSON.stringify(checkSource(sources,inp.arg,{owner_user_id:owner}));}\n else{out.reply='\\u041a\\u043e\\u043c\\u0430\\u043d\\u0434\\u0430 \\u0438\\u0441\\u0442\\u043e\\u0447\\u043d\\u0438\\u043a\\u043e\\u0432 \\u043d\\u0435 \\u0440\\u0430\\u0441\\u043f\\u043e\\u0437\\u043d\\u0430\\u043d\\u0430.';}\n}else{out.reply='\\u041d\\u0435\\u0438\\u0437\\u0432\\u0435\\u0441\\u0442\\u043d\\u044b\\u0439 \\u0434\\u043e\\u043c\\u0435\\u043d \\u043a\\u043e\\u043c\\u0430\\u043d\\u0434\\u044b.';}\nreturn [{json:out}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        120,
+        0
+      ],
+      "id": "wf22-apply",
+      "name": "Apply Control Command"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "memory_audit_events",
+          "mode": "name"
+        },
+        "mappingMode": "autoMapInputData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        340,
+        -120
+      ],
+      "id": "wf22-apmem",
+      "name": "Append memory_audit_events"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "source_audit_events",
+          "mode": "name"
+        },
+        "mappingMode": "autoMapInputData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        340,
+        120
+      ],
+      "id": "wf22-apsrc",
+      "name": "Append source_audit_events"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/conversation_response.js (drift-proof; test asserts equality)\n// conversation_response.js — Part 5: conversational response generation.\n//\n// Every reply must be useful WITHOUT buttons. The text explicitly states what was understood, what is missing,\n// what will happen next, whether approval is needed, the expected source scope + call/budget ceiling, the\n// current result, factual limitations, and a natural-language invitation to continue. Buttons (optional) are\n// shortcuts whose callback_data maps to REAL router intents — they never add capabilities. Standalone +\n// deterministic; user-facing text is Russian (operator preference).\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\n// Generic conversational reply skeleton — populated by the gateway from the routed intent + plan.\nfunction buildConversationalReply(p) {\n  p = p || {};\n  const lines = [];\n  if (p.understood) lines.push('Понял так: ' + str(p.understood));\n  if (p.missing) lines.push('Не хватает: ' + str(p.missing));\n  if (p.next) lines.push('Дальше: ' + str(p.next));\n  if (p.requires_approval) lines.push('Нужно ваше подтверждение перед запуском (платные/внешние действия).');\n  if (p.source_scope) lines.push('Источники: ' + str(p.source_scope));\n  if (p.budget_ceiling) lines.push('Лимит вызовов/бюджет: ' + str(p.budget_ceiling));\n  if (p.result) lines.push(str(p.result));\n  if (p.limitations) lines.push('Ограничения: ' + str(p.limitations));\n  const followups = (p.followups || []).map(str).filter(Boolean);\n  if (followups.length) lines.push('Можно дальше: ' + followups.join('; ') + '. Просто напишите, что сделать.');\n  return lines.join('\\n');\n}\n\n// Clarification reply — exactly one concise question, with no external work implied.\nfunction clarificationReply(question) {\n  return str(question) || 'Уточните, пожалуйста, что сделать дальше?';\n}\n\n// Follow-up suggestions are drawn ONLY from currently-available capabilities (honest; never invents).\nfunction followupSuggestions(availableCaps) {\n  const names = (availableCaps || []).filter(c => c && c.available && ['deep_competitor_analysis', 'add_source', 'generate_ideas', 'compare_periods', 'manage_sources'].indexOf(c.id) >= 0).map(c => c.name);\n  return names;\n}\n\n// Post-report conversational reply: factual summary -> changes -> ideas -> limitations -> NL invitation.\nfunction postReportReply(report, availableCaps) {\n  report = report || {};\n  const lines = [];\n  lines.push('Готово. ' + (str(report.summary_text) || ('Найдено записей в отчёте: ' + num(report.rows_after_filters || report.competitor_count, 0) + '.')));\n  const changes = [].concat(report.changes || report.major_findings || []).map(str).filter(Boolean);\n  if (changes.length) lines.push('Главное: ' + changes.join('; ') + '.');\n  const ideas = [].concat(report.ideas || report.recommendations || []).map(str).filter(Boolean);\n  if (ideas.length) lines.push('Идеи (это рекомендации, не факты): ' + ideas.slice(0, 5).join('; ') + '.');\n  const limits = [].concat(report.limitations || []).map(str).filter(Boolean);\n  if (limits.length) lines.push('Ограничения данных: ' + limits.join('; ') + '.');\n  const sugg = followupSuggestions(availableCaps);\n  if (sugg.length) {\n    lines.push('Я могу: ' + sugg.join(', ') + ' — или найти новые каналы привлечения и подготовить идеи для вашего оффера. Просто напишите, что сделать дальше.');\n  } else {\n    lines.push('Напишите, что сделать дальше.');\n  }\n  return lines.join('\\n');\n}\n\n// --- optional buttons (shortcuts only; callback_data maps to REAL router intents) --------------------------\nfunction approvalButtons(agentRequestId) {\n  return { inline_keyboard: [[\n    { text: '✅ Запустить', callback_data: 'approve:' + str(agentRequestId) },\n    { text: '✖ Отклонить', callback_data: 'reject:' + str(agentRequestId) }\n  ]] };\n}\n// Each button's callback_data is `intent:<capability_id>` — the router parses these deterministically, so a\n// button is exactly equivalent to typing the corresponding request. Only AVAILABLE capabilities are offered.\nfunction actionButtons(availableCaps) {\n  const wanted = ['deep_competitor_analysis', 'add_source', 'generate_ideas', 'compare_periods', 'manage_sources'];\n  const rows = (availableCaps || []).filter(c => c && c.available && wanted.indexOf(c.id) >= 0)\n    .map(c => [{ text: c.name, callback_data: 'intent:' + c.id }]);\n  return rows.length ? { inline_keyboard: rows } : null;\n}\n\n// --- proactive post-report continuation (attached to the REAL delivery path) -------------------------------\n// Conversational phrasing per capability for the proactive section. (Claude may rephrase, but the action set\n// comes from the deterministic registry — never invented here.)\nconst PROACTIVE_LABELS = {\n  deep_competitor_analysis: 'подробнее сравнить этих конкурентов',\n  generate_ideas: 'предложить идеи для вашего оффера',\n  add_source: 'добавить их источники в мониторинг',\n  rerun_request: 'проверить изменения повторно',\n  compare_periods: 'сравнить с прошлым периодом',\n  manage_sources: 'настроить или проверить источники'\n};\n// State-aware action set, drawn ONLY from available capabilities. A success report offers the rich set; a\n// partial/no-data report offers recovery actions instead of \"success\" actions.\nfunction proactiveActions(state, availableCaps) {\n  state = str(state).toLowerCase();\n  const noData = state === 'no_data';\n  const partial = state === 'partial';\n  let wanted;\n  if (noData) wanted = ['rerun_request', 'manage_sources', 'add_source'];\n  else if (partial) wanted = ['rerun_request', 'generate_ideas', 'manage_sources', 'compare_periods'];\n  else wanted = ['deep_competitor_analysis', 'generate_ideas', 'add_source', 'rerun_request', 'compare_periods'];\n  const byId = {}; (availableCaps || []).forEach(c => { if (c) byId[c.id] = c; });\n  return wanted.filter(id => byId[id] && byId[id].available).map(id => ({ id: id, label: PROACTIVE_LABELS[id] || (byId[id].name) }));\n}\n// The proactive sentence — useful WITHOUT buttons, ending with the natural-language invitation.\nfunction proactiveText(state, availableCaps) {\n  const acts = proactiveActions(state, availableCaps);\n  if (!acts.length) return 'Напишите, что сделать дальше.';\n  return 'Я могу ' + acts.map(a => a.label).join(', ') + '. Просто напишите, что сделать дальше.';\n}\n// Optional keyboard for the proactive actions (intent:<id> == the equivalent free-text request). Caller\n// attaches this to the FINAL message chunk only.\nfunction proactiveKeyboard(state, availableCaps) {\n  const acts = proactiveActions(state, availableCaps);\n  return acts.length ? { inline_keyboard: acts.map(a => [{ text: a.label, callback_data: 'intent:' + a.id }]) } : null;\n}\n// The full delivery body: IMMUTABLE report facts first (verbatim, never rewritten), then a state-aware\n// proactive continuation. Partial/no-data get an honest one-line status before the continuation.\nfunction deliveryBody(report, summary, availableCaps) {\n  report = report || {}; summary = summary || {};\n  const state = str(summary.final_state).toLowerCase() || 'completed';\n  const noData = num(summary.records_reported, 0) === 0 && state !== 'completed';\n  const facts = str(report.report_markdown) || str(report.summary_text) ||\n    ('Итог: ' + (str(summary.final_state) || 'completed') + '. Записей в отчёте: ' + num(summary.records_reported, 0) + '.');\n  const lines = [facts];\n  if (noData || state === 'no_data') lines.push('Подходящих данных не собрано.');\n  else if (state === 'partial') lines.push('Отчёт частичный — часть источников не отработала.');\n  lines.push(proactiveText(noData ? 'no_data' : state, availableCaps));\n  return lines.join('\\n\\n');\n}\n// --- end embedded conversation_response ---\n\n// --- node driver ---\nvar o=$('Apply Control Command').first().json;\nvar chat=String(o.chat_id||'');\nvar body={chat_id:chat,text:clarificationReply(o.reply)};\nreturn [{json:{telegram_send_body:JSON.stringify(body),domain:o.domain,op:o.op}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        0
+      ],
+      "id": "wf22-reply",
+      "name": "Build Control Reply"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.telegram_send_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        0
+      ],
+      "id": "wf22-send",
+      "name": "Send Control Reply"
+    }
+  ],
+  "connections": {
+    "Manual Start": {
+      "main": [
+        [
+          {
+            "node": "Resolve Agent Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Agent Config": {
+      "main": [
+        [
+          {
+            "node": "Read durable_memories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read durable_memories": {
+      "main": [
+        [
+          {
+            "node": "Read tracked_sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read tracked_sources": {
+      "main": [
+        [
+          {
+            "node": "Apply Control Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Control Command": {
+      "main": [
+        [
+          {
+            "node": "Append memory_audit_events",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Append source_audit_events",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Control Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Control Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Control Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

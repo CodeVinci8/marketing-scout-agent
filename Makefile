@@ -28,6 +28,20 @@ test-js:
 	node tests/test_wf12_closure.js
 	node tests/test_wf16_runtime_searchcards.js
 	node tests/test_wf09_actor_input.js
+	node tests/test_lineage_contract.js
+	node tests/test_website_pipeline.js
+	node tests/test_stage3_gates.js
+	node tests/test_stage4_contracts.js
+	node tests/test_stage4_workflows.js
+	node tests/test_stage4_e2e.js
+	node tests/test_agent_contracts.js
+	node tests/test_agent_workflows.js
+	node tests/test_deep_analysis_contracts.js
+	node tests/test_deep_analysis_workflows.js
+	node tests/test_monitoring.js
+	node tests/test_agent_e2e.js
+	node tests/test_release_audit.js
+	node tests/test_release_e2e.js
 	node tests/test_ci_workflow.js
 
 test-wf:

@@ -54,7 +54,7 @@
         320
       ],
       "parameters": {
-        "jsCode": "// Analyzer config. deterministic_first by default, LLM enrichment OFF. No external calls by default.\n// MSK time (DEC-083): operational timestamps + run_id use explicit Moscow time +03:00.\nfunction pad(n){return String(n).padStart(2,'0');}\nfunction moscowIsoNow(){const m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){const m=new Date(Date.now()+10800000);return m.getUTCFullYear()+pad(m.getUTCMonth()+1)+pad(m.getUTCDate())+'_'+pad(m.getUTCHours())+pad(m.getUTCMinutes())+pad(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nreturn [{ json: {\n  llm_enabled:false,                 // MASTER kill switch (DEC-119). false => NO Claude call (safe offline default).\n  analysis_mode:'llm_primary',       // §2.1 PRODUCTION target mode. Claude is the PRIMARY semantic classifier for\n                                     // substantive live records (may override WF09/WF11 hints from POST_EVIDENCE).\n                                     // Deterministic logic = Stage A pre-gate + dedup + system-event + hard-negative +\n                                     // safety + freshness + fallback + free fixture/offline classifier (semantic_core).\n                                     // Runs only when llm_enabled=true (operator approval). Until then the deterministic\n                                     // offline classifier (evidence-based, taxonomy-correct) produces semantic-v2 rows.\n  data_mode:'fixture',               // §13 fixture | live | manual_test — set to the mode you actually run.\n  taxonomy_version:'semantic-v2.0',\n  semantic_schema_version:'semantic-v2',\n  freshness_window_days:30,\n  llm_enrichment:false,\n  llm_enrichment_test_mode:false,\n  llm_test_batch_indexes:[1,7,11,12],\n  test_mode:true,\n  max_records:12,\n  analyze_statuses:['approved','new'],\n  production_statuses:['approved'],\n  agent_request_id_filter:'',\n  platform_filter:'',\n  source_type_filter:'',\n  run_id:'touchpoint_'+stamp,\n  generated_at:now,\n  note:'COST-CONTROL MODE (DEC-119): llm_enabled=false is the MASTER kill switch — when false, NO record reaches Claude nodes regardless of llm_enrichment / llm_enrichment_test_mode / deterministic_needs_llm; uncertain records route to review_queue with parse_method=deterministic_uncertain_no_llm, estimated_analysis_cost_usd=0. Set llm_enabled=true (explicit operator approval) to re-enable the existing LLM path. deterministic_first + llm_enrichment=false: obvious records route WITHOUT Claude (deterministic_pre_route / deterministic_irrelevant_skip). Only deterministic_needs_llm=true records call Claude. Future mode: analysis_mode=llm_enriched + llm_enrichment=true enriches non-irrelevant records (deterministic fallback still applies). LLM 4-record test: set llm_enrichment_test_mode=true (sends only llm_test_batch_indexes through Claude). Source handoff (Stage 3.3): set agent_request_id_filter/platform_filter/source_type_filter (empty by default) to process only rows from one connector run; these apply BEFORE max_records and BEFORE per-record processing, and are independent of llm_test_batch_indexes (do NOT use batch indexes for source handoff). production: set test_mode=false -> only approved analyzed and irrelevant excluded.'\n}}];"
+        "jsCode": "// Analyzer config. deterministic_first by default, LLM enrichment OFF. No external calls by default.\n// MSK time (DEC-083): operational timestamps + run_id use explicit Moscow time +03:00.\nfunction pad(n){return String(n).padStart(2,'0');}\nfunction moscowIsoNow(){const m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){const m=new Date(Date.now()+10800000);return m.getUTCFullYear()+pad(m.getUTCMonth()+1)+pad(m.getUTCDate())+'_'+pad(m.getUTCHours())+pad(m.getUTCMinutes())+pad(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nvar __cfg = {\n  llm_enabled:false,                 // MASTER kill switch (DEC-119). false => NO Claude call (safe offline default).\n  analysis_mode:'llm_primary',       // §2.1 PRODUCTION target mode. Claude is the PRIMARY semantic classifier for\n                                     // substantive live records (may override WF09/WF11 hints from POST_EVIDENCE).\n                                     // Deterministic logic = Stage A pre-gate + dedup + system-event + hard-negative +\n                                     // safety + freshness + fallback + free fixture/offline classifier (semantic_core).\n                                     // Runs only when llm_enabled=true (operator approval). Until then the deterministic\n                                     // offline classifier (evidence-based, taxonomy-correct) produces semantic-v2 rows.\n  data_mode:'fixture',               // §13 fixture | live | manual_test — set to the mode you actually run.\n  taxonomy_version:'semantic-v2.0',\n  semantic_schema_version:'semantic-v2',\n  freshness_window_days:30,\n  llm_enrichment:false,\n  llm_enrichment_test_mode:false,\n  llm_test_batch_indexes:[1,7,11,12],\n  test_mode:true,\n  max_records:12,\n  analyze_statuses:['approved','new'],\n  production_statuses:['approved'],\n  agent_request_id_filter:'',\n  source_run_id_filter:'',            // §2.4 exact source-run isolation (canonical join key)\n  force_reprocess:false,              // §2.4 exactly-once: re-analyze an already-analyzed source_record only when true\n  require_quality_eligible:true,      // §2.6 record-level gate: degraded/quarantined/pending never reach analysis\n  analysis_run_id:'analysis_'+stamp,  // one analyzer execution id (lineage)\n  require_llm_approval:true,          // §1 runtime guard: an explicit token is required to call Claude\n  llm_approval_token:'',              // operator pastes the approved token here for an LLM run (value never logged)\n  expected_llm_approval_token:'WF08_LLM_APPROVED',\n  llm_budget_usd:0.50,                // §1 hard budget; a per-call estimate above this blocks the call\n  estimated_llm_cost_per_call_usd:0.01,\n  request_cancelled:false,            // §1 a cancelled request never calls Claude\n  platform_filter:'',\n  source_type_filter:'',\n  run_id:'touchpoint_'+stamp,\n  generated_at:now,\n  note:'COST-CONTROL MODE (DEC-119): llm_enabled=false is the MASTER kill switch — when false, NO record reaches Claude nodes regardless of llm_enrichment / llm_enrichment_test_mode / deterministic_needs_llm; uncertain records route to review_queue with parse_method=deterministic_uncertain_no_llm, estimated_analysis_cost_usd=0. Set llm_enabled=true (explicit operator approval) to re-enable the existing LLM path. deterministic_first + llm_enrichment=false: obvious records route WITHOUT Claude (deterministic_pre_route / deterministic_irrelevant_skip). Only deterministic_needs_llm=true records call Claude. Future mode: analysis_mode=llm_enriched + llm_enrichment=true enriches non-irrelevant records (deterministic fallback still applies). LLM 4-record test: set llm_enrichment_test_mode=true (sends only llm_test_batch_indexes through Claude). Source handoff (Stage 3.3): set agent_request_id_filter/platform_filter/source_type_filter (empty by default) to process only rows from one connector run; these apply BEFORE max_records and BEFORE per-record processing, and are independent of llm_test_batch_indexes (do NOT use batch indexes for source handoff). production: set test_mode=false -> only approved analyzed and irrelevant excluded.'\n};\n\nvar __agentIn=(typeof $json==='object'&&$json)?$json:{};\nfunction __ov(ck,ik){var k=ik||ck;var v=__agentIn[k];if(v!==undefined&&v!==null&&v!=='')__cfg[ck]=v;}\n__ov('agent_request_id_filter','agent_request_id');\n__ov('source_run_id_filter','source_run_id');\n__ov('data_mode','data_mode');\n__ov('force_reprocess','force_reprocess');\n__ov('platform_filter','platform_filter');\n__ov('source_type_filter','source_type_filter');\n__ov('llm_enabled','llm_enabled');\n__ov('llm_approval_token','llm_approval_token');\n__ov('llm_budget_usd','llm_budget_usd');\n__ov('request_cancelled','request_cancelled');\n__ov('max_records','max_records');\nreturn [{ json: __cfg }];"
       }
     },
     {
@@ -99,7 +99,7 @@
         320
       ],
       "parameters": {
-        "jsCode": "// Select records to analyze. dedup_status=unique + approval_status in allowed. test_mode includes irrelevant.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nconst cfg=$('Set Analyzer Config').first().json;\nconst test_mode=(cfg.test_mode===true);\nconst allowed=(test_mode?(cfg.analyze_statuses||['approved','new']):(cfg.production_statuses||['approved'])).map(s=>String(s).toLowerCase());\nconst include_irrelevant=test_mode;\nconst max_records=parseInt(cfg.max_records)||12;\nconst run_id=cfg.run_id||'';\n// Source handoff filters (Stage 3.3, DEC-091): empty by default = unchanged behavior. Applied BEFORE max_records\n// and BEFORE per-record processing so only rows from one connector run (e.g. a Workflow 09 Avito request) flow.\nconst agent_request_id_filter=str(cfg.agent_request_id_filter);\nconst platform_filter=low(cfg.platform_filter);\nconst source_type_filter=low(cfg.source_type_filter);\nconst rows=$('Read raw_market_records').all().map(i=>i.json).filter(Boolean);\nconst out=[];\nfor(const r of rows){\n  if(!str(r.record_id))continue;\n  if(low(r.dedup_status)!=='unique')continue;\n  if(!allowed.includes(low(r.approval_status)))continue;\n  const rth=low(r.record_type_hint)||'unknown';\n  if(rth==='irrelevant'&&!include_irrelevant)continue;\n  if(agent_request_id_filter&&str(r.agent_request_id)!==agent_request_id_filter)continue;\n  if(platform_filter&&low(r.platform)!==platform_filter)continue;\n  if(source_type_filter&&low(r.source_type)!==source_type_filter)continue;\n  if(out.length>=max_records)break;\n  out.push({ json: {\n    record_id:str(r.record_id), agent_request_id:str(r.agent_request_id), source_type:str(r.source_type),\n    platform:str(r.platform), source_url:str(r.source_url), post_url:str(r.post_url), profile_url:str(r.profile_url),\n    profile_name:str(r.profile_name), author_handle:str(r.author_handle), published_at:str(r.published_at),\n    region_hint:str(r.region_hint), service_hint:str(r.service_hint), text_context:str(r.text_context),\n    comment_text:str(r.comment_text), contact_public:str(r.contact_public), record_type_hint:rth,\n    touchpoint_type:low(r.touchpoint_type), lead_intent_hint:low(r.lead_intent_hint), urgency_hint:low(r.urgency_hint),\n    lead_temperature:low(r.lead_temperature), competitor_related:r.competitor_related, competitor_name:str(r.competitor_name),\n    interest_topic:str(r.interest_topic), probable_need:str(r.probable_need),\n    run_id:run_id, batch_index:out.length+1\n  }});\n}\n// C2 fix (DEC-086): when llm_enrichment_test_mode=true, pre-filter the SELECTED records to llm_test_batch_indexes\n// BEFORE the processing loop, so the loop receives exactly the test fixtures (e.g. [1,7,11,12] -> 4 items).\n// batch_index was assigned over the FULL selection above, so indexes stay stable (1,7,11,12). This avoids any\n// empty return inside Build Deterministic Row, which would stall Split-in-Batches loop continuation.\nconst llm_test=(cfg.llm_enrichment_test_mode===true);\nconst testIdx=Array.isArray(cfg.llm_test_batch_indexes)?cfg.llm_test_batch_indexes.map(Number):[];\nconst before=out.length;\nlet selected=out;\nif(llm_test&&testIdx.length>0){\n  selected=out.filter(it=>testIdx.indexOf(Number(it.json.batch_index))>=0);\n}\nconst after=selected.length;\nfor(const it of selected){\n  it.json.selected_count_before_test_filter=before;\n  it.json.selected_count_after_test_filter=after;\n  it.json.llm_enrichment_test_mode=llm_test;\n  it.json.llm_test_batch_indexes=testIdx;\n}\nreturn selected;"
+        "jsCode": "// Select records to analyze. dedup_status=unique + approval_status in allowed. test_mode includes irrelevant.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nconst cfg=$('Set Analyzer Config').first().json;\nconst test_mode=(cfg.test_mode===true);\nconst allowed=(test_mode?(cfg.analyze_statuses||['approved','new']):(cfg.production_statuses||['approved'])).map(s=>String(s).toLowerCase());\nconst include_irrelevant=test_mode;\nconst max_records=parseInt(cfg.max_records)||12;\nconst run_id=cfg.run_id||'';\n// Source handoff filters (Stage 3.3, DEC-091): empty by default = unchanged behavior. Applied BEFORE max_records\n// and BEFORE per-record processing so only rows from one connector run (e.g. a Workflow 09 Avito request) flow.\nconst agent_request_id_filter=str(cfg.agent_request_id_filter);\nconst source_run_id_filter=str(cfg.source_run_id_filter);\nconst force_reprocess=(cfg.force_reprocess===true);\nconst require_quality=(cfg.require_quality_eligible!==false);\nfunction canonId(x){return str(x.source_run_id)||str(x.run_id)||str(x.agent_request_id);}\n// §2.4 exactly-once: keys of source records already analyzed (from the analysis_runs ledger).\nconst analyzedKeys=(function(){var m={};try{$('Read analysis_runs').all().map(function(i){return i.json;}).forEach(function(g){var k=str(g.analysis_idempotency_key)||(str(g.source_run_id)+'::'+str(g.source_record_id));if(k)m[k]=1;});}catch(e){}return m;})();\nconst platform_filter=low(cfg.platform_filter);\nconst source_type_filter=low(cfg.source_type_filter);\nconst rows=$('Read raw_market_records').all().map(i=>i.json).filter(Boolean);\nconst out=[];\nfor(const r of rows){\n  if(!str(r.record_id))continue;\n  if(low(r.dedup_status)!=='unique')continue;\n  if(!allowed.includes(low(r.approval_status)))continue;\n  const rth=low(r.record_type_hint)||'unknown';\n  if(rth==='irrelevant'&&!include_irrelevant)continue;\n  if(agent_request_id_filter&&str(r.agent_request_id)!==agent_request_id_filter)continue;\n  if(source_run_id_filter&&canonId(r)!==source_run_id_filter)continue;\n  // §2.6 record-level quality gate (mixed run: each record gated on its OWN quality, not the run)\n  if(require_quality){ var __qs=low(r.quality_status); if(__qs==='degraded'||__qs==='quarantined')continue; if(low(r.review_status)==='pending')continue; if(low(r.analysis_status)==='analyzed'||low(r.analysis_status)==='done')continue; }\n  var __sid=canonId(r), __rid=str(r.source_record_id)||str(r.record_id), __key=__sid+'::'+__rid;\n  if(!force_reprocess&&analyzedKeys[__key])continue; // §2.4 exactly-once\n  if(platform_filter&&low(r.platform)!==platform_filter)continue;\n  if(source_type_filter&&low(r.source_type)!==source_type_filter)continue;\n  if(out.length>=max_records)break;\n  out.push({ json: {\n    record_id:str(r.record_id), agent_request_id:str(r.agent_request_id),\n    source_run_id:__sid, source_record_id:__rid, workflow_run_id:str(r.workflow_run_id), data_mode:low(r.data_mode)||'live',\n    quality_status:low(r.quality_status), analysis_status:low(r.analysis_status)||'pending',\n    analysis_idempotency_key:__key, analysis_run_id:str(cfg.analysis_run_id)||run_id,\n    source_type:str(r.source_type),\n    platform:str(r.platform), source_url:str(r.source_url), post_url:str(r.post_url), profile_url:str(r.profile_url),\n    profile_name:str(r.profile_name), author_handle:str(r.author_handle), published_at:str(r.published_at),\n    region_hint:str(r.region_hint), service_hint:str(r.service_hint), text_context:str(r.text_context),\n    comment_text:str(r.comment_text), contact_public:str(r.contact_public), record_type_hint:rth,\n    touchpoint_type:low(r.touchpoint_type), lead_intent_hint:low(r.lead_intent_hint), urgency_hint:low(r.urgency_hint),\n    lead_temperature:low(r.lead_temperature), competitor_related:r.competitor_related, competitor_name:str(r.competitor_name),\n    interest_topic:str(r.interest_topic), probable_need:str(r.probable_need),\n    run_id:run_id, batch_index:out.length+1\n  }});\n}\n// C2 fix (DEC-086): when llm_enrichment_test_mode=true, pre-filter the SELECTED records to llm_test_batch_indexes\n// BEFORE the processing loop, so the loop receives exactly the test fixtures (e.g. [1,7,11,12] -> 4 items).\n// batch_index was assigned over the FULL selection above, so indexes stay stable (1,7,11,12). This avoids any\n// empty return inside Build Deterministic Row, which would stall Split-in-Batches loop continuation.\nconst llm_test=(cfg.llm_enrichment_test_mode===true);\nconst testIdx=Array.isArray(cfg.llm_test_batch_indexes)?cfg.llm_test_batch_indexes.map(Number):[];\nconst before=out.length;\nlet selected=out;\nif(llm_test&&testIdx.length>0){\n  selected=out.filter(it=>testIdx.indexOf(Number(it.json.batch_index))>=0);\n}\nconst after=selected.length;\nfor(const it of selected){\n  it.json.selected_count_before_test_filter=before;\n  it.json.selected_count_after_test_filter=after;\n  it.json.llm_enrichment_test_mode=llm_test;\n  it.json.llm_test_batch_indexes=testIdx;\n}\nreturn selected;"
       }
     },
     {
@@ -125,7 +125,7 @@
         440
       ],
       "parameters": {
-        "jsCode": "// Per-record holder. Builds analyzer text AND a DETERMINISTIC classification (det) from intake hints.\n// deterministic_first (DEC-082): det is the PRIMARY classifier. Claude is OPTIONAL enrichment.\n// det decides (a) is_irrelevant pre-Claude, (b) deterministic_needs_llm gate, (c) the row when Claude is skipped,\n// (d) the fallback if Claude+repair fail.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction cleanContact(raw){\n  const s=String(raw||'').trim();\n  if(!s)return '';\n  if(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}/.test(s))return s;\n  if(/t\\.me\\/|wa\\.me\\//i.test(s))return s;\n  if(/(^|[^A-Za-z0-9_])@[A-Za-z0-9_]{4,}/.test(s))return s;\n  const digits=s.replace(/\\D/g,'');\n  if(digits.length>=10&&digits.length<=11)return s;\n  return '';\n}\nfunction host(u){try{return new URL(str(u)).hostname.replace(/^www\\./,'');}catch(e){return '';}}\n// Avito/classified competitor ad-intelligence det builder (DEC-092). Parses the WF09 text_context signature\n// 'Avito объявление: <TITLE> | цена: <PRICE> | <LOCATION> | продавец: <SELLER> | <DESC> | запрос: <QUERY>'\n// to populate offer_text/terms/service_type/scores. Deterministic, no Claude. lead_signal_score=1 (competitor ad).\nfunction classifiedCompetitorDet(r,tc){\n  function s2(v){return v==null?'':String(v).trim();}\n  let body=s2(tc).replace(/^avito объявление:\\s*/i,'');\n  const parts=body.split(' | ');\n  let title='',price='',seller='',q='';\n  const leftover=[];\n  parts.forEach(function(p,idx){ const t=s2(p);\n    if(idx===0){title=t;return;}\n    if(/^цена:/i.test(t)){price=t.replace(/^цена:\\s*/i,'');}\n    else if(/^продавец:/i.test(t)){seller=t.replace(/^продавец:\\s*/i,'');}\n    else if(/^запрос:/i.test(t)){q=t.replace(/^запрос:\\s*/i,'');}\n    else leftover.push(t);\n  });\n  const loc=leftover.length?leftover[0]:'';\n  const description=leftover.slice(1).join(' | ');\n  const blob=(title+' '+description+' '+q).toLowerCase();\n  const classifiedSvc=['credit_broker','business_credit','credit_after_refusals','mortgage_refinance','unknown'];\n  let svc=String(r.service_hint||'').toLowerCase();\n  if(classifiedSvc.indexOf(svc)<0){\n    if(/ипотек|рефинансир|снижение ставк/.test(blob))svc='mortgage_refinance';\n    else if(/для бизнеса|ип и ооо|оборотн|тендерн|банковск|бизнес-кредит/.test(blob))svc='business_credit';\n    else if(/после отказов|отказах банк|просрочк|плохой кредитн|плохая кредитн/.test(blob))svc='credit_after_refusals';\n    else svc='credit_broker';\n  }\n  const termDefs=[['без предоплаты','без предоплаты'],['оплата за результат','оплата за результат'],['по договору','работа по договору'],['консультаци','консультация'],['после отказов','после отказов'],['отказах банк','после отказов банков'],['просрочк','с просрочками'],['плохой кредитн','плохая кредитная история'],['плохая кредитн','плохая кредитная история'],['пакет документ','помощь с пакетом документов'],['банковск','банковские гарантии'],['рефинансир','рефинансирование'],['снижение ставк','снижение ставки']];\n  const seenT={}; const terms=[];\n  termDefs.forEach(function(d){ if(blob.indexOf(d[0])>=0 && !seenT[d[1]]){seenT[d[1]]=1;terms.push(d[1]);} });\n  const termsStr=(price?price:'')+((price&&terms.length)?'; ':'')+terms.join('; ');\n  const strong=/отказов|плохая кредитн|плохой кредитн|просрочк|без предоплаты|оплата за результат|ип и ооо|для бизнеса|бизнес-кредит|банковск|рефинансир/.test(blob);\n  let cs=75; if(price)cs+=4; if(terms.length>=2)cs+=4; if(description.length>40)cs+=2; if(cs>85)cs=85;\n  let ci=35; if(price||terms.length)ci=45; if(strong)ci=(price&&terms.length)?55:50;\n  let comp=0; [title,price,seller,description,s2(r.profile_url)].forEach(function(x){if(s2(x))comp++;});\n  const qs=comp>=5?82:(comp>=4?78:(comp>=3?74:70));\n  const company=s2(r.competitor_name)||seller||s2(r.profile_name)||'';\n  const offer=title||s2(r.interest_topic);\n  const need=s2(r.probable_need);\n  const reason='Avito-объявление конкурента: '+(offer||'оффер')+(price?(' ('+price+')'):'')+(terms.length?('; '+terms.slice(0,3).join(', ')):'')+'. Сохранить оффер, цену и семантику для мониторинга конкурентов и рекламных углов (площадка Avito/classifieds). Действие: monitor.';\n  return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'competitor', route:'monitor_queue', recommended_action:'monitor', company_name:company, service_type:svc, region:s2(r.region_hint)||loc, competitor_strength:cs, lead_signal_score:1, content_idea_score:ci, quality_score:qs, needs_manual_review:false, status:'analyzed', detected_need:need, offer_text:offer, terms:termsStr, contact:cleanContact(r.contact_public), reason:reason };\n}\nfunction classifyDeterministic(r){\n  // §2.1 Stage A / §9.1 system-event pre-gate: Telegram service messages (channel rename/photo/pin) are\n  // hard-skipped to skipped_log BEFORE any Claude call ($0). Service is NOT derived from a changed channel title.\n  var _sysTxt=str(r.text_context)+' '+str(r.comment_text);\n  if(low(r.record_type_hint)==='system_event'||/channel name was changed to|канал переименован|(сменил|изменил)\\s+название\\s+канала|(сменил|изменил|обновил)\\s+фото\\s+канала|channel (was )?created|канал создан/i.test(_sysTxt)){\n    return { is_irrelevant:true, deterministic_needs_llm:false, entity_type:'irrelevant', route:'skipped_log', recommended_action:'ignore', company_name:'', service_type:'unknown', region:str(r.region_hint), competitor_strength:1, lead_signal_score:1, content_idea_score:1, quality_score:1, needs_manual_review:false, status:'skipped', detected_need:'', offer_text:'', contact:'', reason:'Системное событие Telegram (переименование/смена фото/закреп) — hard-skip до Claude, $0. Сервис не выводится из нового названия канала.', skip_reason:'telegram_service_message', is_system_event:true };\n  }\n  const rth=low(r.record_type_hint), tpt=low(r.touchpoint_type), lit=low(r.lead_intent_hint);\n  const urg=low(r.urgency_hint), temp=low(r.lead_temperature);\n  const compRelated=(r.competitor_related===true||low(r.competitor_related)==='true');\n  const svcRaw=low(r.service_hint);\n  const text=str(r.text_context)+' '+str(r.comment_text)+' '+str(r.interest_topic)+' '+str(r.probable_need);\n  const contact=cleanContact(r.contact_public);\n  const hasContact=contact!=='';\n  const hasInsight=(str(r.comment_text)!=='');\n  const allowedSvc=['secured_auto_loan','secured_real_estate_loan','pts_loan','refinancing','mortgage_adjacent','generic_lending','credit_broker','consumer_credit'];\n  function svcNorm(def){ if(allowedSvc.indexOf(svcRaw)>=0)return svcRaw; const t=text.toLowerCase(); if(t.indexOf('птс')>=0||t.indexOf('pts')>=0)return 'pts_loan'; if(t.indexOf('брокер')>=0)return 'credit_broker'; return def||'unknown'; }\n  function company(){ const c=str(r.competitor_name); if(c)return c; const p=str(r.profile_name); if(p)return p; const h=host(r.source_url||r.profile_url); if(h)return h; return ''; }\n  // 1. irrelevant -> skipped_log (pre-Claude, $0)\n  if(rth==='irrelevant'||tpt==='irrelevant_source'||tpt==='weak_market_noise'){\n    return { is_irrelevant:true, deterministic_needs_llm:false, entity_type:'irrelevant', route:'skipped_log', recommended_action:'ignore', company_name:'', service_type:'unknown', region:str(r.region_hint), competitor_strength:1, lead_signal_score:1, content_idea_score:1, quality_score:1, needs_manual_review:false, status:'skipped', detected_need:'', offer_text:'', contact:'' };\n  }\n  // 2. competitor activity -> monitor_queue\n  if(rth==='competitor_activity'||(compRelated&&tpt.indexOf('competitor')>=0)){\n    const tc0=str(r.text_context);\n    if(low(r.source_type)==='classified'&&low(r.platform)==='avito'&&/^avito объявление:/i.test(tc0)){ return classifiedCompetitorDet(r,tc0); }\n    const clear=/₽|руб|цена|ставк|%|оффер|offer|услуг|помощь|объявлен|канал|кейс|usp|преимуществ/i.test(text);\n    return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'competitor', route:'monitor_queue', recommended_action:'monitor', company_name:company(), service_type:svcNorm('generic_lending'), region:str(r.region_hint), competitor_strength:clear?78:70, lead_signal_score:1, content_idea_score:hasInsight?30:1, quality_score:clear?80:72, needs_manual_review:false, status:'analyzed', detected_need:'', offer_text:str(r.interest_topic), contact:contact };\n  }\n  // 4. review source (handle before generic source_candidate). DEC-087: ONLY a NAMED competitor\n  // (competitor_name set) is treated as a strong competitor -> monitor_queue. A generic category/\n  // listing/review directory (e.g. a Zoon \"кредитные брокеры в Москве\" category page) is a CONTENT/\n  // monitoring source -> content_queue, content_idea, competitor_strength capped (<=45), no \"strong competitor\".\n  if(tpt==='review_source'){\n    const specificCompetitor=(str(r.competitor_name)!=='');\n    if(specificCompetitor){\n      return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'competitor', route:'monitor_queue', recommended_action:'monitor', company_name:company(), service_type:svcNorm('generic_lending'), region:str(r.region_hint), competitor_strength:70, lead_signal_score:1, content_idea_score:35, quality_score:68, needs_manual_review:false, status:'analyzed', detected_need:str(r.probable_need), offer_text:str(r.interest_topic), contact:contact };\n    }\n    return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'content_idea', route:'content_queue', recommended_action:'create_content', company_name:'', service_type:svcNorm('unknown'), region:str(r.region_hint), competitor_strength:(compRelated?45:1), lead_signal_score:1, content_idea_score:70, quality_score:68, needs_manual_review:true, status:'analyzed', detected_need:str(r.probable_need), offer_text:str(r.interest_topic), contact:contact };\n  }\n  // 3. source candidate / market signal -> content_queue\n  if(rth==='market_signal'&&tpt==='source_candidate'){\n    return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'content_idea', route:'content_queue', recommended_action:'create_content', company_name:'', service_type:svcNorm('unknown'), region:str(r.region_hint), competitor_strength:1, lead_signal_score:1, content_idea_score:55, quality_score:52, needs_manual_review:true, status:'analyzed', detected_need:'', offer_text:str(r.interest_topic), contact:contact };\n  }\n  // 5. question / objection / hot pattern -> results (with contact) or review_queue\n  if(rth==='question_objection'||temp==='hot'||lit==='high'||urg==='high'){\n    if(hasContact){\n      return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'lead_signal', route:'results', recommended_action:'contact', company_name:'', service_type:svcNorm('unknown'), region:str(r.region_hint), competitor_strength:1, lead_signal_score:85, content_idea_score:40, quality_score:80, needs_manual_review:false, status:'analyzed', detected_need:str(r.probable_need)||str(r.interest_topic), offer_text:str(r.interest_topic), contact:contact };\n    }\n    return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'lead_signal', route:'review_queue', recommended_action:'investigate', company_name:'', service_type:svcNorm('unknown'), region:str(r.region_hint), competitor_strength:1, lead_signal_score:75, content_idea_score:40, quality_score:70, needs_manual_review:true, status:'analyzed', detected_need:str(r.probable_need)||str(r.interest_topic), offer_text:str(r.interest_topic), contact:contact };\n  }\n  // 6. fallback unknown -> review_queue content_idea (classifiable but uncertain -> ask Claude when available)\n  return { is_irrelevant:false, deterministic_needs_llm:true, entity_type:'content_idea', route:'review_queue', recommended_action:'investigate', company_name:'', service_type:svcNorm('unknown'), region:str(r.region_hint), competitor_strength:1, lead_signal_score:1, content_idea_score:40, quality_score:40, needs_manual_review:true, status:'analyzed', detected_need:'', offer_text:str(r.interest_topic), contact:contact };\n}\nfunction moscowIsoNow(){const m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nconst r=$json;\nconst cfg=$('Set Analyzer Config').first().json;\nconst llm_enrichment=(cfg.llm_enrichment===true);\nconst llm_test=(cfg.llm_enrichment_test_mode===true);\nconst testIdx=Array.isArray(cfg.llm_test_batch_indexes)?cfg.llm_test_batch_indexes.map(Number):[];\nconst now=moscowIsoNow();\nlet combined=str(r.text_context);\nif(str(r.comment_text))combined+=' || КОММЕНТАРИЙ: '+str(r.comment_text);\nif(str(r.interest_topic))combined+=' || ТЕМА: '+str(r.interest_topic);\nif(str(r.probable_need))combined+=' || ВЕРОЯТНАЯ ПОТРЕБНОСТЬ: '+str(r.probable_need);\nconst det=classifyDeterministic(r);\n// LLM gate (DEC-082): call Claude only for non-irrelevant records when enrichment is ON, or when det is uncertain.\n// llm_enrichment_test_mode (Part C): restrict Claude to the listed fixture batch_indexes only (e.g. [1,7,11,12]).\n// MASTER LLM KILL SWITCH (DEC-119): llm_enabled=false guarantees zero Claude calls — uncertain records\n// (deterministic_needs_llm=true) are NOT escalated to Claude; they go deterministically to review_queue\n// with parse_method=deterministic_uncertain_no_llm and estimated_analysis_cost_usd=0 (manual review).\nconst llm_enabled=(cfg.llm_enabled===true);\nlet call_claude;\nif(!llm_enabled){\n  call_claude=false;\n} else if(llm_test){\n  call_claude=(!det.is_irrelevant)&&(testIdx.length>0?(testIdx.indexOf(Number(r.batch_index))>=0):true);\n} else {\n  call_claude=(!det.is_irrelevant)&&(llm_enrichment===true||det.deterministic_needs_llm===true);\n}\nconst llm_blocked_uncertain=(!llm_enabled)&&(!det.is_irrelevant)&&(det.deterministic_needs_llm===true);\nreturn [{ json: Object.assign({}, r, { parsed_at:now, analyzer_text:combined.substring(0,3500), det:det, is_irrelevant:det.is_irrelevant, deterministic_needs_llm:det.deterministic_needs_llm, call_claude:call_claude, llm_enabled:llm_enabled, llm_blocked_uncertain:llm_blocked_uncertain, analysis_mode:cfg.analysis_mode||'deterministic_first', llm_enrichment:llm_enrichment, llm_enrichment_test_mode:llm_test }) }];"
+        "jsCode": "// Per-record holder. Builds analyzer text AND a DETERMINISTIC classification (det) from intake hints.\n// deterministic_first (DEC-082): det is the PRIMARY classifier. Claude is OPTIONAL enrichment.\n// det decides (a) is_irrelevant pre-Claude, (b) deterministic_needs_llm gate, (c) the row when Claude is skipped,\n// (d) the fallback if Claude+repair fail.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction cleanContact(raw){\n  const s=String(raw||'').trim();\n  if(!s)return '';\n  if(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}/.test(s))return s;\n  if(/t\\.me\\/|wa\\.me\\//i.test(s))return s;\n  if(/(^|[^A-Za-z0-9_])@[A-Za-z0-9_]{4,}/.test(s))return s;\n  const digits=s.replace(/\\D/g,'');\n  if(digits.length>=10&&digits.length<=11)return s;\n  return '';\n}\nfunction host(u){try{return new URL(str(u)).hostname.replace(/^www\\./,'');}catch(e){return '';}}\n// Avito/classified competitor ad-intelligence det builder (DEC-092). Parses the WF09 text_context signature\n// 'Avito объявление: <TITLE> | цена: <PRICE> | <LOCATION> | продавец: <SELLER> | <DESC> | запрос: <QUERY>'\n// to populate offer_text/terms/service_type/scores. Deterministic, no Claude. lead_signal_score=1 (competitor ad).\nfunction classifiedCompetitorDet(r,tc){\n  function s2(v){return v==null?'':String(v).trim();}\n  let body=s2(tc).replace(/^avito объявление:\\s*/i,'');\n  const parts=body.split(' | ');\n  let title='',price='',seller='',q='';\n  const leftover=[];\n  parts.forEach(function(p,idx){ const t=s2(p);\n    if(idx===0){title=t;return;}\n    if(/^цена:/i.test(t)){price=t.replace(/^цена:\\s*/i,'');}\n    else if(/^продавец:/i.test(t)){seller=t.replace(/^продавец:\\s*/i,'');}\n    else if(/^запрос:/i.test(t)){q=t.replace(/^запрос:\\s*/i,'');}\n    else leftover.push(t);\n  });\n  const loc=leftover.length?leftover[0]:'';\n  const description=leftover.slice(1).join(' | ');\n  const blob=(title+' '+description+' '+q).toLowerCase();\n  const classifiedSvc=['credit_broker','business_credit','credit_after_refusals','mortgage_refinance','unknown'];\n  let svc=String(r.service_hint||'').toLowerCase();\n  if(classifiedSvc.indexOf(svc)<0){\n    if(/ипотек|рефинансир|снижение ставк/.test(blob))svc='mortgage_refinance';\n    else if(/для бизнеса|ип и ооо|оборотн|тендерн|банковск|бизнес-кредит/.test(blob))svc='business_credit';\n    else if(/после отказов|отказах банк|просрочк|плохой кредитн|плохая кредитн/.test(blob))svc='credit_after_refusals';\n    else svc='credit_broker';\n  }\n  const termDefs=[['без предоплаты','без предоплаты'],['оплата за результат','оплата за результат'],['по договору','работа по договору'],['консультаци','консультация'],['после отказов','после отказов'],['отказах банк','после отказов банков'],['просрочк','с просрочками'],['плохой кредитн','плохая кредитная история'],['плохая кредитн','плохая кредитная история'],['пакет документ','помощь с пакетом документов'],['банковск','банковские гарантии'],['рефинансир','рефинансирование'],['снижение ставк','снижение ставки']];\n  const seenT={}; const terms=[];\n  termDefs.forEach(function(d){ if(blob.indexOf(d[0])>=0 && !seenT[d[1]]){seenT[d[1]]=1;terms.push(d[1]);} });\n  const termsStr=(price?price:'')+((price&&terms.length)?'; ':'')+terms.join('; ');\n  const strong=/отказов|плохая кредитн|плохой кредитн|просрочк|без предоплаты|оплата за результат|ип и ооо|для бизнеса|бизнес-кредит|банковск|рефинансир/.test(blob);\n  let cs=75; if(price)cs+=4; if(terms.length>=2)cs+=4; if(description.length>40)cs+=2; if(cs>85)cs=85;\n  let ci=35; if(price||terms.length)ci=45; if(strong)ci=(price&&terms.length)?55:50;\n  let comp=0; [title,price,seller,description,s2(r.profile_url)].forEach(function(x){if(s2(x))comp++;});\n  const qs=comp>=5?82:(comp>=4?78:(comp>=3?74:70));\n  const company=s2(r.competitor_name)||seller||s2(r.profile_name)||'';\n  const offer=title||s2(r.interest_topic);\n  const need=s2(r.probable_need);\n  const reason='Avito-объявление конкурента: '+(offer||'оффер')+(price?(' ('+price+')'):'')+(terms.length?('; '+terms.slice(0,3).join(', ')):'')+'. Сохранить оффер, цену и семантику для мониторинга конкурентов и рекламных углов (площадка Avito/classifieds). Действие: monitor.';\n  return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'competitor', route:'monitor_queue', recommended_action:'monitor', company_name:company, service_type:svc, region:s2(r.region_hint)||loc, competitor_strength:cs, lead_signal_score:1, content_idea_score:ci, quality_score:qs, needs_manual_review:false, status:'analyzed', detected_need:need, offer_text:offer, terms:termsStr, contact:cleanContact(r.contact_public), reason:reason };\n}\nfunction classifyDeterministic(r){\n  // §2.1 Stage A / §9.1 system-event pre-gate: Telegram service messages (channel rename/photo/pin) are\n  // hard-skipped to skipped_log BEFORE any Claude call ($0). Service is NOT derived from a changed channel title.\n  var _sysTxt=str(r.text_context)+' '+str(r.comment_text);\n  if(low(r.record_type_hint)==='system_event'||/channel name was changed to|канал переименован|(сменил|изменил)\\s+название\\s+канала|(сменил|изменил|обновил)\\s+фото\\s+канала|channel (was )?created|канал создан/i.test(_sysTxt)){\n    return { is_irrelevant:true, deterministic_needs_llm:false, entity_type:'irrelevant', route:'skipped_log', recommended_action:'ignore', company_name:'', service_type:'unknown', region:str(r.region_hint), competitor_strength:1, lead_signal_score:1, content_idea_score:1, quality_score:1, needs_manual_review:false, status:'skipped', detected_need:'', offer_text:'', contact:'', reason:'Системное событие Telegram (переименование/смена фото/закреп) — hard-skip до Claude, $0. Сервис не выводится из нового названия канала.', skip_reason:'telegram_service_message', is_system_event:true };\n  }\n  const rth=low(r.record_type_hint), tpt=low(r.touchpoint_type), lit=low(r.lead_intent_hint);\n  const urg=low(r.urgency_hint), temp=low(r.lead_temperature);\n  const compRelated=(r.competitor_related===true||low(r.competitor_related)==='true');\n  const svcRaw=low(r.service_hint);\n  const text=str(r.text_context)+' '+str(r.comment_text)+' '+str(r.interest_topic)+' '+str(r.probable_need);\n  const contact=cleanContact(r.contact_public);\n  const hasContact=contact!=='';\n  const hasInsight=(str(r.comment_text)!=='');\n  const allowedSvc=['secured_auto_loan','secured_real_estate_loan','pts_loan','refinancing','mortgage_adjacent','generic_lending','credit_broker','consumer_credit'];\n  function svcNorm(def){ if(allowedSvc.indexOf(svcRaw)>=0)return svcRaw; const t=text.toLowerCase(); if(t.indexOf('птс')>=0||t.indexOf('pts')>=0)return 'pts_loan'; if(t.indexOf('брокер')>=0)return 'credit_broker'; return def||'unknown'; }\n  function company(){ const c=str(r.competitor_name); if(c)return c; const p=str(r.profile_name); if(p)return p; const h=host(r.source_url||r.profile_url); if(h)return h; return ''; }\n  // 1. irrelevant -> skipped_log (pre-Claude, $0)\n  if(rth==='irrelevant'||tpt==='irrelevant_source'||tpt==='weak_market_noise'){\n    return { is_irrelevant:true, deterministic_needs_llm:false, entity_type:'irrelevant', route:'skipped_log', recommended_action:'ignore', company_name:'', service_type:'unknown', region:str(r.region_hint), competitor_strength:1, lead_signal_score:1, content_idea_score:1, quality_score:1, needs_manual_review:false, status:'skipped', detected_need:'', offer_text:'', contact:'' };\n  }\n  // 2. competitor activity -> monitor_queue\n  if(rth==='competitor_activity'||(compRelated&&tpt.indexOf('competitor')>=0)){\n    const tc0=str(r.text_context);\n    if(low(r.source_type)==='classified'&&low(r.platform)==='avito'&&/^avito объявление:/i.test(tc0)){ return classifiedCompetitorDet(r,tc0); }\n    const clear=/₽|руб|цена|ставк|%|оффер|offer|услуг|помощь|объявлен|канал|кейс|usp|преимуществ/i.test(text);\n    return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'competitor', route:'monitor_queue', recommended_action:'monitor', company_name:company(), service_type:svcNorm('generic_lending'), region:str(r.region_hint), competitor_strength:clear?78:70, lead_signal_score:1, content_idea_score:hasInsight?30:1, quality_score:clear?80:72, needs_manual_review:false, status:'analyzed', detected_need:'', offer_text:str(r.interest_topic), contact:contact };\n  }\n  // 4. review source (handle before generic source_candidate). DEC-087: ONLY a NAMED competitor\n  // (competitor_name set) is treated as a strong competitor -> monitor_queue. A generic category/\n  // listing/review directory (e.g. a Zoon \"кредитные брокеры в Москве\" category page) is a CONTENT/\n  // monitoring source -> content_queue, content_idea, competitor_strength capped (<=45), no \"strong competitor\".\n  if(tpt==='review_source'){\n    const specificCompetitor=(str(r.competitor_name)!=='');\n    if(specificCompetitor){\n      return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'competitor', route:'monitor_queue', recommended_action:'monitor', company_name:company(), service_type:svcNorm('generic_lending'), region:str(r.region_hint), competitor_strength:70, lead_signal_score:1, content_idea_score:35, quality_score:68, needs_manual_review:false, status:'analyzed', detected_need:str(r.probable_need), offer_text:str(r.interest_topic), contact:contact };\n    }\n    return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'content_idea', route:'content_queue', recommended_action:'create_content', company_name:'', service_type:svcNorm('unknown'), region:str(r.region_hint), competitor_strength:(compRelated?45:1), lead_signal_score:1, content_idea_score:70, quality_score:68, needs_manual_review:true, status:'analyzed', detected_need:str(r.probable_need), offer_text:str(r.interest_topic), contact:contact };\n  }\n  // 3. source candidate / market signal -> content_queue\n  if(rth==='market_signal'&&tpt==='source_candidate'){\n    return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'content_idea', route:'content_queue', recommended_action:'create_content', company_name:'', service_type:svcNorm('unknown'), region:str(r.region_hint), competitor_strength:1, lead_signal_score:1, content_idea_score:55, quality_score:52, needs_manual_review:true, status:'analyzed', detected_need:'', offer_text:str(r.interest_topic), contact:contact };\n  }\n  // 5. question / objection / hot pattern -> results (with contact) or review_queue\n  if(rth==='question_objection'||temp==='hot'||lit==='high'||urg==='high'){\n    if(hasContact){\n      return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'lead_signal', route:'results', recommended_action:'contact', company_name:'', service_type:svcNorm('unknown'), region:str(r.region_hint), competitor_strength:1, lead_signal_score:85, content_idea_score:40, quality_score:80, needs_manual_review:false, status:'analyzed', detected_need:str(r.probable_need)||str(r.interest_topic), offer_text:str(r.interest_topic), contact:contact };\n    }\n    return { is_irrelevant:false, deterministic_needs_llm:false, entity_type:'lead_signal', route:'review_queue', recommended_action:'investigate', company_name:'', service_type:svcNorm('unknown'), region:str(r.region_hint), competitor_strength:1, lead_signal_score:75, content_idea_score:40, quality_score:70, needs_manual_review:true, status:'analyzed', detected_need:str(r.probable_need)||str(r.interest_topic), offer_text:str(r.interest_topic), contact:contact };\n  }\n  // 6. fallback unknown -> review_queue content_idea (classifiable but uncertain -> ask Claude when available)\n  return { is_irrelevant:false, deterministic_needs_llm:true, entity_type:'content_idea', route:'review_queue', recommended_action:'investigate', company_name:'', service_type:svcNorm('unknown'), region:str(r.region_hint), competitor_strength:1, lead_signal_score:1, content_idea_score:40, quality_score:40, needs_manual_review:true, status:'analyzed', detected_need:'', offer_text:str(r.interest_topic), contact:contact };\n}\nfunction moscowIsoNow(){const m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nconst r=$json;\nconst cfg=$('Set Analyzer Config').first().json;\nconst llm_enrichment=(cfg.llm_enrichment===true);\nconst llm_test=(cfg.llm_enrichment_test_mode===true);\nconst testIdx=Array.isArray(cfg.llm_test_batch_indexes)?cfg.llm_test_batch_indexes.map(Number):[];\nconst now=moscowIsoNow();\nlet combined=str(r.text_context);\nif(str(r.comment_text))combined+=' || КОММЕНТАРИЙ: '+str(r.comment_text);\nif(str(r.interest_topic))combined+=' || ТЕМА: '+str(r.interest_topic);\nif(str(r.probable_need))combined+=' || ВЕРОЯТНАЯ ПОТРЕБНОСТЬ: '+str(r.probable_need);\nconst det=classifyDeterministic(r);\n// LLM gate (DEC-082): call Claude only for non-irrelevant records when enrichment is ON, or when det is uncertain.\n// llm_enrichment_test_mode (Part C): restrict Claude to the listed fixture batch_indexes only (e.g. [1,7,11,12]).\n// MASTER LLM KILL SWITCH (DEC-119): llm_enabled=false guarantees zero Claude calls — uncertain records\n// (deterministic_needs_llm=true) are NOT escalated to Claude; they go deterministically to review_queue\n// with parse_method=deterministic_uncertain_no_llm and estimated_analysis_cost_usd=0 (manual review).\nconst llm_enabled=(cfg.llm_enabled===true);\n// PRODUCTION LLM RUNTIME GUARD (§1): the Claude node is ENABLED in JSON; a call proceeds ONLY when EVERY\n// condition holds. Any failure => deterministic path ($0). llm_enabled=false guarantees zero Claude calls.\nfunction _tru(v){return v===true||String(v).toLowerCase()==='true';}\nconst _apprReq=(cfg.require_llm_approval!==false);\nconst _apprOk=(!_apprReq)||(str(cfg.llm_approval_token)!==''&&str(cfg.llm_approval_token)===str(cfg.expected_llm_approval_token));\nconst _qualOk=(['degraded','quarantined'].indexOf(str(r.quality_status).toLowerCase())<0)&&(str(r.review_status).toLowerCase()!=='pending');\nconst _notDone=(str(r.analysis_status).toLowerCase()!=='analyzed'&&str(r.analysis_status).toLowerCase()!=='done');\nconst _notCancelled=!_tru(cfg.request_cancelled)&&!_tru(r.request_cancelled);\nconst _perCall=Number(cfg.estimated_llm_cost_per_call_usd);const _estPerCall=(isFinite(_perCall)&&_perCall>0)?_perCall:0.01;\nconst _budget=Number(cfg.llm_budget_usd);const _budgetOk=(!isFinite(_budget)||_budget<=0)?true:(_estPerCall<=_budget);\nconst _guardOk=llm_enabled&&_apprOk&&_qualOk&&_notDone&&_notCancelled&&_budgetOk;\nconst llm_guard_reason=(!llm_enabled)?'llm_disabled':(!_apprOk?'approval_token_invalid':(!_qualOk?'record_not_quality_eligible':(!_notDone?'already_analyzed':(!_notCancelled?'request_cancelled':(!_budgetOk?'over_llm_budget':'ok')))));\nlet call_claude;\nif(!_guardOk){\n  call_claude=false;\n} else if(llm_test){\n  call_claude=(!det.is_irrelevant)&&(testIdx.length>0?(testIdx.indexOf(Number(r.batch_index))>=0):true);\n} else {\n  call_claude=(!det.is_irrelevant)&&(llm_enrichment===true||det.deterministic_needs_llm===true);\n}\nconst llm_blocked_uncertain=(!_guardOk)&&(!det.is_irrelevant)&&(det.deterministic_needs_llm===true);\nreturn [{ json: Object.assign({}, r, { parsed_at:now, analyzer_text:combined.substring(0,3500), det:det, is_irrelevant:det.is_irrelevant, deterministic_needs_llm:det.deterministic_needs_llm, call_claude:call_claude, llm_enabled:llm_enabled, llm_guard_ok:_guardOk, llm_guard_reason:llm_guard_reason, estimated_llm_cost_per_call_usd:_estPerCall, llm_blocked_uncertain:llm_blocked_uncertain, analysis_mode:cfg.analysis_mode||'deterministic_first', llm_enrichment:llm_enrichment, llm_enrichment_test_mode:llm_test }) }];"
       }
     },
     {
@@ -405,6 +405,229 @@
         "width": 420,
         "content": "## Диагностика: «Filter & Select Records вернул 0 записей»\n\nЕсли после handoff из коннектора (WF09/WF11) выборка пуста — это почти всегда НЕ баг. Проверьте по порядку:\n1. `agent_request_id_filter` — id именно ПЕРВОГО прогона коннектора. Повторные (duplicate) прогоны пишут строки с `approval_status=duplicate`, а дефолт `analyze_statuses=['approved','new']` их корректно игнорирует.\n2. `approval_status` строк в `raw_market_records` vs `analyze_statuses`.\n3. `platform_filter` / `source_type_filter` — не остались ли от прошлого теста.\n4. `max_records` > 0.\n\nАнализировать duplicate-строки можно, явно добавив `duplicate` в `analyze_statuses`, но для нормального handoff это НЕ рекомендуется (дубликаты — аудит, не новые данные)."
       }
+    },
+    {
+      "id": "wf08-read-analysisruns",
+      "name": "Read analysis_runs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "analysis_runs",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "wf08-build-analysisruns",
+      "name": "Build analysis_runs Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        820
+      ],
+      "parameters": {
+        "jsCode": "// WF08 analysis_runs ledger writer (Stage 3 closure, DEC-148). One row per SELECTED source record = the\n// exactly-once idempotency key the next run reads back. Runs once per WF08 execution. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nconst cfg=$('Set Analyzer Config').first().json||{};\nconst sel=$('Filter & Select Records').all().map(function(i){return i.json;});\nconst now=moscowIsoNow();\nreturn sel.map(function(r){ var sid=str(r.source_run_id), rid=str(r.source_record_id)||str(r.record_id);\n  return { json: {\n    analysis_run_id:str(r.analysis_run_id)||str(cfg.analysis_run_id),\n    analysis_idempotency_key:str(r.analysis_idempotency_key)||(sid+'::'+rid),\n    source_run_id:sid, source_record_id:rid, agent_request_id:str(r.agent_request_id),\n    platform:str(r.platform), source_type:str(r.source_type), data_mode:str(r.data_mode)||'live',\n    analysis_status:'analyzed', analyzed_at:now, analysis_mode:str(cfg.analysis_mode), llm_used:false,\n    notes:'wf08 analysis ledger (exactly-once)'\n  }};\n});"
+      }
+    },
+    {
+      "id": "wf08-append-analysisruns",
+      "name": "Append analysis_runs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1320,
+        820
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "analysis_runs",
+          "mode": "name"
+        },
+        "options": {},
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        }
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "schema": [
+            {
+              "id": "agent_request_id",
+              "displayName": "agent_request_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "source_run_id",
+              "displayName": "source_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "workflow_run_id",
+              "displayName": "workflow_run_id",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "data_mode",
+              "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "force_reprocess",
+              "displayName": "force_reprocess",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "platform_filter",
+              "displayName": "platform_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "source_type_filter",
+              "displayName": "source_type_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "llm_enabled",
+              "displayName": "llm_enabled",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "llm_approval_token",
+              "displayName": "llm_approval_token",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "llm_budget_usd",
+              "displayName": "llm_budget_usd",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "request_cancelled",
+              "displayName": "request_cancelled",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "max_records",
+              "displayName": "max_records",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "defaultMatch": false,
+              "canBeUsedToMatch": false,
+              "removed": false
+            }
+          ],
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        120,
+        520
+      ],
+      "id": "wf08-subtrig",
+      "name": "When Called by Agent"
     }
   ],
   "connections": {
@@ -423,7 +646,7 @@
       "main": [
         [
           {
-            "node": "Read raw_market_records",
+            "node": "Read analysis_runs",
             "type": "main",
             "index": 0
           }
@@ -446,6 +669,11 @@
         [
           {
             "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build analysis_runs Row",
             "type": "main",
             "index": 0
           }
@@ -610,6 +838,39 @@
         [
           {
             "node": "Append to Dynamic Route Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read analysis_runs": {
+      "main": [
+        [
+          {
+            "node": "Read raw_market_records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build analysis_runs Row": {
+      "main": [
+        [
+          {
+            "node": "Append analysis_runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Set Analyzer Config",
             "type": "main",
             "index": 0
           }

@@ -1,0 +1,229 @@
+{
+  "_meta": {
+    "purpose": "Sanitized Stage 4 replay fixtures. Drive the full Telegram->plan->approval->website->WF16->WF08->WF10->WF12->outbox->completed path offline, with $0 and zero external calls.",
+    "sanitized": true,
+    "notes": "All identifiers are synthetic. Domains cashmotor.ru / carcapital.ru are the project's standing EXAMPLE competitor domains (not live targets). No tokens, no credentials, no real PII.",
+    "agent_request_id": "req_replay_0001",
+    "source_run_stamp": "firecrawl_20260621_094501"
+  },
+
+  "telegram_request_update": {
+    "update_id": 50001,
+    "message": {
+      "message_id": 8801,
+      "date": 1750497901,
+      "text": "Найди конкурентов по займам под ПТС в Москве, посмотри их сайты",
+      "from": { "id": 111111111, "is_bot": false, "first_name": "Operator" },
+      "chat": { "id": 222222222, "type": "private" }
+    }
+  },
+
+  "telegram_approval_callback": {
+    "update_id": 50002,
+    "callback_query": {
+      "id": "cbq_0001",
+      "data": "approve:req_replay_0001",
+      "from": { "id": 111111111, "is_bot": false, "first_name": "Operator" },
+      "message": { "message_id": 8802, "chat": { "id": 222222222, "type": "private" } }
+    }
+  },
+
+  "telegram_unauthorized_update": {
+    "update_id": 50003,
+    "message": {
+      "message_id": 8803,
+      "text": "найди конкурентов",
+      "from": { "id": 999999999, "is_bot": false, "first_name": "Stranger" },
+      "chat": { "id": 222222222, "type": "private" }
+    }
+  },
+
+  "apify_google_discovery": {
+    "_shape": "WF05/WF06 candidate discovery output (Apify Google SERP -> root competitor domains).",
+    "agent_request_id": "req_replay_0001",
+    "source_run_id": "apify_serp_20260621_094210",
+    "query": "займ под ПТС Москва",
+    "items_received": 8,
+    "items_relevant": 2,
+    "external_calls": 1,
+    "cost_status": "unknown",
+    "candidates": [
+      { "title": "CASHMOTOR — займы под ПТС", "root_url": "https://cashmotor.ru/", "is_competitor": true },
+      { "title": "CarCapital — деньги под залог авто", "root_url": "https://carcapital.ru/", "is_competitor": true },
+      { "title": "Сравни.ру — каталог займов", "root_url": "https://sravni.ru/", "is_competitor": false, "note": "aggregator, not a direct competitor" }
+    ]
+  },
+
+  "avito_search_cards": {
+    "_shape": "WF09 search-card discovery. Search cards are CANDIDATES, not confirmed offers. items_relevant=0; do not run WF08 until detail enrichment.",
+    "agent_request_id": "req_replay_0001",
+    "source_run_id": "apify_avito_20260621_094320",
+    "platform": "avito",
+    "items_received": 5,
+    "items_written": 5,
+    "items_relevant": 0,
+    "external_calls": 1,
+    "cost_status": "unknown",
+    "quality_status": "degraded",
+    "detail_fetch_required": true,
+    "directive": "Detail enrichment required; do not run WF08",
+    "cards": [
+      { "title": "Займ под ПТС без проверок", "search_url": "https://avito.ru/moskva?q=птс", "is_detail": false, "placeholder_title": true },
+      { "title": "Деньги под залог авто за 30 минут", "search_url": "https://avito.ru/moskva?q=залог+авто", "is_detail": false, "placeholder_title": true }
+    ]
+  },
+
+  "firecrawl_cashmotor_healthy": {
+    "_shape": "WF04 website source adapter, healthy Firecrawl scrape -> canonical live_source_runs summary + raw_market_records rows.",
+    "summary": {
+      "agent_request_id": "req_replay_0001",
+      "source_run_id": "firecrawl_20260621_094501",
+      "run_id": "firecrawl_20260621_094501",
+      "workflow_run_id": "wf04_20260621_094501",
+      "platform": "website",
+      "data_mode": "live",
+      "quality_status": "healthy",
+      "items_requested": 1,
+      "items_received": 1,
+      "items_written": 1,
+      "items_relevant": 1,
+      "external_calls": 1,
+      "cost_status": "unknown",
+      "cost_usd": null
+    },
+    "records": [
+      {
+        "agent_request_id": "req_replay_0001",
+        "source_run_id": "firecrawl_20260621_094501",
+        "source_record_id": "firecrawl_20260621_094501::cashmotor_home",
+        "platform": "website",
+        "data_mode": "live",
+        "quality_status": "healthy",
+        "report_eligible": true,
+        "llm_eligible": true,
+        "analysis_status": "pending",
+        "company_name": "CASHMOTOR",
+        "root_url": "https://cashmotor.ru/",
+        "exact_evidence_url": "https://cashmotor.ru/",
+        "title": "Займы под ПТС в Москве — CASHMOTOR",
+        "offer_hint": "Займ под ПТС до 1 500 000 ₽, ставка от 0,1% в день, без снятия с учёта",
+        "rate_hint": "от 0,1%/день",
+        "amount_hint": "до 1 500 000 ₽"
+      }
+    ]
+  },
+
+  "firecrawl_carcapital_degraded": {
+    "_shape": "WF04 website source adapter, DEGRADED/fallback Firecrawl scrape (thin content -> quarantined; must be blocked from analysis).",
+    "summary": {
+      "agent_request_id": "req_replay_0001",
+      "source_run_id": "firecrawl_20260621_094612",
+      "run_id": "firecrawl_20260621_094612",
+      "workflow_run_id": "wf04_20260621_094612",
+      "platform": "website",
+      "data_mode": "live",
+      "quality_status": "quarantined",
+      "critical_flags": "thin_content;blocked_by_robots_fallback",
+      "items_requested": 1,
+      "items_received": 1,
+      "items_written": 1,
+      "items_relevant": 0,
+      "external_calls": 1,
+      "cost_status": "unknown",
+      "cost_usd": null
+    },
+    "records": [
+      {
+        "agent_request_id": "req_replay_0001",
+        "source_run_id": "firecrawl_20260621_094612",
+        "source_record_id": "firecrawl_20260621_094612::carcapital_home",
+        "platform": "website",
+        "data_mode": "live",
+        "quality_status": "quarantined",
+        "report_eligible": false,
+        "llm_eligible": false,
+        "analysis_status": "blocked",
+        "quality_flags": "thin_content",
+        "company_name": "CarCapital",
+        "root_url": "https://carcapital.ru/",
+        "exact_evidence_url": "https://carcapital.ru/",
+        "title": "CarCapital",
+        "offer_hint": ""
+      }
+    ]
+  },
+
+  "source_health_rows": [
+    {
+      "source_run_id": "firecrawl_20260621_094501",
+      "agent_request_id": "req_replay_0001",
+      "platform": "website",
+      "quality_status": "healthy",
+      "report_eligible": true,
+      "data_mode": "live"
+    },
+    {
+      "source_run_id": "firecrawl_20260621_094612",
+      "agent_request_id": "req_replay_0001",
+      "platform": "website",
+      "quality_status": "quarantined",
+      "report_eligible": false,
+      "data_mode": "live"
+    }
+  ],
+
+  "wf08_analysis_output": {
+    "_shape": "WF08 semantic analysis of the healthy CASHMOTOR record (exactly-once). Degraded CarCapital was blocked upstream.",
+    "agent_request_id": "req_replay_0001",
+    "records_unique": 1,
+    "records_eligible": 1,
+    "records_analyzed": 1,
+    "llm_primary_calls": 0,
+    "llm_repair_calls": 0,
+    "llm_cost_status": "unknown",
+    "schema_version": "semantic-v2",
+    "results": [
+      {
+        "source_run_id": "firecrawl_20260621_094501",
+        "company_name": "CASHMOTOR",
+        "record_type": "competitor_offer",
+        "service": "pts_loan",
+        "region": "Москва/МО",
+        "rate": "от 0,1%/день",
+        "max_amount": "1 500 000 ₽",
+        "evidence_url": "https://cashmotor.ru/"
+      }
+    ]
+  },
+
+  "wf10_aggregation_output": {
+    "_shape": "WF10 request-isolated aggregation. Only the healthy, source-health-verified row survives the fail-closed gate.",
+    "agent_request_id": "req_replay_0001",
+    "time_window_days": 30,
+    "rows_after_filters": 1,
+    "rows_excluded_unverified": 1,
+    "source_mix": { "website": 1 },
+    "competitors": [
+      { "company_name": "CASHMOTOR", "service": "pts_loan", "region": "Москва/МО", "rate": "от 0,1%/день", "max_amount": "1 500 000 ₽", "evidence_url": "https://cashmotor.ru/" }
+    ],
+    "degraded_included": false,
+    "historical_comparison_enabled": false
+  },
+
+  "wf12_report": {
+    "_shape": "WF12 deterministic, factual report. Counts/prices/URLs derive from WF10 rows; optional Claude summary is OFF here (zero LLM calls).",
+    "agent_request_id": "req_replay_0001",
+    "report_id": "rep_req_replay_0001_20260621",
+    "report_data_mode": "live",
+    "rows_after_filters": 1,
+    "records_unique": 1,
+    "records_eligible": 1,
+    "records_analyzed": 1,
+    "llm_primary_calls": 0,
+    "llm_repair_calls": 0,
+    "competitor_count": 1,
+    "source_quality": { "website_runs": 2, "healthy": 1, "quarantined": 1 },
+    "summary_text": "Найден 1 прямой конкурент по займам под ПТС (Москва/МО): CASHMOTOR — ставка от 0,1%/день, до 1 500 000 ₽. Источник деградированного качества (CarCapital) исключён из отчёта.",
+    "summary_source": "deterministic"
+  }
+}

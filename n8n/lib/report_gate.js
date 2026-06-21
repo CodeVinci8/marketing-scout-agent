@@ -157,7 +157,7 @@ function rowEligible(row, elig, cfg) {
     (qs === '' || qs === 'healthy' || (qs === 'degraded' && allowDegraded)) && !reportFalse;
   // explicit operator opt-in to a fixture/manual report verifies that data too (it is watermarked downstream)
   const fixtureOptedIn = allowFixture && (dm === 'fixture' || dm === 'manual_test');
-  const verified = (healthMatched && healthEligible) || selfAttestsLive || fixtureOptedIn;
+  const verified = (healthMatched && healthEligible) || (selfAttestsLive && cfg.require_source_health !== true) || fixtureOptedIn;
   if (reasons.length === 0 && !verified && !allowUnverified) {
     reasons.push(healthMatched ? 'unverified' : (id ? 'no_source_health' : 'no_lineage'));
   }
