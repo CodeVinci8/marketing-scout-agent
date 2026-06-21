@@ -69,6 +69,8 @@ const JS_SUITES = [
   ['vk-collector', 'test_vk_collector.js'],
   // --- Storage: sheets contract validator + runtime content auditor + before/after verifier + retention ---
   ['sheets-contracts', 'test_sheets_contracts.js'],
+  // --- Safety: SSRF defense + prompt-injection guard + honest Telegram channel capability ---
+  ['url-safety', 'test_url_safety.js'],
 ];
 
 let failed = 0;
