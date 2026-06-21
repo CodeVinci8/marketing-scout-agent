@@ -1,0 +1,37 @@
+# EXAMPLE pinned n8n compose for Marketing Scout (QA-010). This is a TEMPLATE, not the live file.
+# Do NOT overwrite /opt/n8n/docker-compose.yml with this — see docs/N8N_VERSION_PINNING.md for the operator-only
+# diff recommendation. The point of this file: pin the EXACT tested image tag so a silent floating-tag upgrade
+# can never change runtime behavior (the Stage 1/2 acceptance run was done against n8n 2.23.3).
+#
+# Tested tag: n8nio/n8n:2.23.3  (verified image id sha256:c0c39b1ca69d43f736bc65f8ddd70972a8989f736e8a4b6a075823f98cc48a23).
+# No image digest is hard-pinned here on purpose (a digest can drift per-registry/arch and would be "invented");
+# scripts/check_n8n_runtime.sh verifies the RUNNING image id against the tested one at deploy time instead.
+
+services:
+  n8n:
+    # PINNED — never ":latest". A floating tag is treated as unsafe by scripts/check_n8n_runtime.sh unless
+    # MS_ALLOW_FLOATING_N8N_IMAGE=true is set explicitly.
+    image: n8nio/n8n:2.23.3
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      # REQUIRED so the XLSX writer Code node (WF24/WF25) can load Node's built-in zlib in the sandbox.
+      - NODE_FUNCTION_ALLOW_BUILTIN=zlib
+      # Non-secret runtime config (see ops/n8n/runtime.env.example). Real secrets stay in the credential store.
+      - MS_SPREADSHEET_ID=${MS_SPREADSHEET_ID}
+      - MS_TELEGRAM_ALLOWED_USER_IDS=${MS_TELEGRAM_ALLOWED_USER_IDS}
+      - MS_MONITORING_ENABLED=${MS_MONITORING_ENABLED:-false}
+      - MS_WEEKLY_DIGEST_ENABLED=${MS_WEEKLY_DIGEST_ENABLED:-false}
+      - MS_ENABLE_LLM_PLANNER=${MS_ENABLE_LLM_PLANNER:-false}
+      - MS_ENABLE_LLM_SUMMARY=${MS_ENABLE_LLM_SUMMARY:-false}
+      # Pin generic n8n basics (adjust to your host).
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Moscow}
+    volumes:
+      # Persist n8n's own data (workflows/credentials/SQLite or external DB). This is the PRODUCTION volume and is
+      # NEVER mounted into any disposable smoke container.
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  n8n_data:
