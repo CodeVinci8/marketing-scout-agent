@@ -1,6 +1,6 @@
 {
   "generated_by": "tools/gen_workflow_manifest.js",
-  "purpose": "Data-driven capability + archive-safety classification for every workflow. Default action is RETAIN; nothing is archived while any caller/test/deploy/trigger references it (Section 1 of the reporting-UX phase).",
+  "purpose": "Single source of truth for capability/archive classification AND the production deployment plan (runtime closure, import order, sub-workflow binding edges, activation policy). Derived from the workflow Execute Sub-workflow graph + the POLICY block in the generator; the deploy/smoke tooling consumes deployment.* so the runtime set is defined in exactly one place.",
   "workflow_count": 31,
   "capability_classes": [
     "production_entrypoint",
@@ -9,17 +9,208 @@
     "manual_diagnostic",
     "legacy_referenced"
   ],
+  "deployment": {
+    "n8n_version": "2.23.3",
+    "runtime_roots": [
+      "17_agent_settings_config.json",
+      "18_telegram_agent_gateway.json",
+      "19_request_planner.json",
+      "20_agent_orchestrator.json",
+      "21_deep_competitor_analysis.json",
+      "22_conversation_control.json",
+      "23_scheduled_source_monitor.json",
+      "24_report_export_delivery.json",
+      "25_weekly_digest.json",
+      "26_vk_public_community_collector.json"
+    ],
+    "runtime_closure": [
+      "04_firecrawl_url_list_resilient.json",
+      "08_touchpoint_analyzer.json",
+      "10_competitor_audience_intelligence_aggregator.json",
+      "12_market_intelligence_report_builder.json",
+      "16_source_quality_gate_health_score.json",
+      "17_agent_settings_config.json",
+      "18_telegram_agent_gateway.json",
+      "19_request_planner.json",
+      "20_agent_orchestrator.json",
+      "21_deep_competitor_analysis.json",
+      "22_conversation_control.json",
+      "23_scheduled_source_monitor.json",
+      "24_report_export_delivery.json",
+      "25_weekly_digest.json",
+      "26_vk_public_community_collector.json"
+    ],
+    "runtime_workflow_count": 15,
+    "import_order": [
+      "17_agent_settings_config.json",
+      "04_firecrawl_url_list_resilient.json",
+      "08_touchpoint_analyzer.json",
+      "10_competitor_audience_intelligence_aggregator.json",
+      "12_market_intelligence_report_builder.json",
+      "16_source_quality_gate_health_score.json",
+      "26_vk_public_community_collector.json",
+      "19_request_planner.json",
+      "20_agent_orchestrator.json",
+      "21_deep_competitor_analysis.json",
+      "22_conversation_control.json",
+      "24_report_export_delivery.json",
+      "18_telegram_agent_gateway.json",
+      "23_scheduled_source_monitor.json",
+      "25_weekly_digest.json"
+    ],
+    "callable_targets": [
+      "04_firecrawl_url_list_resilient.json",
+      "08_touchpoint_analyzer.json",
+      "10_competitor_audience_intelligence_aggregator.json",
+      "12_market_intelligence_report_builder.json",
+      "16_source_quality_gate_health_score.json",
+      "26_vk_public_community_collector.json"
+    ],
+    "binding_edges": [
+      {
+        "caller_workflow": "20_agent_orchestrator.json",
+        "caller_wf": "WF20",
+        "caller_node": "Run WF08 Analyzer",
+        "target_workflow": "08_touchpoint_analyzer.json",
+        "target_wf": "WF08",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "20_agent_orchestrator.json",
+        "caller_wf": "WF20",
+        "caller_node": "Run WF10 Aggregator",
+        "target_workflow": "10_competitor_audience_intelligence_aggregator.json",
+        "target_wf": "WF10",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "20_agent_orchestrator.json",
+        "caller_wf": "WF20",
+        "caller_node": "Run WF12 Report",
+        "target_workflow": "12_market_intelligence_report_builder.json",
+        "target_wf": "WF12",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "20_agent_orchestrator.json",
+        "caller_wf": "WF20",
+        "caller_node": "Run WF16 Quality Gate",
+        "target_workflow": "16_source_quality_gate_health_score.json",
+        "target_wf": "WF16",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "20_agent_orchestrator.json",
+        "caller_wf": "WF20",
+        "caller_node": "Run Website Source (WF04)",
+        "target_workflow": "04_firecrawl_url_list_resilient.json",
+        "target_wf": "WF04",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "21_deep_competitor_analysis.json",
+        "caller_wf": "WF21",
+        "caller_node": "Collect Deep Evidence (WF04)",
+        "target_workflow": "04_firecrawl_url_list_resilient.json",
+        "target_wf": "WF04",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "23_scheduled_source_monitor.json",
+        "caller_wf": "WF23",
+        "caller_node": "Run VK Check (WF26)",
+        "target_workflow": "26_vk_public_community_collector.json",
+        "target_wf": "WF26",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "23_scheduled_source_monitor.json",
+        "caller_wf": "WF23",
+        "caller_node": "Run Website Check (WF04)",
+        "target_workflow": "04_firecrawl_url_list_resilient.json",
+        "target_wf": "WF04",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      }
+    ],
+    "binding_edge_count": 8,
+    "activation": {
+      "always": [
+        "18_telegram_agent_gateway.json"
+      ],
+      "when_monitoring": [
+        "23_scheduled_source_monitor.json"
+      ],
+      "when_weekly_digest": [
+        "25_weekly_digest.json"
+      ],
+      "never_callable": [
+        "04_firecrawl_url_list_resilient.json",
+        "08_touchpoint_analyzer.json",
+        "10_competitor_audience_intelligence_aggregator.json",
+        "12_market_intelligence_report_builder.json",
+        "16_source_quality_gate_health_score.json",
+        "26_vk_public_community_collector.json"
+      ],
+      "callable_trigger_count": 6
+    },
+    "requires_runtime": {
+      "xlsx_zlib": [
+        "24_report_export_delivery.json",
+        "25_weekly_digest.json"
+      ]
+    },
+    "expected_active_after_import": [],
+    "excluded_from_runtime": [
+      "00_healthcheck_manual_test.json",
+      "01_google_sheets_append_row_test.json",
+      "02_claude_api_single_record_analysis.json",
+      "02_claude_api_single_record_v2_baseline_raw_json.json",
+      "02_claude_api_single_record_v2_extended_tests.json",
+      "02_claude_api_single_record_v2_resilient_router_production.json",
+      "02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json",
+      "03_firecrawl_single_url_resilient.json",
+      "05_apify_search_candidate_discovery.json",
+      "06_approved_candidates_runner.json",
+      "07_manual_touchpoint_intake.json",
+      "09_avito_classifieds_listing_connector.json",
+      "11_social_source_connector_foundation.json",
+      "13_public_discussion_or_reviews_connector_foundation.json",
+      "14_public_lead_signal_triage.json",
+      "15_live_source_run_logger.json"
+    ]
+  },
   "deploy_import_order": [
     "17_agent_settings_config.json",
-    "18_telegram_agent_gateway.json",
+    "04_firecrawl_url_list_resilient.json",
+    "08_touchpoint_analyzer.json",
+    "10_competitor_audience_intelligence_aggregator.json",
+    "12_market_intelligence_report_builder.json",
+    "16_source_quality_gate_health_score.json",
+    "26_vk_public_community_collector.json",
     "19_request_planner.json",
     "20_agent_orchestrator.json",
     "21_deep_competitor_analysis.json",
     "22_conversation_control.json",
-    "23_scheduled_source_monitor.json",
     "24_report_export_delivery.json",
-    "25_weekly_digest.json",
-    "26_vk_public_community_collector.json"
+    "18_telegram_agent_gateway.json",
+    "23_scheduled_source_monitor.json",
+    "25_weekly_digest.json"
   ],
   "trigger_workflows_always": [
     "18_telegram_agent_gateway.json"
@@ -27,16 +218,16 @@
   "trigger_workflows_when_monitoring": [
     "23_scheduled_source_monitor.json"
   ],
+  "trigger_workflows_when_weekly_digest": [
+    "25_weekly_digest.json"
+  ],
   "archive_safe_candidates": [
-    "00_healthcheck_manual_test.json",
-    "01_google_sheets_append_row_test.json",
     "02_claude_api_single_record_analysis.json",
     "02_claude_api_single_record_v2_baseline_raw_json.json",
     "02_claude_api_single_record_v2_extended_tests.json",
     "02_claude_api_single_record_v2_resilient_router_production.json",
     "02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json",
-    "03_firecrawl_single_url_resilient.json",
-    "15_live_source_run_logger.json"
+    "03_firecrawl_single_url_resilient.json"
   ],
   "workflows": [
     {
@@ -52,15 +243,22 @@
         "manual-only"
       ],
       "capability_class": "manual_diagnostic",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
-      "referenced_by_test": false,
-      "archive_safe_candidate": true,
-      "retain_reason": "",
-      "action": "review_for_archive"
+      "trigger_when_weekly_digest": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
     },
     {
       "file": "01_google_sheets_append_row_test.json",
@@ -75,15 +273,22 @@
         "manual-only"
       ],
       "capability_class": "manual_diagnostic",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
-      "referenced_by_test": false,
-      "archive_safe_candidate": true,
-      "retain_reason": "",
-      "action": "review_for_archive"
+      "trigger_when_weekly_digest": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
     },
     {
       "file": "02_claude_api_single_record_analysis.json",
@@ -98,11 +303,18 @@
         "manual-only"
       ],
       "capability_class": "manual_diagnostic",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": false,
       "archive_safe_candidate": true,
       "retain_reason": "",
@@ -121,11 +333,18 @@
         "manual-only"
       ],
       "capability_class": "manual_diagnostic",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": false,
       "archive_safe_candidate": true,
       "retain_reason": "",
@@ -144,11 +363,18 @@
         "manual-only"
       ],
       "capability_class": "manual_diagnostic",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": false,
       "archive_safe_candidate": true,
       "retain_reason": "",
@@ -167,11 +393,18 @@
         "manual-only"
       ],
       "capability_class": "manual_diagnostic",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": false,
       "archive_safe_candidate": true,
       "retain_reason": "",
@@ -190,11 +423,18 @@
         "manual-only"
       ],
       "capability_class": "manual_diagnostic",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": false,
       "archive_safe_candidate": true,
       "retain_reason": "",
@@ -213,11 +453,18 @@
         "manual-only"
       ],
       "capability_class": "manual_diagnostic",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": false,
       "archive_safe_candidate": true,
       "retain_reason": "",
@@ -238,18 +485,25 @@
         "manual-diagnostic"
       ],
       "capability_class": "production_dependency",
+      "deployment_role": "callable_dependency",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
       "called_by": [
         "20_agent_orchestrator.json",
         "21_deep_competitor_analysis.json",
         "23_scheduled_source_monitor.json"
       ],
       "calls": [],
-      "imported_by_deploy": false,
+      "binding_nodes": [],
+      "requires_runtime": [],
+      "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "called_by:20_agent_orchestrator.json,21_deep_competitor_analysis.json,23_scheduled_source_monitor.json; referenced_by_test",
+      "retain_reason": "called_by:20_agent_orchestrator.json,21_deep_competitor_analysis.json,23_scheduled_source_monitor.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -265,11 +519,18 @@
         "manual-only"
       ],
       "capability_class": "legacy_referenced",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
       "retain_reason": "referenced_by_test",
@@ -288,11 +549,18 @@
         "manual-only"
       ],
       "capability_class": "legacy_referenced",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
       "retain_reason": "referenced_by_test",
@@ -311,11 +579,18 @@
         "manual-only"
       ],
       "capability_class": "legacy_referenced",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
       "retain_reason": "referenced_by_test",
@@ -336,16 +611,23 @@
         "manual-diagnostic"
       ],
       "capability_class": "production_dependency",
+      "deployment_role": "callable_dependency",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
       "called_by": [
         "20_agent_orchestrator.json"
       ],
       "calls": [],
-      "imported_by_deploy": false,
+      "binding_nodes": [],
+      "requires_runtime": [],
+      "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test",
+      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -361,11 +643,18 @@
         "manual-only"
       ],
       "capability_class": "optional_source_adapter",
+      "deployment_role": "optional_source_adapter",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
       "retain_reason": "referenced_by_test",
@@ -386,16 +675,23 @@
         "manual-diagnostic"
       ],
       "capability_class": "production_dependency",
+      "deployment_role": "callable_dependency",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
       "called_by": [
         "20_agent_orchestrator.json"
       ],
       "calls": [],
-      "imported_by_deploy": false,
+      "binding_nodes": [],
+      "requires_runtime": [],
+      "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test",
+      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -411,11 +707,18 @@
         "manual-only"
       ],
       "capability_class": "optional_source_adapter",
+      "deployment_role": "optional_source_adapter",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
       "retain_reason": "referenced_by_test",
@@ -436,16 +739,23 @@
         "manual-diagnostic"
       ],
       "capability_class": "production_dependency",
+      "deployment_role": "callable_dependency",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
       "called_by": [
         "20_agent_orchestrator.json"
       ],
       "calls": [],
-      "imported_by_deploy": false,
+      "binding_nodes": [],
+      "requires_runtime": [],
+      "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test",
+      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -461,11 +771,18 @@
         "manual-only"
       ],
       "capability_class": "optional_source_adapter",
+      "deployment_role": "optional_source_adapter",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
       "retain_reason": "referenced_by_test",
@@ -484,11 +801,18 @@
         "manual-only"
       ],
       "capability_class": "legacy_referenced",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
       "retain_reason": "referenced_by_test",
@@ -506,16 +830,23 @@
       "classification": [
         "manual-only"
       ],
-      "capability_class": "manual_diagnostic",
+      "capability_class": "legacy_referenced",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": false,
       "trigger_always": false,
       "trigger_when_monitoring": false,
-      "referenced_by_test": false,
-      "archive_safe_candidate": true,
-      "retain_reason": "",
-      "action": "review_for_archive"
+      "trigger_when_weekly_digest": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
     },
     {
       "file": "16_source_quality_gate_health_score.json",
@@ -532,16 +863,23 @@
         "manual-diagnostic"
       ],
       "capability_class": "production_dependency",
+      "deployment_role": "callable_dependency",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
       "called_by": [
         "20_agent_orchestrator.json"
       ],
       "calls": [],
-      "imported_by_deploy": false,
+      "binding_nodes": [],
+      "requires_runtime": [],
+      "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test",
+      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -557,14 +895,21 @@
         "manual-only"
       ],
       "capability_class": "production_dependency",
+      "deployment_role": "orchestration",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "retain_reason": "referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -580,14 +925,21 @@
         "public"
       ],
       "capability_class": "production_entrypoint",
+      "deployment_role": "entrypoint",
+      "runtime": true,
+      "activation_flag": "always",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": true,
       "trigger_always": true,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_deploy_import_order; trigger_entrypoint",
+      "retain_reason": "referenced_by_test; in_runtime_closure; trigger_entrypoint",
       "action": "retain"
     },
     {
@@ -603,14 +955,21 @@
         "manual-only"
       ],
       "capability_class": "production_dependency",
+      "deployment_role": "orchestration",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "retain_reason": "referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -626,6 +985,10 @@
         "manual-only"
       ],
       "capability_class": "production_dependency",
+      "deployment_role": "orchestration",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
       "called_by": [],
       "calls": [
         "04_firecrawl_url_list_resilient.json",
@@ -634,12 +997,36 @@
         "12_market_intelligence_report_builder.json",
         "16_source_quality_gate_health_score.json"
       ],
+      "binding_nodes": [
+        {
+          "node": "Run WF08 Analyzer",
+          "target": "WF08"
+        },
+        {
+          "node": "Run WF10 Aggregator",
+          "target": "WF10"
+        },
+        {
+          "node": "Run WF12 Report",
+          "target": "WF12"
+        },
+        {
+          "node": "Run WF16 Quality Gate",
+          "target": "WF16"
+        },
+        {
+          "node": "Run Website Source (WF04)",
+          "target": "WF04"
+        }
+      ],
+      "requires_runtime": [],
       "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "retain_reason": "referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -655,16 +1042,28 @@
         "manual-only"
       ],
       "capability_class": "production_dependency",
+      "deployment_role": "orchestration",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
       "called_by": [],
       "calls": [
         "04_firecrawl_url_list_resilient.json"
       ],
+      "binding_nodes": [
+        {
+          "node": "Collect Deep Evidence (WF04)",
+          "target": "WF04"
+        }
+      ],
+      "requires_runtime": [],
       "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "retain_reason": "referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -680,14 +1079,21 @@
         "manual-only"
       ],
       "capability_class": "production_dependency",
+      "deployment_role": "orchestration",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "retain_reason": "referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -705,17 +1111,33 @@
         "manual-diagnostic"
       ],
       "capability_class": "production_entrypoint",
+      "deployment_role": "entrypoint",
+      "runtime": true,
+      "activation_flag": "MS_MONITORING_ENABLED",
+      "expected_active": false,
       "called_by": [],
       "calls": [
         "04_firecrawl_url_list_resilient.json",
         "26_vk_public_community_collector.json"
       ],
+      "binding_nodes": [
+        {
+          "node": "Run VK Check (WF26)",
+          "target": "WF26"
+        },
+        {
+          "node": "Run Website Check (WF04)",
+          "target": "WF04"
+        }
+      ],
+      "requires_runtime": [],
       "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": true,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_deploy_import_order; trigger_entrypoint",
+      "retain_reason": "referenced_by_test; in_runtime_closure; trigger_entrypoint",
       "action": "retain"
     },
     {
@@ -733,14 +1155,23 @@
         "manual-diagnostic"
       ],
       "capability_class": "production_dependency",
+      "deployment_role": "orchestration",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [
+        "NODE_FUNCTION_ALLOW_BUILTIN:zlib"
+      ],
       "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "retain_reason": "referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -760,14 +1191,23 @@
         "manual-diagnostic"
       ],
       "capability_class": "production_entrypoint",
+      "deployment_role": "entrypoint",
+      "runtime": true,
+      "activation_flag": "MS_WEEKLY_DIGEST_ENABLED",
+      "expected_active": false,
       "called_by": [],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [
+        "NODE_FUNCTION_ALLOW_BUILTIN:zlib"
+      ],
       "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": true,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "retain_reason": "referenced_by_test; in_runtime_closure; trigger_entrypoint",
       "action": "retain"
     },
     {
@@ -785,16 +1225,23 @@
         "manual-diagnostic"
       ],
       "capability_class": "production_dependency",
+      "deployment_role": "callable_dependency",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
       "called_by": [
         "23_scheduled_source_monitor.json"
       ],
       "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
       "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "called_by:23_scheduled_source_monitor.json; referenced_by_test; in_deploy_import_order",
+      "retain_reason": "called_by:23_scheduled_source_monitor.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     }
   ]
