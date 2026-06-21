@@ -59,6 +59,10 @@ const JS_SUITES = [
   ['report-compare', 'test_report_compare.js'],
   ['report-filter', 'test_report_filter.js'],
   ['refresh-policy', 'test_refresh_policy.js'],
+  // --- Reporting UX phase: scope/cost preview + progress UX + weekly digest ---
+  ['scope-preview', 'test_scope_preview.js'],
+  ['progress-tracker', 'test_progress_tracker.js'],
+  ['weekly-digest', 'test_weekly_digest.js'],
 ];
 
 let failed = 0;

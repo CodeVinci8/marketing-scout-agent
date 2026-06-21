@@ -50,6 +50,9 @@ test-js:
 	node tests/test_report_compare.js
 	node tests/test_report_filter.js
 	node tests/test_refresh_policy.js
+	node tests/test_scope_preview.js
+	node tests/test_progress_tracker.js
+	node tests/test_weekly_digest.js
 
 test-wf:
 	python3 scripts/validate_workflows.py
