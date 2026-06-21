@@ -4,6 +4,26 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-21 (session 23) — Reporting UX & release-verification phase (DEC-155)
+
+**Status (exact):** branch `feat/reporting-ux-and-release-verification` (baseline `b7a95c1`). **$0, 0 external
+calls, all 31 workflows `active=false`, NOT pushed/merged/imported, no credentials.** Built reporting outputs
+(scoped CSV/XLSX/charts, evidence, compare, NL filter, smart refresh), conversation UX (scope/cost preview in
+WF19, progress in WF20, weekly digest WF25), optional VK public-community collector (`vk_collector.js` + WF26 +
+WF23 edge — *structurally implemented, offline-tested, live-unverified*), honest Telegram channel capability,
+URL SSRF + prompt-injection safety, and the storage layer (`sheets_contracts.json` + validator + `sheet_audit` +
+`retention_policy`). New WF24/25/26; libs embedded drift-proof.
+
+**Commits this session (local only):** `6478ac0` progress/scope/digest libs · `8fc91bf` reporting WF integration
+· `673a5bd` VK collector · `9cc2068` storage contracts/retention · `b9bec47` url-safety + telegram channel +
+capability matrix · (+ test(release) e2e/docs commit). `make test` ALL SUITES PASS (external calls=0, $0).
+
+**Next:** operator review → optional push/PR; credentialed staging test for VK + Telegram bot-update before
+marking production-live; n8n import remains unproven (CLI absent). See
+`docs/REPORTING_UX_AND_RELEASE_VERIFICATION.md`.
+
+---
+
 ## Session: 2026-06-21 (session 22) — Release hardening: proactive delivery + scheduled monitoring (DEC-153)
 
 **Status (exact):** final automated release-hardening before controlled install. Branch

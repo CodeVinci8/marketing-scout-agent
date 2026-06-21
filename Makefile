@@ -57,6 +57,7 @@ test-js:
 	node tests/test_vk_collector.js
 	node tests/test_sheets_contracts.js
 	node tests/test_url_safety.js
+	node tests/test_reporting_e2e.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

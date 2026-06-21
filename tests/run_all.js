@@ -71,6 +71,8 @@ const JS_SUITES = [
   ['sheets-contracts', 'test_sheets_contracts.js'],
   // --- Safety: SSRF defense + prompt-injection guard + honest Telegram channel capability ---
   ['url-safety', 'test_url_safety.js'],
+  // --- Capstone: full offline conversational E2E (request->preview->report->exports->VK->digest->audit) ---
+  ['reporting-e2e', 'test_reporting_e2e.js'],
 ];
 
 let failed = 0;
