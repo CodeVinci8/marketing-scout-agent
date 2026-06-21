@@ -42,7 +42,7 @@ A.ok('WF25 has NO public webhook', !WF25.nodes.some(n => n.type === 'n8n-nodes-b
 A.section('WF24 embeds the reporting libraries with no drift');
 const EMBED24 = [['Select & Scope Report', 'report_export'], ['Build Scope Preview', 'scope_preview'], ['Init Progress', 'progress_tracker'],
   ['Apply Action', 'report_filter'], ['Apply Action', 'report_compare'], ['Apply Action', 'refresh_policy'], ['Apply Action', 'evidence'],
-  ['Build Exports & Outbox', 'report_export'], ['Build Exports & Outbox', 'xlsx_writer'], ['Build Exports & Outbox', 'report_package'], ['Build Exports & Outbox', 'report_charts'], ['Build Exports & Outbox', 'telegram_io']];
+  ['Build Exports & Outbox', 'report_export'], ['Build Exports & Outbox', 'xlsx_writer'], ['Build Exports & Outbox', 'report_package'], ['Build Exports & Outbox', 'report_charts'], ['Build Exports & Outbox', 'attachment_router'], ['Build Exports & Outbox', 'telegram_io']];
 for (const [node, lib] of EMBED24) A.eq('WF24 ' + node + ' embeds ' + lib, extract(nodeCode(WF24, node), lib), libCore(lib));
 A.eq('WF25 Build Weekly Digest embeds weekly_digest', extract(nodeCode(WF25, 'Build Weekly Digest'), 'weekly_digest'), libCore('weekly_digest'));
 A.eq('WF25 attachments embed report_package', extract(nodeCode(WF25, 'Build Digest Attachments'), 'report_package'), libCore('report_package'));
@@ -50,7 +50,9 @@ A.eq('WF25 attachments embed report_package', extract(nodeCode(WF25, 'Build Dige
 A.section('WF24 Telegram delivery + outbox paths actually exist');
 const senders = WF24.nodes.filter(n => n.type === 'n8n-nodes-base.httpRequest');
 A.ok('WF24 has a sendDocument node', senders.some(n => /sendDocument/.test(n.parameters.url)));
-A.ok('WF24 has a sendPhoto node', senders.some(n => /sendPhoto/.test(n.parameters.url)));
+// QA-004: the chart is an SVG (vector); it MUST be uploaded via sendDocument, never sendPhoto.
+A.ok('WF24 has NO sendPhoto node (SVG never goes via sendPhoto)', !senders.some(n => /sendPhoto/.test(n.parameters.url)));
+A.ok('WF24 sends the SVG chart via sendDocument', senders.some(n => /Send Chart/.test(n.name) && /sendDocument/.test(n.parameters.url)));
 A.ok('WF24 sendDocument uploads binary multipart', senders.some(n => n.parameters.contentType === 'multipart-form-data'));
 A.ok('WF24 appends attachment_outbox', WF24.nodes.some(n => n.type === 'n8n-nodes-base.googleSheets' && n.parameters.operation === 'append' && n.parameters.sheetName.value === 'attachment_outbox'));
 A.ok('WF24 no Claude/external collector node', !WF24.nodes.some(n => /anthropic|firecrawl|apify|api\.vk\.com/.test(JSON.stringify(n.parameters || {}))));

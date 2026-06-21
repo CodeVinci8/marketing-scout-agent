@@ -58,6 +58,11 @@ test-js:
 	node tests/test_sheets_contracts.js
 	node tests/test_url_safety.js
 	node tests/test_reporting_e2e.js
+	node tests/test_workflow_manifest.js
+	node tests/test_binding_tool.js
+	node tests/test_deploy_preflight.js
+	node tests/test_attachment_routing.js
+	node tests/test_smoke_hardening.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

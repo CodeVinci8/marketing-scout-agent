@@ -1,0 +1,40 @@
+{
+  "id": "fixturechildwf",
+  "name": "FIXTURE child callable",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "schema": [
+            { "id": "ping", "displayName": "ping", "required": false, "type": "string", "display": true, "defaultMatch": false, "canBeUsedToMatch": false, "removed": false }
+          ],
+          "matchingColumns": [], "attemptToConvertTypes": false, "convertFieldsToString": false
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "id": "cfx-trig",
+      "name": "When Called by Parent"
+    },
+    {
+      "parameters": {
+        "jsCode": "// QA-003: child echoes the parent's named input so the parent can prove the round trip.\nvar ping = ($json && $json.ping) ? String($json.ping) : '';\nreturn [{ json: { child_ran: true, echo: ping, marker: 'child-roundtrip-ok' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "cfx-code",
+      "name": "Child Echo"
+    }
+  ],
+  "connections": {
+    "When Called by Parent": { "main": [[{ "node": "Child Echo", "type": "main", "index": 0 }]] }
+  }
+}

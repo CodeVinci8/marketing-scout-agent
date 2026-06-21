@@ -1,68 +1,108 @@
 #!/usr/bin/env bash
-# n8n_import_smoke.sh — fully DISPOSABLE n8n import smoke test. Proves the agent workflows import cleanly into a
-# real n8n, captures the assigned workflow IDs, confirms every workflow is INACTIVE, and verifies the callable
-# sub-workflow targets are present — all inside a throwaway N8N_USER_FOLDER (its own SQLite DB) that is deleted on
-# exit. It NEVER touches the production n8n database/folder, NEVER activates/publishes, NEVER calls a paid API or
-# overwrites credentials. If n8n is not installed it prints the exact manual command and exits 0 (nothing proven).
+# n8n_import_smoke.sh — FAIL-CLOSED disposable import smoke (QA-007/011). Stages the runtime closure with stable
+# ids, imports it INACTIVE into a throwaway n8n 2.23.3, auto-binds the 8 Execute Sub-workflow edges, exports and
+# verifies (exact count, zero placeholders, 8 edges, all inactive), then repeats the deploy to prove idempotency.
+# Everything is derived from config/workflow_manifest.json — no hard-coded workflow list.
+#
+# Disposable by construction (scripts/lib/disposable_n8n.sh): verified image, --network none, throwaway SQLite,
+# repo read-only, --rm, no credentials, no production volume, nothing activated.
+#
+# Fail-closed: EVERY mandatory verification failure propagates a non-zero exit. A failed mandatory step is NEVER
+# followed by a final PASS. POSIX/BusyBox-safe (no `find -printf`, no bashisms in the in-container script).
+#
+# Machine-readable output:
+#   RUNTIME_WORKFLOWS_EXPECTED=15  RUNTIME_WORKFLOWS_IMPORTED=15  MISSING_WORKFLOWS=0  EXTRA_WORKFLOWS=0
+#   DUPLICATE_WORKFLOWS=0  PLACEHOLDER_BINDINGS=0  RESOLVED_EDGES=8  ACTIVE_WORKFLOWS=0  REPEAT_DEPLOY=PASS
+#   PRODUCTION_UNTOUCHED=true  DISPOSABLE_IMPORT=PASS
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WF_DIR="${ROOT}/n8n/workflows"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=scripts/lib/disposable_n8n.sh
+. "${ROOT}/scripts/lib/disposable_n8n.sh"
 
-# The callable sub-workflow targets that MUST be importable (each now carries an Execute Sub-workflow Trigger).
-CALLABLES=( "04_firecrawl_url_list_resilient.json" "08_touchpoint_analyzer.json" \
-  "10_competitor_audience_intelligence_aggregator.json" "12_market_intelligence_report_builder.json" \
-  "16_source_quality_gate_health_score.json" )
-# The trigger/entry workflows the agent imports (config first, orchestrator last).
-AGENT_WF=( "17_agent_settings_config.json" "18_telegram_agent_gateway.json" "19_request_planner.json" \
-  "20_agent_orchestrator.json" "21_deep_competitor_analysis.json" "22_conversation_control.json" \
-  "23_scheduled_source_monitor.json" )
+EXPECTED="$(node "${ROOT}/tools/manifest_lib.js" runtime-count)"
+EDGES="$(node "${ROOT}/tools/manifest_lib.js" binding-count)"
 
-say() { printf '%s\n' "$*"; }
-
-if ! command -v n8n >/dev/null 2>&1; then
-  say "n8n CLI not installed here — import compatibility is NOT proven by this run."
-  say "Run this exact disposable import in an environment that has n8n (throwaway DB, nothing activated):"
-  say ""
-  say "    export N8N_USER_FOLDER=\"\$(mktemp -d)\""
-  say "    n8n import:workflow --separate --input='${WF_DIR}'   # into the throwaway sqlite under \$N8N_USER_FOLDER"
-  say "    n8n list:workflow                                    # capture assigned IDs (all active=false)"
-  say "    rm -rf \"\$N8N_USER_FOLDER\"                            # delete the throwaway DB"
-  say ""
-  say "It never activates/publishes and never touches the production database."
+if ! disp_docker_ready; then
+  disp_skip "docker or the n8n image is unavailable — disposable import smoke needs the container"
+  echo "RUNTIME_WORKFLOWS_EXPECTED=${EXPECTED}"; echo "DISPOSABLE_IMPORT=SKIPPED"; echo "PRODUCTION_UNTOUCHED=true"
   exit 0
 fi
 
-say "n8n CLI: $(n8n --version 2>/dev/null | head -1)"
-TMP="$(mktemp -d)"
-cleanup() { rm -rf "$TMP"; say "cleaned up throwaway folder: $TMP"; }
-trap cleanup EXIT
-export N8N_USER_FOLDER="$TMP"
-say "disposable N8N_USER_FOLDER=$N8N_USER_FOLDER (never the production folder)"
+WORK="$(mktemp -d)"; chmod 777 "$WORK"
+trap 'rm -rf "$WORK"' EXIT
 
-say ">> importing all agent + callable workflows into the throwaway DB (active=false preserved)"
-n8n import:workflow --separate --input="${WF_DIR}"
-
-say ">> assigned workflow IDs (all must be active=false):"
-LISTING="$(n8n list:workflow 2>/dev/null || true)"
-printf '%s\n' "$LISTING"
-
-# Post-import sub-workflow reference verification: every callable target must be present in the imported set.
-missing=0
-for f in "${CALLABLES[@]}" "${AGENT_WF[@]}"; do
-  nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
-  if printf '%s\n' "$LISTING" | grep -qF "$nm"; then
-    say "  [ok]   imported: ${f}"
-  else
-    say "  [MISS] not found after import: ${f}"; missing=1
-  fi
+# The whole import → bind → verify → repeat cycle runs INSIDE one disposable container (node + n8n both present).
+INNER='
+set -e
+node /repo/tools/stage_runtime_workflows.js /work/staged >/dev/null 2>&1
+echo ">> importing staged runtime workflows (inactive)"
+n8n import:workflow --separate --input=/work/staged --activeState=false >/dev/null 2>&1
+mkdir -p /work/exp; n8n export:workflow --all --separate --output=/work/exp >/dev/null 2>&1
+echo ">> auto-binding sub-workflow ids"
+node /repo/tools/bind_n8n_workflow_ids.js --dir /work/exp --report /work/bind.json >/dev/null 2>&1 || true
+mkdir -p /work/callers
+for f in /work/exp/*.json; do
+  if grep -q "n8n-nodes-base.executeWorkflow\"" "$f"; then cp "$f" /work/callers/; fi
 done
+n8n import:workflow --separate --input=/work/callers --activeState=false >/dev/null 2>&1
+mkdir -p /work/ver; n8n export:workflow --all --separate --output=/work/ver >/dev/null 2>&1
+echo "=== FIRST_DEPLOY ==="
+node /repo/tools/smoke_report.js /work/ver /work/bind.json
+echo "LIST_COUNT_1=$(n8n list:workflow 2>/dev/null | grep -c "|")"
+echo "ACTIVE_COUNT_1=$(n8n list:workflow --active=true 2>/dev/null | grep -c "|")"
+echo ">> repeat deploy (idempotency)"
+n8n import:workflow --separate --input=/work/staged --activeState=false >/dev/null 2>&1
+n8n import:workflow --separate --input=/work/callers --activeState=false >/dev/null 2>&1
+mkdir -p /work/rep; n8n export:workflow --all --separate --output=/work/rep >/dev/null 2>&1
+echo "=== REPEAT_DEPLOY ==="
+node /repo/tools/smoke_report.js /work/rep /work/bind.json
+echo "LIST_COUNT_2=$(n8n list:workflow 2>/dev/null | grep -c "|")"
+'
 
-# Independent inactive guard (the JSON enforces it; assert it again here).
-for f in "${CALLABLES[@]}" "${AGENT_WF[@]}"; do
-  node -e 'const w=require(process.argv[1]); if(w.active!==false){console.error("active!=false: "+process.argv[1]); process.exit(1)}' "${WF_DIR}/${f}"
-done
-say "  [ok]   every imported workflow is active=false (nothing activated)"
+echo "n8n disposable import smoke (image=$(disp_image))"
+echo "----------------------------------------------------------------------"
+OUT="$(disp_run "$ROOT" "$WORK" "" "$INNER" 2>&1 | disp_filter || true)"
+printf '%s\n' "$OUT"
+echo "----------------------------------------------------------------------"
 
-if [ "$missing" -ne 0 ]; then say "SMOKE FAILED: a workflow was missing after import."; exit 1; fi
-say "SMOKE OK: all workflows imported INACTIVE into a throwaway DB; nothing activated, production untouched."
+field() { printf '%s\n' "$OUT" | grep "^$1=" | head -1 | cut -d= -f2 || true; }
+
+IMPORTED="$(field RUNTIME_WORKFLOWS_IMPORTED)"
+MISSING="$(field MISSING_WORKFLOWS)"
+EXTRA="$(field EXTRA_WORKFLOWS)"
+DUP="$(field DUPLICATE_WORKFLOWS)"
+PLACEH="$(field PLACEHOLDER_BINDINGS)"
+RESOLVED="$(field RESOLVED_EDGES)"
+ACTIVE="$(field ACTIVE_WORKFLOWS)"
+LC1="$(field LIST_COUNT_1)"
+LC2="$(field LIST_COUNT_2)"
+ACT1="$(field ACTIVE_COUNT_1)"
+
+REPEAT=PASS
+{ [ "${LC1:-0}" = "${LC2:-x}" ] && [ "${LC2:-0}" = "$EXPECTED" ]; } || REPEAT=FAIL
+
+echo "RUNTIME_WORKFLOWS_EXPECTED=${EXPECTED}"
+echo "RUNTIME_WORKFLOWS_IMPORTED=${IMPORTED:-0}"
+echo "MISSING_WORKFLOWS=${MISSING:-1}"
+echo "EXTRA_WORKFLOWS=${EXTRA:-1}"
+echo "DUPLICATE_WORKFLOWS=${DUP:-1}"
+echo "PLACEHOLDER_BINDINGS=${PLACEH:-1}"
+echo "RESOLVED_EDGES=${RESOLVED:-0}"
+echo "ACTIVE_WORKFLOWS=${ACTIVE:-1}"
+echo "REPEAT_DEPLOY=${REPEAT}"
+disp_production_untouched
+
+FAIL=0
+[ "${IMPORTED:-0}" = "$EXPECTED" ] || { echo "  [FAIL] imported ${IMPORTED:-0} != ${EXPECTED}"; FAIL=1; }
+[ "${MISSING:-1}" = "0" ] || { echo "  [FAIL] missing workflows"; FAIL=1; }
+[ "${EXTRA:-1}" = "0" ] || { echo "  [FAIL] extra workflows"; FAIL=1; }
+[ "${DUP:-1}" = "0" ] || { echo "  [FAIL] duplicate workflows"; FAIL=1; }
+[ "${PLACEH:-1}" = "0" ] || { echo "  [FAIL] placeholder bindings remain"; FAIL=1; }
+[ "${RESOLVED:-0}" = "$EDGES" ] || { echo "  [FAIL] resolved edges ${RESOLVED:-0} != ${EDGES}"; FAIL=1; }
+[ "${ACTIVE:-1}" = "0" ] || { echo "  [FAIL] active workflows after import"; FAIL=1; }
+[ "${ACT1:-1}" = "0" ] || { echo "  [FAIL] list --active reports active workflows"; FAIL=1; }
+[ "$REPEAT" = "PASS" ] || { echo "  [FAIL] repeat deploy not idempotent (${LC1:-?} -> ${LC2:-?})"; FAIL=1; }
+
+[ "$FAIL" -eq 0 ] || { echo "DISPOSABLE_IMPORT=FAIL"; exit 1; }
+echo "DISPOSABLE_IMPORT=PASS"

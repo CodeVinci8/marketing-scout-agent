@@ -147,8 +147,13 @@ A.ok('deploy ALWAYS-activate set is exactly WF18', /TRIGGER_WORKFLOWS_ALWAYS=\(\
 A.ok('deploy MONITORING-activate set is exactly WF23', /TRIGGER_WORKFLOWS_MONITORING=\(\s*"23_scheduled_source_monitor\.json"\s*\)/.test(deploy));
 A.ok('WF23 activation is gated behind MS_MONITORING_ENABLED=true', /MS_MONITORING_ENABLED:-false.*=.*"true"/s.test(deploy) || /MS_MONITORING_ENABLED:-false/.test(deploy));
 A.ok('deploy never activates a callable sub-workflow (explicit guard text present)', /NEVER activated|never activates a callable/i.test(deploy));
-A.ok('deploy import preserves active=false (no blanket activation on import)', /active stays false/.test(deploy));
-A.ok('activation uses update:workflow --active=true (no separate publish in OSS CLI)', /update:workflow --id="\$id" --active=true/.test(deploy));
+// QA-012: imports land inactive via the proven 2.23.3 mechanism (--activeState=false deactivates regardless of JSON).
+A.ok('deploy import lands workflows inactive via --activeState=false (no blanket activation on import)', /import:workflow --input=[^\n]*--activeState=false/.test(deploy));
+// QA-012: 2.23.3 DOES have publish/unpublish (update:workflow is deprecated). Deploy prefers the modern command
+// and keeps the deprecated update:workflow as a fallback for older CLIs.
+A.ok('activation prefers publish:workflow (proven 2.23.3 semantics)', /publish:workflow --id="\$id"/.test(deploy));
+A.ok('deactivation uses unpublish:workflow (publish rollback)', /unpublish:workflow --id="\$id"/.test(deploy));
+A.ok('deprecated update:workflow --active=true retained only as a fallback', /update:workflow --id="\$id" --active=true/.test(deploy));
 
 A.section('Part 7 — every repository workflow stays inactive');
 A.eq('audit finds zero active workflows', R.active_violations.length, 0);

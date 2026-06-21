@@ -73,6 +73,12 @@ const JS_SUITES = [
   ['url-safety', 'test_url_safety.js'],
   // --- Capstone: full offline conversational E2E (request->preview->report->exports->VK->digest->audit) ---
   ['reporting-e2e', 'test_reporting_e2e.js'],
+  // --- QA Stage 1/2 repair package (QA-001..QA-012) ---
+  ['workflow-manifest', 'test_workflow_manifest.js'],
+  ['binding-tool', 'test_binding_tool.js'],
+  ['deploy-preflight', 'test_deploy_preflight.js'],
+  ['attachment-routing', 'test_attachment_routing.js'],
+  ['smoke-hardening', 'test_smoke_hardening.js'],
 ];
 
 let failed = 0;

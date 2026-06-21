@@ -1,0 +1,30 @@
+{
+  "id": "fixturezlibroundtrip",
+  "name": "FIXTURE zlib roundtrip",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "id": "zfx-trig",
+      "name": "Manual Start"
+    },
+    {
+      "parameters": {
+        "jsCode": "// QA-005: prove Node's built-in zlib is loadable inside the n8n Code-node sandbox and round-trips.\n// Without NODE_FUNCTION_ALLOW_BUILTIN=zlib the require() throws ('Module zlib is disallowed') and execution\n// exits non-zero (the negative control). With it set, we additionally THROW if the round trip is wrong, so the\n// execute exit code alone is a reliable PASS/FAIL signal (no fragile stdout parsing).\nvar zlib = require('zlib');\nvar input = 'marketing-scout-zlib-roundtrip-' + Array(200).join('AB');\nvar buf = Buffer.from(input, 'utf8');\nvar compressed = zlib.deflateSync(buf);\nvar decompressed = zlib.inflateSync(compressed).toString('utf8');\nif (decompressed !== input) { throw new Error('ZLIB_ROUNDTRIP_FAIL'); }\nreturn [{ json: {\n  zlib_loaded: true,\n  round_trip_ok: true,\n  original_bytes: buf.length,\n  compressed_bytes: compressed.length\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "zfx-code",
+      "name": "zlib Round Trip"
+    }
+  ],
+  "connections": {
+    "Manual Start": { "main": [[{ "node": "zlib Round Trip", "type": "main", "index": 0 }]] }
+  }
+}

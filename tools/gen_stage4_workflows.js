@@ -543,7 +543,7 @@ else if(action==='evidence'){out.evidence=queryEvidence(b,{text:s.filter_text},s
 else if(action==='compare'){var cands=[];try{cands=($('Read report_bundles').all()||[]).map(function(r){return J(r.json.bundle||r.json.report_bundle||r.json);}).filter(function(x){return x&&String(x.owner_user_id)===String(scope.owner_user_id)&&String(x.report_id)!==String(scope.report_id);});}catch(e){}var base=selectBaseline(b,cands,cfg);out.baseline=base.baseline||null;out.baseline_reason=base.reason;out.comparison=base.baseline?compareReports(b,base.baseline):null;}
 else if(action==='refresh'){var srcs=(b.source_quality||[]).map(function(q){return {source_id:q.source,owner_user_id:scope.owner_user_id,platform:q.platform,ref:q.source,status:'active',last_status:q.error?'error':'ok',last_success_at:q.last_success_at,last_collected_at:q.last_collected_at,fields:{hash:'h'}};});out.refresh_plan=planRefresh(srcs,{cfg:cfg,now:(new Date()).toISOString(),only_stale:true});}
 return [{json:Object.assign({},s,{result:out})}];`),
-  code('wf24-exports', 'Build Exports & Outbox', [220, 40], ['report_export', 'xlsx_writer', 'report_package', 'report_charts', 'telegram_io'], `
+  code('wf24-exports', 'Build Exports & Outbox', [220, 40], ['report_export', 'xlsx_writer', 'report_package', 'report_charts', 'attachment_router', 'telegram_io'], `
 var s=$('Apply Action').first().json;var b=s.bundle;var scope=s.scope;
 var csv=exportCsv(b,'report',scope);
 var pkg=buildReportPackage(b,scope);
@@ -553,10 +553,15 @@ var xlsxDeliv=attachmentDelivery(scope,'xlsx',pkg.size_bytes+'|'+pkg.sheet_names
 var csvDeliv=attachmentDelivery(scope,'csv',csv.content);
 var chartDeliv=attachmentDelivery(scope,'chart',chart.svg||chart.title||'chart');
 var xlsxSend=shouldSendAttachment(existing,xlsxDeliv);var chartSend=shouldSendAttachment(existing,chartDeliv);
-var json={scope:scope,csv_filename:csv.filename,csv_row_count:csv.row_count,xlsx_filename:pkg.filename,xlsx_size:pkg.size_bytes,xlsx_sheets:pkg.sheet_names,chart_title:chart.title,chart_insufficient:!!chart.insufficient_data,chat_id:String(scope.owner_user_id||''),caption:'Отчёт '+b.report_id,attachment_deliveries:[xlsxDeliv,csvDeliv,chartDeliv],xlsx_should_send:xlsxSend.send,chart_should_send:chartSend.send,external_calls:0};
-return [{json:json,binary:{attachment:{data:Buffer.from(pkg.buffer).toString('base64'),fileName:pkg.filename,mimeType:pkg.mime},chart:{data:Buffer.from(String(chart.svg||''),'utf8').toString('base64'),fileName:'chart.svg',mimeType:'image/svg+xml'}}}];`),
+// QA-004: route every attachment through the canonical MIME policy (fail-closed). The chart is SVG (vector) so it
+// MUST go via sendDocument, never sendPhoto; the XLSX workbook is a document too.
+var chartMime=chart.mime||'image/svg+xml';
+var docRoute=routeAttachment(pkg.mime);
+var chartRoute=routeAttachment(chartMime);
+var json={scope:scope,csv_filename:csv.filename,csv_row_count:csv.row_count,xlsx_filename:pkg.filename,xlsx_size:pkg.size_bytes,xlsx_sheets:pkg.sheet_names,chart_title:chart.title,chart_mime:chartMime,chart_insufficient:!!chart.insufficient_data,doc_api_method:docRoute.api_method,doc_form_field:docRoute.form_field,chart_api_method:chartRoute.api_method,chart_form_field:chartRoute.form_field,chat_id:String(scope.owner_user_id||''),caption:'Отчёт '+b.report_id,attachment_deliveries:[xlsxDeliv,csvDeliv,chartDeliv],xlsx_should_send:xlsxSend.send,chart_should_send:chartSend.send,external_calls:0};
+return [{json:json,binary:{attachment:{data:Buffer.from(pkg.buffer).toString('base64'),fileName:pkg.filename,mimeType:pkg.mime},chart:{data:Buffer.from(String(chart.svg||''),'utf8').toString('base64'),fileName:'chart.svg',mimeType:chartMime}}}];`),
   httpTelegramFile('wf24-senddoc', 'Send Document', [440, -60], 'sendDocument', 'document', 'attachment'),
-  httpTelegramFile('wf24-sendchart', 'Send Chart', [440, 120], 'sendPhoto', 'photo', 'chart'),
+  httpTelegramFile('wf24-sendchart', 'Send Chart (SVG via sendDocument)', [440, 120], 'sendDocument', 'document', 'chart'),
   code('wf24-outrows', 'Shape Attachment Outbox', [440, 280], [], `
 var e=$('Build Exports & Outbox').first().json;
 return (e.attachment_deliveries||[]).map(function(d){return {json:d};});`),
@@ -584,7 +589,7 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:lines.join('
   ['Build Scope Preview', 'Apply Action'],
   ['Apply Action', 'Build Exports & Outbox'],
   ['Build Exports & Outbox', 'Send Document'],
-  ['Send Document', 'Send Chart'],
+  ['Send Document', 'Send Chart (SVG via sendDocument)'],
   ['Build Exports & Outbox', 'Shape Attachment Outbox'],
   ['Shape Attachment Outbox', 'Append attachment_outbox'],
   ['Build Exports & Outbox', 'Build Result Reply'],
