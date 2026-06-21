@@ -1,7 +1,7 @@
 {
   "generated_by": "tools/gen_workflow_manifest.js",
   "purpose": "Data-driven capability + archive-safety classification for every workflow. Default action is RETAIN; nothing is archived while any caller/test/deploy/trigger references it (Section 1 of the reporting-UX phase).",
-  "workflow_count": 28,
+  "workflow_count": 30,
   "capability_classes": [
     "production_entrypoint",
     "production_dependency",
@@ -16,7 +16,9 @@
     "20_agent_orchestrator.json",
     "21_deep_competitor_analysis.json",
     "22_conversation_control.json",
-    "23_scheduled_source_monitor.json"
+    "23_scheduled_source_monitor.json",
+    "24_report_export_delivery.json",
+    "25_weekly_digest.json"
   ],
   "trigger_workflows_always": [
     "18_telegram_agent_gateway.json"
@@ -614,7 +616,7 @@
       "file": "20_agent_orchestrator.json",
       "wf_number": "WF20",
       "name": "20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)",
-      "node_count": 23,
+      "node_count": 25,
       "active": false,
       "trigger_classes": [
         "manualTrigger"
@@ -712,6 +714,58 @@
       "referenced_by_test": true,
       "archive_safe_candidate": false,
       "retain_reason": "referenced_by_test; in_deploy_import_order; trigger_entrypoint",
+      "action": "retain"
+    },
+    {
+      "file": "24_report_export_delivery.json",
+      "wf_number": "WF24",
+      "name": "24 — Report Export, Filter, Compare, Refresh & Delivery",
+      "node_count": 17,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_dependency",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test; in_deploy_import_order",
+      "action": "retain"
+    },
+    {
+      "file": "25_weekly_digest.json",
+      "wf_number": "WF25",
+      "name": "25 — Weekly Digest (stored data only, one per owner per ISO week)",
+      "node_count": 19,
+      "active": false,
+      "trigger_classes": [
+        "scheduleTrigger",
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "scheduled",
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_entrypoint",
+      "called_by": [],
+      "calls": [],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test; in_deploy_import_order",
       "action": "retain"
     }
   ]

@@ -7,10 +7,14 @@ const path = require('path');
 const LIB = path.join(__dirname, '..', 'n8n', 'lib');
 const WF = path.join(__dirname, '..', 'n8n', 'workflows');
 
-// Extract a lib's embeddable core: strip the leading 'use strict'; and the trailing module.exports.
+// Extract a lib's embeddable core: strip the leading 'use strict'; and the trailing module.exports, and drop
+// local cross-require lines (the depended-on lib is embedded alongside in the SAME node scope, so its symbols
+// are already declared — the require() would otherwise throw inside an n8n Code node). Dependencies MUST be
+// embedded BEFORE their dependents in the names[] list passed to embed().
 function libCore(name) {
   let s = fs.readFileSync(path.join(LIB, name + '.js'), 'utf8');
   s = s.replace(/^'use strict';\s*$/m, '').replace(/module\.exports[\s\S]*$/m, '');
+  s = s.replace(/^\s*const\s*\{[^}]*\}\s*=\s*require\('\.\/[^']+'\);\s*$/gm, ''); // drop local cross-requires
   return s.trim();
 }
 function embed(names, driver) {
@@ -103,6 +107,51 @@ function httpTelegram(id, name, pos) {
       sendBody: true, specifyBody: 'json', jsonBody: '={{ $json.telegram_send_body }}', options: {}
     },
     type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
+  };
+}
+// editMessageText reuses the SAME message (progress edits). Body carries chat_id + message_id + text.
+function httpTelegramEdit(id, name, pos) {
+  return {
+    parameters: {
+      method: 'POST', url: '=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/editMessageText',
+      sendBody: true, specifyBody: 'json', jsonBody: '={{ $json.telegram_edit_body }}', options: {}
+    },
+    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
+  };
+}
+// sendDocument / sendPhoto: multipart upload of a generated attachment (CSV/XLSX/SVG). The binary is produced by
+// the preceding Code node on binary property `attachment`; chat_id is a form field. Never carries a token.
+function httpTelegramFile(id, name, pos, apiMethod, formField, binaryField) {
+  return {
+    parameters: {
+      method: 'POST', url: '=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/' + apiMethod,
+      sendBody: true, contentType: 'multipart-form-data',
+      bodyParameters: { parameters: [
+        { name: 'chat_id', value: '={{ $json.chat_id }}' },
+        { name: 'caption', value: '={{ $json.caption }}' },
+        { parameterType: 'formBinaryData', name: formField, inputDataFieldName: binaryField || 'attachment' }
+      ] },
+      options: {}
+    },
+    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
+  };
+}
+// Execute Sub-workflow Trigger ("When Called by Agent") declaring NAMED canonical input fields (mirrors WF04/08
+// callable contract so the parent passes named fields, not positional/.first()). Array fields use type 'array'.
+function subTrigger(id, name, pos, fields) {
+  return {
+    parameters: {
+      inputSource: 'workflowInputs',
+      workflowInputs: {
+        mappingMode: 'defineBelow', value: {},
+        schema: (fields || []).map(function (f) {
+          var fld = (typeof f === 'string') ? { id: f, type: 'string' } : f;
+          return { id: fld.id, displayName: fld.id, required: false, type: fld.type || 'string', display: true, defaultMatch: false, canBeUsedToMatch: false, removed: false };
+        }),
+        matchingColumns: [], attemptToConvertTypes: false, convertFieldsToString: false
+      }
+    },
+    type: 'n8n-nodes-base.executeWorkflowTrigger', typeVersion: 1.1, position: pos, id: id, name: name
   };
 }
 // connections: array of [from, to, outIndex?]
@@ -229,8 +278,8 @@ write('19_request_planner.json', wf('19 — Request Planner (deterministic + gua
   httpClaude('wf19-claude', 'Claude Planner API Request', [840, -120]),
   code('wf19-validate', 'Validate Plan', [1060, -120], ['request_planner'],
     "var j=$('Build Planner Prompt').first().json;var cfg=j.cfg;\nvar text='';try{var c=($json&&$json.content)||[];for(var i=0;i<c.length;i++){if(c[i]&&c[i].type==='text')text+=String(c[i].text||'');}}catch(e){}\nvar v=validatePlanJSON(text,cfg);\nvar plan=v.valid?v.plan:deterministicPlan(j.request_text,cfg);\nreturn [{json:{plan:plan,plan_valid:v.valid,plan_reason:v.reason,plan_source:plan.plan_source,cfg:cfg}}];"),
-  code('wf19-approval', 'Build Approval Message', [840, 120], ['request_planner', 'telegram_io'],
-    "var src;try{src=$('Validate Plan').first().json;}catch(e){src=$('Deterministic Plan').first().json;}\nvar plan=src.plan;\nvar text=planToApprovalText(plan);\nvar arid=String(($json&&$json.agent_request_id)||'req_pending');\nvar kb=approvalKeyboard(arid);\nreturn [{json:{plan:plan,plan_source:plan.plan_source,approval_text:text,approval_keyboard:kb}}];")
+  code('wf19-approval', 'Build Approval Message', [840, 120], ['request_planner', 'telegram_io', 'scope_preview'],
+    "var src;try{src=$('Validate Plan').first().json;}catch(e){src=$('Deterministic Plan').first().json;}\nvar plan=src.plan;var cfg=src.cfg||{};\nvar text=planToApprovalText(plan);\nvar arid=String(($json&&$json.agent_request_id)||'req_pending');\nvar kb=approvalKeyboard(arid);\n// scope + cost preview shown BEFORE approval (honest budgets; never a fabricated price)\nvar preview=buildScopePreview({goal:plan.intent||plan.expected_output,niche:plan.niche,region:plan.region,competitors:plan.competitors||[],platforms:plan.sources||['website'],cfg:cfg,refresh_plan:{expected_calls:Number(plan.max_external_calls)||0},expected_llm_calls:0,max_items:Number(plan.max_items)||undefined,outputs:{telegram_summary:true,xlsx:true,charts:true,evidence:true}});\nvar combined=preview.text+'\\n\\n'+text;\nreturn [{json:{plan:plan,plan_source:plan.plan_source,approval_text:text,scope_preview:preview,scope_preview_text:preview.text,combined_approval_text:combined,approval_keyboard:kb}}];")
 ], [
   ['Manual Start', 'Resolve Agent Config'],
   ['Resolve Agent Config', 'Deterministic Plan'],
@@ -298,7 +347,12 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   sheetsAppend('wf20-apsum', 'Append execution_summaries', [1720, 60], 'execution_summaries'),
   code('wf20-blocked', 'Build Blocked Response', [180, 160], ['telegram_io'],
     "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar body={chat_id:chat,text:'Запрос не запущен: '+g.gate_reason};\nreturn [{json:{telegram_send_body:JSON.stringify(body),gate_reason:g.gate_reason}}];"),
-  httpTelegram('wf20-sendblock', 'Send Blocked Reply', [400, 160])
+  httpTelegram('wf20-sendblock', 'Send Blocked Reply', [400, 160]),
+  // one progress message per request (created here; later stages EDIT the same message id; final report is a
+  // SEPARATE idempotent delivery via the outbox). Runs as a parallel branch off the allowed gate.
+  code('wf20-progress', 'Build Progress Update', [180, -300], ['progress_tracker'],
+    "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nvar up=advance(st,2,{now:(new Date()).toISOString()});\nvar body={chat_id:chat,text:up.text};\nreturn [{json:{telegram_send_body:JSON.stringify(body),progress_state:up.state,progress_action:up.action,is_final_delivery:up.is_final_delivery}}];"),
+  httpTelegram('wf20-sendprogress', 'Send Progress', [400, -300])
 ], [
   ['Manual Start', 'Resolve Agent Config'],
   ['Resolve Agent Config', 'Orchestration Reuse Decision'],
@@ -309,6 +363,8 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   ['Build Reuse Response', 'Send Reuse Reply'],
   ['Approval & Budget Gate', 'Gate Allowed?'],
   ['Gate Allowed?', 'Run Website Source (WF04)', 0],
+  ['Gate Allowed?', 'Build Progress Update', 0],
+  ['Build Progress Update', 'Send Progress'],
   ['Gate Allowed?', 'Build Blocked Response', 1],
   ['Run Website Source (WF04)', 'Normalize Adapter Result'],
   ['Normalize Adapter Result', 'Run WF16 Quality Gate'],
@@ -415,6 +471,170 @@ write('23_scheduled_source_monitor.json', wf('23 — Scheduled Tracked Source Mo
   ['Meaningful Change?', 'No Change — Skip', 1],
   ['Build Change Notification', 'Append source_change_events'],
   ['Append source_change_events', 'Send Change Notification']
+]));
+
+// =========================================================================================== WF24 reporting
+// Report export, filtering, comparison, smart refresh, evidence + Telegram document/photo delivery. Operates on
+// a STORED report bundle, strictly scoped by (owner_user_id, agent_request_id, report_id). Builds scoped CSV +
+// real XLSX (zlib) + deterministic chart, persists an attachment outbox row (dedup), and uploads via
+// sendDocument/sendPhoto. One progress message. NO external collection here ($0). Manual + callable.
+write('24_report_export_delivery.json', wf('24 — Report Export, Filter, Compare, Refresh & Delivery', [
+  manual('wf24-trig', 'Manual Start', [-1100, 0]),
+  subTrigger('wf24-sub', 'When Called by Agent', [-1100, 220], ['owner_user_id', 'agent_request_id', 'report_id', 'action', 'filter_text', 'data_mode']),
+  code('wf24-cfg', 'Resolve Agent Config', [-880, 0], ['agent_config'],
+    ENV + "\nreturn [{json:resolveConfig(__env)}];"),
+  sheetsRead('wf24-readrep', 'Read report_bundles', [-660, -120], 'report_bundles'),
+  sheetsRead('wf24-readout', 'Read attachment_outbox', [-660, 120], 'attachment_outbox'),
+  code('wf24-scope', 'Select & Scope Report', [-440, 0], ['report_export'], `
+var cfg=$('Resolve Agent Config').first().json;
+var inp=$json||{};
+var owner=String(inp.owner_user_id||'');var arid=String(inp.agent_request_id||'');var rid=String(inp.report_id||'');
+var action=String(inp.action||'export');var filter_text=String(inp.filter_text||'');
+function J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}
+var rows=[];try{rows=($('Read report_bundles').all()||[]).map(function(r){return r.json;});}catch(e){}
+var match=null;
+for(var i=0;i<rows.length;i++){var b=J(rows[i].bundle||rows[i].report_bundle||rows[i]);if(b&&String(b.report_id)===rid&&String(b.owner_user_id)===owner){match=b;break;}}
+if(!match&&inp.report_bundle)match=J(inp.report_bundle);
+if(!match)throw new Error('report not found / out of scope: '+owner+'/'+arid+'/'+rid);
+var scope={owner_user_id:owner||String(match.owner_user_id),agent_request_id:arid||String(match.agent_request_id),report_id:rid||String(match.report_id)};
+assertScope(match,scope);
+return [{json:{bundle:match,scope:scope,action:action,filter_text:filter_text,cfg:cfg}}];`),
+  code('wf24-preview', 'Build Scope Preview', [-220, 0], ['scope_preview'], `
+var s=$('Select & Scope Report').first().json;var b=s.bundle;var cfg=s.cfg||{};
+var comps=(b.competitors||[]).map(function(c){return c.competitor;});
+var preview=buildScopePreview({goal:'Экспорт/анализ отчёта '+b.report_id,niche:b.niche,region:b.region,competitors:comps,platforms:['website'],cfg:cfg,refresh_plan:{expected_calls:0,reused:comps},expected_llm_calls:0,outputs:{telegram_summary:true,xlsx:true,charts:true,evidence:true}});
+return [{json:Object.assign({},s,{scope_preview:preview,scope_preview_text:preview.text})}];`),
+  code('wf24-progress', 'Init Progress', [0, -160], ['progress_tracker'], `
+var s=$('Build Scope Preview').first().json;var chat=String(s.scope&&s.scope.owner_user_id||'');
+var st=initProgress({agent_request_id:s.scope.agent_request_id,chat_id:chat});
+var up=advance(st,8,{now:(new Date()).toISOString()});
+return [{json:Object.assign({},s,{telegram_send_body:JSON.stringify({chat_id:chat,text:up.text}),progress_state:up.state,is_final_delivery:up.is_final_delivery})}];`),
+  httpTelegram('wf24-sendprog', 'Send Progress', [220, -160]),
+  code('wf24-apply', 'Apply Action', [0, 40], ['report_export', 'evidence', 'report_compare', 'report_filter', 'refresh_policy'], `
+var s=$('Build Scope Preview').first().json;var b=s.bundle;var scope=s.scope;var cfg=s.cfg||{};
+var action=s.action;var out={action:action,external_calls:0};
+function J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}
+if(action==='filter'){var pf=parseFilter(s.filter_text,(b.competitors||[]).map(function(c){return c.competitor;}));out.filter=pf;out.filtered=pf.ok?applyFilter(b,pf.filters,pf.sort):null;}
+else if(action==='evidence'){out.evidence=queryEvidence(b,{text:s.filter_text},scope,cfg);}
+else if(action==='compare'){var cands=[];try{cands=($('Read report_bundles').all()||[]).map(function(r){return J(r.json.bundle||r.json.report_bundle||r.json);}).filter(function(x){return x&&String(x.owner_user_id)===String(scope.owner_user_id)&&String(x.report_id)!==String(scope.report_id);});}catch(e){}var base=selectBaseline(b,cands,cfg);out.baseline=base.baseline||null;out.baseline_reason=base.reason;out.comparison=base.baseline?compareReports(b,base.baseline):null;}
+else if(action==='refresh'){var srcs=(b.source_quality||[]).map(function(q){return {source_id:q.source,owner_user_id:scope.owner_user_id,platform:q.platform,ref:q.source,status:'active',last_status:q.error?'error':'ok',last_success_at:q.last_success_at,last_collected_at:q.last_collected_at,fields:{hash:'h'}};});out.refresh_plan=planRefresh(srcs,{cfg:cfg,now:(new Date()).toISOString(),only_stale:true});}
+return [{json:Object.assign({},s,{result:out})}];`),
+  code('wf24-exports', 'Build Exports & Outbox', [220, 40], ['report_export', 'xlsx_writer', 'report_package', 'report_charts', 'telegram_io'], `
+var s=$('Apply Action').first().json;var b=s.bundle;var scope=s.scope;
+var csv=exportCsv(b,'report',scope);
+var pkg=buildReportPackage(b,scope);
+var chart=renderChart(b,'competitor_score',scope);
+var existing=[];try{existing=($('Read attachment_outbox').all()||[]).map(function(r){return r.json;});}catch(e){}
+var xlsxDeliv=attachmentDelivery(scope,'xlsx',pkg.size_bytes+'|'+pkg.sheet_names.join(','));
+var csvDeliv=attachmentDelivery(scope,'csv',csv.content);
+var chartDeliv=attachmentDelivery(scope,'chart',chart.svg||chart.title||'chart');
+var xlsxSend=shouldSendAttachment(existing,xlsxDeliv);var chartSend=shouldSendAttachment(existing,chartDeliv);
+var json={scope:scope,csv_filename:csv.filename,csv_row_count:csv.row_count,xlsx_filename:pkg.filename,xlsx_size:pkg.size_bytes,xlsx_sheets:pkg.sheet_names,chart_title:chart.title,chart_insufficient:!!chart.insufficient_data,chat_id:String(scope.owner_user_id||''),caption:'Отчёт '+b.report_id,attachment_deliveries:[xlsxDeliv,csvDeliv,chartDeliv],xlsx_should_send:xlsxSend.send,chart_should_send:chartSend.send,external_calls:0};
+return [{json:json,binary:{attachment:{data:Buffer.from(pkg.buffer).toString('base64'),fileName:pkg.filename,mimeType:pkg.mime},chart:{data:Buffer.from(String(chart.svg||''),'utf8').toString('base64'),fileName:'chart.svg',mimeType:'image/svg+xml'}}}];`),
+  httpTelegramFile('wf24-senddoc', 'Send Document', [440, -60], 'sendDocument', 'document', 'attachment'),
+  httpTelegramFile('wf24-sendchart', 'Send Chart', [440, 120], 'sendPhoto', 'photo', 'chart'),
+  code('wf24-outrows', 'Shape Attachment Outbox', [440, 280], [], `
+var e=$('Build Exports & Outbox').first().json;
+return (e.attachment_deliveries||[]).map(function(d){return {json:d};});`),
+  sheetsAppend('wf24-apout', 'Append attachment_outbox', [660, 280], 'attachment_outbox'),
+  code('wf24-reply', 'Build Result Reply', [660, 40], [], `
+var s=$('Apply Action').first().json;var e=$('Build Exports & Outbox').first().json;var r=s.result||{};
+var chat=String(s.scope.owner_user_id||'');
+var lines=['Готово по отчёту '+s.bundle.report_id+':'];
+if(r.action==='filter'&&r.filtered){lines.push('Фильтр: '+(r.filtered.competitors||[]).length+' конкурентов, '+(r.filtered.offers||[]).length+' предложений.');}
+else if(r.action==='evidence'&&r.evidence){lines.push('Доказательств: '+(r.evidence.total||0)+'.');}
+else if(r.action==='compare'){lines.push(r.comparison?('Сравнение с '+(r.baseline&&r.baseline.report_id)+' готово.'):('Подходящий прошлый отчёт не найден: '+r.baseline_reason));}
+else if(r.action==='refresh'&&r.refresh_plan){lines.push('Обновление: к сбору '+((r.refresh_plan.refreshed||[]).length)+', переиспользовано '+((r.refresh_plan.reused||[]).length)+' (внешних вызовов пока 0).');}
+lines.push('Файлы: '+e.xlsx_filename+' (XLSX), '+e.csv_filename+' (CSV)'+(e.chart_insufficient?'':', график'));
+return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:lines.join('\\n')})}}];`),
+  httpTelegram('wf24-sendreply', 'Send Result Reply', [880, 40])
+], [
+  ['Manual Start', 'Resolve Agent Config'],
+  ['When Called by Agent', 'Resolve Agent Config'],
+  ['Resolve Agent Config', 'Read report_bundles'],
+  ['Read report_bundles', 'Read attachment_outbox'],
+  ['Read attachment_outbox', 'Select & Scope Report'],
+  ['Select & Scope Report', 'Build Scope Preview'],
+  ['Build Scope Preview', 'Init Progress'],
+  ['Init Progress', 'Send Progress'],
+  ['Build Scope Preview', 'Apply Action'],
+  ['Apply Action', 'Build Exports & Outbox'],
+  ['Build Exports & Outbox', 'Send Document'],
+  ['Send Document', 'Send Chart'],
+  ['Build Exports & Outbox', 'Shape Attachment Outbox'],
+  ['Shape Attachment Outbox', 'Append attachment_outbox'],
+  ['Build Exports & Outbox', 'Build Result Reply'],
+  ['Build Result Reply', 'Send Result Reply']
+]));
+
+// =========================================================================================== WF25 weekly digest
+// One digest per owner per ISO week, assembled ONLY from stored reports/change events/tracked sources/health/
+// execution summaries/recommendations (no recollection). Deterministic digest id + idempotency key, empty-week
+// suppression, optional XLSX attachment via the SAME outbox contract. Schedule trigger ships INACTIVE (disabled
+// by default); manual + callable also supported. NO external collection ($0).
+write('25_weekly_digest.json', wf('25 — Weekly Digest (stored data only, one per owner per ISO week)', [
+  scheduleTrigger('wf25-sched', 'Weekly Schedule', [-1100, -200], 168),
+  manual('wf25-manual', 'Manual Start', [-1100, 0]),
+  subTrigger('wf25-sub', 'When Called by Agent', [-1100, 200], ['owner_user_id', 'agent_request_id', 'week', 'force']),
+  code('wf25-cfg', 'Resolve Agent Config', [-880, 0], ['agent_config'],
+    ENV + "\nreturn [{json:resolveConfig(__env)}];"),
+  sheetsRead('wf25-readrep', 'Read report_bundles', [-660, -240], 'report_bundles'),
+  sheetsRead('wf25-readchg', 'Read source_change_events', [-660, -80], 'source_change_events'),
+  sheetsRead('wf25-readsrc', 'Read tracked_sources', [-660, 80], 'tracked_sources'),
+  sheetsRead('wf25-readsum', 'Read execution_summaries', [-660, 240], 'execution_summaries'),
+  sheetsRead('wf25-readdig', 'Read weekly_digests', [-660, 400], 'weekly_digests'),
+  code('wf25-build', 'Build Weekly Digest', [-440, 0], ['weekly_digest'], `
+var cfg=$('Resolve Agent Config').first().json;
+var inp=$json||{};
+var owner=String(inp.owner_user_id||((cfg.telegram_allowed_user_ids||[])[0])||'');
+function J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}
+function rd(name){try{return ($(name).all()||[]).map(function(r){return r.json;});}catch(e){return [];}}
+var reports=rd('Read report_bundles').map(function(r){return J(r.bundle||r.report_bundle||r);});
+var changes=rd('Read source_change_events');var tracked=rd('Read tracked_sources');var summaries=rd('Read execution_summaries');var existing=rd('Read weekly_digests');
+var res=buildWeeklyDigest({owner_user_id:owner,now:inp.now||(new Date()).toISOString(),reports:reports,change_events:changes,tracked_sources:tracked,execution_summaries:summaries,cfg:cfg,force:inp.force===true});
+var dd=dedupeDigest(existing,res.digest);
+return [{json:{digest:res.digest,emit:(res.ok&&dd.emit),suppressed:res.suppressed,empty:res.empty,dedupe_reason:dd.reason,owner_user_id:owner,cfg:cfg}}];`),
+  ifNode('wf25-if', 'Emit Digest?', [-220, 0], '={{ $json.emit }}'),
+  code('wf25-attach', 'Build Digest Attachments', [0, -120], ['report_export', 'xlsx_writer', 'report_package'], `
+var d=$('Build Weekly Digest').first().json;var cfg=d.cfg||{};var dg=d.digest;
+function J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}
+var reports=[];try{reports=($('Read report_bundles').all()||[]).map(function(r){return J(r.json.bundle||r.json.report_bundle||r.json);});}catch(e){}
+var cur=null;for(var i=0;i<reports.length;i++){if(reports[i]&&String(reports[i].report_id)===String(dg.current_report_id)&&String(reports[i].owner_user_id)===String(dg.owner_user_id))cur=reports[i];}
+var out={chat_id:String(dg.owner_user_id||''),caption:'Недельная сводка '+dg.iso_week,has_attachment:false,attachment_delivery:null};
+var binary=undefined;
+if(cur&&cfg.digest_attach_xlsx===true){var scope={owner_user_id:cur.owner_user_id,agent_request_id:cur.agent_request_id,report_id:cur.report_id};var pkg=buildReportPackage(cur,scope);var deliv=attachmentDelivery({owner_user_id:dg.owner_user_id,agent_request_id:dg.digest_id,report_id:cur.report_id},'digest_xlsx',pkg.size_bytes+'');out.has_attachment=true;out.attachment_delivery=deliv;out.xlsx_filename=pkg.filename;binary={attachment:{data:Buffer.from(pkg.buffer).toString('base64'),fileName:pkg.filename,mimeType:pkg.mime}};}
+var item={json:Object.assign({},out,{digest:dg})};if(binary)item.binary=binary;
+return [item];`),
+  ifNode('wf25-ifatt', 'Has Attachment?', [220, -220], '={{ $json.has_attachment }}'),
+  httpTelegramFile('wf25-senddoc', 'Send Digest Document', [440, -220], 'sendDocument', 'document', 'attachment'),
+  code('wf25-row', 'Shape Digest Row', [220, -40], [], `
+var d=$('Build Weekly Digest').first().json;var dg=d.digest;
+return [{json:{digest_id:dg.digest_id,idempotency_key:dg.idempotency_key,owner_user_id:dg.owner_user_id,iso_week:dg.iso_week,item_count:dg.item_count,current_report_id:dg.current_report_id,baseline_report_id:dg.baseline_report_id,external_calls:dg.external_calls,generated_at:dg.generated_at}}];`),
+  sheetsAppend('wf25-apdig', 'Append weekly_digests', [440, -40], 'weekly_digests'),
+  code('wf25-msg', 'Build Digest Message', [660, -40], [], `
+var d=$('Build Weekly Digest').first().json;var dg=d.digest;var chat=String(dg.owner_user_id||'');
+return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:dg.text}),digest_id:dg.digest_id,iso_week:dg.iso_week}}];`),
+  httpTelegram('wf25-send', 'Send Digest', [880, -40]),
+  code('wf25-skip', 'Skip Digest', [0, 160], [], "var d=$json||{};return [{json:{skipped:true,reason:d.suppressed?'empty_suppressed':(d.dedupe_reason||'already_emitted')}}];")
+], [
+  ['Weekly Schedule', 'Resolve Agent Config'],
+  ['Manual Start', 'Resolve Agent Config'],
+  ['When Called by Agent', 'Resolve Agent Config'],
+  ['Resolve Agent Config', 'Read report_bundles'],
+  ['Read report_bundles', 'Read source_change_events'],
+  ['Read source_change_events', 'Read tracked_sources'],
+  ['Read tracked_sources', 'Read execution_summaries'],
+  ['Read execution_summaries', 'Read weekly_digests'],
+  ['Read weekly_digests', 'Build Weekly Digest'],
+  ['Build Weekly Digest', 'Emit Digest?'],
+  ['Emit Digest?', 'Build Digest Attachments', 0],
+  ['Emit Digest?', 'Skip Digest', 1],
+  ['Build Digest Attachments', 'Has Attachment?'],
+  ['Has Attachment?', 'Send Digest Document', 0],
+  ['Build Digest Attachments', 'Shape Digest Row'],
+  ['Shape Digest Row', 'Append weekly_digests'],
+  ['Append weekly_digests', 'Build Digest Message'],
+  ['Build Digest Message', 'Send Digest']
 ]));
 
 console.log('Stage 4 workflows generated.');

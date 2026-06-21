@@ -63,6 +63,8 @@ const JS_SUITES = [
   ['scope-preview', 'test_scope_preview.js'],
   ['progress-tracker', 'test_progress_tracker.js'],
   ['weekly-digest', 'test_weekly_digest.js'],
+  // --- Reporting UX phase: real n8n workflow integration (WF24 export/delivery, WF25 digest, WF19/WF20 wiring) ---
+  ['reporting-workflows', 'test_reporting_workflows.js'],
 ];
 
 let failed = 0;

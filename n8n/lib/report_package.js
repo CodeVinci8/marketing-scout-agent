@@ -188,4 +188,26 @@ function buildReportPackage(bundle, scope, opts) {
   };
 }
 
-module.exports = { buildReportPackage, buildSheets, SHEET_NAMES, qualityHighlight };
+// djb2 — stable, dependency-free content hash (self-contained so this lib stays embeddable).
+function djb2(s) { s = String(s == null ? '' : s); let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return 'h' + h.toString(16); }
+
+// An attachment outbox row, deterministic in (owner, agent_request_id, report_id, kind, content) so the SAME
+// generated file for the SAME request can never be enqueued/sent twice. Scope is part of the id (isolation).
+function attachmentDelivery(scope, kind, content) {
+  scope = scope || {};
+  const hash = djb2(str(kind) + '|' + (content == null ? '' : (typeof content === 'string' ? content : String(content))));
+  const owner = str(scope.owner_user_id), arid = str(scope.agent_request_id), rep = str(scope.report_id);
+  return {
+    delivery_id: ['att', owner || 'own', arid || 'req', rep || 'rep', str(kind), hash].join('_'),
+    owner_user_id: owner, agent_request_id: arid, report_id: rep,
+    kind: str(kind), content_hash: hash, send_status: 'pending', attempts: 0, telegram_message_id: '', last_error: ''
+  };
+}
+// Idempotent enqueue: if an existing attachment delivery with the same id is already sent, skip (no double-send).
+function shouldSendAttachment(existing, delivery) {
+  const prior = (existing || []).filter(d => str(d.delivery_id) === str(delivery.delivery_id));
+  if (prior.some(d => str(d.send_status) === 'sent')) return { send: false, reason: 'already_sent' };
+  return { send: true, reason: '' };
+}
+
+module.exports = { buildReportPackage, buildSheets, SHEET_NAMES, qualityHighlight, attachmentDelivery, shouldSendAttachment, djb2 };
