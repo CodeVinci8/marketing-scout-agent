@@ -23,6 +23,7 @@ Statuses: `CONFIRMED` `FIXED` `RETESTED` `LIVE_VERIFICATION_REQUIRED` `READY_FOR
 | QA-010 | n8n image not pinned | READY_FOR_OPERATOR_APPLY |
 | QA-011 | Smoke used GNU `find -printf` / could print false PASS | FIXED · RETESTED |
 | QA-012 | Activation/publication semantics assumed, not verified | FIXED · RETESTED |
+| QA-015 | `sheets_contracts.json` had no ordered headers; `source_health.required_columns` did not exist on the tab | FIXED · RETESTED (offline) |
 
 ---
 
@@ -136,6 +137,33 @@ failure exits non-zero and never prints PASS).
 deprecated `update:workflow --active=true` only on an older CLI) and rolls back via `unpublish:workflow`. Rollback
 procedure documented. No workflow was activated or published during this work.
 **Status: FIXED · RETESTED.**
+
+## QA-015 — Sheets contract lacked ordered headers; one tab's required_columns were phantom
+**Context.** The Stage 3 Google Sheets staging bootstrap needs the exact ordered headers for all 40 contract tabs.
+`config/sheets_contracts.json` declared the 40 tab names + `required_columns` but **no ordered `headers`** — the
+project relied on `autoMapInputData` so the full header set was only implicit (the union of what each writer emits),
+scattered across the schema docs. `docs/REPORTING_UX_AND_RELEASE_VERIFICATION.md` even claimed "headers in
+`config/sheets_contracts.json`" though none were present.
+
+Separately, **`source_health.required_columns` was `["source", "status"]`**, but the canonical WF16 schema
+(`docs/SOURCE_QUALITY_GATE.md`) has no `source`/`status` columns — they are `source_run_id` / `quality_status`. So
+`required_columns` referenced phantom columns.
+
+**Fix.**
+* Added `sheet_order` (40), ordered `headers` (superset of `required_columns`), and `identity_columns` to
+  `config/sheets_contracts.json`, sourced from the canonical schema docs / library row shapes (provenance recorded
+  in `config/sheets_ui_contracts.json._provenance`). Tabs written by more than one workflow generation (notably
+  `agent_requests` — Stage 3 ledger vs Stage 4 WF18; and `source_change_events` — WF23 vs WF26) carry the **union**
+  of every writer's columns, because Google Sheets `append` maps by header *name* and a missing column silently
+  drops a writer's field.
+* Corrected `source_health.required_columns` to `["source_run_id", "quality_status"]`.
+* These are additive top-level keys; the existing `tools/validate_sheet_contracts.js` (363 checks) and
+  `tests/test_sheets_contracts.js` continue to pass unchanged.
+
+**Tests.** `tests/test_sheets_bootstrap.js` (resolver fails closed on duplicate/empty/missing-required/bad-enum;
+headers non-empty + unique; `required ⊆ headers`). No live Google call — offline-verified.
+**Status: FIXED · RETESTED (offline).** Live Google Sheets apply against the operator's staging spreadsheet is a
+deliberate manual step (`docs/STAGE3_SHEETS_BOOTSTRAP.md`).
 
 ---
 

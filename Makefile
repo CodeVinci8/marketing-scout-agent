@@ -63,6 +63,7 @@ test-js:
 	node tests/test_deploy_preflight.js
 	node tests/test_attachment_routing.js
 	node tests/test_smoke_hardening.js
+	node tests/test_sheets_bootstrap.js
 
 test-wf:
 	python3 scripts/validate_workflows.py
