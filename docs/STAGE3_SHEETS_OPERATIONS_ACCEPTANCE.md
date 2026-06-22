@@ -71,10 +71,10 @@ In n8n: *Workflows → Import from File* → select
 `ops/n8n/workflows/qa_stage3_sheets_operations_acceptance.json`. It imports **inactive**. Keep it inactive.
 
 ### 2. Select the credential (no new credential)
-On each of the 4 HTTP Request nodes (*Get Spreadsheet Metadata*, *Get Header Rows*, *Get Before Snapshot*,
-*Apply Writes*, *Get After Snapshot*), select the existing
-**“Google Sheets - Marketing Scout Service Account”** credential. On that Google Service Account
-credential, enable *“Set up for use in HTTP Request node”* and restrict allowed domains to
+On **every** HTTP Request node (*Get Spreadsheet Metadata*, *Get Header Rows*, *Get Before Snapshot*,
+*Expand Grid (spreadsheets:batchUpdate)*, *Apply Writes (values:batchUpdate)*, *Get After Snapshot*),
+select the existing **“Google Sheets - Marketing Scout Service Account”** credential. On that Google
+Service Account credential, enable *“Set up for use in HTTP Request node”* and restrict allowed domains to
 `https://sheets.googleapis.com`. The workflow contains **no credential id** — selection is manual.
 
 ### 3. Replace the placeholder
@@ -83,14 +83,20 @@ In *Set QA Config*, set `spreadsheet_id` to your **staging** spreadsheet ID (the
 
 ### 4. Dry-run first (default, no mutation)
 Leave `execute_writes = false` **and** `confirm_staging_spreadsheet = false`. Execute the workflow.
-It reads metadata + the before-snapshot, plans every operation, verifies against an in-memory projection,
-and **sends nothing**. The *Verify & Report* item shows `CHANGES_APPLIED = false` and a full marker set.
+It reads metadata + the before-snapshot, plans every operation, and **sends nothing**. The *Verify & Report*
+item shows `CHANGES_APPLIED = false`, `WRITE_PLAN = PASS`, and `NEXT_DATA_ROWS` (the physical append rows the
+live write *would* use). In a dry-run the live-operation markers read **`NOT_EXECUTED_DRY_RUN`** — they are
+**not** reported as `PASS`, because nothing was written or read back yet.
 
 ### 5. Confirm staging, then the first live write
 Set **both** `execute_writes = true` **and** `confirm_staging_spreadsheet = true`, then run again.
 Writes require *both* flags **and** a clean preflight (40 tabs present, matching contract hash, required
 test columns present). The single `values:batchUpdate` (USER_ENTERED) appends/updates only this run’s
-clearly-tagged rows; the header row (row 1) is never written, and only the 5 test sheets are targeted.
+clearly-tagged rows at their **physical** data rows; the header row (row 1) is never written, and only the
+5 test sheets are targeted. If an append would land beyond a sheet’s grid capacity, the *Expand Grid* node
+first grows **only that sheet** (`updateSheetProperties`, `rowCount` up). Live-operation markers become
+`PASS` only after the write succeeds **and** the after-snapshot is re-read and verified (then
+`CHANGES_APPLIED = true`).
 
 ### 6. Locate the QA rows
 In each test sheet, filter the marker column (e.g. `agent_requests.notes`) for your `QA_RUN_ID`
@@ -115,16 +121,54 @@ The Report must show every `DUPLICATE_*_CREATED = 0`, `UPSERT_ROW_COUNT_STABLE =
 
 ---
 
+## How write rows are chosen (physical occupied rows + capacity)
+
+Write positions are derived from the **physical rows in the actual before-snapshot**, never from the grid’s
+preallocated size. The algorithm, per test sheet:
+
+1. Read the full table (`A1:lastCol`) with `values:batchGet`; row 1 is the header.
+2. A returned data row counts as **occupied** only if at least one of the sheet’s **identity columns** is
+   non-blank (`agent_request_id`, `conversation_id`, `source_id`, `delivery_id`, …). Cells that are blank on
+   the identity columns — e.g. a bootstrap **checkbox default `FALSE`** sitting in a preallocated row, or a
+   trailing empty row — are **not** occupied.
+3. `last_occupied_row` = the highest physical row that is occupied (header counts as row 1);
+   `next_free_row` = `last_occupied_row + 1` (never below 2).
+4. **Insert** → write at `next_free_row` (advancing per insert). **Update** (matched canonical key) → rewrite
+   that key’s **exact physical row**, preserving sparse layouts. **Dedup** (`telegram_outbox`) → suppress.
+5. The grid’s `gridProperties.rowCount` is used **only** as a capacity limit. If a target row would exceed it,
+   the *Expand Grid* node first grows **only the affected sheet** (`updateSheetProperties` → larger
+   `rowCount`; capacity only ever increases) before the values write. Sheets within capacity are never touched.
+
+| Situation | Behavior |
+|-----------|----------|
+| Header-only sheet (incl. 999 preallocated `FALSE` checkbox rows, grid 1000) | next data row = **2** (the prior bug emitted `A1001`, exceeding the 1000-row grid). |
+| Rows 1–7 occupied | next data row = **8**. |
+| Trailing empty rows after the last real row | ignored — they do not move the append point. |
+| Existing canonical key on physical row *N* | **updated in place at row *N***; no duplicate, no new row. |
+| Occupied count == grid capacity | one bounded `updateSheetProperties` grows that sheet’s `rowCount` **before** the write; no delete/clear/shrink. |
+
+This is what the live failure surfaced: a header-only `agent_requests` whose bootstrap left checkbox-default
+`FALSE` cells down to row 1000 was mis-counted as 999 occupied rows, so the old logic appended at `A1001`
+(one past the grid). Occupancy is now identity-based and rows are physical, so the first append is `A2`.
+
+---
+
 ## Reading the markers (Section 9 summary)
 
 The Report node returns one machine-readable item. `RESULT` is **derived** from the sub-markers — it is
-never hard-coded.
+never hard-coded. **Truthfulness:** the *live-operation* markers below (everything from `APPEND_AGENT_REQUEST`
+through `IDEMPOTENCY`) are reported as `PASS`/`FAIL` **only after a real write + after-snapshot read-back**.
+In a dry-run they read **`NOT_EXECUTED_DRY_RUN`**; when preflight blocked, **`NOT_APPLICABLE`**; when formula
+tests are disabled, the two formula/negative markers read `SKIPPED`.
 
 | Marker | Meaning |
 |--------|---------|
 | `PREFLIGHT` | `PASS` only if all 40 tabs present, contract hash matches the bootstrap marker, and every required test column exists. |
 | `CONTRACT_TABS_PRESENT` | how many declared tabs were found in the staging spreadsheet. |
 | `SHEETS_READ` | metadata + before-snapshot reads succeeded. |
+| `WRITE_PLAN` | plan-level guarantees knowable without writing: every range targets a data row (≥ 2), only the 5 test sheets, no destructive request, planned cells neutralized, and the plan is idempotent. Can be `PASS` in a dry-run; `NOT_APPLICABLE` when blocked. |
+| `NEXT_DATA_ROWS` | the physical next-free data row chosen per sheet (e.g. `{agent_requests: 2}`). Derived from occupied rows, never grid capacity. |
+| `GRID_EXPANSIONS` | per-sheet `{from,to}` capacity growth the run will perform at the boundary (usually `{}`). |
 | `APPEND_AGENT_REQUEST` / `READ_BACK_AGENT_REQUEST` | request A was appended and read back field-for-field (formula cells as literal text, negatives numeric). |
 | `APPEND_REQUEST_EVENT` | an event row linked to request A was appended with a valid state transition. |
 | `UPSERT_INSERT` / `UPSERT_UPDATE` / `UPSERT_ROW_COUNT_STABLE` | conversation_state inserted once, updated in place (key stable, `current_state` changed), still exactly one row. |
@@ -136,11 +180,11 @@ never hard-coded.
 | `EXPECTED_ROWS_WRITTEN` / `UNEXPECTED_ROWS_WRITTEN` | rows this run added vs. any it should not have (`0`). |
 | `FOREIGN_ROWS_MODIFIED` / `HEADERS_MODIFIED` / `UNDECLARED_TABS_MODIFIED` | other owners/requests untouched (`0`); header row unchanged (`0`); no tab outside the 5 test sheets written (`0`). |
 | `DUPLICATE_AGENT_REQUESTS_CREATED` / `_CONVERSATION_STATES_` / `_TRACKED_SOURCES_` / `_OUTBOX_DELIVERIES_` | duplicates a repeat run would create (`0`). |
-| `IDEMPOTENCY` | re-planning against the projected-after state yields zero new inserts. |
+| `IDEMPOTENCY` | re-planning against the **real after-snapshot** yields zero new inserts (in a dry-run this is `NOT_EXECUTED_DRY_RUN`; the plan-level idempotency is folded into `WRITE_PLAN`). |
 | `EXTERNAL_NON_GOOGLE_CALLS` | always `0` — no Telegram/Apify/Firecrawl/VK/Claude call is made. |
-| `CHANGES_APPLIED` | `true` only after a confirmed live write; `false` on a dry-run. |
+| `CHANGES_APPLIED` | `true` **only** after a verified live write: the values write succeeded, the after-snapshot was re-read, and **all** live-operation markers passed. `false` on a dry-run, when blocked, or if any live verification failed. |
 | `QA_RUN_ID` / `DATA_MODE` | the generated run id; always `manual_test`. |
-| `RESULT` | `PASS` (all green), `FAIL` (a marker tripped), or `BLOCKED_PREFLIGHT` (a preflight gate failed → no write happened). |
+| `RESULT` | dry-run: `PASS` when `PREFLIGHT`+`SHEETS_READ`+`WRITE_PLAN` pass (plan is valid). Live: `PASS` only when every live-operation marker passed against the after-snapshot. `FAIL` if a marker tripped; `BLOCKED_PREFLIGHT` if a preflight gate failed (no write happened). |
 
 ---
 
@@ -159,12 +203,38 @@ on. Cleanup is therefore out of scope here and handled by retention testing. Bec
 - **No external collectors / messaging:** tracked_sources uses an RFC-2606 example domain and **no**
   collector runs; telegram_outbox writes a DB row only and **no** Telegram message is sent. The summary’s
   `EXTERNAL_NON_GOOGLE_CALLS` is always `0`. The only external host is `https://sheets.googleapis.com`.
-- **No destructive operations:** every write is a single `values:batchUpdate` (USER_ENTERED) to explicit
-  data-row ranges (row ≥ 2). There is no `spreadsheets:batchUpdate` structural request, no `deleteSheet` /
-  `deleteRange` / `deleteDimension`, and no `values:clear`.
+- **No destructive operations:** row writes are a single `values:batchUpdate` (USER_ENTERED) to explicit
+  data-row ranges (row ≥ 2). The **only** structural request is a bounded `updateSheetProperties` that
+  **increases** a single sheet’s `gridProperties.rowCount` at the capacity boundary — capacity only ever
+  grows. There is no `deleteSheet` / `deleteRange` / `deleteDimension`, no `values:clear`, no `batchClear`,
+  and capacity is never shrunk.
 - **Inactive, manual-only, no secrets:** the workflow is `active: false`, has exactly one Manual Trigger,
   no webhook, no credential id, and no real spreadsheet id (placeholder only). It is excluded from the
   production manifest and validators.
 - **Drift-proof:** the contract snapshot + engine are embedded by the generator. Edit the contract or the
   engine and **regenerate** (`node tools/gen_sheets_operations_qa_workflow.js`); never hand-edit the JSON.
   `tests/run_all.js` fails on any drift.
+
+---
+
+## Replacing a previously-imported (broken) workflow in n8n
+
+If you imported an earlier copy that wrote `agent_requests!A1001`, replace it — the generated JSON now has a
+new `versionId` and two extra nodes (*Expand Grid?* and *Expand Grid (spreadsheets:batchUpdate)*):
+
+1. **Regenerate** locally: `node tools/gen_sheets_operations_qa_workflow.js` (then `node tests/run_all.js` to
+   confirm green). This rewrites `ops/n8n/workflows/qa_stage3_sheets_operations_acceptance.json`.
+2. In n8n, open the old **“QA - Stage 3 Google Sheets Operations Acceptance”** workflow. Because it is
+   inactive and manual-only, deleting or overwriting it affects nothing in production. Either:
+   - **Delete** the old workflow, then *Workflows → Import from File* the regenerated JSON; or
+   - open the old workflow → *⋯ menu → Import from File* → select the regenerated JSON to overwrite the
+     canvas in place.
+3. Re-select the **“Google Sheets - Marketing Scout Service Account”** credential on **all six** HTTP Request
+   nodes (the import does not carry credential ids) and re-paste your **staging** `spreadsheet_id` in
+   *Set QA Config*.
+4. Keep the workflow **inactive**. Run a dry-run first (`execute_writes = false`), confirm
+   `WRITE_PLAN = PASS` and `NEXT_DATA_ROWS` shows `2` for a freshly-bootstrapped sheet, then do the gated
+   live write as in steps 5–8 above.
+
+No history rewrite, no production workflow, and no activation is involved — this is a plain re-import of an
+inactive QA workflow.

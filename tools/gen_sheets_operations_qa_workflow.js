@@ -170,6 +170,16 @@ function build() {
   // -- node 8: get BEFORE snapshot
   const nBefore = httpGet('msq-08-getbefore', 'Get Before Snapshot', [1160, 0], '={{ $json.url }}');
 
+  // -- shared glue: build identity / grid-capacity / sheetId maps for the 5 test sheets from the metadata. -----
+  // Occupancy is keyed on identity columns (so preallocated checkbox-default cells never count as occupied);
+  // gridRowCounts is the per-sheet capacity used ONLY as a boundary; sheetIds drives the bounded expansion.
+  const MAPS_GLUE = [
+    "const planMeta = sheetPlanMeta();",
+    "const identity = {}; Object.keys(planMeta).forEach(function (n) { identity[n] = planMeta[n].identity_cols; });",
+    "const gridRowCounts = {}, sheetIds = {};",
+    "(meta.sheets || []).forEach(function (s) { var p = s.properties || s; var t = String(p.title); if (identity[t]) { sheetIds[t] = p.sheetId; gridRowCounts[t] = (p.gridProperties && p.gridProperties.rowCount) || 0; } });"
+  ].join('\n');
+
   // -- node 9: preflight + plan (pure engine; produces the single USER_ENTERED values:batchUpdate body + gate)
   const planGlue = [
     "",
@@ -181,13 +191,17 @@ function build() {
     "const resolved = init.snapshot.resolved, config = init.config, id = init.identity;",
     "const headerRows = {};",
     "(headerResp.valueRanges || []).forEach(function (vr) { headerRows[titleFromRange(vr.range)] = (vr.values && vr.values[0]) ? vr.values[0] : []; });",
-    "const before = parseSnapshot(beforeResp);",
+    MAPS_GLUE,
+    "// derive PHYSICAL occupied rows from the actual values (never from grid capacity / a logical count).",
+    "const before = parseSnapshot(beforeResp, { identity: identity, grid_row_counts: gridRowCounts });",
     "const set = buildQaRowSet(id, config);",
     "const pre = preflight({ resolved: resolved, metadata: meta, headerRows: headerRows, config: config, identity: id, row_set: set });",
-    "const plan = planOperations({ resolved: resolved, identity: id, config: config, row_set: set, before: before, preflight: pre });",
+    "const plan = planOperations({ resolved: resolved, identity: id, config: config, row_set: set, before: before, preflight: pre, sheet_ids: sheetIds });",
     "return [{ json: {",
     "  should_apply: plan.should_apply_writes, blocked: plan.blocked, dry_run: !plan.should_apply_writes,",
     "  mutations_planned: (plan.batchBody.data || []).length, batchBody: plan.batchBody,",
+    "  needs_expansion: plan.needs_expansion === true, expansionBody: plan.expansion_body || { requests: [] },",
+    "  expanded_tabs: plan.expanded_tabs, next_data_rows: plan.next_data_rows,",
     "  preflight: pre, qa_run_id: id.qa_run_id",
     "} }];"
   ].join('\n');
@@ -205,9 +219,26 @@ function build() {
     }
   };
 
-  // -- node 11: apply writes (single values:batchUpdate, USER_ENTERED, no destructive request) [TRUE branch]
+  // -- node 10b: IF needs_expansion (a target row exceeds the sheet's grid capacity) [only on the apply branch]
+  const nExpandIf = {
+    id: 'msq-10b-expandif', name: 'Expand Grid?', type: 'n8n-nodes-base.if', typeVersion: 2, position: [1820, -200],
+    parameters: {
+      conditions: {
+        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose' },
+        conditions: [{ id: 'cond-exp', leftValue: '={{ $json.needs_expansion }}', rightValue: '', operator: { type: 'boolean', operation: 'true', singleValue: true } }],
+        combinator: 'and'
+      }, options: {}
+    }
+  };
+
+  // -- node 10c: expand ONLY the affected sheet(s) first — structural spreadsheets:batchUpdate that GROWS
+  //    gridProperties.rowCount (never deletes/clears/shrinks). Bounded: at most one structural call. [TRUE only]
+  const expandUrl = "={{ '" + SHEETS_BASE + "' + encodeURIComponent($('Init, Guard & Embed Engine').first().json.spreadsheet_id) + ':batchUpdate' }}";
+  const nExpand = httpPost('msq-10c-expand', 'Expand Grid (spreadsheets:batchUpdate)', [2040, -320], expandUrl, "={{ JSON.stringify($('Preflight & Plan').first().json.expansionBody) }}");
+
+  // -- node 11: apply writes (single values:batchUpdate, USER_ENTERED, no destructive request) [apply branch]
   const buUrl = "={{ '" + SHEETS_BASE + "' + encodeURIComponent($('Init, Guard & Embed Engine').first().json.spreadsheet_id) + '/values:batchUpdate' }}";
-  const nApply = httpPost('msq-11-apply', 'Apply Writes (values:batchUpdate)', [1820, -140], buUrl, '={{ JSON.stringify($json.batchBody) }}');
+  const nApply = httpPost('msq-11-apply', 'Apply Writes (values:batchUpdate)', [2040, -120], buUrl, "={{ JSON.stringify($('Preflight & Plan').first().json.batchBody) }}");
 
   // -- node 12: build AFTER ranges (re-read the full table of every test sheet AFTER the write)
   const afterRangesJs = [
@@ -220,10 +251,10 @@ function build() {
     "(init.test_sheets || []).forEach(function (ts) { url += '&ranges=' + encodeURIComponent(q(ts.name, ts.ncols)); });",
     "return [{ json: { url: url } }];"
   ].join('\n');
-  const nAfterRanges = code('msq-12-afterranges', 'Build After Ranges', [2040, -140], afterRangesJs);
+  const nAfterRanges = code('msq-12-afterranges', 'Build After Ranges', [2260, -120], afterRangesJs);
 
   // -- node 13: get AFTER snapshot
-  const nAfter = httpGet('msq-13-getafter', 'Get After Snapshot', [2260, -140], '={{ $json.url }}');
+  const nAfter = httpGet('msq-13-getafter', 'Get After Snapshot', [2480, -120], '={{ $json.url }}');
 
   // -- node 14: verify + assemble the single machine-readable summary (both branches converge here)
   const reportGlue = [
@@ -236,18 +267,20 @@ function build() {
     "const resolved = init.snapshot.resolved, config = init.config, id = init.identity;",
     "const headerRows = {};",
     "(headerResp.valueRanges || []).forEach(function (vr) { headerRows[titleFromRange(vr.range)] = (vr.values && vr.values[0]) ? vr.values[0] : []; });",
-    "const before = parseSnapshot(beforeResp);",
+    MAPS_GLUE,
+    "const before = parseSnapshot(beforeResp, { identity: identity, grid_row_counts: gridRowCounts });",
     "const set = buildQaRowSet(id, config);",
     "const pre = preflight({ resolved: resolved, metadata: meta, headerRows: headerRows, config: config, identity: id, row_set: set });",
-    "const plan = planOperations({ resolved: resolved, identity: id, config: config, row_set: set, before: before, preflight: pre });",
+    "const plan = planOperations({ resolved: resolved, identity: id, config: config, row_set: set, before: before, preflight: pre, sheet_ids: sheetIds });",
+    "// applied === a real, successful values write happened AND a real after-snapshot read came back.",
     "let after = null, applied = false;",
-    "try { const a = $('Get After Snapshot').first().json; if (a && a.valueRanges) { after = parseSnapshot(a); applied = true; } } catch (e) { after = null; applied = false; }",
-    "const ver = verifyAll({ resolved: resolved, identity: id, config: config, row_set: set, before: before, plan: plan, after: applied ? after : null });",
+    "try { const a = $('Get After Snapshot').first().json; if (a && a.valueRanges) { after = parseSnapshot(a, { identity: identity, grid_row_counts: gridRowCounts }); applied = true; } } catch (e) { after = null; applied = false; }",
+    "const ver = verifyAll({ resolved: resolved, identity: id, config: config, row_set: set, before: before, plan: plan, after: applied ? after : null, applied: applied });",
     "const summary = assembleSummary({ preflight: pre, verify: ver, identity: id, config: config, plan: plan, changes_applied: applied, sheets_read: true });",
     "summary.SOURCE_HASH = init.snapshot.source_hash;",
     "return [{ json: summary }];"
   ].join('\n');
-  const nReport = code('msq-14-report', 'Verify & Report', [2480, 0], ENGINE + '\n' + reportGlue);
+  const nReport = code('msq-14-report', 'Verify & Report', [2700, 0], ENGINE + '\n' + reportGlue);
 
   // -- sticky notes
   const s1 = sticky('msq-note-setup', [-380, 240], 560, 460, [
@@ -261,32 +294,39 @@ function build() {
     '1. In "Set QA Config" paste the SEPARATE STAGING spreadsheet ID (never a production sheet).',
     '   Run the Stage 3 bootstrap workflow against it first so all 40 tabs + the contract-hash marker exist.',
     '2. Keep execute_writes = false AND confirm_staging_spreadsheet = false for the first run (dry-run).',
-    '   A dry-run plans + verifies against a simulated projection and sends NOTHING.',
-    '3. On the 4 HTTP Request nodes, select the existing credential:',
+    '   A dry-run plans + verifies the PLAN and sends NOTHING. In a dry-run the live-operation markers read',
+    '   NOT_EXECUTED_DRY_RUN (not PASS); only PREFLIGHT/SHEETS_READ/WRITE_PLAN can be PASS and CHANGES_APPLIED=false.',
+    '3. On every HTTP Request node, select the existing credential:',
     '   "' + CRED_NAME + '".',
     '   Enable "Set up for use in HTTP Request node" and restrict allowed domains to',
     '   https://sheets.googleapis.com. No NEW credential is created.',
     '4. To perform the live staging write, set BOTH execute_writes = true AND',
     '   confirm_staging_spreadsheet = true, then run again. Writes are blocked unless BOTH are true',
     '   and preflight passed (40 tabs, matching contract hash, required test columns present).',
+    '   Live-operation markers become PASS only after the write succeeds AND the after-snapshot is re-read +',
+    '   verified; CHANGES_APPLIED = true only then.',
     '5. To prove idempotency, copy QA_RUN_ID from the Report into reuse_qa_run_id and run again:',
     '   the Report must show every DUPLICATE_* = 0 and IDEMPOTENCY = PASS.',
     '',
     'Docs: docs/STAGE3_SHEETS_OPERATIONS_ACCEPTANCE.md. Keep this workflow INACTIVE.'
   ].join('\n'), 5);
-  const s2 = sticky('msq-note-engine', [1380, 240], 560, 240, [
+  const s2 = sticky('msq-note-engine', [1380, 260], 620, 280, [
     'ENGINE (embedded, drift-proof):',
     'A frozen snapshot of the resolved Sheets contract (config/sheets_contracts.json +',
     'config/sheets_ui_contracts.json + config/taxonomy.json) and the pure engine',
     'n8n/lib/sheets_operations_qa.js are embedded by tools/gen_sheets_operations_qa_workflow.js.',
     'Edit the contract or engine and REGENERATE — never hand-edit this workflow.',
     '',
-    'Every write is one values:batchUpdate (USER_ENTERED) targeting explicit data-row ranges (row >= 2);',
-    'the header row is never written and only the 5 declared test sheets are ever targeted. Formula',
-    'injection is neutralized (apostrophe prefix); finite negatives (-5, -4.5) stay numeric.'
+    'Row allocation is derived from PHYSICAL occupied rows in the actual before-snapshot (occupancy keyed on',
+    'identity columns, so preallocated checkbox/format cells and trailing empty rows never count). Grid',
+    'rowCount is used ONLY as a capacity limit. If a target row exceeds capacity, "Expand Grid" grows ONLY',
+    'the affected sheet (updateSheetProperties, rowCount up only) before the values write.',
+    '',
+    'Every write is one values:batchUpdate (USER_ENTERED) to explicit data rows (>= 2); the header row is',
+    'never written and only the 5 declared test sheets are targeted. No deleteSheet/deleteRange/values.clear.'
   ].join('\n'), 4);
 
-  const nodes = [nManual, nConfig, nInit, nMeta, nHeaderRanges, nHeaders, nBeforeRanges, nBefore, nPlan, nIf, nApply, nAfterRanges, nAfter, nReport, s1, s2];
+  const nodes = [nManual, nConfig, nInit, nMeta, nHeaderRanges, nHeaders, nBeforeRanges, nBefore, nPlan, nIf, nExpandIf, nExpand, nApply, nAfterRanges, nAfter, nReport, s1, s2];
 
   // -- connections
   const wires = [
@@ -299,8 +339,11 @@ function build() {
     conn('Build Before Ranges', 'Get Before Snapshot'),
     conn('Get Before Snapshot', 'Preflight & Plan'),
     conn('Preflight & Plan', 'Apply Writes?'),
-    conn('Apply Writes?', 'Apply Writes (values:batchUpdate)', 0), // TRUE
-    conn('Apply Writes?', 'Verify & Report', 1),                   // FALSE (dry-run)
+    conn('Apply Writes?', 'Expand Grid?', 0),                      // TRUE -> consider capacity expansion
+    conn('Apply Writes?', 'Verify & Report', 1),                   // FALSE (dry-run) -> report
+    conn('Expand Grid?', 'Expand Grid (spreadsheets:batchUpdate)', 0), // TRUE -> expand affected sheet(s) first
+    conn('Expand Grid?', 'Apply Writes (values:batchUpdate)', 1),  // FALSE -> straight to the values write
+    conn('Expand Grid (spreadsheets:batchUpdate)', 'Apply Writes (values:batchUpdate)'),
     conn('Apply Writes (values:batchUpdate)', 'Build After Ranges'),
     conn('Build After Ranges', 'Get After Snapshot'),
     conn('Get After Snapshot', 'Verify & Report')
