@@ -133,6 +133,13 @@ var FORMULA_TESTS = ['=1+1', '+SUM(1,1)', '@IMPORTXML("https://example.com","/")
 var NEGATIVE_TESTS = [-5, -4.5];
 var EXAMPLE_URL = 'https://example.com/qa-stage3c';   // RFC 2606 reserved example domain — no collector is run
 
+// LIVE-operation markers: only meaningful after a real write + after-snapshot read-back. In a dry-run they are
+// reported as NOT_EXECUTED_DRY_RUN (or NOT_APPLICABLE when blocked / SKIPPED when formula tests are disabled).
+var LIVE_MARKERS = ['APPEND_AGENT_REQUEST', 'READ_BACK_AGENT_REQUEST', 'APPEND_REQUEST_EVENT', 'UPSERT_INSERT',
+  'UPSERT_UPDATE', 'UPSERT_ROW_COUNT_STABLE', 'TRACKED_SOURCE_UPSERT', 'OUTBOX_IDEMPOTENCY', 'OWNER_ISOLATION',
+  'REQUEST_ISOLATION', 'FORMULA_INJECTION_NEUTRALIZATION', 'NEGATIVE_NUMBER_PRESERVATION', 'BEFORE_AFTER_SCOPE',
+  'IDEMPOTENCY'];
+
 // Static plan describing each sheet's role. `op`: append (insert-or-update by id) | upsert (insert then update
 // proven) | dedup (suppress duplicate by deterministic key). marker_field carries the QA tag.
 function sheetPlanMeta() {
@@ -329,28 +336,63 @@ function neededColumns(sheetEntry) {
 }
 
 // ============================================================================================================
-// SNAPSHOT parsing — turn a values:batchGet response into { tab: { headers, rows:[obj], count } }
+// SNAPSHOT parsing — turn a values:batchGet response into a PHYSICAL-ROW-AWARE model per tab:
+//   { headers, rows:[obj], row_numbers:[physical 1-indexed], count, last_occupied_row, next_free_row,
+//     grid_row_count (capacity), range_start_row }
+//
+// Occupancy is decided by the tab's IDENTITY columns (passed in opts.identity), NOT by "any non-blank cell":
+// a Google Sheet whose bootstrap left preallocated checkbox-default `FALSE` cells (or any incidental value)
+// down the grid must NOT be treated as occupied. Trailing empty rows and preallocated grid rows therefore do
+// not advance the append point, and physical row numbers are preserved so a matched key updates its EXACT row.
+// grid_row_count comes from the metadata (sheets.properties.gridProperties.rowCount) and is used ONLY as a
+// capacity limit — never as the number of occupied rows.
 // ============================================================================================================
 function titleFromRange(range) {
   var r = str(range); var bang = r.lastIndexOf('!'); var title = bang >= 0 ? r.slice(0, bang) : r;
   if (title.charAt(0) === "'" && title.charAt(title.length - 1) === "'") title = title.slice(1, -1).replace(/''/g, "'");
   return title;
 }
-function rowsFromValues(values) {
-  values = arr(values); var headers = arr(values[0]).map(str); var rows = [];
-  for (var i = 1; i < values.length; i++) {
-    var raw = arr(values[i]); var nonEmpty = raw.some(function (c) { return str(c).trim() !== ''; });
-    if (!nonEmpty) continue;
-    var o = {}; headers.forEach(function (h, c) { o[h] = c < raw.length ? raw[c] : ''; });
-    rows.push(o);
-  }
-  return { headers: headers, rows: rows };
+// the physical 1-indexed start row of a returned A1 range, e.g. "agent_requests!A1:AC1" -> 1
+function rangeStartRow(range) {
+  var r = str(range); var bang = r.lastIndexOf('!'); var cell = bang >= 0 ? r.slice(bang + 1) : r;
+  var m = cell.match(/^[A-Za-z]+(\d+)/); return m ? parseInt(m[1], 10) : 1;
 }
-function parseSnapshot(batchGetResponse) {
+// a data row is OCCUPIED iff at least one identity column is non-blank; with no identity declared, fall back to
+// "any non-blank cell" (conservative). Preallocated checkbox/format cells have blank identity => not occupied.
+function rowIsOccupied(obj, raw, identityCols) {
+  if (identityCols && identityCols.length) return identityCols.some(function (c) { return str(obj[c]).trim() !== ''; });
+  return arr(raw).some(function (c) { return str(c).trim() !== ''; });
+}
+// startRow = physical row of values[0] (the header when reading from A1); identityCols decide occupancy.
+function rowsFromValues(values, startRow, identityCols) {
+  values = arr(values); startRow = startRow || 1;
+  var headers = arr(values[0]).map(str);
+  var rows = [], rowNumbers = [], lastOccupied = startRow;       // header row counts as occupied (>= startRow)
+  for (var i = 1; i < values.length; i++) {
+    var physical = startRow + i;
+    var raw = arr(values[i]);
+    var o = {}; headers.forEach(function (h, c) { o[h] = c < raw.length ? raw[c] : ''; });
+    if (!rowIsOccupied(o, raw, identityCols)) continue;          // ignore preallocated / trailing-empty rows
+    rows.push(o); rowNumbers.push(physical);
+    if (physical > lastOccupied) lastOccupied = physical;
+  }
+  return { headers: headers, rows: rows, row_numbers: rowNumbers, last_occupied_row: lastOccupied };
+}
+// opts: { identity: { tab: [identity cols] }, grid_row_counts: { tab: capacity } }
+function parseSnapshot(batchGetResponse, opts) {
+  opts = opts || {}; var identityBy = opts.identity || {}; var gridBy = opts.grid_row_counts || {};
   var out = {};
   arr((batchGetResponse || {}).valueRanges).forEach(function (vr) {
-    var title = titleFromRange(vr.range); var parsed = rowsFromValues(vr.values);
-    out[title] = { headers: parsed.headers, rows: parsed.rows, count: parsed.rows.length };
+    var title = titleFromRange(vr.range);
+    var start = rangeStartRow(vr.range);
+    var parsed = rowsFromValues(vr.values, start, identityBy[title]);
+    out[title] = {
+      headers: parsed.headers, rows: parsed.rows, row_numbers: parsed.row_numbers, count: parsed.rows.length,
+      last_occupied_row: parsed.last_occupied_row,
+      next_free_row: Math.max(start + 1, parsed.last_occupied_row + 1),
+      grid_row_count: gridBy[title] != null ? gridBy[title] : 0,
+      range_start_row: start
+    };
   });
   return out;
 }
@@ -362,6 +404,14 @@ function parseSnapshot(batchGetResponse) {
 function matchByIdentity(rows, identityCols, values) {
   return arr(rows).filter(function (r) { return identityCols.every(function (c) { return str(r[c]) === str(values[c]); }); });
 }
+// physical-aware match: index of the FIRST existing row whose identity equals values, or -1.
+function indexByIdentity(rows, identityCols, values) {
+  rows = arr(rows);
+  for (var i = 0; i < rows.length; i++) {
+    if (identityCols.every(function (c) { return str(rows[i][c]) === str(values[c]); })) return i;
+  }
+  return -1;
+}
 function rowCells(headers, values) { return headers.map(function (h) { return neutralize(values[h]); }); }
 
 function planOperations(input) {
@@ -370,51 +420,73 @@ function planOperations(input) {
   var id = input.identity;
   var config = input.config || {};
   var set = input.row_set || buildQaRowSet(id, config);
-  var before = input.before || {};                 // parseSnapshot output
+  var before = input.before || {};                 // parseSnapshot output (physical-row aware)
   var pre = input.preflight;                        // preflight result (optional, gates writes)
+  var sheetIds = input.sheet_ids || {};             // { tab: sheetId } from metadata (for capacity expansion)
 
   var canWrite = config.execute_writes === true && config.confirm_staging_spreadsheet === true && (!pre || pre.ok === true);
   var blocked = pre ? !pre.ok : false;
 
   var data = [];                                    // values:batchUpdate data entries
+  var expansions = [];                              // structural updateSheetProperties (grow rowCount) entries
   var decisions = [];
   var counts = { inserts: 0, updates: 0, suppressed: 0 };
   var writeTabs = {};
+  var nextDataRows = {};                            // { tab: physical next-free data row used for the first insert }
+  var expandedTabs = {};                            // { tab: { from, to } }
 
   Object.keys(set.sheets).forEach(function (name) {
     var cs = contractSheet(resolved, name);
     var headers = cs ? cs.headers : (before[name] ? before[name].headers : []);
     var ncols = headers.length;
     var entry = set.sheets[name];
-    var existing = (before[name] && before[name].rows) || [];
-    var nextRow = (before[name] ? before[name].count : 0) + 2;   // 1 header + 1-indexed; advances per insert
+    var snap = before[name] || {};
+    var existing = snap.rows || [];
+    var rowNums = snap.row_numbers || [];
+    // PHYSICAL next-free data row from the actual values read (never derived from grid capacity / a logical count)
+    var nextRow = snap.next_free_row != null ? snap.next_free_row : 2;
+    if (nextRow < 2) nextRow = 2;                                  // never the header row (row 1)
+    var gridRows = snap.grid_row_count || 0;                       // capacity only
+    var maxTarget = 0;
+    nextDataRows[name] = nextRow;
 
     entry.desired.forEach(function (d) {
-      var match = matchByIdentity(existing, entry.meta.identity_cols, d.values);
-      var decision;
-      if (entry.meta.op === 'dedup' && match.length > 0) {
+      var idx = indexByIdentity(existing, entry.meta.identity_cols, d.values);
+      var decision, rowNum = null;
+      if (entry.meta.op === 'dedup' && idx >= 0) {
         decision = 'suppress'; counts.suppressed++;
-      } else if (match.length > 0) {
-        // update in place: rewrite our own row at its existing data position (row index in the live sheet)
-        var idx = existing.indexOf(match[0]); var rowNum = idx + 2;
+      } else if (idx >= 0) {
+        // update in place at the matched row's EXACT physical position (preserves sparse layout)
+        rowNum = rowNums[idx] != null ? rowNums[idx] : (idx + 2);
         data.push({ range: rowStartRange(name, rowNum), majorDimension: 'ROWS', values: [rowCells(headers, d.values)] });
         decision = 'update'; counts.updates++; writeTabs[name] = true;
       } else {
-        data.push({ range: rowStartRange(name, nextRow), majorDimension: 'ROWS', values: [rowCells(headers, d.values)] });
+        rowNum = nextRow;
+        data.push({ range: rowStartRange(name, rowNum), majorDimension: 'ROWS', values: [rowCells(headers, d.values)] });
         decision = 'insert'; counts.inserts++; nextRow++; writeTabs[name] = true;
       }
-      decisions.push({ tab: name, role: d.role, decision: decision, ncols: ncols });
+      if (rowNum != null && rowNum > maxTarget) maxTarget = rowNum;
+      decisions.push({ tab: name, role: d.role, decision: decision, ncols: ncols, row: rowNum });
     });
+
+    // capacity boundary: when a target row would exceed the sheet's grid, grow ONLY this sheet first (never all).
+    if (gridRows > 0 && maxTarget > gridRows && sheetIds[name] != null) {
+      expansions.push({ updateSheetProperties: { properties: { sheetId: sheetIds[name], gridProperties: { rowCount: maxTarget } }, fields: 'gridProperties.rowCount' } });
+      expandedTabs[name] = { from: gridRows, to: maxTarget };
+    }
   });
 
   var expectedRowsWritten = counts.inserts;     // a "row written" (added) is an insert; updates rewrite in place
   var batchBody = { valueInputOption: 'USER_ENTERED', data: data };
+  var expansionBody = expansions.length ? { requests: expansions } : null;
   var shouldApply = canWrite && !blocked && data.length > 0;
 
   return {
     blocked: blocked, can_write: canWrite, should_apply_writes: shouldApply,
     batchBody: batchBody, decisions: decisions, counts: counts,
     expected_rows_written: expectedRowsWritten, write_tabs: Object.keys(writeTabs).sort(),
+    next_data_rows: nextDataRows,
+    needs_expansion: expansions.length > 0, expansion_body: expansionBody, expanded_tabs: expandedTabs,
     no_destructive: true
   };
 }
@@ -430,16 +502,34 @@ function parseUserEntered(sent) {
   if (DANGEROUS_LEAD.test(s)) return { display: '#EXEC_FORMULA#', formula: true };  // un-neutralized => formula!
   return { display: s, formula: false };
 }
-// model: { tabs: { name: { headers:[...], grid:[[...]] } }, executable_formula_cells: n }
+// model: { tabs: { name: { headers, grid:[[...]], grid_row_count } }, executable_formula_cells }
+// Rows are placed at their PHYSICAL grid index (physical row N => grid index N-1) so sparse layouts and the exact
+// update/insert positions are mirrored faithfully.
 function simulateFromSnapshot(before, headerMap) {
   var model = { tabs: {}, executable_formula_cells: 0 };
   Object.keys(before || {}).forEach(function (name) {
     var b = before[name]; var headers = b.headers.slice(); var grid = [headers.slice()];
-    b.rows.forEach(function (r) { grid.push(headers.map(function (h) { return r[h]; })); });
-    model.tabs[name] = { headers: headers, grid: grid };
+    var rowNums = b.row_numbers || [];
+    b.rows.forEach(function (r, i) {
+      var physical = rowNums[i] != null ? rowNums[i] : (i + 2);
+      var gi = physical - 1;                              // 0-indexed grid row
+      while (grid.length <= gi) grid.push([]);
+      grid[gi] = headers.map(function (h) { return r[h]; });
+    });
+    model.tabs[name] = { headers: headers, grid: grid, grid_row_count: b.grid_row_count || 0 };
   });
   // ensure header row exists for tabs we will write even if absent from the snapshot
-  Object.keys(headerMap || {}).forEach(function (name) { if (!model.tabs[name]) model.tabs[name] = { headers: headerMap[name].slice(), grid: [headerMap[name].slice()] }; });
+  Object.keys(headerMap || {}).forEach(function (name) { if (!model.tabs[name]) model.tabs[name] = { headers: headerMap[name].slice(), grid: [headerMap[name].slice()], grid_row_count: 0 }; });
+  return model;
+}
+// mirror a structural grid expansion (updateSheetProperties grow rowCount) — capacity only grows, never shrinks.
+// expandedTabs is the plan's { tab: { from, to } } map (keyed by name, which is how the model is keyed).
+function applyExpansion(model, expandedTabs) {
+  Object.keys(expandedTabs || {}).forEach(function (name) {
+    var t = model.tabs[name]; if (!t) return;
+    var to = expandedTabs[name] && expandedTabs[name].to;
+    if (to && (!t.grid_row_count || to > t.grid_row_count)) t.grid_row_count = to;
+  });
   return model;
 }
 function applyBatch(model, batchBody) {
@@ -448,7 +538,7 @@ function applyBatch(model, batchBody) {
     var m = str(entry.range).match(/!([A-Z]+)(\d+)$/);
     var startRow = m ? parseInt(m[2], 10) : 2;            // 1-indexed
     var startCol = 0;                                     // we always anchor at column A
-    var t = model.tabs[title]; if (!t) { t = model.tabs[title] = { headers: [], grid: [[]] }; }
+    var t = model.tabs[title]; if (!t) { t = model.tabs[title] = { headers: [], grid: [[]], grid_row_count: 0 }; }
     arr(entry.values).forEach(function (rowVals, ri) {
       var r = startRow - 1 + ri;                          // 0-indexed grid row (row 1 => index 0 = header)
       while (t.grid.length <= r) t.grid.push([]);
@@ -457,22 +547,30 @@ function applyBatch(model, batchBody) {
         if (p.formula) model.executable_formula_cells++;
         t.grid[r][startCol + ci] = p.display;
       });
+      if (t.grid_row_count && (r + 1) > t.grid_row_count) t.grid_row_count = r + 1;   // capacity follows growth
     });
   });
   return model;
 }
-function modelToSnapshot(model) {
+// identityBy: { tab: [identity cols] } — occupancy mirrors parseSnapshot so a re-parse keeps physical rows.
+function modelToSnapshot(model, identityBy) {
+  identityBy = identityBy || {};
   var out = {};
   Object.keys(model.tabs).forEach(function (name) {
     var t = model.tabs[name]; var headers = t.grid[0] ? t.grid[0].map(str) : [];
-    var rows = [];
+    var rows = [], rowNumbers = [], lastOccupied = 1; var idc = identityBy[name];
     for (var r = 1; r < t.grid.length; r++) {
-      var raw = t.grid[r] || []; var nonEmpty = raw.some(function (c) { return str(c).trim() !== ''; });
-      if (!nonEmpty) continue;
+      var raw = t.grid[r] || []; var physical = r + 1;
       var o = {}; headers.forEach(function (h, c) { o[h] = c < raw.length ? raw[c] : ''; });
-      rows.push(o);
+      if (!rowIsOccupied(o, raw, idc)) continue;
+      rows.push(o); rowNumbers.push(physical);
+      if (physical > lastOccupied) lastOccupied = physical;
     }
-    out[name] = { headers: headers, rows: rows, count: rows.length };
+    out[name] = {
+      headers: headers, rows: rows, row_numbers: rowNumbers, count: rows.length,
+      last_occupied_row: lastOccupied, next_free_row: Math.max(2, lastOccupied + 1),
+      grid_row_count: t.grid_row_count || 0, range_start_row: 1
+    };
   });
   return out;
 }
@@ -499,13 +597,17 @@ function verifyAll(input) {
   var before = input.before || {};
   var plan = input.plan || planOperations({ resolved: resolved, identity: id, config: config, row_set: set, before: before, preflight: input.preflight });
   var after = input.after || null;
-  var headerMap = {}; Object.keys(set.sheets).forEach(function (n) { var cs = contractSheet(resolved, n); if (cs) headerMap[n] = cs.headers; });
+  // a marker is LIVE-verified only when a real, successful write + after-snapshot read happened.
+  var applied = input.applied === true || (input.applied == null && after != null);
+  var blocked = plan.blocked === true;
+  var headerMap = {}, identityBy = {};
+  Object.keys(set.sheets).forEach(function (n) { var cs = contractSheet(resolved, n); if (cs) headerMap[n] = cs.headers; identityBy[n] = set.sheets[n].meta.identity_cols; });
 
-  // projected-after via the simulator when no real after-snapshot is supplied (dry-run / offline tests / blocked)
+  // projected-after via the simulator (dry-run / offline reasoning). Mirrors a grid expansion then the values write.
   var simModel = simulateFromSnapshot(before, headerMap);
-  if (!plan.blocked) applyBatch(simModel, plan.batchBody);
-  var projected = modelToSnapshot(simModel);
-  var afterSnap = after || projected;
+  if (!blocked) { applyExpansion(simModel, plan.expanded_tabs); applyBatch(simModel, plan.batchBody); }
+  var projected = modelToSnapshot(simModel, identityBy);
+  var afterSnap = (applied && after) ? after : projected;     // LIVE markers read the REAL after-snapshot only
   var v = {};
 
   // ---- formula-injection neutralization + negative-number preservation (Section 5) ------------------------
@@ -588,15 +690,38 @@ function verifyAll(input) {
   v.UNDECLARED_TABS_MODIFIED = ba.undeclared_tabs_modified;
   v.BEFORE_AFTER_SCOPE = ba.ok ? 'PASS' : 'FAIL';
 
-  // ---- Section 8. repeat-run idempotency: re-plan against projected-after => zero new inserts --------------
-  var idem = verifyIdempotency(resolved, id, config, set, projected);
+  // ---- Section 8. repeat-run idempotency: re-plan against the AFTER state => zero new inserts --------------
+  // LIVE marker re-plans against the real after-snapshot; plan-level uses the projection (for WRITE_PLAN).
+  var idem = verifyIdempotency(resolved, id, config, set, afterSnap);
+  var projIdem = applied ? verifyIdempotency(resolved, id, config, set, projected) : idem;
   v.DUPLICATE_AGENT_REQUESTS_CREATED = idem.dup.agent_requests;
   v.DUPLICATE_CONVERSATION_STATES_CREATED = idem.dup.conversation_state;
   v.DUPLICATE_TRACKED_SOURCES_CREATED = idem.dup.tracked_sources;
   v.DUPLICATE_OUTBOX_DELIVERIES_CREATED = idem.dup.telegram_outbox;
   v.IDEMPOTENCY = idem.ok ? 'PASS' : 'FAIL';
 
-  return { markers: v, projected: projected, isolation: iso, before_after: ba, idempotency: idem, plan: plan };
+  // ---- WRITE_PLAN: plan-level guarantees that ARE knowable without a live write (truthful in dry-run) -------
+  var planRangesOk = arr(plan.batchBody.data).every(function (e) { var mm = str(e.range).match(/!A(\d+)$/); return mm && parseInt(mm[1], 10) >= 2; });
+  var onlyTestTabs = (plan.write_tabs || []).every(function (t) { return Object.keys(set.sheets).indexOf(t) >= 0; });
+  var expSafe = !plan.expansion_body || arr(plan.expansion_body.requests).every(function (r) { return r && r.updateSheetProperties && r.updateSheetProperties.fields === 'gridProperties.rowCount'; });
+  var noDestructive = plan.no_destructive === true && !('requests' in plan.batchBody) && expSafe;
+  var plannedCellsSafe = cells.every(function (c) { return !isUnsafeCell(c); }) && simModel.executable_formula_cells === 0;
+  var planNeg = (set.formula_tests_enabled === false) ? true : negNotPrefixed;
+  var writePlanOk = planRangesOk && onlyTestTabs && noDestructive && plannedCellsSafe && planNeg && projIdem.ok;
+  v.WRITE_PLAN = blocked ? 'NOT_APPLICABLE' : (writePlanOk ? 'PASS' : 'FAIL');
+  v.NEXT_DATA_ROWS = plan.next_data_rows || {};
+  v.GRID_EXPANSIONS = plan.expanded_tabs || {};
+
+  // ---- truthful gating: LIVE-operation markers are PASS/FAIL only when a real write+read-back happened. ------
+  // In a dry-run they are NOT_EXECUTED_DRY_RUN; when preflight blocked, NOT_APPLICABLE. SKIPPED stays SKIPPED.
+  LIVE_MARKERS.forEach(function (k) {
+    if (v[k] === 'SKIPPED') return;
+    if (blocked) v[k] = 'NOT_APPLICABLE';
+    else if (!applied) v[k] = 'NOT_EXECUTED_DRY_RUN';
+    // when applied: keep the computed PASS/FAIL (verified against the REAL after-snapshot)
+  });
+
+  return { markers: v, projected: projected, applied: applied, isolation: iso, before_after: ba, idempotency: idem, plan: plan };
 }
 
 function findRow(snapshot, tab, identityCols, values) {
@@ -691,24 +816,40 @@ function assembleSummary(input) {
   var ver = input.verify || {};
   var m = ver.markers || {};
   var id = input.identity || {};
-  var config = input.config || {};
   var plan = input.plan || (ver.plan) || {};
-  var changesApplied = !!input.changes_applied && !plan.blocked;
+  var blocked = plan.blocked === true;
+  // a real, successful values write + after-snapshot read happened (the workflow only reaches Verify & Report on
+  // the applied branch after a 200 from the write and a successful after-read).
+  var applied = ver.applied === true || input.changes_applied === true;
 
-  var subPass = ['APPEND_AGENT_REQUEST', 'READ_BACK_AGENT_REQUEST', 'APPEND_REQUEST_EVENT', 'UPSERT_INSERT',
-    'UPSERT_UPDATE', 'UPSERT_ROW_COUNT_STABLE', 'TRACKED_SOURCE_UPSERT', 'OUTBOX_IDEMPOTENCY', 'OWNER_ISOLATION',
-    'REQUEST_ISOLATION', 'BEFORE_AFTER_SCOPE', 'IDEMPOTENCY'];
-  var okFormula = m.FORMULA_INJECTION_NEUTRALIZATION === 'PASS' || m.FORMULA_INJECTION_NEUTRALIZATION === 'SKIPPED';
-  var okNeg = m.NEGATIVE_NUMBER_PRESERVATION === 'PASS' || m.NEGATIVE_NUMBER_PRESERVATION === 'SKIPPED';
-  var allSub = pre.PREFLIGHT === 'PASS' && subPass.every(function (k) { return m[k] === 'PASS'; }) && okFormula && okNeg &&
-    (m.FOREIGN_ROWS_MODIFIED === 0) && (m.UNEXPECTED_ROWS_WRITTEN === 0) && (m.FOREIGN_ROWS_RETURNED === 0) &&
-    (m.HEADERS_MODIFIED === 0) && (m.UNDECLARED_TABS_MODIFIED === 0);
-  var result = plan.blocked ? 'BLOCKED_PREFLIGHT' : (allSub ? 'PASS' : 'FAIL');
+  var preflightPass = pre.PREFLIGHT === 'PASS';
+  var sheetsRead = input.sheets_read === false ? 'FAIL' : 'PASS';   // reads must have succeeded to reach here
+
+  // dry-run validity: a well-formed, neutralized, in-bounds, idempotent PLAN (no live mutation needed).
+  var dryPlanOk = preflightPass && sheetsRead === 'PASS' && m.WRITE_PLAN === 'PASS';
+
+  // live verification (fix 6): every LIVE marker PASS (SKIPPED allowed only for formula/negative when disabled)
+  // plus all numeric scope guards zero.
+  function liveOk(k) {
+    var val = m[k];
+    if (k === 'FORMULA_INJECTION_NEUTRALIZATION' || k === 'NEGATIVE_NUMBER_PRESERVATION') return val === 'PASS' || val === 'SKIPPED';
+    return val === 'PASS';
+  }
+  var numericGuardsZero = (m.FOREIGN_ROWS_MODIFIED === 0) && (m.UNEXPECTED_ROWS_WRITTEN === 0) &&
+    (m.FOREIGN_ROWS_RETURNED === 0) && (m.HEADERS_MODIFIED === 0) && (m.UNDECLARED_TABS_MODIFIED === 0);
+  var liveAllPass = applied && preflightPass && LIVE_MARKERS.every(liveOk) && numericGuardsZero;
+
+  // CHANGES_APPLIED is true ONLY after a verified live write (write ok + after read-back + all live markers pass).
+  var changesApplied = liveAllPass;
+  var result = blocked ? 'BLOCKED_PREFLIGHT' : (applied ? (liveAllPass ? 'PASS' : 'FAIL') : (dryPlanOk ? 'PASS' : 'FAIL'));
 
   return {
     PREFLIGHT: pre.PREFLIGHT || 'FAIL',
     CONTRACT_TABS_PRESENT: pre.contract_tabs_present != null ? pre.contract_tabs_present : 0,
-    SHEETS_READ: input.sheets_read ? 'PASS' : 'PASS',
+    SHEETS_READ: sheetsRead,
+    WRITE_PLAN: m.WRITE_PLAN,
+    NEXT_DATA_ROWS: m.NEXT_DATA_ROWS || {},
+    GRID_EXPANSIONS: m.GRID_EXPANSIONS || {},
     APPEND_AGENT_REQUEST: m.APPEND_AGENT_REQUEST,
     READ_BACK_AGENT_REQUEST: m.READ_BACK_AGENT_REQUEST,
     APPEND_REQUEST_EVENT: m.APPEND_REQUEST_EVENT,
@@ -752,16 +893,18 @@ function runOffline(input) {
   var set = buildQaRowSet(id, config);
   var before = input.before || {};
   var pre = preflight({ resolved: resolved, metadata: input.metadata, headerRows: input.headerRows, config: config, identity: id, row_set: set });
-  var plan = planOperations({ resolved: resolved, identity: id, config: config, row_set: set, before: before, preflight: pre });
+  var plan = planOperations({ resolved: resolved, identity: id, config: config, row_set: set, before: before, preflight: pre, sheet_ids: input.sheet_ids });
 
-  // apply the plan to a fresh simulator to obtain the projected after-state (the "live write" stand-in)
-  var headerMap = {}; Object.keys(set.sheets).forEach(function (n) { var cs = contractSheet(resolved, n); if (cs) headerMap[n] = cs.headers; });
+  // apply the plan to a fresh simulator to obtain the projected after-state (the "live write" stand-in):
+  // mirror the bounded grid expansion, then the single values write, at PHYSICAL row positions.
+  var headerMap = {}, identityBy = {};
+  Object.keys(set.sheets).forEach(function (n) { var cs = contractSheet(resolved, n); if (cs) headerMap[n] = cs.headers; identityBy[n] = set.sheets[n].meta.identity_cols; });
   var model = simulateFromSnapshot(before, headerMap);
   var applied = config.execute_writes === true && config.confirm_staging_spreadsheet === true && !pre.blocked;
-  if (applied && plan.batchBody.data.length) applyBatch(model, plan.batchBody);
-  var after = modelToSnapshot(model);
+  if (applied) { applyExpansion(model, plan.expanded_tabs); if (plan.batchBody.data.length) applyBatch(model, plan.batchBody); }
+  var after = modelToSnapshot(model, identityBy);
 
-  var ver = verifyAll({ resolved: resolved, identity: id, config: config, row_set: set, before: before, plan: plan, after: applied ? after : null });
+  var ver = verifyAll({ resolved: resolved, identity: id, config: config, row_set: set, before: before, plan: plan, after: applied ? after : null, applied: applied });
   var summary = assembleSummary({ preflight: pre, verify: ver, identity: id, config: config, plan: plan, changes_applied: applied, sheets_read: true });
   return { identity: id, row_set: set, preflight: pre, plan: plan, verify: ver, after: after, projected: ver.projected, summary: summary };
 }
@@ -771,10 +914,11 @@ module.exports = {
   str, low, neutralize, isFiniteNumber, isUnsafeCell, djb2, payloadHash, makeDeliveryId, colLetter,
   rowStartRange, fullRange, encodeQaTag, parseQaTag, isQaRunRow,
   // constants
-  FORMULA_TESTS, NEGATIVE_TESTS, EXAMPLE_URL, sheetPlanMeta,
+  FORMULA_TESTS, NEGATIVE_TESTS, EXAMPLE_URL, LIVE_MARKERS, sheetPlanMeta,
   // engine
   buildRunIdentity, buildQaRowSet, validatePlanAgainstContract, neededColumns, contractSheet,
-  preflight, parseSnapshot, titleFromRange, rowsFromValues, planOperations,
-  simulateFromSnapshot, applyBatch, modelToSnapshot, parseUserEntered, upsertInMemory, matchByIdentity,
+  preflight, parseSnapshot, titleFromRange, rangeStartRow, rowsFromValues, rowIsOccupied, planOperations,
+  matchByIdentity, indexByIdentity,
+  simulateFromSnapshot, applyExpansion, applyBatch, modelToSnapshot, parseUserEntered, upsertInMemory,
   verifyAll, verifyIsolation, verifyBeforeAfter, verifyIdempotency, fieldsEqual, assembleSummary, runOffline
 };
