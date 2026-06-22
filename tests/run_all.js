@@ -79,6 +79,8 @@ const JS_SUITES = [
   ['deploy-preflight', 'test_deploy_preflight.js'],
   ['attachment-routing', 'test_attachment_routing.js'],
   ['smoke-hardening', 'test_smoke_hardening.js'],
+  // --- Stage 3 Google Sheets staging bootstrap (resolver + pure planner + generated QA workflow) ---
+  ['sheets-bootstrap', 'test_sheets_bootstrap.js'],
 ];
 
 let failed = 0;
@@ -130,6 +132,17 @@ try {
   process.stdout.write((e.stdout || '') + '\n  (sheet contract validator exit non-zero)\n');
   failed++;
   summary.push(['validate_sheet_contracts', '?', '?', 'FAIL']);
+}
+
+// Stage 3 sheets bootstrap: contract resolver + generated QA workflow must be drift-free.
+try {
+  execFileSync('node', [path.join(__dirname, '..', 'n8n', 'lib', 'sheets_contract_resolver.js')], { encoding: 'utf8' });
+  execFileSync('node', [path.join(__dirname, '..', 'tools', 'gen_sheets_bootstrap_workflow.js'), '--check'], { encoding: 'utf8' });
+  summary.push(['sheets_bootstrap_gen (drift)', 'ok', '0', 'PASS']);
+} catch (e) {
+  process.stdout.write((e.stdout || '') + (e.stderr || '') + '\n  (sheets bootstrap resolver/generator drift)\n');
+  failed++;
+  summary.push(['sheets_bootstrap_gen (drift)', '?', '?', 'FAIL']);
 }
 
 // Legacy Lead Scout harness (WF12/13/14) — must remain green.

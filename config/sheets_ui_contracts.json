@@ -1,0 +1,216 @@
+{
+  "$schema_note": "UI metadata layer for the Stage 3 Google Sheets staging bootstrap. It NEVER redefines sheet headers (those live only in config/sheets_contracts.json). It declares, per contract sheet+column: data validations (dropdowns sourced from a canonical enum) and checkboxes (canonically boolean fields). Column widths and number/date formats are derived deterministically from reusable semantic rules in n8n/lib/sheets_bootstrap_planner.js, not hand-listed here. Every dropdown resolves an enum_ref: 'taxonomy:<key>' reads config/taxonomy.json; 'canonical:<name>' reads canonical_enums below. Each canonical enum records its source. n8n/lib/sheets_contract_resolver.js fails if an enum_ref or a referenced column/sheet cannot be resolved. Add a new dropdown by pointing a column at an existing enum or adding a new canonical enum with its source.",
+  "version": "sheets-ui-v1",
+
+  "validation_strictness_policy": "strict=true rejects values outside the canonical list (closed, stable enums normalized by the workflows). strict=false shows the list as suggestions with a warning but accepts other values (legacy/alias-bearing columns, comma-lists, or columns that may hold historical values) so the bootstrap never rejects pre-existing data. Dropdowns and checkboxes are applied from row 2 downward; header cells (row 1) are never validated.",
+
+  "canonical_enums": {
+    "agent_state": { "strict": true, "source": "n8n/lib/agent_state.js STATES", "values": ["received", "classified", "awaiting_approval", "approved", "collecting", "quality_check", "analyzing", "aggregating", "reporting", "delivering", "completed", "partial", "failed", "cancelled"] },
+    "agent_request_status": { "strict": false, "source": "docs/TABLE_SCHEMA.md §A agent_requests.status", "values": ["new", "planned", "needs_approval", "approved", "running", "needs_review", "processed", "error", "cancelled"] },
+    "request_type": { "strict": false, "source": "docs/TABLE_SCHEMA.md §A agent_requests.request_type", "values": ["web_competitor_discovery", "touchpoint_discovery", "lead_search", "competitor_audience_mining", "comment_mining", "semantic_ads_analysis", "usp_positioning", "outreach_draft", "report_summary", "manual_intake", "unknown"] },
+    "source_scope": { "strict": false, "source": "docs/TABLE_SCHEMA.md §A agent_requests.source_scope", "values": ["classified", "social", "search", "web", "mixed", "unknown"] },
+    "plan_source": { "strict": true, "source": "docs/SHEETS_MIGRATION_STAGE_4.md A1/A3", "values": ["deterministic", "llm"] },
+    "approval_decision": { "strict": true, "source": "docs/SHEETS_MIGRATION_STAGE_4.md A4", "values": ["approve", "reject", "cancel"] },
+    "send_status": { "strict": true, "source": "docs/SHEETS_MIGRATION_STAGE_4.md A5 telegram_outbox.send_status", "values": ["pending", "sent", "error"] },
+    "attachment_kind": { "strict": false, "source": "n8n/lib/report_package.js attachmentDelivery / report_export.js views", "values": ["csv", "xlsx", "chart", "png", "report"] },
+    "message_role": { "strict": false, "source": "n8n/lib/conversation_memory.js message roles", "values": ["user", "assistant", "system"] },
+    "memory_type": { "strict": false, "source": "docs/TABLE_SCHEMA.md §D agent_memory.memory_type", "values": ["business_profile", "stakeholder_preference", "known_competitor", "source_quality", "lead_followup", "campaign_insight", "decision", "run_summary", "constraint"] },
+    "memory_status": { "strict": false, "source": "docs/TABLE_SCHEMA.md §D agent_memory.status", "values": ["active", "archived", "needs_review"] },
+    "orchestration_action": { "strict": true, "source": "docs/SHEETS_MIGRATION_STAGE_4.md B3.1 orchestration_decisions.action", "values": ["reuse", "collect", "extend"] },
+    "tracked_source_status": { "strict": true, "source": "docs/SHEETS_MIGRATION_STAGE_4.md B2.8 tracked_sources.status", "values": ["active", "paused", "removed", "setup_required"] },
+    "platform": { "strict": false, "source": "docs/TABLE_SCHEMA.md (platform across raw/snapshot/live tabs)", "values": ["website", "telegram", "vk", "avito", "instagram", "dzen", "forum", "reviews", "sheets", "manual", "manual_test", "unknown"] },
+    "change_type_vk": { "strict": false, "source": "n8n/lib/vk_collector.js changeEvent change_type", "values": ["new_post", "edited_post"] },
+    "report_type": { "strict": true, "source": "docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md report_type", "values": ["weekly_digest", "on_demand", "no_data_notice"] },
+    "llm_status": { "strict": true, "source": "docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md llm_status", "values": ["disabled", "ok", "ok_with_flags"] },
+    "delivered_to": { "strict": true, "source": "docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md delivered_to", "values": ["none", "telegram_operator", "sheets_only"] },
+    "trend_status": { "strict": true, "source": "docs/SHEETS_MIGRATION_STAGE_C_HARDENING.md §12 trend_status", "values": ["baseline_selected", "no_compatible_baseline"] },
+    "snapshot_change_type": { "strict": false, "source": "docs/TABLE_SCHEMA.md §E competitor_site_snapshots.change_type", "values": ["baseline", "unchanged", "changed", "new_offer", "price_change"] },
+    "page_type": { "strict": false, "source": "docs/TABLE_SCHEMA.md §E + SHEETS_MIGRATION_STAGE_C_HARDENING.md §8 page_type", "values": ["home", "landing", "services", "offer", "prices", "about", "contact", "other"] },
+    "analysis_status": { "strict": true, "source": "docs/SHEETS_MIGRATION_STAGE_C_HARDENING.md §24 analysis_runs/raw_market_records.analysis_status", "values": ["pending", "analyzed"] },
+    "source_family": { "strict": false, "source": "docs/TABLE_SCHEMA.md §F live_source_runs.source_family", "values": ["classifieds", "social_channel", "public_discussion", "web_competitor", "report_layer", "other"] },
+    "live_run_mode": { "strict": false, "source": "docs/TABLE_SCHEMA.md §F live_source_runs.mode", "values": ["fixture", "live", "deterministic", "llm_summary", "blocked_by_guard"] },
+    "live_run_status": { "strict": true, "source": "docs/TABLE_SCHEMA.md §F live_source_runs.status", "values": ["completed", "failed", "blocked", "partial"] },
+    "approval_token_used": { "strict": true, "source": "docs/TABLE_SCHEMA.md §F live_source_runs.approval_token_used (never the token value)", "values": ["yes", "no", "not_required"] },
+    "raw_source_type": { "strict": false, "source": "docs/TABLE_SCHEMA.md §B raw_market_records.source_type", "values": ["classified", "social", "scraped_web", "manual", "apify", "firecrawl", "unknown"] },
+    "raw_record_type_hint": { "strict": false, "source": "docs/TABLE_SCHEMA.md §B record classes", "values": ["hot_lead", "warm_touchpoint", "cold_audience_candidate", "client_pain", "question_objection", "competitor_audience", "competitor_activity", "semantic_signal", "ad_channel_signal", "content_idea", "market_signal", "irrelevant"] },
+    "raw_approval_status": { "strict": false, "source": "docs/TABLE_SCHEMA.md §B raw_market_records.approval_status", "values": ["new", "approved", "rejected", "processed", "duplicate", "error"] },
+    "dedup_status": { "strict": false, "source": "docs/TABLE_SCHEMA.md raw/url candidate dedup_status (advisory)", "values": ["unique", "duplicate_in_batch", "duplicate_in_registry"] },
+    "registry_status": { "strict": false, "source": "docs/TABLE_SCHEMA.md url_candidates.registry_status (advisory)", "values": ["not_in_registry", "in_registry"] },
+    "lead_temperature": { "strict": false, "source": "docs/TABLE_SCHEMA.md §B raw_market_records.lead_temperature", "values": ["hot", "warm", "cold", "none"] },
+    "candidate_type": { "strict": false, "source": "docs/TABLE_SCHEMA.md url_candidates.candidate_type", "values": ["direct_competitor", "aggregator", "directory", "media_article", "marketplace", "social", "unknown"] },
+    "competitor_class": { "strict": true, "source": "docs/SHEETS_MIGRATION_STAGE_C_HARDENING.md §9 url_candidates.competitor_class", "values": ["direct", "indirect", "regulator", "publisher", "source_candidate", "irrelevant"] },
+    "url_candidate_approval": { "strict": false, "source": "docs/TABLE_SCHEMA.md url_candidates.approval_status", "values": ["new", "approved", "rejected", "processed", "duplicate", "error"] },
+    "discovery_status": { "strict": false, "source": "docs/TABLE_SCHEMA.md discovery_requests.status", "values": ["new", "search_done", "needs_review", "approved", "processing", "processed", "error", "cancelled"] },
+    "discovery_source_mode": { "strict": false, "source": "docs/TABLE_SCHEMA.md discovery_requests.source_mode", "values": ["search", "manual"] },
+    "processing_status": { "strict": false, "source": "docs/TABLE_SCHEMA.md technical columns processing_status", "values": ["parsed_success", "business_skip", "technical_error"] },
+    "status_analysis": { "strict": false, "source": "docs/TABLE_SCHEMA.md status (analyzer)", "values": ["analyzed", "skipped"] },
+    "entity_type_legacy": { "strict": false, "source": "docs/TABLE_SCHEMA.md Entity Type Values (6 business tabs)", "values": ["competitor", "lead_signal", "market_signal", "content_idea", "irrelevant"] },
+    "freshness_status_analysis": { "strict": false, "source": "docs/TABLE_SCHEMA.md col 7 freshness_status", "values": ["fresh", "recent", "old", "unknown"] },
+    "recommended_action_analysis": { "strict": false, "source": "docs/TABLE_SCHEMA.md col 24 recommended_action", "values": ["monitor", "contact", "create_content", "ignore", "investigate"] },
+    "review_status_queue": { "strict": false, "source": "docs/SHEETS_MIGRATION_STAGE_C_HARDENING.md §3 review_status", "values": ["confirmed", "pending"] },
+    "score_band": { "strict": true, "source": "docs/TABLE_SCHEMA.md §G + DEC-140 score_band", "values": ["high", "medium", "low", "ignore"] },
+    "review_priority": { "strict": true, "source": "docs/TABLE_SCHEMA.md §G + DEC-140 review_priority", "values": ["high", "medium", "low", "ignore"] },
+    "review_status_lead": { "strict": true, "source": "docs/TABLE_SCHEMA.md §G public_lead_signals.review_status", "values": ["new", "needs_review", "accepted", "rejected", "duplicate", "stale"] },
+    "recommended_action_lead": { "strict": true, "source": "docs/TABLE_SCHEMA.md §G public_lead_signals.recommended_action (outreach values forbidden)", "values": ["manual_review", "content_idea", "monitor", "ignore"] },
+    "contact_use_policy": { "strict": true, "source": "docs/TABLE_SCHEMA.md §G public_lead_signals.contact_use_policy", "values": ["manual_review", "aggregate_only", "do_not_use"] },
+    "public_contact_type": { "strict": false, "source": "docs/TABLE_SCHEMA.md §G public_lead_signals.public_contact_type (empty allowed)", "values": ["phone", "username", "profile_url"] },
+    "intent_type_lead": { "strict": true, "source": "docs/TABLE_SCHEMA.md §G public_lead_signals.intent_type", "values": ["question", "objection", "complaint", "buying_intent", "content_signal"] },
+    "freshness_status_lead": { "strict": true, "source": "docs/TABLE_SCHEMA.md §G public_lead_signals.freshness_status", "values": ["fresh", "stale", "unknown"] },
+    "market_angle_category": { "strict": false, "source": "docs/WF10_TABLE_SCHEMAS.md §2 market_angles.category", "values": ["speed", "price", "trust", "pain", "segment"] }
+  },
+
+  "sheets": {
+    "agent_requests": {
+      "dropdowns": { "state": "canonical:agent_state", "status": "canonical:agent_request_status", "request_type": "canonical:request_type", "source_scope": "canonical:source_scope", "plan_source": "canonical:plan_source", "service_focus": "taxonomy:service" },
+      "checkboxes": ["approval_required"]
+    },
+    "agent_request_events": {
+      "dropdowns": { "from_state": "canonical:agent_state", "to_state": "canonical:agent_state" },
+      "checkboxes": ["accepted"]
+    },
+    "conversation_state": {
+      "dropdowns": { "current_state": "canonical:agent_state", "current_service": "taxonomy:service" },
+      "checkboxes": ["no_memory"]
+    },
+    "conversation_messages": {
+      "dropdowns": { "role": "canonical:message_role" },
+      "checkboxes": ["archived"]
+    },
+    "conversation_summaries": { "dropdowns": {}, "checkboxes": [] },
+    "context_usage": { "dropdowns": {}, "checkboxes": ["truncated"] },
+    "durable_memories": {
+      "dropdowns": { "memory_type": "canonical:memory_type", "status": "canonical:memory_status" },
+      "checkboxes": []
+    },
+    "memory_audit_events": { "dropdowns": {}, "checkboxes": [] },
+    "source_audit_events": { "dropdowns": { "platform": "canonical:platform", "status": "canonical:tracked_source_status" }, "checkboxes": [] },
+    "orchestration_decisions": { "dropdowns": { "action": "canonical:orchestration_action" }, "checkboxes": ["needs_external_call"] },
+    "execution_summaries": {
+      "dropdowns": { "final_state": "canonical:agent_state", "source_cost_status": "taxonomy:cost_status", "llm_cost_status": "taxonomy:cost_status" },
+      "checkboxes": []
+    },
+    "telegram_outbox": { "dropdowns": { "send_status": "canonical:send_status" }, "checkboxes": [] },
+    "report_bundles": { "dropdowns": { "report_type": "canonical:report_type" }, "checkboxes": [] },
+    "attachment_outbox": { "dropdowns": { "send_status": "canonical:send_status", "kind": "canonical:attachment_kind" }, "checkboxes": [] },
+    "weekly_digests": { "dropdowns": {}, "checkboxes": ["empty"] },
+    "tracked_sources": {
+      "dropdowns": { "platform": "canonical:platform", "status": "canonical:tracked_source_status", "last_status": "canonical:tracked_source_status" },
+      "checkboxes": []
+    },
+    "source_change_events": {
+      "dropdowns": { "platform": "canonical:platform", "change_type": "canonical:change_type_vk" },
+      "checkboxes": ["acknowledged"]
+    },
+    "source_health": {
+      "dropdowns": { "source_family": "canonical:source_family", "platform": "canonical:platform", "data_mode": "taxonomy:data_mode", "quality_status": "taxonomy:quality_status", "source_cost_status": "taxonomy:cost_status", "llm_cost_status": "taxonomy:cost_status" },
+      "checkboxes": []
+    },
+    "vk_posts": {
+      "dropdowns": { "platform": "canonical:platform", "source_type": "canonical:raw_source_type", "data_mode": "taxonomy:data_mode", "quality_status": "taxonomy:quality_status" },
+      "checkboxes": ["is_pinned", "monitoring_eligible"]
+    },
+    "vk_post_state": { "dropdowns": {}, "checkboxes": ["is_pinned"] },
+    "deep_analysis_findings": { "dropdowns": { "quality_status": "taxonomy:quality_status" }, "checkboxes": [] },
+    "deep_analysis_recommendations": { "dropdowns": {}, "checkboxes": [] },
+    "market_intelligence_reports": {
+      "dropdowns": { "report_type": "canonical:report_type", "llm_status": "canonical:llm_status", "delivered_to": "canonical:delivered_to", "trend_status": "canonical:trend_status" },
+      "checkboxes": ["report_contains_degraded_data", "report_contains_fixture_data", "report_contains_contacts", "is_fixture_report"]
+    },
+    "competitor_profiles": { "dropdowns": { "data_mode": "taxonomy:data_mode" }, "checkboxes": [] },
+    "competitor_site_snapshots": {
+      "dropdowns": { "page_type": "canonical:page_type", "change_type": "canonical:snapshot_change_type", "service_primary": "taxonomy:service", "service_secondary": "taxonomy:service", "quality_status": "taxonomy:quality_status", "cost_status": "taxonomy:cost_status", "data_mode": "taxonomy:data_mode" },
+      "checkboxes": ["broken_brand", "repair_used"]
+    },
+    "audience_activity_signals": { "dropdowns": { "data_mode": "taxonomy:data_mode" }, "checkboxes": [] },
+    "content_positioning_plan": { "dropdowns": {}, "checkboxes": [] },
+    "market_angles": { "dropdowns": { "category": "canonical:market_angle_category", "data_mode": "taxonomy:data_mode" }, "checkboxes": [] },
+    "analysis_runs": {
+      "dropdowns": { "platform": "canonical:platform", "source_type": "canonical:raw_source_type", "data_mode": "taxonomy:data_mode", "analysis_status": "canonical:analysis_status" },
+      "checkboxes": ["llm_used"]
+    },
+    "live_source_runs": {
+      "dropdowns": { "source_family": "canonical:source_family", "platform": "canonical:platform", "mode": "canonical:live_run_mode", "status": "canonical:live_run_status", "approval_token_used": "canonical:approval_token_used", "cost_status": "taxonomy:cost_status", "source_cost_status": "taxonomy:cost_status", "llm_cost_status": "taxonomy:cost_status", "data_mode": "taxonomy:data_mode" },
+      "checkboxes": []
+    },
+    "raw_market_records": {
+      "dropdowns": { "source_type": "canonical:raw_source_type", "platform": "canonical:platform", "service_hint": "taxonomy:service", "record_type_hint": "canonical:raw_record_type_hint", "lead_temperature": "canonical:lead_temperature", "dedup_status": "canonical:dedup_status", "approval_status": "canonical:raw_approval_status", "data_mode": "taxonomy:data_mode", "quality_status": "taxonomy:quality_status", "activity_subtype": "taxonomy:activity_subtype", "analysis_status": "canonical:analysis_status", "cost_status": "taxonomy:cost_status", "review_status": "canonical:review_status_queue" },
+      "checkboxes": ["competitor_related", "is_detail", "detail_fetch_required", "within_default_window", "exact_evidence_url", "placeholder_title"]
+    },
+    "market_record_registry": {
+      "dropdowns": { "source_type": "canonical:raw_source_type", "platform": "canonical:platform", "last_route": "taxonomy:valid_routes", "last_processing_status": "canonical:processing_status", "last_entity_type": "canonical:entity_type_legacy" },
+      "checkboxes": []
+    },
+    "discovery_requests": {
+      "dropdowns": { "status": "canonical:discovery_status", "source_mode": "canonical:discovery_source_mode", "service_focus": "taxonomy:service", "service_primary": "taxonomy:service", "service_secondary": "taxonomy:service", "apify_cost_status": "taxonomy:cost_status" },
+      "checkboxes": []
+    },
+    "url_candidates": {
+      "dropdowns": { "candidate_type": "canonical:candidate_type", "approval_status": "canonical:url_candidate_approval", "competitor_class": "canonical:competitor_class", "service_hint": "taxonomy:service", "service_primary": "taxonomy:service", "service_secondary": "taxonomy:service", "dedup_status": "canonical:dedup_status", "registry_status": "canonical:registry_status" },
+      "checkboxes": ["is_root", "is_competitor_entity"]
+    },
+    "url_registry": {
+      "dropdowns": { "last_route": "taxonomy:valid_routes", "last_processing_status": "canonical:processing_status", "last_entity_type": "canonical:entity_type_legacy" },
+      "checkboxes": []
+    },
+    "public_lead_signals": {
+      "dropdowns": { "source_platform": "canonical:platform", "service_type": "taxonomy:service", "intent_type": "canonical:intent_type_lead", "score_band": "canonical:score_band", "freshness_status": "canonical:freshness_status_lead", "public_contact_type": "canonical:public_contact_type", "contact_use_policy": "canonical:contact_use_policy", "review_status": "canonical:review_status_lead", "review_priority": "canonical:review_priority", "recommended_action": "canonical:recommended_action_lead" },
+      "checkboxes": ["outreach_allowed"]
+    },
+    "source_confidence_rules": { "dropdowns": {}, "checkboxes": [] },
+    "monitor_queue": {
+      "dropdowns": { "source_type": "canonical:raw_source_type", "platform": "canonical:platform", "freshness_status": "canonical:freshness_status_analysis", "entity_type": "taxonomy:entity_type", "service_type": "taxonomy:service", "recommended_action": "canonical:recommended_action_analysis", "status": "canonical:status_analysis", "processing_status": "canonical:processing_status", "route": "taxonomy:valid_routes", "record_type": "taxonomy:record_type", "activity_subtype": "taxonomy:activity_subtype", "service_primary": "taxonomy:service", "service_secondary": "taxonomy:service", "candidate_entity_type": "taxonomy:entity_type", "data_mode": "taxonomy:data_mode", "quality_status": "taxonomy:quality_status", "review_status": "canonical:review_status_queue" },
+      "checkboxes": ["needs_manual_review", "repair_used"]
+    },
+    "content_queue": {
+      "dropdowns": { "source_type": "canonical:raw_source_type", "platform": "canonical:platform", "freshness_status": "canonical:freshness_status_analysis", "entity_type": "taxonomy:entity_type", "service_type": "taxonomy:service", "recommended_action": "canonical:recommended_action_analysis", "status": "canonical:status_analysis", "processing_status": "canonical:processing_status", "route": "taxonomy:valid_routes", "record_type": "taxonomy:record_type", "activity_subtype": "taxonomy:activity_subtype", "service_primary": "taxonomy:service", "service_secondary": "taxonomy:service", "candidate_entity_type": "taxonomy:entity_type", "data_mode": "taxonomy:data_mode", "quality_status": "taxonomy:quality_status", "review_status": "canonical:review_status_queue" },
+      "checkboxes": ["needs_manual_review", "repair_used"]
+    },
+    "review_queue": {
+      "dropdowns": { "source_type": "canonical:raw_source_type", "platform": "canonical:platform", "freshness_status": "canonical:freshness_status_analysis", "entity_type": "taxonomy:entity_type", "service_type": "taxonomy:service", "recommended_action": "canonical:recommended_action_analysis", "status": "canonical:status_analysis", "processing_status": "canonical:processing_status", "route": "taxonomy:valid_routes", "record_type": "taxonomy:record_type", "activity_subtype": "taxonomy:activity_subtype", "service_primary": "taxonomy:service", "service_secondary": "taxonomy:service", "candidate_entity_type": "taxonomy:entity_type", "data_mode": "taxonomy:data_mode", "quality_status": "taxonomy:quality_status", "review_status": "canonical:review_status_queue" },
+      "checkboxes": ["needs_manual_review", "repair_used"]
+    }
+  },
+
+  "_provenance": {
+    "agent_requests": "UNION of Stage 4 WF18 schema (docs/SHEETS_MIGRATION_STAGE_4.md A1) + Stage 3 ledger (docs/TABLE_SCHEMA.md §A). Multi-generation writer collision — QA-015.",
+    "agent_request_events": "docs/SHEETS_MIGRATION_STAGE_4.md A2 + contract required idempotency_key",
+    "conversation_state": "docs/SHEETS_MIGRATION_STAGE_4.md B2.3",
+    "conversation_messages": "docs/SHEETS_MIGRATION_STAGE_4.md B2.2",
+    "conversation_summaries": "docs/SHEETS_MIGRATION_STAGE_4.md B2.4",
+    "context_usage": "docs/SHEETS_MIGRATION_STAGE_4.md B2.7",
+    "durable_memories": "docs/SHEETS_MIGRATION_STAGE_4.md B2.5",
+    "memory_audit_events": "docs/SHEETS_MIGRATION_STAGE_4.md B2.6",
+    "source_audit_events": "docs/SHEETS_MIGRATION_STAGE_4.md B2.9",
+    "orchestration_decisions": "docs/SHEETS_MIGRATION_STAGE_4.md B3.1",
+    "execution_summaries": "docs/SHEETS_MIGRATION_STAGE_4.md A6 + contract required owner_user_id",
+    "telegram_outbox": "docs/SHEETS_MIGRATION_STAGE_4.md A5",
+    "report_bundles": "WF24/WF25 'Read report_bundles' reader contract (report_id/owner_user_id + serialized bundle column)",
+    "attachment_outbox": "n8n/lib/report_package.js attachmentDelivery()",
+    "weekly_digests": "n8n/lib/weekly_digest.js digest row",
+    "tracked_sources": "docs/SHEETS_MIGRATION_STAGE_4.md B2.8",
+    "source_change_events": "UNION of WF23 (docs/SHEETS_MIGRATION_STAGE_4.md B2.10) + n8n/lib/vk_collector.js changeEvent (WF26)",
+    "source_health": "docs/SOURCE_QUALITY_GATE.md source_health columns (WF16)",
+    "vk_posts": "n8n/lib/vk_collector.js buildRecord() (nested attachments/repost/engagement stored as JSON)",
+    "vk_post_state": "n8n/workflows/26 'Shape VK Post State'",
+    "deep_analysis_findings": "docs/SHEETS_MIGRATION_STAGE_4.md B3.2",
+    "deep_analysis_recommendations": "docs/SHEETS_MIGRATION_STAGE_4.md B3.3",
+    "market_intelligence_reports": "docs/MARKET_INTELLIGENCE_REPORT_SCHEMA.md (25) + SHEETS_MIGRATION_STAGE_C_HARDENING.md §12/§17 additive",
+    "competitor_profiles": "docs/WF10_TABLE_SCHEMAS.md §1 (17) + SHEETS_MIGRATION_STAGE_C_HARDENING.md §16 lineage",
+    "competitor_site_snapshots": "docs/TABLE_SCHEMA.md §E (22) + SHEETS_MIGRATION_STAGE_C_HARDENING.md §8/§24 additive",
+    "audience_activity_signals": "docs/WF10_TABLE_SCHEMAS.md §3 (14) + SHEETS_MIGRATION_STAGE_C_HARDENING.md §16 lineage",
+    "content_positioning_plan": "docs/WF10_TABLE_SCHEMAS.md §4 (12)",
+    "market_angles": "docs/WF10_TABLE_SCHEMAS.md §2 (9) + SHEETS_MIGRATION_STAGE_C_HARDENING.md §16 lineage",
+    "analysis_runs": "docs/SHEETS_MIGRATION_STAGE_C_HARDENING.md §24",
+    "live_source_runs": "docs/TABLE_SCHEMA.md §F (23) + SHEETS_MIGRATION_STAGE_C_HARDENING.md §4/§20 additive",
+    "raw_market_records": "docs/TABLE_SCHEMA.md §B (40) + SHEETS_MIGRATION_STAGE_C_HARDENING.md §14/§19/§24 lineage+observability",
+    "market_record_registry": "docs/TABLE_SCHEMA.md §C (15)",
+    "discovery_requests": "docs/TABLE_SCHEMA.md (18) + SHEETS_MIGRATION_STAGE_C_HARDENING.md §10 additive",
+    "url_candidates": "docs/TABLE_SCHEMA.md (26) + SHEETS_MIGRATION_STAGE_C_HARDENING.md §9 additive",
+    "url_registry": "docs/TABLE_SCHEMA.md url_registry (10)",
+    "public_lead_signals": "docs/TABLE_SCHEMA.md §G (47, v0.3)",
+    "source_confidence_rules": "docs/WF10_TABLE_SCHEMAS.md §5 (5)",
+    "monitor_queue": "docs/TABLE_SCHEMA.md 6-business-tab schema (35) + SHEETS_MIGRATION_STAGE_C_HARDENING.md §3/§15 semantic+lineage",
+    "content_queue": "docs/TABLE_SCHEMA.md 6-business-tab schema (35) + SHEETS_MIGRATION_STAGE_C_HARDENING.md §3/§15 semantic+lineage",
+    "review_queue": "docs/TABLE_SCHEMA.md 6-business-tab schema (35) + SHEETS_MIGRATION_STAGE_C_HARDENING.md §3/§15 semantic+lineage"
+  }
+}

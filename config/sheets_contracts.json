@@ -18,6 +18,293 @@
     "={{ $json.route }}",
     "results"
   ],
+  "$bootstrap_note": "sheet_order + headers + identity_columns below are the SINGLE SOURCE OF TRUTH for the Stage 3 staging bootstrap (tools/gen_sheets_bootstrap_workflow.js, n8n/lib/sheets_contract_resolver.js). Header order is canonical and sourced from the repository schema docs / library row shapes (provenance in config/sheets_ui_contracts.json `_provenance`). headers[tab] is always a superset of tabs[tab].required_columns. Tabs written by more than one workflow generation carry the UNION of every writer's columns (n8n Google Sheets append maps by header NAME, so a tab missing a writer's column silently drops that field). Add a new tab by appending its name to sheet_order and an ordered list to headers; no engine change is required.",
+  "sheet_order": [
+    "agent_requests", "agent_request_events", "conversation_state", "conversation_messages",
+    "conversation_summaries", "context_usage", "durable_memories", "memory_audit_events",
+    "source_audit_events", "orchestration_decisions", "execution_summaries", "telegram_outbox",
+    "report_bundles", "attachment_outbox", "weekly_digests", "tracked_sources", "source_change_events",
+    "source_health", "vk_posts", "vk_post_state", "deep_analysis_findings", "deep_analysis_recommendations",
+    "market_intelligence_reports", "competitor_profiles", "competitor_site_snapshots",
+    "audience_activity_signals", "content_positioning_plan", "market_angles", "analysis_runs",
+    "live_source_runs", "raw_market_records", "market_record_registry", "discovery_requests",
+    "url_candidates", "url_registry", "public_lead_signals", "source_confidence_rules",
+    "monitor_queue", "content_queue", "review_queue"
+  ],
+  "identity_columns": {
+    "agent_requests": ["agent_request_id"],
+    "agent_request_events": ["agent_request_id", "idempotency_key"],
+    "conversation_state": ["conversation_id"],
+    "conversation_messages": ["conversation_id", "message_id"],
+    "conversation_summaries": ["conversation_id", "version"],
+    "context_usage": ["agent_request_id"],
+    "durable_memories": ["memory_id"],
+    "memory_audit_events": ["memory_id", "ts"],
+    "source_audit_events": ["source_id", "ts"],
+    "orchestration_decisions": ["agent_request_id", "ts"],
+    "execution_summaries": ["agent_request_id"],
+    "telegram_outbox": ["delivery_id"],
+    "report_bundles": ["report_id"],
+    "attachment_outbox": ["delivery_id"],
+    "weekly_digests": ["idempotency_key"],
+    "tracked_sources": ["source_id"],
+    "source_change_events": ["change_id"],
+    "source_health": ["quality_evaluation_id"],
+    "vk_posts": ["source_record_id", "post_version"],
+    "vk_post_state": ["owner_id", "post_id"],
+    "deep_analysis_findings": ["finding_id"],
+    "deep_analysis_recommendations": ["agent_request_id", "competitor"],
+    "market_intelligence_reports": ["report_id"],
+    "competitor_profiles": ["competitor_id"],
+    "competitor_site_snapshots": ["snapshot_id"],
+    "audience_activity_signals": ["signal_id"],
+    "content_positioning_plan": ["plan_id"],
+    "market_angles": ["angle_id"],
+    "analysis_runs": ["analysis_idempotency_key"],
+    "live_source_runs": ["run_id"],
+    "raw_market_records": ["record_id", "dedup_key"],
+    "market_record_registry": ["dedup_key"],
+    "discovery_requests": ["discovery_request_id"],
+    "url_candidates": ["candidate_id", "normalized_source_url"],
+    "url_registry": ["normalized_source_url"],
+    "public_lead_signals": ["lead_signal_id"],
+    "source_confidence_rules": ["rule_id"],
+    "monitor_queue": ["source_url"],
+    "content_queue": ["source_url"],
+    "review_queue": ["source_url"]
+  },
+  "headers": {
+    "agent_requests": [
+      "agent_request_id", "update_id", "chat_id", "user_id", "request_text", "idempotency_key", "state",
+      "plan_source", "created_ts", "updated_ts", "created_at", "requested_by", "request_type", "source_scope",
+      "platforms", "query", "region", "service_focus", "requested_limit", "status", "plan_summary",
+      "estimated_source_cost_usd", "estimated_analysis_cost_usd", "approval_required", "approved_by",
+      "approved_at", "result_summary", "next_action", "notes"
+    ],
+    "agent_request_events": ["agent_request_id", "from_state", "to_state", "accepted", "reason", "idempotency_key", "ts"],
+    "conversation_state": [
+      "conversation_id", "owner_user_id", "active_agent_request_id", "current_intent", "current_state",
+      "current_plan_id", "last_report_id", "last_source_run_ids", "selected_competitors", "selected_sources",
+      "pending_clarification", "pending_approval", "current_region", "current_service", "comparison_baseline_id",
+      "no_memory", "updated_at"
+    ],
+    "conversation_messages": ["conversation_id", "message_id", "role", "text", "intent", "created_at", "archived"],
+    "conversation_summaries": [
+      "conversation_id", "version", "prev_version", "text", "preserved_ids", "covers_message_ids",
+      "decisions", "entities", "unresolved", "created_at"
+    ],
+    "context_usage": [
+      "conversation_id", "agent_request_id", "est_input_tokens", "max_context_tokens", "sections_included",
+      "sections_omitted", "summary_version", "truncated", "ts"
+    ],
+    "durable_memories": [
+      "memory_id", "owner_user_id", "scope", "conversation_id", "memory_type", "key", "value_json",
+      "source_message_id", "confidence", "status", "created_at", "updated_at", "last_used_at", "expires_at"
+    ],
+    "memory_audit_events": ["event", "owner_user_id", "memory_id", "memory_type", "key", "value_hash", "ts"],
+    "source_audit_events": ["event", "owner_user_id", "source_id", "key", "platform", "from", "to", "status", "ts"],
+    "orchestration_decisions": [
+      "agent_request_id", "conversation_id", "intent", "action", "reason", "needs_external_call",
+      "target_sources", "ts"
+    ],
+    "execution_summaries": [
+      "agent_request_id", "owner_user_id", "final_state", "sources_requested", "sources_completed",
+      "sources_failed", "sources_quarantined", "records_received", "records_unique", "records_eligible",
+      "records_analyzed", "records_reported", "external_calls", "llm_primary_calls", "llm_repair_calls",
+      "source_cost_status", "llm_cost_status", "report_id", "delivery_status", "blocking_errors",
+      "next_operator_action"
+    ],
+    "telegram_outbox": [
+      "delivery_id", "agent_request_id", "report_id", "chat_id", "payload_hash", "chunks", "send_status",
+      "attempts", "telegram_message_id", "last_error"
+    ],
+    "report_bundles": ["report_id", "owner_user_id", "agent_request_id", "created_at", "report_type", "bundle", "notes"],
+    "attachment_outbox": [
+      "delivery_id", "owner_user_id", "agent_request_id", "report_id", "kind", "content_hash", "send_status",
+      "attempts", "telegram_message_id", "last_error"
+    ],
+    "weekly_digests": [
+      "digest_id", "idempotency_key", "owner_user_id", "iso_week", "year", "week", "generated_at",
+      "current_report_id", "baseline_report_id", "sections", "item_count", "empty", "external_calls", "text"
+    ],
+    "tracked_sources": [
+      "source_id", "owner_user_id", "chat_id", "platform", "ref", "key", "label", "status", "added_at",
+      "updated_at", "last_checked_at", "last_success_at", "next_check_at", "last_content_hash", "last_change_at",
+      "last_status", "last_error", "error_count", "check_interval_hours", "agent_request_id"
+    ],
+    "source_change_events": [
+      "change_id", "source_id", "owner_user_id", "platform", "ref", "prev_hash", "new_hash", "summary",
+      "status", "acknowledged", "ts", "change_type", "source_type", "community_id", "owner_id", "post_id",
+      "post_version", "canonical_url", "published_at"
+    ],
+    "source_health": [
+      "quality_evaluation_id", "evaluated_at", "source_run_id", "agent_request_id", "workflow", "source_family",
+      "platform", "source_key", "data_mode", "items_received", "structurally_valid_items", "invalid_items",
+      "unique_items", "duplicate_items", "hard_skipped_items", "irrelevant_items", "report_candidate_items",
+      "structurally_valid_rate", "invalid_rate", "duplicate_rate", "hard_skip_rate", "irrelevant_rate",
+      "unknown_service_rate", "generic_offer_rate", "placeholder_title_rate", "missing_description_rate",
+      "missing_identity_rate", "missing_published_at_rate", "exact_evidence_url_rate", "primary_parse_failure_rate",
+      "repair_rate", "fallback_rate", "degraded_record_rate", "pending_review_rate", "stale_rate",
+      "newest_published_at", "oldest_published_at", "source_staleness_days", "external_calls", "llm_calls",
+      "actual_source_cost_usd", "actual_llm_cost_usd", "source_cost_status", "llm_cost_status",
+      "cost_per_unique_record", "quality_score", "quality_status", "report_eligible", "llm_eligible",
+      "quality_flags", "operator_next_action", "notes", "taxonomy_version", "quality_rule_version"
+    ],
+    "vk_posts": [
+      "agent_request_id", "source_run_id", "workflow_run_id", "source_record_id", "owner_user_id", "platform",
+      "source_type", "community_id", "owner_id", "post_id", "post_version", "edited_ts", "canonical_url",
+      "published_at", "collected_at", "text", "attachments", "repost", "engagement_observed", "engagement_note",
+      "content_hash", "is_pinned", "evidence_excerpt", "data_mode", "quality_status", "report_eligible",
+      "monitoring_eligible"
+    ],
+    "vk_post_state": [
+      "owner_user_id", "community_id", "owner_id", "post_id", "post_version", "content_hash", "is_pinned",
+      "updated_at"
+    ],
+    "deep_analysis_findings": [
+      "finding_id", "agent_request_id", "competitor", "dimension", "value", "source_url", "source_record_id",
+      "source_run_id", "excerpt", "collected_at", "quality_status", "confidence"
+    ],
+    "deep_analysis_recommendations": ["agent_request_id", "competitor", "text", "derived_from", "confidence", "ts"],
+    "market_intelligence_reports": [
+      "report_id", "created_at", "report_type", "niche_id", "region", "time_window_days", "wf10_run_id",
+      "prev_wf10_run_id", "source_mix", "rows_after_filters", "top_competitors", "top_angles", "audience_summary",
+      "content_plan_ref", "report_markdown_path", "llm_status", "llm_model", "llm_input_tokens",
+      "llm_output_tokens", "llm_cost_usd", "llm_summary_ru", "llm_recommendations_ru", "llm_quality_flags",
+      "delivered_to", "notes", "trend_status", "source_runs_evaluated", "source_runs_included",
+      "source_runs_excluded", "report_contains_degraded_data", "report_contains_fixture_data",
+      "report_contains_contacts", "contacts_detected", "contacts_redacted", "contacts_excluded_from_report",
+      "quality_warning", "website_snapshots_excluded", "is_fixture_report", "body_records_excluded"
+    ],
+    "competitor_profiles": [
+      "competitor_id", "competitor_name", "first_seen_at", "last_seen_at", "platforms", "source_urls",
+      "service_types", "offers", "prices_terms", "semantic_keywords", "pain_points_targeted", "ad_channels",
+      "observed_strengths", "observed_weaknesses", "evidence_count", "source_confidence_score", "notes",
+      "source_run_ids", "data_mode", "report_eligible"
+    ],
+    "competitor_site_snapshots": [
+      "snapshot_id", "created_at", "run_id", "source_url", "domain", "company_name", "page_type", "title",
+      "offer_summary", "prices_terms", "guarantees", "service_types", "detected_pains", "contact_public",
+      "contact_channel", "cta_text", "content_hash", "change_type", "previous_snapshot_id", "source_confidence",
+      "agent_request_id", "notes", "brand_source", "broken_brand", "service_primary", "service_secondary",
+      "offer_text_raw_audit", "contact_public_raw_audit", "quality_status", "report_eligible", "fallback_reason",
+      "parse_method", "repair_used", "primary_calls", "repair_calls", "firecrawl_calls", "claude_calls",
+      "input_tokens", "output_tokens", "actual_source_cost_usd", "actual_llm_cost_usd", "cost_status",
+      "source_run_id", "workflow_run_id", "data_mode"
+    ],
+    "audience_activity_signals": [
+      "signal_id", "platform", "source_url", "time_window", "active_authors_count", "repeat_authors_count",
+      "question_count", "objection_count", "complaint_count", "buying_intent_count", "top_topics", "top_pains",
+      "confidence", "notes", "source_run_ids", "data_mode", "report_eligible"
+    ],
+    "content_positioning_plan": [
+      "plan_id", "created_at", "niche", "region", "top_angles", "recommended_posts", "recommended_ads",
+      "faq_topics", "counterarguments", "lead_magnets", "source_evidence", "next_action"
+    ],
+    "market_angles": [
+      "angle_id", "angle_text", "category", "platforms", "frequency", "example_sources", "related_pain",
+      "recommended_content_response", "confidence", "source_run_ids", "data_mode", "report_eligible"
+    ],
+    "analysis_runs": [
+      "analysis_run_id", "analysis_idempotency_key", "source_run_id", "source_record_id", "agent_request_id",
+      "platform", "source_type", "data_mode", "analysis_status", "analyzed_at", "analysis_mode", "llm_used", "notes"
+    ],
+    "live_source_runs": [
+      "run_id", "created_at", "workflow", "source_family", "platform", "mode", "approval_token_used",
+      "source_allowlist", "max_items", "items_received", "items_relevant", "items_written_raw", "items_unique",
+      "items_duplicate", "hard_skipped", "external_calls", "estimated_source_cost_usd", "llm_calls",
+      "estimated_llm_cost_usd", "status", "error_summary", "operator_next_action", "notes",
+      "actual_source_cost_usd", "actual_llm_cost_usd", "estimated_future_analysis_cost_usd", "cost_status",
+      "source_cost_status", "llm_cost_status", "input_tokens", "output_tokens", "cache_read_tokens",
+      "cache_creation_tokens", "primary_calls", "repair_calls", "cost_per_unique_record", "data_mode",
+      "source_run_id", "agent_request_id", "workflow_run_id"
+    ],
+    "raw_market_records": [
+      "record_id", "agent_request_id", "created_at", "source_type", "platform", "source_url", "post_url",
+      "profile_url", "profile_name", "author_handle", "published_at", "region_hint", "service_hint", "query",
+      "text_context", "comment_text", "contact_public", "contact_channel", "dedup_key", "record_type_hint",
+      "touchpoint_type", "lead_intent_hint", "urgency_hint", "interest_topic", "probable_need",
+      "competitor_related", "competitor_name", "semantic_keywords", "ad_channel_hint", "confidence_score",
+      "lead_temperature", "next_action", "responsible", "dedup_status", "approval_status", "approved_by",
+      "approved_at", "estimated_analysis_cost_usd", "manager_note", "notes", "data_mode", "source_run_id",
+      "quality_status", "report_eligible", "llm_eligible", "quality_flags", "placeholder_title",
+      "detail_fetch_required", "detail_fetch_status", "is_detail", "search_query", "source_search_url",
+      "exact_evidence_url", "activity_subtype", "skip_reason", "age_days", "freshness_bucket",
+      "within_default_window", "taxonomy_version", "review_status", "source_record_id", "workflow_run_id",
+      "analysis_status", "firecrawl_calls", "primary_calls", "repair_calls", "cost_status",
+      "actual_source_cost_usd"
+    ],
+    "market_record_registry": [
+      "dedup_key", "source_type", "platform", "source_url", "post_url", "profile_url", "author_handle",
+      "text_hash", "first_seen_at", "last_seen_at", "last_route", "last_processing_status", "last_entity_type",
+      "agent_request_id", "note"
+    ],
+    "discovery_requests": [
+      "discovery_request_id", "created_at", "requested_by", "request_text", "query", "region", "service_focus",
+      "requested_limit", "source_mode", "source_api", "status", "candidate_count", "unique_candidate_count",
+      "duplicate_count", "approved_count", "estimated_firecrawl_credits", "estimated_claude_cost_usd", "notes",
+      "requested_search_scope", "service_primary", "service_secondary", "query_terms", "direct_competitor_count",
+      "regulator_count", "publisher_count", "source_candidate_count", "estimated_apify_cost_usd",
+      "actual_apify_cost_usd", "apify_cost_status"
+    ],
+    "url_candidates": [
+      "candidate_id", "discovery_request_id", "created_at", "requested_by", "requested_limit", "query", "source",
+      "candidate_url", "normalized_source_url", "domain", "candidate_type", "title", "snippet", "rank",
+      "region_hint", "service_hint", "confidence_score", "dedup_status", "registry_status", "approval_status",
+      "approved_by", "approved_at", "rejection_reason", "estimated_firecrawl_credits", "estimated_claude_cost_usd",
+      "notes", "requested_search_scope", "canonical_url", "is_root", "competitor_class", "is_competitor_entity",
+      "service_primary", "service_secondary"
+    ],
+    "url_registry": [
+      "normalized_source_url", "source_url", "first_seen_at", "last_seen_at", "last_route",
+      "last_processing_status", "last_entity_type", "run_id", "batch_index", "note"
+    ],
+    "public_lead_signals": [
+      "lead_signal_id", "created_at", "updated_at", "extracted_at", "source_platform", "source_type",
+      "source_url", "source_post_url", "source_comment_url", "source_author_public_id",
+      "source_author_public_name", "source_public_profile_url", "evidence_text", "evidence_excerpt",
+      "service_type", "region", "intent_type", "pain_type", "urgency", "niche_fit", "lead_score", "score_band",
+      "score_reasons", "source_confidence", "contact_confidence", "freshness_status", "public_phone",
+      "public_username", "public_profile_url", "public_contact_type", "contact_source_url",
+      "contact_evidence_text", "contact_use_policy", "review_status", "review_priority", "recommended_action",
+      "manager_note", "reviewed_by", "reviewed_at", "rejection_reason", "duplicate_of", "privacy_flags",
+      "outreach_allowed", "policy_note", "agent_request_id", "run_id", "notes"
+    ],
+    "source_confidence_rules": ["rule_id", "pattern", "confidence_effect", "rationale", "created_at"],
+    "monitor_queue": [
+      "created_at", "source_type", "platform", "source_url", "parsed_at", "published_at", "freshness_status",
+      "entity_type", "company_name", "profile_name", "profile_url", "region", "service_type", "offer_text",
+      "terms", "contact_public", "text_context", "detected_need", "competitor_strength", "lead_signal_score",
+      "content_idea_score", "quality_score", "reason", "recommended_action", "status", "processing_status",
+      "parse_method", "parse_error", "raw_response_preview", "route", "needs_manual_review", "repair_used",
+      "repair_status", "run_id", "batch_index", "source_run_id", "data_mode", "quality_status", "report_eligible",
+      "review_status", "quality_flags", "schema_version", "record_type", "activity_subtype", "service_primary",
+      "service_secondary", "raw_model_service_type", "normalized_service_type", "candidate_entity_type",
+      "confidence_reasons", "evidence_completeness_score", "quoted_claims", "negated_claims", "taxonomy_version"
+    ],
+    "content_queue": [
+      "created_at", "source_type", "platform", "source_url", "parsed_at", "published_at", "freshness_status",
+      "entity_type", "company_name", "profile_name", "profile_url", "region", "service_type", "offer_text",
+      "terms", "contact_public", "text_context", "detected_need", "competitor_strength", "lead_signal_score",
+      "content_idea_score", "quality_score", "reason", "recommended_action", "status", "processing_status",
+      "parse_method", "parse_error", "raw_response_preview", "route", "needs_manual_review", "repair_used",
+      "repair_status", "run_id", "batch_index", "source_run_id", "data_mode", "quality_status", "report_eligible",
+      "review_status", "quality_flags", "schema_version", "record_type", "activity_subtype", "service_primary",
+      "service_secondary", "raw_model_service_type", "normalized_service_type", "candidate_entity_type",
+      "confidence_reasons", "evidence_completeness_score", "quoted_claims", "negated_claims", "taxonomy_version"
+    ],
+    "review_queue": [
+      "created_at", "source_type", "platform", "source_url", "parsed_at", "published_at", "freshness_status",
+      "entity_type", "company_name", "profile_name", "profile_url", "region", "service_type", "offer_text",
+      "terms", "contact_public", "text_context", "detected_need", "competitor_strength", "lead_signal_score",
+      "content_idea_score", "quality_score", "reason", "recommended_action", "status", "processing_status",
+      "parse_method", "parse_error", "raw_response_preview", "route", "needs_manual_review", "repair_used",
+      "repair_status", "run_id", "batch_index", "source_run_id", "data_mode", "quality_status", "report_eligible",
+      "review_status", "quality_flags", "schema_version", "record_type", "activity_subtype", "service_primary",
+      "service_secondary", "raw_model_service_type", "normalized_service_type", "candidate_entity_type",
+      "confidence_reasons", "evidence_completeness_score", "quoted_claims", "negated_claims", "taxonomy_version"
+    ]
+  },
   "tabs": {
     "agent_requests": {
       "purpose": "agent request lifecycle index",
@@ -352,8 +639,8 @@
       "retention_class": "operational",
       "retention_days": 120,
       "required_columns": [
-        "source",
-        "status"
+        "source_run_id",
+        "quality_status"
       ],
       "writers": [
         "10",
