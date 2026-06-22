@@ -81,6 +81,8 @@ const JS_SUITES = [
   ['smoke-hardening', 'test_smoke_hardening.js'],
   // --- Stage 3 Google Sheets staging bootstrap (resolver + pure planner + generated QA workflow) ---
   ['sheets-bootstrap', 'test_sheets_bootstrap.js'],
+  // --- Stage 3C Google Sheets OPERATIONS acceptance (pure engine + generated manual QA workflow) ---
+  ['sheets-operations-qa', 'test_sheets_operations_qa.js'],
 ];
 
 let failed = 0;
@@ -143,6 +145,16 @@ try {
   process.stdout.write((e.stdout || '') + (e.stderr || '') + '\n  (sheets bootstrap resolver/generator drift)\n');
   failed++;
   summary.push(['sheets_bootstrap_gen (drift)', '?', '?', 'FAIL']);
+}
+
+// Stage 3C sheets operations acceptance: generated manual QA workflow must be drift-free.
+try {
+  execFileSync('node', [path.join(__dirname, '..', 'tools', 'gen_sheets_operations_qa_workflow.js'), '--check'], { encoding: 'utf8' });
+  summary.push(['sheets_ops_qa_gen (drift)', 'ok', '0', 'PASS']);
+} catch (e) {
+  process.stdout.write((e.stdout || '') + (e.stderr || '') + '\n  (sheets operations QA generator drift)\n');
+  failed++;
+  summary.push(['sheets_ops_qa_gen (drift)', '?', '?', 'FAIL']);
 }
 
 // Legacy Lead Scout harness (WF12/13/14) — must remain green.
