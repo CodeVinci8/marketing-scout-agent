@@ -5,6 +5,41 @@ Most recent first.
 
 ---
 
+## DEC-156 — Stage 3C read-back is contract-aware; scope is identity-based; mutation markers are separable
+
+**Date:** 2026-06-23
+
+**Decision:** On branch `fix/stage3-verification-stage4-readiness` (off `main` `820a593`), the Stage 3C
+operations acceptance harness (`n8n/lib/sheets_operations_qa.js`) no longer compares Google read-back values
+byte-for-byte. A single shared **contract-aware comparison layer** judges each field by its contract type —
+numeric columns numerically (`-5 == "-5.00"`), checkbox columns as booleans (`false == "FALSE"`), timestamp
+columns as instants, everything else as text (a formula-escape apostrophe tolerated only on a dangerous lead;
+legitimate apostrophes preserved); blank means unset only where the contract allows and is never equal to `0`
+or `false`. `BEFORE_AFTER_SCOPE` is now **identity-based**: rows are classified as run-owned (marker or desired
+identity) vs foreign, so normalization of the run's *own* rows is never mistaken for a foreign change; foreign
+rows are compared with the *same* contract-aware comparator. Formula safety is a **separate** assertion — a
+bounded `spreadsheets.get?includeGridData=true` typed read proves each formula cell is stored as
+`userEnteredValue.stringValue`, never `formulaValue`. Mutation/acceptance markers are split and truthful:
+`WRITE_NODE_EXECUTED`, `WRITE_REQUEST_SUCCEEDED`, `MUTATIONS_EXECUTED`, `AFTER_SNAPSHOT_READ`,
+`ACCEPTANCE_VERIFIED`, `CHANGES_APPLIED`. `CHANGES_APPLIED` stays `true` whenever Google applied the mutation
+even if verification later fails; the verdict lives in `ACCEPTANCE_VERIFIED`/`RESULT`. Once the write node has
+run, `RESULT` is acceptance-based and never falls back to the dry-run PASS path.
+
+**Why:** QA-018 — the first live write was correct but the harness failed `READ_BACK_AGENT_REQUEST` because
+`USER_ENTERED` values come back **rendered** (`-5` → `-5.00` under the bootstrap `#,##0.00####` number format on
+`*_usd` columns; `false` → `FALSE` on checkbox columns). QA-019 — the same byte comparison then mis-counted the
+run's own normalized rows as foreign, so `BEFORE_AFTER_SCOPE` failed while every scope counter read `0`. A
+verification failure must never imply Google applied no mutation, so the markers had to be separated.
+
+**Status:** **FIXED IN CODE — LIVE RETEST REQUIRED** for QA-018 and QA-019. Proven offline only:
+`tests/test_sheets_operations_qa.js` (162 checks), `make test` ALL SUITES PASS (`$0`, 0 external calls, every
+workflow `active=false`). Not pushed/merged/imported. Live closure runbook in
+`docs/STAGE3_SHEETS_OPERATIONS_ACCEPTANCE.md` (dry-run → first write new `QA_RUN_ID` → repeat same id → final
+dry-run; require `READ_BACK_AGENT_REQUEST=PASS`, `BEFORE_AFTER_SCOPE=PASS`, `ACCEPTANCE_VERIFIED=true`,
+`RESULT=PASS`, `IDEMPOTENCY=PASS`).
+
+---
+
 ## DEC-155 — Reporting UX & release-verification phase (WF24-26, scope/progress/digest, VK, storage, safety)
 
 **Date:** 2026-06-21

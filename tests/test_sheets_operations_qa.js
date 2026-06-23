@@ -74,6 +74,29 @@ function runWith(cfgOverride, spec, cap) {
   var id = QA.buildRunIdentity(cfg);
   return QA.runOffline({ resolved: resolved, metadata: metadataAll(gridMapAll(cap)), headerRows: headerRowsAll(), config: cfg, identity: id, before: buildBefore(spec || foreignSpec(), cap), sheet_ids: sheetIdsAll() });
 }
+// Mimic how Google returns the AFTER snapshot via values:batchGet (FORMATTED_VALUE): the bootstrap NUMBER format
+// #,##0.00#### makes the *_usd columns read back as "-5.00"/"-4.50", booleans read back "TRUE"/"FALSE". This is the
+// exact normalization that produced the live QA-018 read-back failure.
+function normalizeGoogle(after) {
+  var a = JSON.parse(JSON.stringify(after));
+  (a.agent_requests ? a.agent_requests.rows : []).forEach(function (r) {
+    ['estimated_source_cost_usd', 'estimated_analysis_cost_usd'].forEach(function (c) {
+      if (r[c] !== '' && r[c] != null && isFinite(Number(r[c]))) r[c] = Number(r[c]).toFixed(2);
+    });
+    if (r.approval_required === false || r.approval_required === 'false') r.approval_required = 'FALSE';
+    if (r.approval_required === true || r.approval_required === 'true') r.approval_required = 'TRUE';
+  });
+  return a;
+}
+// the pre-fix byte/loose comparator, kept ONLY to PROVE the regressions reproduce the live failure.
+function oldFieldsEqual(written, readBack) {
+  return Object.keys(written).every(function (k) {
+    var w = written[k]; var r = (readBack || {})[k];
+    if (typeof w === 'boolean') return String(r).toLowerCase() === String(w) || String(r) === String(w);
+    if (QA.isFiniteNumber(w)) return String(r) === String(Number(w));
+    return String(r == null ? '' : r) === String(w == null ? '' : w);
+  });
+}
 
 // =============================================================================================================
 A.section('1. reuse-equivalence — engine mirrors the canonical neutralizer / unsafe-cell / outbox id (no forks)');
@@ -232,20 +255,104 @@ A.ok('when blocked, live-operation markers read NOT_APPLICABLE (not PASS)', (fun
 A.section('15. live-result truthfulness — markers become PASS only after a real write + after-snapshot verify');
 var live = runWith({ execute_writes: true, confirm_staging_spreadsheet: true });
 A.eq('RESULT=PASS', live.summary.RESULT, 'PASS');
-A.eq('CHANGES_APPLIED=true (verified live write)', live.summary.CHANGES_APPLIED, true);
+A.eq('CHANGES_APPLIED=true (mutation executed)', live.summary.CHANGES_APPLIED, true);
+A.eq('ACCEPTANCE_VERIFIED=true', live.summary.ACCEPTANCE_VERIFIED, true);
 ['APPEND_AGENT_REQUEST', 'READ_BACK_AGENT_REQUEST', 'APPEND_REQUEST_EVENT', 'UPSERT_INSERT', 'UPSERT_UPDATE',
   'UPSERT_ROW_COUNT_STABLE', 'TRACKED_SOURCE_UPSERT', 'OUTBOX_IDEMPOTENCY', 'OWNER_ISOLATION', 'REQUEST_ISOLATION',
   'FORMULA_INJECTION_NEUTRALIZATION', 'NEGATIVE_NUMBER_PRESERVATION', 'BEFORE_AFTER_SCOPE', 'IDEMPOTENCY'
 ].forEach(function (k) { A.eq(k + '=PASS', live.summary[k], 'PASS'); });
 A.eq('EXTERNAL_NON_GOOGLE_CALLS=0', live.summary.EXTERNAL_NON_GOOGLE_CALLS, 0);
 A.eq('DATA_MODE=manual_test', live.summary.DATA_MODE, 'manual_test');
-A.ok('CHANGES_APPLIED is false if the live verification fails (not derived from projection alone)', (function () {
-  // tamper the real after-snapshot to drop request A's row entirely => READ_BACK must fail => RESULT FAIL
+
+A.section('15b. mutation markers (D) — dry-run all false; write-accepted-but-verify-fail keeps CHANGES_APPLIED=true');
+['WRITE_NODE_EXECUTED', 'WRITE_REQUEST_SUCCEEDED', 'MUTATIONS_EXECUTED', 'AFTER_SNAPSHOT_READ', 'ACCEPTANCE_VERIFIED', 'CHANGES_APPLIED']
+  .forEach(function (k) { A.eq('dry-run ' + k + '=false', dry.summary[k], false); });
+['WRITE_NODE_EXECUTED', 'WRITE_REQUEST_SUCCEEDED', 'MUTATIONS_EXECUTED', 'AFTER_SNAPSHOT_READ', 'ACCEPTANCE_VERIFIED', 'CHANGES_APPLIED']
+  .forEach(function (k) { A.eq('full-acceptance ' + k + '=true', live.summary[k], true); });
+A.ok('write accepted but verification fails: CHANGES_APPLIED=true, ACCEPTANCE_VERIFIED=false, RESULT=FAIL', (function () {
+  // tamper the real after-snapshot to drop request A's row => READ_BACK fails AFTER a successful write
   var bad = JSON.parse(JSON.stringify(live.after));
   bad.agent_requests.rows = bad.agent_requests.rows.filter(function (r) { return String(r.agent_request_id) !== String(id.qa_request_a); });
   var ver = QA.verifyAll({ resolved: resolved, identity: id, config: { formula_tests_enabled: true }, row_set: live.row_set, before: buildBefore(foreignSpec()), plan: live.plan, after: bad, applied: true });
   var sum = QA.assembleSummary({ preflight: live.preflight, verify: ver, identity: id, config: {}, plan: live.plan, changes_applied: true });
-  return sum.RESULT === 'FAIL' && sum.CHANGES_APPLIED === false;
+  return sum.WRITE_NODE_EXECUTED === true && sum.WRITE_REQUEST_SUCCEEDED === true && sum.MUTATIONS_EXECUTED === true &&
+    sum.AFTER_SNAPSHOT_READ === true && sum.ACCEPTANCE_VERIFIED === false && sum.CHANGES_APPLIED === true && sum.RESULT === 'FAIL';
+})());
+A.ok('Google write REQUEST FAILED: node ran but write rejected => no mutation, no acceptance, RESULT=FAIL', (function () {
+  // the write node executed but Google rejected the values:batchUpdate (non-2xx): nothing was applied, no
+  // after-snapshot was read, and the verdict must be FAIL — never a fall-back to the dry-run PASS path.
+  var sum = QA.assembleSummary({
+    preflight: live.preflight, verify: { markers: live.verify.markers, applied: false }, identity: id, config: {},
+    plan: live.plan, write_node_executed: true, write_request_succeeded: false, after_snapshot_read: false, changes_applied: false
+  });
+  return sum.WRITE_NODE_EXECUTED === true && sum.WRITE_REQUEST_SUCCEEDED === false && sum.MUTATIONS_EXECUTED === false &&
+    sum.ACCEPTANCE_VERIFIED === false && sum.CHANGES_APPLIED === false && sum.RESULT === 'FAIL';
+})());
+
+A.section('15c. QA-018 REGRESSION — Google-normalized read-back (-5.00/-4.50, FALSE) passes; old byte compare fails');
+var liveNorm = normalizeGoogle(live.after);
+var raReq = liveNorm.agent_requests.rows.filter(function (r) { return String(r.agent_request_id) === String(id.qa_request_a); })[0];
+A.eq('cost reads back FORMATTED "-5.00"', String(raReq.estimated_source_cost_usd), '-5.00');
+A.eq('cost reads back FORMATTED "-4.50"', String(raReq.estimated_analysis_cost_usd), '-4.50');
+A.ok('OLD byte/loose comparator FAILS on the normalized row (reproduces QA-018)', oldFieldsEqual(live.row_set.sheets.agent_requests.desired[0].values, raReq) === false);
+var verNorm = QA.verifyAll({ resolved: resolved, identity: id, config: { formula_tests_enabled: true }, row_set: live.row_set, before: buildBefore(foreignSpec()), plan: live.plan, after: liveNorm, applied: true, typed: live.verify.markers ? undefined : undefined });
+A.eq('NEW contract-aware READ_BACK_AGENT_REQUEST=PASS on the normalized row', verNorm.markers.READ_BACK_AGENT_REQUEST, 'PASS');
+A.eq('NEW NEGATIVE_NUMBER_PRESERVATION=PASS (compared numerically)', verNorm.markers.NEGATIVE_NUMBER_PRESERVATION, 'PASS');
+A.eq('READ_BACK_FAILURES empty on the normalized row', verNorm.markers.READ_BACK_FAILURES.length, 0);
+A.eq('BEFORE_AFTER_SCOPE=PASS despite normalization of our OWN rows (QA-019)', verNorm.markers.BEFORE_AFTER_SCOPE, 'PASS');
+A.eq('BEFORE_AFTER_FAILURES empty on the normalized run', verNorm.markers.BEFORE_AFTER_FAILURES.length, 0);
+
+A.section('15d. comparison-layer unit tests (blank / boolean / numeric / missing-trailing / timestamp / escape)');
+function tinfo(sheet, col) { return QA.columnTypeInfo(resolved, sheet, col); }
+A.ok('blank-equivalence: undefined/null/"" all compare equal', QA.cellEquals(undefined, '', {}) === true && QA.cellEquals(null, '', {}) === true && QA.cellEquals('', undefined, {}) === true);
+A.ok('blank is NEVER equal to 0', QA.cellEquals('', 0, { numeric: true }) === false);
+A.ok('blank is NEVER equal to false', QA.cellEquals('', false, { boolean: true }) === false);
+A.ok('boolean: false=="FALSE", true=="TRUE" (case-insensitive)', QA.cellEquals(false, 'FALSE', { boolean: true }) && QA.cellEquals(true, 'true', { boolean: true }));
+A.ok('boolean rejects arbitrary truthy strings', QA.cellEquals(true, 'yes', { boolean: true }) === false && QA.cellEquals(true, '1', { boolean: true }) === false);
+A.ok('numeric: -5 == "-5.00", -4.5 == "-4.50", 1234.5 == "1,234.50"', QA.cellEquals(-5, '-5.00', { numeric: true }) && QA.cellEquals(-4.5, '-4.50', { numeric: true }) && QA.cellEquals(1234.5, '1,234.50', { numeric: true }));
+A.ok('numeric never parses arbitrary free text as a number', QA.cellEquals('hello', 'hello', { numeric: true }) && QA.cellEquals(5, 'five', { numeric: true }) === false);
+A.ok('missing trailing cell equals "" for a text column', QA.cellEquals('', undefined, tinfo('agent_requests', 'request_text')));
+A.ok('timestamp: same instant in different ISO forms compares equal', QA.cellEquals('2026-06-22T12:00:00.000Z', '2026-06-22T12:00:00Z', tinfo('agent_requests', 'created_at')));
+A.ok('agent_requests.created_at classified as timestamp; *_cost_usd as numeric; approval_required as boolean',
+  tinfo('agent_requests', 'created_at').timestamp && tinfo('agent_requests', 'estimated_source_cost_usd').numeric && tinfo('agent_requests', 'approval_required').boolean);
+A.ok('formula-escape apostrophe tolerated only for formula-lead text', QA.textEquals("'=1+1", '=1+1') && QA.textEquals('=1+1', "'=1+1") && QA.textEquals("O'Brien", "Brien") === false);
+
+A.section('15e. formula SAFETY (separate typed assertion) — stringValue passes; a real formulaValue fails');
+var typedSafe = {}; ['query', 'plan_summary', 'result_summary', 'next_action'].forEach(function (f, i) { typedSafe[f] = { userEnteredValue: { stringValue: QA.FORMULA_TESTS[i] } }; });
+A.ok('verifyFormulaSafety PASS when every formula cell is a stringValue', QA.verifyFormulaSafety(typedSafe, ['query', 'plan_summary', 'result_summary', 'next_action']).ok === true);
+var typedBad = JSON.parse(JSON.stringify(typedSafe)); typedBad.query = { userEnteredValue: { formulaValue: '=1+1' } };
+A.ok('verifyFormulaSafety FAIL when any cell is a formulaValue (detects a real formula)', QA.verifyFormulaSafety(typedBad, ['query', 'plan_summary', 'result_summary', 'next_action']).ok === false);
+A.ok('a live run with a formulaValue makes FORMULA_INJECTION_NEUTRALIZATION=FAIL', (function () {
+  var ver = QA.verifyAll({ resolved: resolved, identity: id, config: { formula_tests_enabled: true }, row_set: live.row_set, before: buildBefore(foreignSpec()), plan: live.plan, after: live.after, applied: true, typed: typedBad });
+  return ver.markers.FORMULA_INJECTION_NEUTRALIZATION === 'FAIL';
+})());
+A.ok('parseTypedRow maps a spreadsheets.get includeGridData row to columns', (function () {
+  var resp = { sheets: [{ properties: { title: 'agent_requests' }, data: [{ rowData: [{ values: [{ userEnteredValue: { stringValue: 'X' } }, { userEnteredValue: { numberValue: -5 } }] }] }] }] };
+  var t = QA.parseTypedRow(resp, 'agent_requests', headersOf('agent_requests'));
+  var h0 = headersOf('agent_requests')[0], h1 = headersOf('agent_requests')[1];
+  return t[h0].userEnteredValue.stringValue === 'X' && t[h1].userEnteredValue.numberValue === -5;
+})());
+
+A.section('15f. QA-019 REGRESSION — genuine scope violations are caught with structured BEFORE_AFTER_FAILURES');
+A.ok('a modified FOREIGN row is reported (foreign_row_modified) and fails scope', (function () {
+  var bad = JSON.parse(JSON.stringify(live.after));
+  var f = bad.agent_requests.rows.filter(function (r) { return String(r.agent_request_id) === 'foreign-req'; })[0];
+  f.request_text = 'TAMPERED';
+  var ba = QA.verifyBeforeAfter(resolved, buildBefore(foreignSpec()), bad, id, live.row_set, live.plan);
+  return ba.ok === false && ba.failures.some(function (x) { return x.kind === 'foreign_row_modified'; });
+})());
+A.ok('a missing expected QA row is reported (expected_row_missing)', (function () {
+  var bad = JSON.parse(JSON.stringify(live.after));
+  bad.tracked_sources.rows = bad.tracked_sources.rows.filter(function (r) { return String(r.source_id) !== String(id.qa_source_id); });
+  var ba = QA.verifyBeforeAfter(resolved, buildBefore(foreignSpec()), bad, id, live.row_set, live.plan);
+  return ba.ok === false && ba.failures.some(function (x) { return x.kind === 'expected_row_missing' && x.sheet === 'tracked_sources'; });
+})());
+A.ok('a duplicate QA row is reported (duplicate_qa_row)', (function () {
+  var bad = JSON.parse(JSON.stringify(live.after));
+  var dup = bad.agent_requests.rows.filter(function (r) { return String(r.agent_request_id) === String(id.qa_request_a); })[0];
+  bad.agent_requests.rows.push(JSON.parse(JSON.stringify(dup)));
+  var ba = QA.verifyBeforeAfter(resolved, buildBefore(foreignSpec()), bad, id, live.row_set, live.plan);
+  return ba.ok === false && ba.failures.some(function (x) { return x.kind === 'duplicate_qa_row'; });
 })());
 
 A.section('16. owner + request isolation — strict, fail-closed post-read assertion (no foreign rows)');
@@ -301,7 +408,8 @@ var REQUIRED_KEYS = ['PREFLIGHT', 'CONTRACT_TABS_PRESENT', 'SHEETS_READ', 'WRITE
   'FOREIGN_ROWS_MODIFIED', 'EXPECTED_ROWS_WRITTEN', 'UNEXPECTED_ROWS_WRITTEN', 'HEADERS_MODIFIED',
   'UNDECLARED_TABS_MODIFIED', 'DUPLICATE_AGENT_REQUESTS_CREATED', 'DUPLICATE_CONVERSATION_STATES_CREATED',
   'DUPLICATE_TRACKED_SOURCES_CREATED', 'DUPLICATE_OUTBOX_DELIVERIES_CREATED', 'IDEMPOTENCY',
-  'EXTERNAL_NON_GOOGLE_CALLS', 'CHANGES_APPLIED', 'QA_RUN_ID', 'DATA_MODE', 'RESULT'];
+  'EXTERNAL_NON_GOOGLE_CALLS', 'WRITE_NODE_EXECUTED', 'WRITE_REQUEST_SUCCEEDED', 'MUTATIONS_EXECUTED',
+  'AFTER_SNAPSHOT_READ', 'ACCEPTANCE_VERIFIED', 'CHANGES_APPLIED', 'QA_RUN_ID', 'DATA_MODE', 'RESULT'];
 A.ok('every required Section 9 key is present', REQUIRED_KEYS.every(function (k) { return k in live.summary; }));
 A.eq('QA_RUN_ID is the generated run id', live.summary.QA_RUN_ID, id.qa_run_id);
 A.ok('RESULT flips to BLOCKED_PREFLIGHT when a tab is missing (proves it is computed)', (function () {

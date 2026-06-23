@@ -53,6 +53,104 @@ function neutralize(v) {
 // (mirror of sheet_audit.js isUnsafeCell). Used to PROVE no executable formula is ever placed in a cell.
 function isUnsafeCell(v) { var s = str(v); return DANGEROUS_LEAD.test(s) && !isFiniteNumber(s) && s.charAt(0) !== "'"; }
 
+// ============================================================================================================
+// CONTRACT-AWARE CELL COMPARISON (QA-018) — read-back equality that respects how Google normalizes a cell.
+// Column type is inferred from the SAME name conventions the bootstrap planner uses to format columns
+// (n8n/lib/sheets_bootstrap_planner.js: RE_USD/RE_RATE/RE_INT/RE_SCORE -> NUMBER format; RE_TIME -> timestamp),
+// plus the contract's checkbox columns -> boolean. These classifiers are mirrored here (the engine cannot
+// require the planner at runtime); tests assert equivalence. A column with a NUMBER format reads back FORMATTED
+// (e.g. -5 -> "-5.00"), so numeric columns compare NUMERICALLY, never byte-identically.
+// ============================================================================================================
+function lc(s) { return str(s).trim().toLowerCase(); }
+var COL_TIME = /(_at$|_ts$|^ts$|created_ts|updated_ts|published_at|evaluated_at|added_at|collected_at|generated_at|first_seen_at|last_seen_at|next_check_at|expires_at|reviewed_at|approved_at|analyzed_at|parsed_at|edited_ts|decided_ts)/;
+var COL_ID_HASH = /(_id$|^id$|_key$|_hash$|hash$|dedup_key|change_id|idempotency_key|version$|payload_hash|content_hash)/;
+var COL_USD = /(_usd$|cost_usd|_cost$)/;
+var COL_RATE = /_rate$/;
+var COL_INT = /(_count$|count$|_calls$|calls$|_tokens$|tokens$|_index$|attempts|chunks|item_count|items_received|requested_limit|requested_search_scope|max_items|max_external_calls|max_context_tokens|est_input_tokens|^week$|^year$|frequency|evidence_count|time_window_days|source_staleness_days|age_days|error_count|check_interval_hours|batch_index|estimated_firecrawl_credits)/;
+var COL_SCORE = /(_score$|score$|confidence|urgency|niche_fit|competitor_strength|lead_signal_score|content_idea_score|quality_score|lead_score|confidence_score|source_confidence|contact_confidence|evidence_completeness_score)/;
+// a column is contractually NUMERIC iff the bootstrap would apply a NUMBER format to it (and it is not id/hash/time).
+function isNumericColumn(col) { var c = lc(col); if (COL_TIME.test(c) || COL_ID_HASH.test(c)) return false; return COL_USD.test(c) || COL_RATE.test(c) || COL_INT.test(c) || COL_SCORE.test(c); }
+function isTimestampColumn(col) { var c = lc(col); return COL_TIME.test(c) && !COL_ID_HASH.test(c); }
+function booleanColumns(resolved, sheet) { var cs = contractSheet(resolved, sheet); return (cs && cs.ui_columns && cs.ui_columns.checkboxes) ? cs.ui_columns.checkboxes : []; }
+function columnTypeInfo(resolved, sheet, col) { return { boolean: booleanColumns(resolved, sheet).indexOf(col) >= 0, numeric: isNumericColumn(col), timestamp: isTimestampColumn(col) }; }
+
+// blank == unset. undefined / null / "" / missing trailing cell are equivalent. NEVER treated as 0 or false.
+function isBlankCell(v) { return v === undefined || v === null || str(v).trim() === ''; }
+// canonical boolean: only literal true/"TRUE"/false/"FALSE" (case-insensitive). Arbitrary truthy strings -> null (reject).
+function toBoolStrict(v) { if (typeof v === 'boolean') return v; var s = lc(v); if (s === 'true') return true; if (s === 'false') return false; return null; }
+// parse a contractually-numeric cell to a finite Number, tolerating en-US thousands separators. Arbitrary free
+// text -> NaN (we never coerce non-numeric text). Applied ONLY to columns the contract proves numeric.
+function toNumberStrict(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : NaN;
+  var s = str(v).trim(); if (s === '') return NaN;
+  var cleaned = s.replace(/,/g, '');
+  if (/^[+\-]?(\d+\.?\d*|\.\d+)([eE][+\-]?\d+)?$/.test(cleaned)) return Number(cleaned);
+  return NaN;
+}
+// normalized instant (epoch ms) for a timestamp string; NaN if not parseable (a bare number is ambiguous here).
+function toInstant(v) { if (v == null || typeof v === 'number') return NaN; var s = str(v).trim(); if (s === '') return NaN; var t = Date.parse(s); return isFinite(t) ? t : NaN; }
+// text equality that tolerates a Google formula-escape apostrophe on EITHER side, but only when the underlying
+// value is formula-lead (so legitimate apostrophes in ordinary text are never silently stripped).
+function textEquals(w, r) {
+  var ws = str(w), rs = str(r);
+  if (ws === rs) return true;
+  var wS = ws.charAt(0) === "'" ? ws.slice(1) : ws;
+  var rS = rs.charAt(0) === "'" ? rs.slice(1) : rs;
+  return wS === rS && DANGEROUS_LEAD.test(wS);
+}
+// contract-aware equality for one cell given its column type.
+function cellEquals(written, readBack, types) {
+  types = types || {};
+  if (isBlankCell(written) && isBlankCell(readBack)) return true;          // both unset
+  if (isBlankCell(written) !== isBlankCell(readBack)) return false;        // one set, one unset -> not equal
+  if (types.boolean) { var wb = toBoolStrict(written), rb = toBoolStrict(readBack); return wb !== null && rb !== null && wb === rb; }
+  if (types.numeric) { var wn = toNumberStrict(written), rn = toNumberStrict(readBack); if (isFinite(wn) && isFinite(rn)) return wn === rn; }
+  if (types.timestamp) { var wi = toInstant(written), ri = toInstant(readBack); if (isFinite(wi) && isFinite(ri)) return wi === ri; }
+  return textEquals(written, readBack);
+}
+function jsType(v) { if (v === undefined) return 'undefined'; if (v === null) return 'null'; return typeof v; }
+// compare every field we WROTE (intent) against the row read back; returns ok + structured mismatches (diagnostics).
+function compareRow(resolved, sheet, written, readBack) {
+  var mismatches = [];
+  Object.keys(written || {}).forEach(function (col) {
+    var t = columnTypeInfo(resolved, sheet, col);
+    if (!cellEquals(written[col], (readBack || {})[col], t)) {
+      mismatches.push({
+        sheet: sheet, column: col, expected_raw: str(written[col]), actual_raw: str((readBack || {})[col]),
+        expected_type: jsType(written[col]), actual_type: jsType((readBack || {})[col]),
+        comparison_mode: t.boolean ? 'boolean' : (t.numeric ? 'numeric' : (t.timestamp ? 'timestamp' : 'text'))
+      });
+    }
+  });
+  return { ok: mismatches.length === 0, mismatches: mismatches };
+}
+
+// ---- typed read (formula safety, separate from read-back equality) ----------------------------------------
+// Parse a bounded spreadsheets.get?includeGridData response for ONE row into { col: cell }, where each cell
+// exposes userEnteredValue (stringValue | formulaValue | numberValue | boolValue), effectiveValue, formattedValue.
+function parseTypedRow(getResponse, sheetName, headers) {
+  var out = {};
+  var sheets = arr((getResponse || {}).sheets);
+  var sh = sheets.filter(function (s) { return ((s.properties || {}).title) === sheetName; })[0] || sheets[0];
+  if (!sh) return out;
+  var data = arr(sh.data)[0] || {};
+  var rowData = arr(data.rowData)[0] || {};
+  var cells = arr(rowData.values);
+  arr(headers).forEach(function (h, i) { if (i < cells.length) out[h] = cells[i] || {}; });
+  return out;
+}
+// prove each formula-test cell is stored as literal TEXT (userEnteredValue.stringValue) and NOT as a formula.
+function verifyFormulaSafety(typedCells, formulaFields) {
+  var details = [], ok = true;
+  arr(formulaFields).forEach(function (f) {
+    var uev = ((typedCells || {})[f] || {}).userEnteredValue || {};
+    var cellOk = (uev.stringValue !== undefined) && (uev.formulaValue === undefined);
+    if (!cellOk) ok = false;
+    details.push({ column: f, stringValue: uev.stringValue, formulaValue: uev.formulaValue, ok: cellOk });
+  });
+  return { ok: ok, details: details };
+}
+
 // ---- djb2 hash + outbox delivery id (mirror of telegram_io.js payloadHash / makeDelivery) ------------------
 function djb2(s) { s = str(s); var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return 'h' + h.toString(16); }
 function payloadHash(s) { return djb2(s); }
@@ -611,31 +709,40 @@ function verifyAll(input) {
   var v = {};
 
   // ---- formula-injection neutralization + negative-number preservation (Section 5) ------------------------
+  // FORMULA SAFETY is a SEPARATE assertion from read-back equality (QA-018): planned cells never unsafe, the
+  // simulator never produced an executable formula, the formula-test cells read back as their literal text, and
+  // (when a typed read is available) Google stored them as userEnteredValue.stringValue, not formulaValue.
   var cells = [];
   arr(plan.batchBody.data).forEach(function (entry) { arr(entry.values).forEach(function (row) { row.forEach(function (c) { cells.push(c); }); }); });
-  v.FORMULA_INJECTION_NEUTRALIZATION = (set.formula_tests_enabled === false) ? 'SKIPPED' : (cells.every(function (c) { return !isUnsafeCell(c); }) && simModel.executable_formula_cells === 0 ? 'PASS' : 'FAIL');
-  // each formula test string round-trips to literal text (never its evaluated result)
   var raReadFt = findRow(afterSnap, 'agent_requests', set.sheets.agent_requests.meta.identity_cols, set.sheets.agent_requests.desired[0].values);
   var ftFields = (set.formula_fields.agent_requests || []);
-  var ftOk = (set.formula_tests_enabled === false) ? true : (raReadFt && ftFields.every(function (f) { return str(raReadFt[f]) === str(set.sheets.agent_requests.desired[0].values[f]); }));
-  if (v.FORMULA_INJECTION_NEUTRALIZATION === 'PASS' && !ftOk) v.FORMULA_INJECTION_NEUTRALIZATION = 'FAIL';
-  // negatives stay numeric AND are not apostrophe-prefixed
+  var typed = input.typed || null;                 // parsed spreadsheets.get (request-A row) when applied
+  var typedSafety = typed ? verifyFormulaSafety(typed, ftFields) : null;
+  var plannedSafe = cells.every(function (c) { return !isUnsafeCell(c); }) && simModel.executable_formula_cells === 0;
+  var ftLiteral = ftFields.every(function (f) { return textEquals(set.sheets.agent_requests.desired[0].values[f], raReadFt ? raReadFt[f] : undefined); });
+  var formulaOk = plannedSafe && !!raReadFt && ftLiteral && (typedSafety ? typedSafety.ok : true);
+  v.FORMULA_INJECTION_NEUTRALIZATION = (set.formula_tests_enabled === false) ? 'SKIPPED' : (formulaOk ? 'PASS' : 'FAIL');
+  v.FORMULA_SAFETY_DETAILS = typedSafety ? typedSafety.details : null;
+  // negatives stay numeric (compared numerically, since the *_usd columns read back FORMATTED e.g. "-5.00") AND
+  // are not apostrophe-prefixed in what we send.
   var negFields = (set.negative_fields.agent_requests || []);
   var negNotPrefixed = negFields.every(function (f) { return neutralize(set.sheets.agent_requests.desired[0].values[f]).charAt(0) !== "'"; });
-  var negNumeric = (set.formula_tests_enabled === false) ? true : (raReadFt && negFields.every(function (f) { var rb = raReadFt[f]; return typeof rb === 'number' && String(rb) === String(set.sheets.agent_requests.desired[0].values[f]); }));
+  var negNumeric = (set.formula_tests_enabled === false) ? true : (!!raReadFt && negFields.every(function (f) { var rb = toNumberStrict(raReadFt[f]); return isFinite(rb) && rb === Number(set.sheets.agent_requests.desired[0].values[f]); }));
   v.NEGATIVE_NUMBER_PRESERVATION = (set.formula_tests_enabled === false) ? 'SKIPPED' : (negNotPrefixed && negNumeric ? 'PASS' : 'FAIL');
 
-  // ---- A. append + filtered read-back: agent_requests request A -------------------------------------------
+  // ---- A. append + filtered read-back: agent_requests request A (contract-aware comparison) ---------------
   var reqA = set.sheets.agent_requests.desired[0].values;
   var raRow = findRow(afterSnap, 'agent_requests', ['agent_request_id'], reqA);
   v.APPEND_AGENT_REQUEST = plan.decisions.some(function (d) { return d.tab === 'agent_requests' && d.role === 'request_a' && (d.decision === 'insert' || d.decision === 'update'); }) ? 'PASS' : 'FAIL';
-  v.READ_BACK_AGENT_REQUEST = raRow && fieldsEqual(reqA, raRow) ? 'PASS' : 'FAIL';
+  var rbCmp = raRow ? compareRow(resolved, 'agent_requests', reqA, raRow) : { ok: false, mismatches: [{ sheet: 'agent_requests', column: '*', expected_raw: '(row)', actual_raw: '(missing)', comparison_mode: 'row_present' }] };
+  v.READ_BACK_AGENT_REQUEST = rbCmp.ok ? 'PASS' : 'FAIL';
+  v.READ_BACK_FAILURES = rbCmp.mismatches;
 
   // ---- B. append event linked to request A ----------------------------------------------------------------
   var evA = set.sheets.agent_request_events.desired[0].values;
   var evRow = findRow(afterSnap, 'agent_request_events', set.sheets.agent_request_events.meta.identity_cols, evA);
   var evValidTransition = isValidState(resolved, 'agent_request_events', 'from_state', evA.from_state) && isValidState(resolved, 'agent_request_events', 'to_state', evA.to_state);
-  v.APPEND_REQUEST_EVENT = (evRow && str(evRow.agent_request_id) === str(id.qa_request_a) && evValidTransition && fieldsEqual(evA, evRow)) ? 'PASS' : 'FAIL';
+  v.APPEND_REQUEST_EVENT = (evRow && str(evRow.agent_request_id) === str(id.qa_request_a) && evValidTransition && compareRow(resolved, 'agent_request_events', evA, evRow).ok) ? 'PASS' : 'FAIL';
 
   // ---- C/D. conversation_state insert then update (two-phase semantic proof over the live before-state) ----
   var cs = set.sheets.conversation_state;
@@ -681,14 +788,15 @@ function verifyAll(input) {
   v.REQUEST_ISOLATION = iso.request_isolation ? 'PASS' : 'FAIL';
   v.FOREIGN_ROWS_RETURNED = iso.foreign_rows_returned;
 
-  // ---- Section 7. before/after scope -----------------------------------------------------------------------
-  var ba = verifyBeforeAfter(before, afterSnap, id, set, plan);
+  // ---- Section 7. before/after scope (identity-based; NOT a read-back content check — QA-019) -------------
+  var ba = verifyBeforeAfter(resolved, before, afterSnap, id, set, plan);
   v.EXPECTED_ROWS_WRITTEN = ba.expected_rows_written;
   v.UNEXPECTED_ROWS_WRITTEN = ba.unexpected_rows_written;
   v.FOREIGN_ROWS_MODIFIED = ba.foreign_rows_modified;
   v.HEADERS_MODIFIED = ba.headers_modified;
   v.UNDECLARED_TABS_MODIFIED = ba.undeclared_tabs_modified;
   v.BEFORE_AFTER_SCOPE = ba.ok ? 'PASS' : 'FAIL';
+  v.BEFORE_AFTER_FAILURES = ba.failures;
 
   // ---- Section 8. repeat-run idempotency: re-plan against the AFTER state => zero new inserts --------------
   // LIVE marker re-plans against the real after-snapshot; plan-level uses the projection (for WRITE_PLAN).
@@ -769,34 +877,66 @@ function verifyIsolation(afterSnap, id, set) {
   };
 }
 
-// before/after scope: only this run's expected QA rows added/updated; foreign rows byte-identical; headers and
-// undeclared tabs untouched.
-function verifyBeforeAfter(before, after, id, set, plan) {
-  var foreignModified = 0, headersModified = 0, undeclaredModified = 0, added = 0;
+// identity key for a row given its identity columns (run-scoped ids embed qa_run_id, so they never collide
+// with foreign rows).
+function identityKey(cols, row) { return arr(cols).map(function (c) { return str((row || {})[c]); }).join(''); }
+function desiredIdentities(set, sheet) { var meta = set.sheets[sheet].meta; return set.sheets[sheet].desired.map(function (d) { return identityKey(meta.identity_cols, d.values); }); }
+// a row is "ours" (this QA run's) iff it carries the run marker OR its identity matches a desired run identity.
+function runOwns(resolved, id, set, sheet, row) {
+  var meta = set.sheets[sheet].meta;
+  if (isQaRunRow(row, id.qa_run_id, meta.marker_field)) return true;
+  return desiredIdentities(set, sheet).indexOf(identityKey(meta.identity_cols, row)) >= 0;
+}
+
+// BEFORE/AFTER SCOPE (QA-019) — a PURE SCOPE aggregate keyed on run identity. It proves: every desired QA row is
+// present exactly once; no unexpected QA row exists; foreign (non-run) rows are unchanged (compared CONTRACT-AWARE
+// so Google's consistent normalization is never read as a change, and normalization of the run's OWN rows is never
+// counted as a foreign modification); headers unchanged; no undeclared tab written. Read-back CONTENT correctness
+// of the run's own rows is deliberately NOT part of this aggregate (that belongs to READ_BACK_*). Returns
+// structured BEFORE_AFTER_FAILURES.
+function verifyBeforeAfter(resolved, before, after, id, set, plan) {
+  var failures = [];
   var testTabs = Object.keys(set.sheets);
   testTabs.forEach(function (name) {
-    var b = before[name] || { headers: [], rows: [], count: 0 };
-    var a = after[name] || { headers: [], rows: [], count: 0 };
-    var mf = set.sheets[name].meta.marker_field;
+    var b = before[name] || { headers: [], rows: [] };
+    var a = after[name] || { headers: [], rows: [] };
+    var meta = set.sheets[name].meta;
+    var mine = function (r) { return runOwns(resolved, id, set, name, r); };
     // header row unchanged
-    if (b.headers.length && JSON.stringify(b.headers) !== JSON.stringify(a.headers)) headersModified++;
-    // foreign rows (not this qa_run) must be byte-identical before vs after
-    var fB = canon(filterRows(b.rows, function (r) { return !isQaRunRow(r, id.qa_run_id, mf); }));
-    var fA = canon(filterRows(a.rows, function (r) { return !isQaRunRow(r, id.qa_run_id, mf); }));
-    if (fB !== fA) foreignModified++;
-    // qa-run rows added
-    var qB = filterRows(b.rows, function (r) { return isQaRunRow(r, id.qa_run_id, mf); }).length;
-    var qA = filterRows(a.rows, function (r) { return isQaRunRow(r, id.qa_run_id, mf); }).length;
-    added += Math.max(0, qA - qB);
+    if (b.headers.length && JSON.stringify(b.headers) !== JSON.stringify(a.headers)) failures.push({ kind: 'header_changed', sheet: name });
+    // every desired QA identity present exactly once in AFTER (covers both fresh inserts and repeat-run updates)
+    var desired = desiredIdentities(set, name);
+    var desiredSet = {}; desired.forEach(function (k) { desiredSet[k] = true; });
+    desired.forEach(function (k, i) {
+      var role = set.sheets[name].desired[i].role;
+      var present = arr(a.rows).filter(function (r) { return identityKey(meta.identity_cols, r) === k; });
+      if (present.length === 0) failures.push({ kind: 'expected_row_missing', sheet: name, role: role, identity: k });
+      else if (present.length > 1) failures.push({ kind: 'duplicate_qa_row', sheet: name, role: role, identity: k, count: present.length });
+    });
+    // no UNEXPECTED run-owned row in AFTER (ours, but not one of the desired identities)
+    arr(a.rows).forEach(function (r) { if (mine(r) && !desiredSet[identityKey(meta.identity_cols, r)]) failures.push({ kind: 'unexpected_qa_row', sheet: name, identity: identityKey(meta.identity_cols, r) }); });
+    // foreign rows (NOT ours), keyed by identity, must be unchanged before->after (contract-aware comparison)
+    var fB = {}; arr(b.rows).forEach(function (r) { if (!mine(r)) fB[identityKey(meta.identity_cols, r)] = r; });
+    var fA = {}; arr(a.rows).forEach(function (r) { if (!mine(r)) fA[identityKey(meta.identity_cols, r)] = r; });
+    Object.keys(fB).forEach(function (k) {
+      if (!(k in fA)) { failures.push({ kind: 'foreign_row_removed', sheet: name, identity: k }); return; }
+      if (!compareRow(resolved, name, fB[k], fA[k]).ok) failures.push({ kind: 'foreign_row_modified', sheet: name, identity: k });
+    });
+    Object.keys(fA).forEach(function (k) { if (!(k in fB)) failures.push({ kind: 'foreign_row_added', sheet: name, identity: k }); });
   });
   // a write to any tab outside the declared test set => violation
-  plan.write_tabs.forEach(function (t) { if (testTabs.indexOf(t) < 0) undeclaredModified++; });
-  var expected = plan.expected_rows_written;
-  var unexpected = Math.abs(added - expected);
-  var ok = unexpected === 0 && foreignModified === 0 && headersModified === 0 && undeclaredModified === 0;
-  return { ok: ok, expected_rows_written: expected, unexpected_rows_written: unexpected, foreign_rows_modified: foreignModified, headers_modified: headersModified, undeclared_tabs_modified: undeclaredModified, qa_rows_added: added };
+  arr(plan.write_tabs).forEach(function (t) { if (testTabs.indexOf(t) < 0) failures.push({ kind: 'undeclared_tab_written', sheet: t }); });
+
+  var byKind = function (kinds) { return failures.filter(function (f) { return kinds.indexOf(f.kind) >= 0; }).length; };
+  return {
+    ok: failures.length === 0, failures: failures,
+    expected_rows_written: plan.expected_rows_written,
+    unexpected_rows_written: byKind(['unexpected_qa_row', 'duplicate_qa_row', 'expected_row_missing']),
+    foreign_rows_modified: byKind(['foreign_row_modified', 'foreign_row_removed', 'foreign_row_added']),
+    headers_modified: byKind(['header_changed']),
+    undeclared_tabs_modified: byKind(['undeclared_tab_written'])
+  };
 }
-function canon(rows) { return JSON.stringify(arr(rows).map(function (r) { return r; })); }
 
 // idempotency: re-plan the whole run against the projected-after state — a correct run plans zero new inserts.
 function verifyIdempotency(resolved, id, config, set, projected) {
@@ -828,8 +968,17 @@ function assembleSummary(input) {
   // dry-run validity: a well-formed, neutralized, in-bounds, idempotent PLAN (no live mutation needed).
   var dryPlanOk = preflightPass && sheetsRead === 'PASS' && m.WRITE_PLAN === 'PASS';
 
-  // live verification (fix 6): every LIVE marker PASS (SKIPPED allowed only for formula/negative when disabled)
-  // plus all numeric scope guards zero.
+  // ---- mutation / acceptance markers (Section D) — truthful and separable ----------------------------------
+  // The write node ran and Google accepted the write iff `applied` (the workflow only reaches Verify & Report on
+  // the applied branch after a 2xx from values:batchUpdate AND a successful after-snapshot read).
+  var mutationsPlanned = arr(plan.batchBody && plan.batchBody.data).length > 0;
+  var writeRequestSucceeded = input.write_request_succeeded != null ? (input.write_request_succeeded === true) : applied;
+  var writeNodeExecuted = input.write_node_executed != null ? (input.write_node_executed === true) : applied;
+  var mutationsExecuted = applied && writeRequestSucceeded && mutationsPlanned;
+  var afterSnapshotRead = input.after_snapshot_read != null ? (input.after_snapshot_read === true) : applied;
+
+  // live verification: every LIVE marker PASS (SKIPPED allowed only for formula/negative when disabled) plus all
+  // numeric scope guards zero.
   function liveOk(k) {
     var val = m[k];
     if (k === 'FORMULA_INJECTION_NEUTRALIZATION' || k === 'NEGATIVE_NUMBER_PRESERVATION') return val === 'PASS' || val === 'SKIPPED';
@@ -837,11 +986,16 @@ function assembleSummary(input) {
   }
   var numericGuardsZero = (m.FOREIGN_ROWS_MODIFIED === 0) && (m.UNEXPECTED_ROWS_WRITTEN === 0) &&
     (m.FOREIGN_ROWS_RETURNED === 0) && (m.HEADERS_MODIFIED === 0) && (m.UNDECLARED_TABS_MODIFIED === 0);
-  var liveAllPass = applied && preflightPass && LIVE_MARKERS.every(liveOk) && numericGuardsZero;
+  var acceptanceVerified = applied && afterSnapshotRead && preflightPass && LIVE_MARKERS.every(liveOk) && numericGuardsZero;
 
-  // CHANGES_APPLIED is true ONLY after a verified live write (write ok + after read-back + all live markers pass).
-  var changesApplied = liveAllPass;
-  var result = blocked ? 'BLOCKED_PREFLIGHT' : (applied ? (liveAllPass ? 'PASS' : 'FAIL') : (dryPlanOk ? 'PASS' : 'FAIL'));
+  // CHANGES_APPLIED reflects whether Google APPLIED the mutation — it must stay true even if later verification
+  // fails (a verification failure must never falsely imply that no mutation happened). RESULT carries the verdict.
+  var changesApplied = mutationsExecuted;
+  // Once the write node has actually executed (a live attempt), the verdict is acceptance-based: a rejected write
+  // (WRITE_REQUEST_SUCCEEDED=false) or an unverified write (ACCEPTANCE_VERIFIED=false) is FAIL and must never fall
+  // back to the dry-run success path. Only a genuine dry-run (the write node never ran) is judged on plan validity.
+  var result = blocked ? 'BLOCKED_PREFLIGHT'
+    : (writeNodeExecuted ? (acceptanceVerified ? 'PASS' : 'FAIL') : (dryPlanOk ? 'PASS' : 'FAIL'));
 
   return {
     PREFLIGHT: pre.PREFLIGHT || 'FAIL',
@@ -850,6 +1004,11 @@ function assembleSummary(input) {
     WRITE_PLAN: m.WRITE_PLAN,
     NEXT_DATA_ROWS: m.NEXT_DATA_ROWS || {},
     GRID_EXPANSIONS: m.GRID_EXPANSIONS || {},
+    WRITE_NODE_EXECUTED: writeNodeExecuted,
+    WRITE_REQUEST_SUCCEEDED: writeRequestSucceeded,
+    MUTATIONS_EXECUTED: mutationsExecuted,
+    AFTER_SNAPSHOT_READ: afterSnapshotRead,
+    ACCEPTANCE_VERIFIED: acceptanceVerified,
     APPEND_AGENT_REQUEST: m.APPEND_AGENT_REQUEST,
     READ_BACK_AGENT_REQUEST: m.READ_BACK_AGENT_REQUEST,
     APPEND_REQUEST_EVENT: m.APPEND_REQUEST_EVENT,
@@ -904,7 +1063,15 @@ function runOffline(input) {
   if (applied) { applyExpansion(model, plan.expanded_tabs); if (plan.batchBody.data.length) applyBatch(model, plan.batchBody); }
   var after = modelToSnapshot(model, identityBy);
 
-  var ver = verifyAll({ resolved: resolved, identity: id, config: config, row_set: set, before: before, plan: plan, after: applied ? after : null, applied: applied });
+  // synthesize the typed (spreadsheets.get) read of request A's formula cells: neutralized formula text is stored
+  // as userEnteredValue.stringValue (never formulaValue). Tests may pass their own `typed` for the negative case.
+  var typed = input.typed;
+  if (typed === undefined && applied) {
+    var raAfter = findRow(after, 'agent_requests', set.sheets.agent_requests.meta.identity_cols, set.sheets.agent_requests.desired[0].values) || {};
+    typed = {}; (set.formula_fields.agent_requests || []).forEach(function (f) { typed[f] = { userEnteredValue: { stringValue: str(raAfter[f]) } }; });
+  }
+
+  var ver = verifyAll({ resolved: resolved, identity: id, config: config, row_set: set, before: before, plan: plan, after: applied ? after : null, applied: applied, typed: applied ? typed : null });
   var summary = assembleSummary({ preflight: pre, verify: ver, identity: id, config: config, plan: plan, changes_applied: applied, sheets_read: true });
   return { identity: id, row_set: set, preflight: pre, plan: plan, verify: ver, after: after, projected: ver.projected, summary: summary };
 }
@@ -913,12 +1080,15 @@ module.exports = {
   // helpers / mirrors (tested for behavioural equivalence with the canonical libs)
   str, low, neutralize, isFiniteNumber, isUnsafeCell, djb2, payloadHash, makeDeliveryId, colLetter,
   rowStartRange, fullRange, encodeQaTag, parseQaTag, isQaRunRow,
+  // contract-aware comparison layer (QA-018) + typed formula safety
+  isNumericColumn, isTimestampColumn, columnTypeInfo, isBlankCell, toBoolStrict, toNumberStrict, toInstant,
+  textEquals, cellEquals, compareRow, parseTypedRow, verifyFormulaSafety,
   // constants
   FORMULA_TESTS, NEGATIVE_TESTS, EXAMPLE_URL, LIVE_MARKERS, sheetPlanMeta,
   // engine
   buildRunIdentity, buildQaRowSet, validatePlanAgainstContract, neededColumns, contractSheet,
   preflight, parseSnapshot, titleFromRange, rangeStartRow, rowsFromValues, rowIsOccupied, planOperations,
-  matchByIdentity, indexByIdentity,
+  matchByIdentity, indexByIdentity, identityKey, desiredIdentities, runOwns,
   simulateFromSnapshot, applyExpansion, applyBatch, modelToSnapshot, parseUserEntered, upsertInMemory,
   verifyAll, verifyIsolation, verifyBeforeAfter, verifyIdempotency, fieldsEqual, assembleSummary, runOffline
 };

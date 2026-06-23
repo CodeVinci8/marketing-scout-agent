@@ -242,3 +242,22 @@ internal config name `live_channel_allowlist` kept for compatibility.
 **Scope:** VK live = Stage 3 expansion (not MVP blocker); Telegram groups/MTProto/member extraction = future
 high-risk extension; Stage 2 WF06 cleanup = backlog. Next active stage = Stage 4 (Claude enrichment + report).
 Full text: DEC-135 in `docs/DECISIONS.md`.
+
+---
+
+## DEC-156 — Verify Google Sheets read-back by contract type, not bytes
+
+**Decision:** When a workflow writes to Google Sheets with `valueInputOption=USER_ENTERED` and then verifies the
+result, compare each field by its **contract type** (numeric numerically, checkbox as boolean, timestamp as
+instant, else text), never byte-for-byte. Google returns the **rendered** value (number format, `TRUE`/`FALSE`),
+so `-5` reads back as `-5.00` and `false` as `FALSE`. Scope ("did we touch only our own rows?") is judged by row
+**identity**, so normalization of a run's own rows is never a foreign-change false positive. Formula-injection
+safety is a **separate** typed assertion (`spreadsheets.get` → `userEnteredValue.stringValue`, never
+`formulaValue`). Mutation markers are separable: `CHANGES_APPLIED` reflects that Google applied the write even
+when verification fails; the verdict is `ACCEPTANCE_VERIFIED`/`RESULT`.
+
+**Reason:** QA-018/QA-019 — a correct live write was reported as a failure because read-back used byte equality
+and own-row normalization leaked into the scope check.
+
+**Impact:** Any future Sheets verification (Stage 3C harness and beyond) must reuse this contract-aware
+comparison rather than re-introducing byte/loose comparison. Full text: DEC-156 in `docs/DECISIONS.md`.
