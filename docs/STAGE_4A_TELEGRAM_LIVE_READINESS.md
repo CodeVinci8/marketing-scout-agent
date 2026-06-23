@@ -321,8 +321,20 @@ Each is an operator provisioning/deployment step, documented in §8/§10.
 
 ## 13. Stage 4A final status
 
-**BLOCKED.** The agent code is present and offline-proven in the repo, the Google Service Account credential
-exists, and the deployment/rollback tooling is sound. Live readiness is blocked solely on operator provisioning:
-deploy the 15-workflow runtime closure (inactive) → attach credentials → set the Stage 4 env vars → stand up a
-public HTTPS endpoint + `WEBHOOK_URL` → register the Telegram webhook → activate WF18 → run the §9 free-path
-smoke (0 paid calls) → then the single controlled paid E2E. No production change was made by this audit.
+**BLOCKED on operator provisioning** (no code blocker). `STAGE_4_IMPLEMENTATION = READY FOR LIVE DEPLOYMENT
+TEST`. The agent code is present and offline-proven, the Google Service Account credential exists, and the
+deployment/rollback tooling is sound. Live readiness is blocked solely on operator provisioning: deploy the
+15-workflow runtime closure (inactive) → attach credentials → set the Stage 4 env vars → stand up a public HTTPS
+endpoint + `WEBHOOK_URL` → register the Telegram webhook → activate WF18 → run the free-path smoke (0 paid calls)
+→ then the single controlled paid E2E. No production change was made by this audit.
+
+### 13a. Updates since the original audit (DEC-157)
+- **`/start` is now a dedicated deterministic command** (Russian welcome + examples + command list, no API) —
+  the gap noted in §8 is closed. `/help /new /status /cancel` remain deterministic.
+- **Explicit zero-paid free-path guards** in `agent_config` (`enable_telegram`, `enable_external_actions`,
+  `enable_claude`, `enable_apify/firecrawl/vk`, `monitoring_enabled`, `weekly_digest_enabled`;
+  `MS_MAX_EXTERNAL_CALLS=0` master kill-switch; `zero_paid_mode`/`effective_max_external_calls`). Approval cannot
+  bypass them.
+- **Europe/Moscow** product timezone for all system timestamps (`n8n/lib/ms_time.js`).
+- The exact BotFather command list, secure-token entry, deploy/webhook/smoke/rollback steps now live in the
+  canonical **`docs/STAGE_4_BOT_DEPLOYMENT.md`** (authoritative; this audit's §8–§10 remain valid).

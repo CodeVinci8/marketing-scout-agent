@@ -139,6 +139,10 @@ function deterministicIntent(parsed, ctx) {
   if (kind === 'status') return Object.assign(buildIntent('status', 1, {}, ctx), { from: 'command' });
   if (kind === 'cancel') return Object.assign(buildIntent('cancel', 1, {}, ctx), { from: 'command' });
   const text = str(parsed.text);
+  // /start is a deterministic onboarding command — it returns the Russian welcome/help (capabilities, examples,
+  // commands), starts no request and calls no API. It shares the help action; `entities.start` lets the responder
+  // open with a welcome line if desired.
+  if (/^\/start\b/i.test(text)) return Object.assign(buildIntent('help', 1, { start: true }, ctx), { from: 'command' });
   const cmd = text.match(/^\/(new|context|memory|forget_all|forget|help)\b\s*(.*)$/i);
   if (cmd) {
     if (/help/i.test(cmd[1])) return Object.assign(buildIntent('help', 1, {}, ctx), { from: 'command' });

@@ -37,6 +37,7 @@ const JS_SUITES = [
   ['stage4-contracts', 'test_stage4_contracts.js'],
   ['stage4-workflows', 'test_stage4_workflows.js'],
   ['stage4-e2e', 'test_stage4_e2e.js'],
+  ['stage4-freepath', 'test_stage4_freepath.js'],
   // --- Conversational agent: charter, intent router, bounded memory, sources ---
   ['agent-contracts', 'test_agent_contracts.js'],
   ['agent-workflows', 'test_agent_workflows.js'],
@@ -83,6 +84,8 @@ const JS_SUITES = [
   ['sheets-bootstrap', 'test_sheets_bootstrap.js'],
   // --- Stage 3C Google Sheets OPERATIONS acceptance (pure engine + generated manual QA workflow) ---
   ['sheets-operations-qa', 'test_sheets_operations_qa.js'],
+  // --- Product timezone: Europe/Moscow system-timestamp helper (RFC3339 +03:00 / Russian display) ---
+  ['ms-time', 'test_ms_time.js'],
 ];
 
 let failed = 0;
