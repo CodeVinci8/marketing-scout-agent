@@ -20,6 +20,7 @@ const GEN = require('../tools/gen_sheets_operations_qa_workflow.js');
 const RPT = require('../n8n/lib/report_export.js');
 const AUD = require('../n8n/lib/sheet_audit.js');
 const TG = require('../n8n/lib/telegram_io.js');
+const MST = require('../n8n/lib/ms_time.js');
 
 const resolved = R.resolveOrThrow();
 const TEST_SHEETS = ['agent_requests', 'agent_request_events', 'conversation_state', 'tracked_sources', 'telegram_outbox'];
@@ -457,5 +458,117 @@ A.ok('not registered in the production workflow manifest', (function () {
   var m = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'workflow_manifest.json'), 'utf8'));
   return !(m.workflows || []).some(function (w) { return /operations_acceptance/.test(String(w.file)); });
 })());
+
+// =============================================================================================================
+// NON-EMPTY STAGING REGRESSION (the live QA-018/QA-019 failure: the spreadsheet already held prior QA runs).
+// Builds a staging sheet that contains: a PRIOR QA run (its request A + B, already Google-normalized), an OLD
+// manual-test conversation row, FOREIGN business rows, preallocated checkbox-FALSE rows, Google-normalized
+// numeric strings ("-5.00"), string booleans ("FALSE"), and timestamps in BOTH UTC-Z and Moscow-offset form.
+// A fresh run must read ONLY its own request A, create no false duplicate, modify no prior/foreign row, and pass.
+// =============================================================================================================
+const AR_APPROVAL_IDX = headersOf('agent_requests').indexOf('approval_required');
+const OLD_RUN = 'stage3c-20260101T090000-old001';
+function oldTag(role, owner) { return QA.encodeQaTag({ data_mode: 'manual_test', qa_run_id: OLD_RUN, owner: owner, role: role }); }
+const OWNER_A = 'qa-stage3-owner::a', OWNER_B = 'qa-stage3-owner::b';
+// render an instant as Google's offset-less Moscow locale string "DD.MM.YYYY HH:mm:ss" (what batchGet returns).
+function googleDate(v) {
+  var ms = MST.instantOf(v); if (!isFinite(ms)) return v;
+  var dtf = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Moscow', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  var m = {}; dtf.formatToParts(new Date(ms)).forEach(function (p) { m[p.type] = p.value; });
+  return m.day + '.' + m.month + '.' + m.year + ' ' + m.hour + ':' + m.minute + ':' + m.second;
+}
+const TS_COLS = ['created_at', 'ts', 'updated_at', 'added_at', 'last_change_at', 'approved_at', 'reviewed_at'];
+function renderGoogleTimestamps(after) {
+  var a = JSON.parse(JSON.stringify(after));
+  Object.keys(a).forEach(function (tab) {
+    ((a[tab] && a[tab].rows) || []).forEach(function (r) {
+      TS_COLS.forEach(function (c) { if (r[c] != null && String(r[c]).trim() !== '' && isFinite(MST.instantOf(r[c]))) r[c] = googleDate(r[c]); });
+    });
+  });
+  return a;
+}
+// the exact before-snapshot a NON-EMPTY staging spreadsheet would return.
+function nonEmptyBeforeSpec() {
+  return {
+    agent_requests: {
+      fillTo: 12, falseAt: AR_APPROVAL_IDX, data: {
+        2: { agent_request_id: 'crm-12001', user_id: 'real-business-user', request_text: 'genuine business row', created_at: '15.06.2026 09:30:00', state: 'received', status: 'new', request_type: 'manual_intake', source_scope: 'unknown', plan_source: 'deterministic', approval_required: 'FALSE', notes: 'production row — not QA' },
+        3: { agent_request_id: OLD_RUN + '::reqA', user_id: OWNER_A, request_text: 'prior QA run A', created_at: '01.01.2026 12:00:00', state: 'received', status: 'new', request_type: 'manual_intake', source_scope: 'unknown', plan_source: 'deterministic', approval_required: 'FALSE', estimated_source_cost_usd: '-5.00', estimated_analysis_cost_usd: '-4.50', query: '=1+1', plan_summary: '+SUM(1,1)', notes: oldTag('request_a', OWNER_A) },
+        4: { agent_request_id: OLD_RUN + '::reqB', user_id: OWNER_B, request_text: 'prior QA run B', created_at: '01.01.2026 12:00:00', state: 'received', status: 'new', request_type: 'manual_intake', source_scope: 'unknown', plan_source: 'deterministic', approval_required: 'FALSE', notes: oldTag('request_b', OWNER_B) }
+      }
+    },
+    agent_request_events: { data: { 2: { agent_request_id: OLD_RUN + '::reqA', from_state: 'received', to_state: 'classified', accepted: 'TRUE', idempotency_key: 'old_idem', ts: '01.01.2026 12:00:00', reason: oldTag('event_a', OWNER_A) } } },
+    conversation_state: {
+      data: {
+        2: { conversation_id: 'crm-conv-9', owner_user_id: 'real-business-user', current_state: 'received', updated_at: '2026-06-15T06:30:00.000Z' },
+        3: { conversation_id: OLD_RUN + '::convA', owner_user_id: OWNER_A, current_state: 'analyzing', updated_at: '01.01.2026 12:00:00', pending_clarification: oldTag('conv_a', OWNER_A) }
+      }
+    },
+    tracked_sources: { data: { 2: { source_id: OLD_RUN + '::src', owner_user_id: OWNER_A, platform: 'website', ref: 'https://example.com', status: 'paused', added_at: '01.01.2026 12:00:00', updated_at: '01.01.2026 12:00:00', label: oldTag('src_a', OWNER_A), agent_request_id: OLD_RUN + '::reqA' } } },
+    telegram_outbox: { data: { 2: { delivery_id: 'dlv_old', agent_request_id: OLD_RUN + '::reqA', report_id: OLD_RUN + '::rep', chat_id: 'qa_chat', payload_hash: 'hold', chunks: 1, send_status: 'sent', attempts: 1, last_error: oldTag('delivery_a', OWNER_A) } } }
+  };
+}
+// a fresh run, writing Moscow-offset system timestamps, over the populated staging sheet.
+const FRESH_CFG = Object.assign({ qa_owner_id: 'qa-stage3-owner', formula_tests_enabled: true }, {
+  now_stamp: '20260622T120000', rand_suffix: 'new001',
+  now: '2026-06-22T15:00:00.000+03:00', now2: '2026-06-22T15:00:01.000+03:00',
+  execute_writes: true, confirm_staging_spreadsheet: true
+});
+
+A.section('21. NON-EMPTY staging regression — fresh run over prior QA runs + foreign rows (live QA-018/QA-019)');
+var neId = QA.buildRunIdentity(FRESH_CFG);
+var neBefore = buildBefore(nonEmptyBeforeSpec());
+var neLive = QA.runOffline({ resolved: resolved, metadata: metadataAll(gridMapAll()), headerRows: headerRowsAll(), config: FRESH_CFG, identity: neId, before: neBefore, sheet_ids: sheetIdsAll() });
+// Google returns the after-snapshot normalized: numbers FORMATTED, booleans "TRUE"/"FALSE", timestamps re-rendered.
+var neAfter = renderGoogleTimestamps(normalizeGoogle(neLive.after));
+var neTyped = {}; ['query', 'plan_summary', 'result_summary', 'next_action'].forEach(function (f) { neTyped[f] = { userEnteredValue: { stringValue: neLive.row_set.sheets.agent_requests.desired[0].values[f] } }; });
+var neVer = QA.verifyAll({ resolved: resolved, identity: neId, config: { formula_tests_enabled: true }, row_set: neLive.row_set, before: neBefore, plan: neLive.plan, after: neAfter, applied: true, typed: neTyped });
+A.eq('the prior run used a DIFFERENT qa_run_id', neId.qa_run_id !== OLD_RUN, true);
+A.eq('READ_BACK_AGENT_REQUEST=PASS despite a populated sheet', neVer.markers.READ_BACK_AGENT_REQUEST, 'PASS');
+A.eq('READ_BACK_FAILURES is an empty array (not [null])', neVer.markers.READ_BACK_FAILURES.length, 0);
+A.ok('READ_BACK_FAILURES is a real array', Array.isArray(neVer.markers.READ_BACK_FAILURES));
+A.eq('BEFORE_AFTER_SCOPE=PASS with prior QA + foreign rows present', neVer.markers.BEFORE_AFTER_SCOPE, 'PASS');
+A.eq('BEFORE_AFTER_FAILURES empty', neVer.markers.BEFORE_AFTER_FAILURES.length, 0);
+A.eq('FOREIGN_ROWS_MODIFIED=0 (no prior/foreign row touched)', neVer.markers.FOREIGN_ROWS_MODIFIED, 0);
+A.eq('UNEXPECTED_ROWS_WRITTEN=0', neVer.markers.UNEXPECTED_ROWS_WRITTEN, 0);
+A.eq('EXPECTED_ROWS_WRITTEN=7', neVer.markers.EXPECTED_ROWS_WRITTEN, 7);
+A.ok('classification counts prior-QA rows separately', neVer.markers.PREVIOUS_QA_RUN_ROWS >= 2);
+A.ok('classification counts foreign business rows separately', neVer.markers.FOREIGN_NON_QA_ROWS >= 1);
+A.eq('no duplicate agent_requests created from the prior run', neVer.markers.DUPLICATE_AGENT_REQUESTS_CREATED, 0);
+A.eq('FORMULA_INJECTION_NEUTRALIZATION=PASS (typed stringValue)', neVer.markers.FORMULA_INJECTION_NEUTRALIZATION, 'PASS');
+A.ok('FORMULA_SAFETY_DETAILS is an array (not null) and all ok', Array.isArray(neVer.markers.FORMULA_SAFETY_DETAILS) && neVer.markers.FORMULA_SAFETY_DETAILS.every(function (d) { return d.ok; }));
+A.eq('NEGATIVE_NUMBER_PRESERVATION=PASS on the populated sheet', neVer.markers.NEGATIVE_NUMBER_PRESERVATION, 'PASS');
+
+A.section('22. full-identity request-A location — never "first matching-looking row"');
+var loc = QA.findRequestARow(neAfter, neId, neLive.row_set);
+A.ok('locates THIS run request A', loc.row && String(loc.row.agent_request_id) === String(neId.qa_request_a));
+A.ok('the located row carries this run\'s marker (role=request_a, current qa_run_id)', QA.rowQaRole(loc.row, 'notes') === 'request_a' && QA.rowQaRunId(loc.row, 'notes') === neId.qa_run_id);
+A.ok('a prior-run request A row is NOT selected', loc.row.agent_request_id.indexOf(OLD_RUN) < 0);
+A.ok('request B identity cannot satisfy request A (role + owner guard)', (function () {
+  var spoof = Object.assign({}, neId, { qa_request_a: neId.qa_request_b, qa_owner_a: neId.qa_owner_b });
+  // request B row carries role=request_b, so the request_a finder must reject it
+  return QA.findRequestARow(neAfter, spoof, neLive.row_set).row !== null ? QA.rowQaRole(QA.findRequestARow(neAfter, spoof, neLive.row_set).row, 'notes') !== 'request_a' : true;
+})());
+A.ok('classifyRow: current run row -> current_run_owned', QA.classifyRow(resolved, neId, neLive.row_set, 'agent_requests', loc.row) === 'current_run_owned');
+A.ok('classifyRow: prior-QA row -> previous_qa_run', (function () {
+  var prior = neAfter.agent_requests.rows.filter(function (r) { return String(r.agent_request_id) === OLD_RUN + '::reqA'; })[0];
+  return QA.classifyRow(resolved, neId, neLive.row_set, 'agent_requests', prior) === 'previous_qa_run';
+})());
+A.ok('classifyRow: business row -> foreign_non_qa', (function () {
+  var biz = neAfter.agent_requests.rows.filter(function (r) { return String(r.agent_request_id) === 'crm-12001'; })[0];
+  return QA.classifyRow(resolved, neId, neLive.row_set, 'agent_requests', biz) === 'foreign_non_qa';
+})());
+
+A.section('23. Moscow timestamp round-trip in read-back (Z / +03:00 / Google locale all one instant)');
+var tInfo = QA.columnTypeInfo(resolved, 'agent_requests', 'created_at');
+A.ok('created_at is a timestamp column', tInfo.timestamp === true);
+A.ok('written +03:00 == Google offset-less Moscow render', QA.cellEquals('2026-06-22T15:00:00.000+03:00', '22.06.2026 15:00:00', tInfo));
+A.ok('written UTC-Z == Google offset-less Moscow render (same instant)', QA.cellEquals('2026-06-22T12:00:00.000Z', '22.06.2026 15:00:00', tInfo));
+A.ok('written +03:00 == US-locale Moscow render', QA.cellEquals('2026-06-22T15:00:00.000+03:00', '6/22/2026 15:00:00', tInfo));
+A.ok('a genuinely different instant still FAILS', !QA.cellEquals('2026-06-22T15:00:00.000+03:00', '22.06.2026 16:00:00', tInfo));
+A.ok('engine toInstant === ms_time.instantOf across forms', ['2026-06-22T12:00:00.000Z', '2026-06-22T15:00:00.000+03:00', '22.06.2026 15:00:00', '6/22/2026 15:00:00', 'not-a-date'].every(function (s) {
+  var a = QA.toInstant(s), b = MST.instantOf(s);
+  return (isFinite(a) && isFinite(b) && a === b) || (!isFinite(a) && !isFinite(b));
+}));
 
 A.report('sheets-operations-qa');

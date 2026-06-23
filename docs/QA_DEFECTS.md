@@ -212,10 +212,29 @@ formula-bearing cell is stored as `userEnteredValue.stringValue` and **not** `us
 `-5`, `-4.5` must remain numeric. The injection test was **not** weakened — `FORMULA_INJECTION_NEUTRALIZATION`
 now requires planned neutralization **and** the typed read proving `stringValue`.
 
+**Second live failure (non-empty staging) + the residual cause.** A later live write was correct
+(`MUTATIONS_EXECUTED=true`, `EXPECTED_ROWS_WRITTEN=7`, scope counters `0`) yet still returned
+`READ_BACK_AGENT_REQUEST=FAIL` because the staging spreadsheet **already held rows from earlier QA runs** and the
+residual mismatch was the **timestamp** columns: `created_at`/`ts`/`updated_at`/`added_at`/`last_change_at` are
+`COL_TIME` columns, and Google re-renders a written instant in an offset-less locale form (`23.06.2026 15:04:05`)
+that `Date.parse` cannot round-trip, so the timestamp branch fell through to a text compare and mismatched.
+**Robust fix:** (1) system timestamps are now written in **Europe/Moscow** RFC3339 (`…+03:00`) via the shared
+`n8n/lib/ms_time.js` (IANA offset, not a hard-coded +3); (2) the engine's `toInstant` is now Moscow-aware
+(mirrors `ms_time.instantOf`) — `Z`, `+03:00`, offset-less ISO, and Google's RU/US locale renderings all resolve
+to the **same instant**; (3) request A is located by the **full identity contract** (`findRequestARow`: current
+`qa_run_id` + exact `agent_request_id` + owner `user_id` + `data_mode=manual_test` + `role=request_a` marker),
+never "first matching-looking row", so prior-run rows and request B can't satisfy it. Diagnostics now carry
+`physical_row`, `key`, `qa_run_id`, `reason`, and empty findings are `[]` (never `[null]`).
+
 **Tests.** `tests/test_sheets_operations_qa.js` §15c (QA-018 regression: old byte comparator FAILS, new
 contract-aware READ_BACK/NEGATIVE PASS on `-5.00`/`-4.50`/`FALSE`), §15d (blank/boolean/numeric/missing-trailing/
-timestamp/escape unit tests), §15e (typed formula safety: `stringValue` PASS, a real `formulaValue` FAILs).
-**Status: FIXED IN CODE · LIVE RETEST REQUIRED** — proven offline; not yet re-run against the live spreadsheet.
+timestamp/escape unit tests), §15e (typed formula safety: `stringValue` PASS, a real `formulaValue` FAILs),
+**§21 (NON-EMPTY staging: a fresh run over prior QA runs + foreign business rows reads only its own request A,
+creates no false duplicate, modifies nothing foreign, READ_BACK/BEFORE_AFTER PASS, empty diagnostics)**, **§22
+(full-identity location rejects request B / prior-run rows)**, **§23 (Moscow timestamp round-trip)**; plus
+`tests/test_ms_time.js` (24 checks). Suite total **190**.
+**Status: FIXED IN CODE · LIVE RETEST REQUIRED** — proven offline (incl. a non-empty-staging fixture); not yet
+re-run against the live spreadsheet.
 
 ---
 
@@ -242,9 +261,20 @@ requires all expected inserts/updates present, zero unexpected QA rows, foreign 
 unchanged, headers unchanged, and undeclared tabs untouched. No check was removed to manufacture a PASS;
 failures return structured `BEFORE_AFTER_FAILURES`.
 
+**Non-empty staging (the live trigger).** `verifyBeforeAfter` now classifies every after-row three ways —
+`current_run_owned` / `previous_qa_run` (a manual_test row from an **earlier** run) / `foreign_non_qa` — and
+surfaces the counts (`CURRENT_RUN_OWNED_ROWS`, `PREVIOUS_QA_RUN_ROWS`, `FOREIGN_NON_QA_ROWS`). Only
+`current_run_owned` rows may be inserted/updated; previous-QA and foreign rows are held **unchanged** with the
+same Moscow-aware contract-aware comparator (so their existence never causes a failure, they are never counted as
+this run's duplicates, never satisfy an expected write, and are never rewritten or deleted). `PASS` requires: all
+current-run expected rows present, all canonical keys unique, previous-QA rows unchanged, foreign rows unchanged,
+`UNEXPECTED_ROWS_WRITTEN=0`, `HEADERS_MODIFIED=0`, `UNDECLARED_TABS_MODIFIED=0`. `BEFORE_AFTER_FAILURES` /
+`READ_BACK_FAILURES` / `FORMULA_SAFETY_DETAILS` are empty arrays (never `[null]`) when clean.
+
 **Tests.** §15f isolates each genuine violation (`foreign_row_modified`, `expected_row_missing`,
 `duplicate_qa_row`); §15c proves PASS survives normalization of the run's own rows; §17 proves a clean run leaves
-foreign rows byte-identical. **Status: FIXED IN CODE · LIVE RETEST REQUIRED.**
+foreign rows byte-identical; **§21 proves PASS over a populated sheet (prior QA run A+B + foreign business rows +
+preallocated checkbox rows)**. **Status: FIXED IN CODE · LIVE RETEST REQUIRED.**
 
 **Mutation / acceptance markers (Section D).** Alongside QA-018/019 the summary now carries truthful, separable
 markers so a verification failure can never imply Google applied no mutation:
