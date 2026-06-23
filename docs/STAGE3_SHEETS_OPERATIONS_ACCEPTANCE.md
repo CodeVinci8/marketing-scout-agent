@@ -8,8 +8,20 @@ Stage 3A = PASS · Stage 3B1 = PASS · Stage 3B2 = PASS · Stage 3C core persist
 **QA-018 = FIXED IN CODE — LIVE RETEST REQUIRED** (Google-normalized read-back) ·
 **QA-019 = FIXED IN CODE — LIVE RETEST REQUIRED** (before/after scope). The contract-aware read-back, the
 identity-based before/after scope, the typed formula-safety read, and the truthful mutation markers are all
-proven in `tests/test_sheets_operations_qa.js` (offline, `$0`, 0 external calls). They have **not** yet been
-re-run against the live staging spreadsheet — see *§ Live retest sequence* below.
+proven in `tests/test_sheets_operations_qa.js` (**190 checks**, offline, `$0`, 0 external calls). They have
+**not** yet been re-run against the live staging spreadsheet — see *§ Live retest sequence* below.
+
+**Works on a NON-EMPTY staging spreadsheet.** The second live failure occurred because the sheet already held
+rows from earlier QA runs. The harness now: (a) locates request A by the **full identity contract**
+(`findRequestARow`: current `qa_run_id` + exact `agent_request_id` + owner + `data_mode=manual_test` +
+`role=request_a` marker — never "first matching-looking row"); (b) classifies every row three ways —
+`current_run_owned` / `previous_qa_run` / `foreign_non_qa` — and holds previous-QA and foreign rows unchanged
+(surfaced as `CURRENT_RUN_OWNED_ROWS` / `PREVIOUS_QA_RUN_ROWS` / `FOREIGN_NON_QA_ROWS`); (c) writes and compares
+**Europe/Moscow** timestamps. Proven by §21 (fresh run over prior QA run A+B + foreign business rows).
+
+**Moscow timezone.** System timestamps are written as RFC3339 with the Moscow offset (`…+03:00`) via
+`n8n/lib/ms_time.js` (IANA offset, not a hard-coded +3); the engine's timestamp comparison is Moscow-aware so a
+written instant matches Google's offset-less locale rendering (`23.06.2026 15:04:05`). See [[DEC-157]].
 
 It proves — against a **separate staging spreadsheet** — that the project can correctly:
 read, append, filtered read-back, insert-style upsert, update-style upsert, dedup-idempotently,
@@ -21,7 +33,8 @@ isolate by owner and by request, neutralize formula injection, preserve negative
 | Pure engine (planning + verification, embeddable) | `n8n/lib/sheets_operations_qa.js` |
 | Deterministic generator | `tools/gen_sheets_operations_qa_workflow.js` |
 | Generated workflow (inactive, manual-only) | `ops/n8n/workflows/qa_stage3_sheets_operations_acceptance.json` |
-| Offline test suite (162 checks) | `tests/test_sheets_operations_qa.js` |
+| Offline test suite (190 checks) | `tests/test_sheets_operations_qa.js` |
+| Moscow-time helper (RFC3339 +03:00 / Russian display) | `n8n/lib/ms_time.js` (+ `tests/test_ms_time.js`, 24) |
 
 The workflow lives under `ops/` so it is **excluded** from the production runtime manifest
 (`config/workflow_manifest.json`), the Python workflow validator, and the Sheets-contract validator
@@ -239,6 +252,7 @@ tests are disabled, the two formula/negative markers read `SKIPPED`.
 | `FORMULA_INJECTION_NEUTRALIZATION` / `NEGATIVE_NUMBER_PRESERVATION` | formula strings stored as text — proven by the planned neutralization **and** the typed `spreadsheets.get` read (`userEnteredValue.stringValue`, never `formulaValue`); finite negatives stay numeric. (`SKIPPED` if `formula_tests_enabled = false`.) Typed detail in `FORMULA_SAFETY_DETAILS`. |
 | `BEFORE_AFTER_SCOPE` | only this run’s expected rows were added/updated, judged **by row identity** (not byte equality), so Google's normalization of the run's *own* rows is not mistaken for a foreign change. PASS requires every expected insert/update present, zero unexpected QA rows, foreign rows + foreign-owner rows unchanged, headers unchanged, and undeclared tabs untouched. Violations are listed in `BEFORE_AFTER_FAILURES`. |
 | `EXPECTED_ROWS_WRITTEN` / `UNEXPECTED_ROWS_WRITTEN` | rows this run added vs. any it should not have (`0`). |
+| `CURRENT_RUN_OWNED_ROWS` / `PREVIOUS_QA_RUN_ROWS` / `FOREIGN_NON_QA_ROWS` | three-way classification of after-rows: this run's rows / earlier QA-run rows / unrelated business rows. Only the first group may be written; the other two must be unchanged. |
 | `FOREIGN_ROWS_MODIFIED` / `HEADERS_MODIFIED` / `UNDECLARED_TABS_MODIFIED` | other owners/requests untouched (`0`); header row unchanged (`0`); no tab outside the 5 test sheets written (`0`). |
 | `DUPLICATE_AGENT_REQUESTS_CREATED` / `_CONVERSATION_STATES_` / `_TRACKED_SOURCES_` / `_OUTBOX_DELIVERIES_` | duplicates a repeat run would create (`0`). |
 | `IDEMPOTENCY` | re-planning against the **real after-snapshot** yields zero new inserts (in a dry-run this is `NOT_EXECUTED_DRY_RUN`; the plan-level idempotency is folded into `WRITE_PLAN`). |

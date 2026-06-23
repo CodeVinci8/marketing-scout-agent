@@ -87,8 +87,31 @@ function toNumberStrict(v) {
   if (/^[+\-]?(\d+\.?\d*|\.\d+)([eE][+\-]?\d+)?$/.test(cleaned)) return Number(cleaned);
   return NaN;
 }
-// normalized instant (epoch ms) for a timestamp string; NaN if not parseable (a bare number is ambiguous here).
-function toInstant(v) { if (v == null || typeof v === 'number') return NaN; var s = str(v).trim(); if (s === '') return NaN; var t = Date.parse(s); return isFinite(t) ? t : NaN; }
+// normalized instant (epoch ms) for a timestamp value; NaN if not a recognizable timestamp (a bare number is
+// ambiguous and never coerced). Offset-less / locale renderings are interpreted in the PRODUCT timezone
+// (Europe/Moscow): Google returns USER_ENTERED timestamps re-rendered without their offset (e.g. "-5"-style
+// number formats for cost, and "23.06.2026 15:04:05" or "6/23/2026 15:04:05" for dates), so a written
+// "...+03:00" / "...Z" must compare equal to that rendering. This MIRRORS n8n/lib/ms_time.js (instantOf); the
+// engine is embedded into Code nodes and cannot require it — tests assert toInstant === ms_time.instantOf.
+var MS_TZ = 'Europe/Moscow';
+function tzOffMin(date, tz) {
+  var dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  var map = {}; dtf.formatToParts(date).forEach(function (p) { map[p.type] = p.value; });
+  var asUTC = Date.UTC(+map.year, (+map.month) - 1, +map.day, (+map.hour) % 24, +map.minute, +map.second);
+  return Math.round((asUTC - date.getTime()) / 60000);
+}
+function wallMs(y, mo, d, h, mi, s, ms, tz) { var p = Date.UTC(y, mo - 1, d, h, mi, s, ms || 0); return p - tzOffMin(new Date(p), tz) * 60000; }
+function toInstant(v) {
+  if (v instanceof Date) return isFinite(v.getTime()) ? v.getTime() : NaN;
+  if (v == null || typeof v === 'number') return NaN;
+  var s = str(v).trim(); if (s === '') return NaN;
+  if (/(?:[zZ]|[+\-]\d{2}:?\d{2})$/.test(s)) { var t = Date.parse(s); return isFinite(t) ? t : NaN; }
+  var m;
+  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/))) { var msv = m[7] ? Number((m[7] + '00').slice(0, 3)) : 0; return wallMs(+m[1], +m[2], +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0), msv, MS_TZ); }
+  if ((m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/))) { return wallMs(+m[3], +m[2], +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0), 0, MS_TZ); }
+  if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/))) { return wallMs(+m[3], +m[1], +m[2], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0), 0, MS_TZ); }
+  return NaN;
+}
 // text equality that tolerates a Google formula-escape apostrophe on EITHER side, but only when the underlying
 // value is formula-lead (so legitimate apostrophes in ordinary text are never silently stripped).
 function textEquals(w, r) {
@@ -109,16 +132,30 @@ function cellEquals(written, readBack, types) {
   return textEquals(written, readBack);
 }
 function jsType(v) { if (v === undefined) return 'undefined'; if (v === null) return 'null'; return typeof v; }
-// compare every field we WROTE (intent) against the row read back; returns ok + structured mismatches (diagnostics).
-function compareRow(resolved, sheet, written, readBack) {
+function modeOf(t) { return t.boolean ? 'boolean' : (t.numeric ? 'numeric' : (t.timestamp ? 'timestamp' : 'text')); }
+// why a cell mismatched, for diagnostics (no value leakage beyond the already-surfaced raw fields).
+function mismatchReason(w, r, t) {
+  if (isBlankCell(w) !== isBlankCell(r)) return isBlankCell(w) ? 'expected_unset_but_actual_present' : 'expected_present_but_actual_unset';
+  if (t.numeric) return 'numeric_values_differ';
+  if (t.boolean) { return (toBoolStrict(w) === null || toBoolStrict(r) === null) ? 'non_canonical_boolean' : 'boolean_values_differ'; }
+  if (t.timestamp) { return (!isFinite(toInstant(w)) || !isFinite(toInstant(r))) ? 'unparseable_timestamp' : 'instants_differ'; }
+  return 'text_differs';
+}
+// compare every field we WROTE (intent) against the row read back; returns ok + structured mismatches.
+// ctx (optional) carries diagnostic identity: { physical_row, key, qa_run_id } — surfaced on every mismatch.
+function compareRow(resolved, sheet, written, readBack, ctx) {
+  ctx = ctx || {};
   var mismatches = [];
   Object.keys(written || {}).forEach(function (col) {
     var t = columnTypeInfo(resolved, sheet, col);
-    if (!cellEquals(written[col], (readBack || {})[col], t)) {
+    var w = written[col], r = (readBack || {})[col];
+    if (!cellEquals(w, r, t)) {
       mismatches.push({
-        sheet: sheet, column: col, expected_raw: str(written[col]), actual_raw: str((readBack || {})[col]),
-        expected_type: jsType(written[col]), actual_type: jsType((readBack || {})[col]),
-        comparison_mode: t.boolean ? 'boolean' : (t.numeric ? 'numeric' : (t.timestamp ? 'timestamp' : 'text'))
+        sheet: sheet, physical_row: ctx.physical_row != null ? ctx.physical_row : 0,
+        key: ctx.key != null ? str(ctx.key) : '', qa_run_id: ctx.qa_run_id != null ? str(ctx.qa_run_id) : '',
+        column: col, expected_raw: w == null ? null : str(w), actual_raw: r == null ? null : str(r),
+        expected_type: jsType(w), actual_type: jsType(r),
+        comparison_mode: modeOf(t), reason: mismatchReason(w, r, t)
       });
     }
   });
@@ -186,6 +223,13 @@ function isQaRunRow(row, runId, markerField) {
   var t = parseQaTag((row || {})[markerField]);
   return !!(t && str(t.qa_run_id) === str(runId) && str(t.data_mode) === 'manual_test');
 }
+// any manual_test QA row (regardless of run) — used to separate PREVIOUS QA-run rows from genuinely foreign rows.
+function isAnyQaRow(row, markerField) {
+  var t = parseQaTag((row || {})[markerField]);
+  return !!(t && str(t.data_mode) === 'manual_test' && str(t.qa_run_id) !== '');
+}
+function rowQaRunId(row, markerField) { var t = parseQaTag((row || {})[markerField]); return t ? str(t.qa_run_id) : ''; }
+function rowQaRole(row, markerField) { var t = parseQaTag((row || {})[markerField]); return t ? str(t.role) : ''; }
 
 // ============================================================================================================
 // run identity — every id is derived from qa_run_id, so it is traceable + deterministic for a reuse run.
@@ -714,7 +758,10 @@ function verifyAll(input) {
   // (when a typed read is available) Google stored them as userEnteredValue.stringValue, not formulaValue.
   var cells = [];
   arr(plan.batchBody.data).forEach(function (entry) { arr(entry.values).forEach(function (row) { row.forEach(function (c) { cells.push(c); }); }); });
-  var raReadFt = findRow(afterSnap, 'agent_requests', set.sheets.agent_requests.meta.identity_cols, set.sheets.agent_requests.desired[0].values);
+  // locate THIS run's request A by full identity (qa_run_id + agent_request_id + owner + data_mode + role marker),
+  // so previous QA runs / request B can never be mistaken for it.
+  var raLoc = findRequestARow(afterSnap, id, set);
+  var raReadFt = raLoc.row;
   var ftFields = (set.formula_fields.agent_requests || []);
   var typed = input.typed || null;                 // parsed spreadsheets.get (request-A row) when applied
   var typedSafety = typed ? verifyFormulaSafety(typed, ftFields) : null;
@@ -722,7 +769,7 @@ function verifyAll(input) {
   var ftLiteral = ftFields.every(function (f) { return textEquals(set.sheets.agent_requests.desired[0].values[f], raReadFt ? raReadFt[f] : undefined); });
   var formulaOk = plannedSafe && !!raReadFt && ftLiteral && (typedSafety ? typedSafety.ok : true);
   v.FORMULA_INJECTION_NEUTRALIZATION = (set.formula_tests_enabled === false) ? 'SKIPPED' : (formulaOk ? 'PASS' : 'FAIL');
-  v.FORMULA_SAFETY_DETAILS = typedSafety ? typedSafety.details : null;
+  v.FORMULA_SAFETY_DETAILS = typedSafety ? typedSafety.details : [];
   // negatives stay numeric (compared numerically, since the *_usd columns read back FORMATTED e.g. "-5.00") AND
   // are not apostrophe-prefixed in what we send.
   var negFields = (set.negative_fields.agent_requests || []);
@@ -730,11 +777,13 @@ function verifyAll(input) {
   var negNumeric = (set.formula_tests_enabled === false) ? true : (!!raReadFt && negFields.every(function (f) { var rb = toNumberStrict(raReadFt[f]); return isFinite(rb) && rb === Number(set.sheets.agent_requests.desired[0].values[f]); }));
   v.NEGATIVE_NUMBER_PRESERVATION = (set.formula_tests_enabled === false) ? 'SKIPPED' : (negNotPrefixed && negNumeric ? 'PASS' : 'FAIL');
 
-  // ---- A. append + filtered read-back: agent_requests request A (contract-aware comparison) ---------------
+  // ---- A. append + filtered read-back: agent_requests request A (full-identity location, contract-aware) ---
   var reqA = set.sheets.agent_requests.desired[0].values;
-  var raRow = findRow(afterSnap, 'agent_requests', ['agent_request_id'], reqA);
+  var raRow = raLoc.row;
   v.APPEND_AGENT_REQUEST = plan.decisions.some(function (d) { return d.tab === 'agent_requests' && d.role === 'request_a' && (d.decision === 'insert' || d.decision === 'update'); }) ? 'PASS' : 'FAIL';
-  var rbCmp = raRow ? compareRow(resolved, 'agent_requests', reqA, raRow) : { ok: false, mismatches: [{ sheet: 'agent_requests', column: '*', expected_raw: '(row)', actual_raw: '(missing)', comparison_mode: 'row_present' }] };
+  var rbCmp = raRow
+    ? compareRow(resolved, 'agent_requests', reqA, raRow, { physical_row: raLoc.physical_row, key: id.qa_request_a, qa_run_id: id.qa_run_id })
+    : { ok: false, mismatches: [{ sheet: 'agent_requests', physical_row: 0, key: str(id.qa_request_a), qa_run_id: str(id.qa_run_id), column: '*', expected_raw: '(request_a row)', actual_raw: null, expected_type: 'object', actual_type: 'null', comparison_mode: 'row_present', reason: raLoc.reason || 'request_a_row_absent' }] };
   v.READ_BACK_AGENT_REQUEST = rbCmp.ok ? 'PASS' : 'FAIL';
   v.READ_BACK_FAILURES = rbCmp.mismatches;
 
@@ -795,6 +844,9 @@ function verifyAll(input) {
   v.FOREIGN_ROWS_MODIFIED = ba.foreign_rows_modified;
   v.HEADERS_MODIFIED = ba.headers_modified;
   v.UNDECLARED_TABS_MODIFIED = ba.undeclared_tabs_modified;
+  v.CURRENT_RUN_OWNED_ROWS = ba.current_run_owned_rows;
+  v.PREVIOUS_QA_RUN_ROWS = ba.previous_qa_run_rows;
+  v.FOREIGN_NON_QA_ROWS = ba.foreign_non_qa_rows;
   v.BEFORE_AFTER_SCOPE = ba.ok ? 'PASS' : 'FAIL';
   v.BEFORE_AFTER_FAILURES = ba.failures;
 
@@ -835,6 +887,26 @@ function verifyAll(input) {
 function findRow(snapshot, tab, identityCols, values) {
   var rows = (snapshot[tab] && snapshot[tab].rows) || [];
   return matchByIdentity(rows, identityCols, values)[0] || null;
+}
+// Locate THIS run's request A by the FULL identity contract, never "first matching-looking row":
+//   current qa_run_id  +  exact agent_request_id  +  exact owner identity  +  data_mode=manual_test  +  role=request_a marker.
+// Rows from earlier QA runs cannot satisfy it, and request B (role=request_b / owner B) cannot satisfy it.
+// Returns { row, physical_row, reason } — reason explains a miss for diagnostics.
+function findRequestARow(snapshot, id, set) {
+  var meta = set.sheets.agent_requests.meta;
+  var snap = snapshot.agent_requests || { rows: [], row_numbers: [] };
+  var rows = snap.rows || [], nums = snap.row_numbers || [];
+  var sawId = false;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (str(r.agent_request_id) !== str(id.qa_request_a)) continue;
+    sawId = true;
+    if (!isQaRunRow(r, id.qa_run_id, meta.marker_field)) continue;          // current qa_run_id + data_mode=manual_test
+    if (rowQaRole(r, meta.marker_field) !== 'request_a') continue;           // role=request_a marker
+    if (str(r.user_id) !== str(id.qa_owner_a)) continue;                     // exact owner identity
+    return { row: r, physical_row: nums[i] != null ? nums[i] : (i + 2), reason: '' };
+  }
+  return { row: null, physical_row: 0, reason: sawId ? 'request_a_id_present_but_identity_marker_mismatch' : 'request_a_row_absent' };
 }
 // exact equality for every field we WROTE (original intent) vs the value read back (USER_ENTERED semantics:
 // neutralized formulas read back as their literal text; finite numbers read back numeric).
@@ -887,6 +959,16 @@ function runOwns(resolved, id, set, sheet, row) {
   if (isQaRunRow(row, id.qa_run_id, meta.marker_field)) return true;
   return desiredIdentities(set, sheet).indexOf(identityKey(meta.identity_cols, row)) >= 0;
 }
+// Three-way row classification for a NON-EMPTY staging spreadsheet:
+//   'current_run_owned' — written/updated by THIS run (marker for this qa_run_id OR a desired identity)
+//   'previous_qa_run'   — a manual_test QA row from an EARLIER run (must remain unchanged; never our duplicate)
+//   'foreign_non_qa'    — any unrelated business/other row (must remain unchanged)
+function classifyRow(resolved, id, set, sheet, row) {
+  var meta = set.sheets[sheet].meta;
+  if (runOwns(resolved, id, set, sheet, row)) return 'current_run_owned';
+  if (isAnyQaRow(row, meta.marker_field)) return 'previous_qa_run';
+  return 'foreign_non_qa';
+}
 
 // BEFORE/AFTER SCOPE (QA-019) — a PURE SCOPE aggregate keyed on run identity. It proves: every desired QA row is
 // present exactly once; no unexpected QA row exists; foreign (non-run) rows are unchanged (compared CONTRACT-AWARE
@@ -897,32 +979,39 @@ function runOwns(resolved, id, set, sheet, row) {
 function verifyBeforeAfter(resolved, before, after, id, set, plan) {
   var failures = [];
   var testTabs = Object.keys(set.sheets);
+  var counts = { current_run_owned_rows: 0, previous_qa_run_rows: 0, foreign_non_qa_rows: 0 };
   testTabs.forEach(function (name) {
-    var b = before[name] || { headers: [], rows: [] };
-    var a = after[name] || { headers: [], rows: [] };
+    var b = before[name] || { headers: [], rows: [], row_numbers: [] };
+    var a = after[name] || { headers: [], rows: [], row_numbers: [] };
     var meta = set.sheets[name].meta;
-    var mine = function (r) { return runOwns(resolved, id, set, name, r); };
+    var aNums = a.row_numbers || [];
+    var cls = function (r) { return classifyRow(resolved, id, set, name, r); };
+    var physOf = function (rows, nums, k) { for (var i = 0; i < rows.length; i++) { if (identityKey(meta.identity_cols, rows[i]) === k) return nums[i] != null ? nums[i] : (i + 2); } return 0; };
     // header row unchanged
     if (b.headers.length && JSON.stringify(b.headers) !== JSON.stringify(a.headers)) failures.push({ kind: 'header_changed', sheet: name });
-    // every desired QA identity present exactly once in AFTER (covers both fresh inserts and repeat-run updates)
+    // classify every AFTER row (current / previous_qa / foreign) — surfaced as scope context
+    arr(a.rows).forEach(function (r) { var c = cls(r); if (c === 'current_run_owned') counts.current_run_owned_rows++; else if (c === 'previous_qa_run') counts.previous_qa_run_rows++; else counts.foreign_non_qa_rows++; });
+    // every desired QA identity present exactly once in AFTER (covers fresh inserts and repeat-run updates)
     var desired = desiredIdentities(set, name);
     var desiredSet = {}; desired.forEach(function (k) { desiredSet[k] = true; });
     desired.forEach(function (k, i) {
       var role = set.sheets[name].desired[i].role;
       var present = arr(a.rows).filter(function (r) { return identityKey(meta.identity_cols, r) === k; });
-      if (present.length === 0) failures.push({ kind: 'expected_row_missing', sheet: name, role: role, identity: k });
-      else if (present.length > 1) failures.push({ kind: 'duplicate_qa_row', sheet: name, role: role, identity: k, count: present.length });
+      if (present.length === 0) failures.push({ kind: 'expected_row_missing', sheet: name, role: role, identity: k, qa_run_id: str(id.qa_run_id) });
+      else if (present.length > 1) failures.push({ kind: 'duplicate_qa_row', sheet: name, role: role, identity: k, count: present.length, qa_run_id: str(id.qa_run_id) });
     });
-    // no UNEXPECTED run-owned row in AFTER (ours, but not one of the desired identities)
-    arr(a.rows).forEach(function (r) { if (mine(r) && !desiredSet[identityKey(meta.identity_cols, r)]) failures.push({ kind: 'unexpected_qa_row', sheet: name, identity: identityKey(meta.identity_cols, r) }); });
-    // foreign rows (NOT ours), keyed by identity, must be unchanged before->after (contract-aware comparison)
-    var fB = {}; arr(b.rows).forEach(function (r) { if (!mine(r)) fB[identityKey(meta.identity_cols, r)] = r; });
-    var fA = {}; arr(a.rows).forEach(function (r) { if (!mine(r)) fA[identityKey(meta.identity_cols, r)] = r; });
+    // no UNEXPECTED current-run row in AFTER (ours, but not one of the desired identities)
+    arr(a.rows).forEach(function (r) { if (cls(r) === 'current_run_owned' && !desiredSet[identityKey(meta.identity_cols, r)]) failures.push({ kind: 'unexpected_qa_row', sheet: name, identity: identityKey(meta.identity_cols, r), qa_run_id: str(id.qa_run_id) }); });
+    // foreign rows (previous-QA OR foreign-non-QA — anything NOT this run's), keyed by identity, must be unchanged
+    // before->after (contract-aware comparison; Google's consistent normalization is never read as a change).
+    var fB = {}; arr(b.rows).forEach(function (r) { if (cls(r) !== 'current_run_owned') fB[identityKey(meta.identity_cols, r)] = r; });
+    var fA = {}; arr(a.rows).forEach(function (r) { if (cls(r) !== 'current_run_owned') fA[identityKey(meta.identity_cols, r)] = r; });
     Object.keys(fB).forEach(function (k) {
-      if (!(k in fA)) { failures.push({ kind: 'foreign_row_removed', sheet: name, identity: k }); return; }
-      if (!compareRow(resolved, name, fB[k], fA[k]).ok) failures.push({ kind: 'foreign_row_modified', sheet: name, identity: k });
+      if (!(k in fA)) { failures.push({ kind: 'foreign_row_removed', sheet: name, identity: k, classification: cls(fB[k]) }); return; }
+      var cmp = compareRow(resolved, name, fB[k], fA[k], { physical_row: physOf(a.rows, aNums, k), key: k, qa_run_id: rowQaRunId(fA[k], meta.marker_field) });
+      if (!cmp.ok) failures.push({ kind: 'foreign_row_modified', sheet: name, identity: k, classification: cls(fA[k]), mismatches: cmp.mismatches });
     });
-    Object.keys(fA).forEach(function (k) { if (!(k in fB)) failures.push({ kind: 'foreign_row_added', sheet: name, identity: k }); });
+    Object.keys(fA).forEach(function (k) { if (!(k in fB)) failures.push({ kind: 'foreign_row_added', sheet: name, identity: k, classification: cls(fA[k]) }); });
   });
   // a write to any tab outside the declared test set => violation
   arr(plan.write_tabs).forEach(function (t) { if (testTabs.indexOf(t) < 0) failures.push({ kind: 'undeclared_tab_written', sheet: t }); });
@@ -934,7 +1023,10 @@ function verifyBeforeAfter(resolved, before, after, id, set, plan) {
     unexpected_rows_written: byKind(['unexpected_qa_row', 'duplicate_qa_row', 'expected_row_missing']),
     foreign_rows_modified: byKind(['foreign_row_modified', 'foreign_row_removed', 'foreign_row_added']),
     headers_modified: byKind(['header_changed']),
-    undeclared_tabs_modified: byKind(['undeclared_tab_written'])
+    undeclared_tabs_modified: byKind(['undeclared_tab_written']),
+    current_run_owned_rows: counts.current_run_owned_rows,
+    previous_qa_run_rows: counts.previous_qa_run_rows,
+    foreign_non_qa_rows: counts.foreign_non_qa_rows
   };
 }
 
@@ -1079,10 +1171,12 @@ function runOffline(input) {
 module.exports = {
   // helpers / mirrors (tested for behavioural equivalence with the canonical libs)
   str, low, neutralize, isFiniteNumber, isUnsafeCell, djb2, payloadHash, makeDeliveryId, colLetter,
-  rowStartRange, fullRange, encodeQaTag, parseQaTag, isQaRunRow,
+  rowStartRange, fullRange, encodeQaTag, parseQaTag, isQaRunRow, isAnyQaRow, rowQaRunId, rowQaRole,
   // contract-aware comparison layer (QA-018) + typed formula safety
   isNumericColumn, isTimestampColumn, columnTypeInfo, isBlankCell, toBoolStrict, toNumberStrict, toInstant,
-  textEquals, cellEquals, compareRow, parseTypedRow, verifyFormulaSafety,
+  tzOffMin, wallMs, textEquals, cellEquals, compareRow, parseTypedRow, verifyFormulaSafety,
+  // full-identity request-A location + row classification (non-empty staging)
+  findRequestARow, classifyRow,
   // constants
   FORMULA_TESTS, NEGATIVE_TESTS, EXAMPLE_URL, LIVE_MARKERS, sheetPlanMeta,
   // engine
