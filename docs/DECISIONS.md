@@ -5,6 +5,40 @@ Most recent first.
 
 ---
 
+## DEC-157 — Europe/Moscow product timezone; Stage 3C works on non-empty staging; Stage 4 zero-paid free path
+
+**Date:** 2026-06-23
+
+**Decision (same branch `fix/stage3-verification-stage4-readiness`):**
+1. **Product timezone = Europe/Moscow.** New `n8n/lib/ms_time.js` is the single source of truth: system
+   timestamps persist as RFC3339 with the Moscow offset (`…+03:00`) and render to users as `DD.MM.YYYY HH:mm МСК`.
+   Offsets come from the IANA database via `Intl` (never a hard-coded +3). The Stage 3C engine's timestamp
+   comparison mirrors `ms_time.instantOf` so `Z` / `+03:00` / offset-less ISO / Google's RU+US locale renderings
+   all resolve to one instant. External-source timestamps are preserved separately and never relabeled as Moscow.
+   Multi-timezone user preferences may come later; the current product timezone is Europe/Moscow.
+2. **Stage 3C survives a non-empty staging spreadsheet.** Request A is located by the full identity contract
+   (`findRequestARow`), never "first matching-looking row"; rows are classified `current_run_owned` /
+   `previous_qa_run` / `foreign_non_qa`, and only the first group is written while the other two are held
+   unchanged. Diagnostics gain `physical_row`/`key`/`qa_run_id`/`reason`; empty findings are `[]` (never `[null]`).
+3. **Stage 4 free path is explicitly zero-paid.** `agent_config` resolves canonical fail-closed guards
+   (`enable_telegram`, `enable_external_actions`, `enable_claude`, `enable_apify/firecrawl/vk`,
+   `monitoring_enabled`, `weekly_digest_enabled`) with `MS_MAX_EXTERNAL_CALLS` as the master kill-switch:
+   `zero_paid_mode`/`effective_max_external_calls=0` mean no approval can spend. `/start` is now a deterministic
+   Russian onboarding command (no LLM, no paid call); `/help /new /status /cancel` remain deterministic.
+
+**Why:** The first QA-018/019 fix (DEC-156) was correct for an EMPTY sheet, but the operator's live sheet held
+prior QA runs and the residual read-back mismatch was the timestamp columns (Google re-renders an instant in an
+offset-less locale form `Date.parse` can't round-trip). The Stage 4 free path needed an explicit, named,
+fail-closed zero-paid mode so a Russian-language Telegram conversation + approval can be tested live without any
+paid call, and `/start` had no dedicated handler.
+
+**Status:** **QA-018 / QA-019 = FIXED IN CODE — LIVE RETEST REQUIRED**;
+**STAGE_4_IMPLEMENTATION = READY FOR LIVE DEPLOYMENT TEST.** Offline only: `make test` ALL SUITES PASS (`$0`, 0
+external calls; sheets-operations-qa 190, ms-time 24, stage4-freepath 76, all `active=false`). Not
+pushed/merged/imported. Runbooks: `docs/STAGE3_SHEETS_OPERATIONS_ACCEPTANCE.md`, `docs/STAGE_4_BOT_DEPLOYMENT.md`.
+
+---
+
 ## DEC-156 — Stage 3C read-back is contract-aware; scope is identity-based; mutation markers are separable
 
 **Date:** 2026-06-23

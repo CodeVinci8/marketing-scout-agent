@@ -4,6 +4,41 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-23 (session 25) — Moscow time + non-empty staging + Stage 4 free path (DEC-157)
+
+**Status (exact):** same branch `fix/stage3-verification-stage4-readiness`. **$0, 0 external calls, every
+workflow `active=false`, NOT pushed/merged/imported, no production change, no secret exposed.** Consolidated
+package fixing the SECOND live Stage 3C failure (non-empty staging) + completing the Russian Stage 4 free path.
+
+**Residual QA-018 cause (found):** a correct live write still failed `READ_BACK_AGENT_REQUEST` because the
+staging sheet held prior QA runs AND the timestamp columns (`created_at`/`ts`/`updated_at`/`added_at`/
+`last_change_at`) re-render in Google's offset-less locale form (`23.06.2026 15:04:05`) that `Date.parse` can't
+round-trip. **Fix:** new `n8n/lib/ms_time.js` (Europe/Moscow, IANA offset, RFC3339 `+03:00`, `DD.MM.YYYY HH:mm
+МСК`); engine `toInstant` now Moscow-aware (mirrors it) so Z/+03:00/offset-less/RU+US renderings = one instant;
+QA harness writes Moscow RFC3339.
+
+**Non-empty staging (QA-019 robustness):** `findRequestARow` locates request A by FULL identity (qa_run_id +
+agent_request_id + owner + data_mode + role marker, never first-match); `verifyBeforeAfter` classifies
+current_run_owned / previous_qa_run / foreign_non_qa and holds the latter two unchanged. Diagnostics gain
+physical_row/key/qa_run_id/reason; empty = `[]` not `[null]`. New markers CURRENT_RUN_OWNED_ROWS /
+PREVIOUS_QA_RUN_ROWS / FOREIGN_NON_QA_ROWS. Proven by §21 (fresh run over prior A+B + foreign rows).
+
+**Stage 4 free path:** `agent_config` gains canonical fail-closed zero-paid guards (enable_telegram/
+enable_external_actions/enable_claude/enable_apify/firecrawl/vk/monitoring/weekly_digest; `zero_paid_mode`,
+`effective_max_external_calls`, helpers paidCallsAllowed/collectorEnabled/llmAllowed/freePathStatus);
+`MS_MAX_EXTERNAL_CALLS=0` master kill-switch; approval can't bypass. `/start` now a deterministic Russian command
+(intent_router → welcome/help, no API). Stage 4 workflows regenerated (deterministic).
+
+**Evidence (offline):** `make test` ALL SUITES PASS — sheets-operations-qa **190**, ms-time **24**,
+stage4-freepath **76**; manifest 187, validate_workflows.py 277, validate_sheet_contracts 363; all generators
+drift-clean. New docs: `docs/STAGE_4_BOT_DEPLOYMENT.md` (BotFather list + Russian UX + auth + idempotency +
+approval + zero-paid + env + deploy + webhook + smoke + rollback). DEC-157.
+
+**Status markers:** QA-018/QA-019 = FIXED IN CODE — LIVE RETEST REQUIRED; STAGE_4_IMPLEMENTATION = READY FOR
+LIVE DEPLOYMENT TEST. **Next:** operator live Stage 3C retest (4-run sequence) + Stage 4 free-path smoke.
+
+---
+
 ## Session: 2026-06-23 (session 24) — Stage 3C QA-018/QA-019 fix + Stage 4A readiness audit (DEC-156)
 
 **Status (exact):** branch `fix/stage3-verification-stage4-readiness` off `main` `820a593`. **$0, 0 external
