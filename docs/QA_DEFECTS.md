@@ -24,6 +24,8 @@ Statuses: `CONFIRMED` `FIXED` `RETESTED` `LIVE_VERIFICATION_REQUIRED` `READY_FOR
 | QA-011 | Smoke used GNU `find -printf` / could print false PASS | FIXED · RETESTED |
 | QA-012 | Activation/publication semantics assumed, not verified | FIXED · RETESTED |
 | QA-015 | `sheets_contracts.json` had no ordered headers; `source_health.required_columns` did not exist on the tab | FIXED · RETESTED (offline) |
+| QA-018 | `READ_BACK_AGENT_REQUEST` failed on Google-normalized values (numeric/boolean/timestamp re-render) | FIXED IN CODE · LIVE RETEST REQUIRED |
+| QA-019 | `BEFORE_AFTER_SCOPE` failed though all scope counters were zero (own-row normalization mis-read as foreign) | FIXED IN CODE · LIVE RETEST REQUIRED |
 
 ---
 
@@ -167,7 +169,101 @@ deliberate manual step (`docs/STAGE3_SHEETS_BOOTSTRAP.md`).
 
 ---
 
+## QA-018 — Read-back compared Google-normalized cells byte-for-byte
+**Context.** The Stage 3C operations acceptance harness writes request A to `agent_requests` with
+`values:batchUpdate` (`valueInputOption=USER_ENTERED`), then reads the row back and asserts equality
+(`READ_BACK_AGENT_REQUEST`). The first **live** run failed even though the write was correct. Root cause: the
+read-back used a **byte/loose** field comparison, but Google does not return the literal characters that were
+sent — it returns the **rendered** value under the cell's number format.
+
+The exact mismatching columns and typed values:
+
+| column | written (USER_ENTERED) | read back (FORMATTED_VALUE) | why |
+|--------|------------------------|-----------------------------|-----|
+| `estimated_source_cost_usd` | `-5` | `-5.00` | bootstrap applies number format `#,##0.00####` to `*_usd` columns (`RE_USD = /(_usd$\|cost_usd\|_cost$)/`) |
+| `estimated_analysis_cost_usd` | `-4.5` | `-4.50` | same number format |
+| `approval_required` | `false` | `FALSE` | checkbox column → boolean rendered as upper-case `TRUE`/`FALSE` |
+| `created_at` (latent) | ISO-8601 instant | same instant, possibly re-serialized | timestamp re-render |
+
+`-5` vs `-5.00` and `false` vs `FALSE` are byte-unequal but semantically identical, so the harness reported a
+false failure.
+
+**Fix (in code).** A single **contract-aware comparison layer** in `n8n/lib/sheets_operations_qa.js`, applied to
+*every* read-back field (no field dropped):
+* **blank semantics** — `undefined`/`null`/missing-trailing-cell/`""` are equivalent *only* where the contract
+  represents an unset value; a blank is **never** equal to `0` or `false`.
+* **boolean semantics** (contract checkbox columns) — `true == "TRUE"`, `false == "FALSE"` (case-insensitive);
+  arbitrary truthy strings (`"yes"`, `"1"`) are rejected.
+* **numeric semantics** (columns the contract proves numeric — `*_usd`/`_cost`, rate, int, score, never
+  id-hash/timestamp) — compared numerically (`-5 == -5.0 == "-5" == "-5.00"`, `1234.5 == "1,234.50"`); locale
+  thousands separators are tolerated **only** for proven-numeric columns; free text is never coerced.
+* **timestamp semantics** (contract timestamp columns) — compared as normalized instants.
+* **text semantics** — a leading formula-escape apostrophe is tolerated **only** when the de-escaped text is a
+  dangerous formula lead; legitimate apostrophes (`O'Brien`) are never stripped.
+
+Structured diagnostics (`READ_BACK_FAILURES`, also `BEFORE_AFTER_FAILURES`) carry
+`{sheet,key,column,expected_raw,actual_raw,expected_type,actual_type,comparison_mode}`.
+
+**Formula safety stays a separate assertion.** Read-back equality must not double as the injection guard, so a
+bounded official-API typed read (`spreadsheets.get?includeGridData=true`,
+`fields=…userEnteredValue,effectiveValue,formattedValue`, scoped to request A's single row) checks that each
+formula-bearing cell is stored as `userEnteredValue.stringValue` and **not** `userEnteredValue.formulaValue`.
+`=1+1`, `+SUM(1,1)`, `@IMPORTXML("https://example.com","/")`, `-CMD|' /C calc'!A0` must remain literal text;
+`-5`, `-4.5` must remain numeric. The injection test was **not** weakened — `FORMULA_INJECTION_NEUTRALIZATION`
+now requires planned neutralization **and** the typed read proving `stringValue`.
+
+**Tests.** `tests/test_sheets_operations_qa.js` §15c (QA-018 regression: old byte comparator FAILS, new
+contract-aware READ_BACK/NEGATIVE PASS on `-5.00`/`-4.50`/`FALSE`), §15d (blank/boolean/numeric/missing-trailing/
+timestamp/escape unit tests), §15e (typed formula safety: `stringValue` PASS, a real `formulaValue` FAILs).
+**Status: FIXED IN CODE · LIVE RETEST REQUIRED** — proven offline; not yet re-run against the live spreadsheet.
+
+---
+
+## QA-019 — Before/after scope failed although every scope counter was zero
+**Context.** `BEFORE_AFTER_SCOPE` must prove the run touched only its own rows. The first live run reported the
+aggregate as FAIL while `FOREIGN_ROWS_MODIFIED=0`, `UNEXPECTED_ROWS_WRITTEN=0`, `HEADERS_MODIFIED=0`,
+`UNDECLARED_TABS_MODIFIED=0` — a contradiction. Root cause: the old predicate compared the whole before/after
+sheet **byte-for-byte** and counted any changed row as foreign. Because Google normalizes the run's **own** QA
+rows on read-back (QA-018), the workflow's own freshly-written rows were mis-counted as foreign modifications,
+and a read-back content difference bled into the scope verdict.
+
+**Fix (in code).** `verifyBeforeAfter` is now **identity-based**. It classifies every after-row by whether the
+run *owns* it (carries the run marker **or** matches a desired QA identity) and asserts, per declared tab:
+* the header row is unchanged;
+* every desired QA identity is present **exactly once** (else `expected_row_missing` / `duplicate_qa_row`);
+* no unexpected run-owned row exists (`unexpected_qa_row`);
+* every **foreign** (non-run) row is unchanged, compared with the **same contract-aware** comparator
+  (`foreign_row_modified` / `foreign_row_removed` / `foreign_row_added`);
+* no undeclared tab was written (`undeclared_tab_written`).
+
+Normalization of the workflow's own QA rows is therefore **not** a foreign-scope violation; a read-back content
+problem surfaces under `READ_BACK_AGENT_REQUEST` / `READ_BACK_FAILURES`, never as a phantom scope failure. PASS
+requires all expected inserts/updates present, zero unexpected QA rows, foreign rows + foreign-owner rows
+unchanged, headers unchanged, and undeclared tabs untouched. No check was removed to manufacture a PASS;
+failures return structured `BEFORE_AFTER_FAILURES`.
+
+**Tests.** §15f isolates each genuine violation (`foreign_row_modified`, `expected_row_missing`,
+`duplicate_qa_row`); §15c proves PASS survives normalization of the run's own rows; §17 proves a clean run leaves
+foreign rows byte-identical. **Status: FIXED IN CODE · LIVE RETEST REQUIRED.**
+
+**Mutation / acceptance markers (Section D).** Alongside QA-018/019 the summary now carries truthful, separable
+markers so a verification failure can never imply Google applied no mutation:
+`WRITE_NODE_EXECUTED`, `WRITE_REQUEST_SUCCEEDED`, `MUTATIONS_EXECUTED`, `AFTER_SNAPSHOT_READ`,
+`ACCEPTANCE_VERIFIED`, `CHANGES_APPLIED`, `RESULT`. Dry-run → all false + live-only checks `NOT_EXECUTED_DRY_RUN`.
+Write rejected → `WRITE_NODE_EXECUTED=true, WRITE_REQUEST_SUCCEEDED=false, MUTATIONS_EXECUTED=false,
+CHANGES_APPLIED=false, RESULT=FAIL`. Write accepted but verification fails → `…MUTATIONS_EXECUTED=true,
+AFTER_SNAPSHOT_READ=true, ACCEPTANCE_VERIFIED=false, CHANGES_APPLIED=true, RESULT=FAIL`. Full acceptance → all
+true, `RESULT=PASS`. Once the write node executes, the verdict is acceptance-based and never falls back to the
+dry-run success path. (Tests §15, §15b.)
+
+---
+
 ## Remaining live-only verification
 * **QA-003** — cross-workflow execution on the live n8n **server** (callables invoked from the active gateway).
 * **QA-004** — actual Telegram `sendDocument` upload of the `.svg` chart and `.xlsx` workbook to a real chat.
 * **QA-010** — operator applies the pinned-image diff to `/opt/n8n/docker-compose.yml` and recreates the container.
+* **QA-018 / QA-019** — operator re-runs the Stage 3C operations harness against the staging spreadsheet
+  (dry-run → first live write with a new `QA_RUN_ID` → repeat live write with the same `QA_RUN_ID` → final
+  dry-run) and confirms `READ_BACK_AGENT_REQUEST=PASS`, `BEFORE_AFTER_SCOPE=PASS`, `ACCEPTANCE_VERIFIED=true`,
+  `RESULT=PASS`, and `IDEMPOTENCY=PASS` (0 duplicates on repeat). See
+  `docs/STAGE3_SHEETS_OPERATIONS_ACCEPTANCE.md`.

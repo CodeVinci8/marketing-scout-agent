@@ -3,6 +3,14 @@
 **Status:** built, inactive, never auto-run. **Cost:** $0 to build/test (every check is offline).
 **Scope:** this is an **acceptance harness for the existing persistence layer**, *not* a product feature.
 
+**Verification status (offline-proven, live retest pending):**
+Stage 3A = PASS · Stage 3B1 = PASS · Stage 3B2 = PASS · Stage 3C core persistence = PASS ·
+**QA-018 = FIXED IN CODE — LIVE RETEST REQUIRED** (Google-normalized read-back) ·
+**QA-019 = FIXED IN CODE — LIVE RETEST REQUIRED** (before/after scope). The contract-aware read-back, the
+identity-based before/after scope, the typed formula-safety read, and the truthful mutation markers are all
+proven in `tests/test_sheets_operations_qa.js` (offline, `$0`, 0 external calls). They have **not** yet been
+re-run against the live staging spreadsheet — see *§ Live retest sequence* below.
+
 It proves — against a **separate staging spreadsheet** — that the project can correctly:
 read, append, filtered read-back, insert-style upsert, update-style upsert, dedup-idempotently,
 isolate by owner and by request, neutralize formula injection, preserve negative numbers, and touch
@@ -13,7 +21,7 @@ isolate by owner and by request, neutralize formula injection, preserve negative
 | Pure engine (planning + verification, embeddable) | `n8n/lib/sheets_operations_qa.js` |
 | Deterministic generator | `tools/gen_sheets_operations_qa_workflow.js` |
 | Generated workflow (inactive, manual-only) | `ops/n8n/workflows/qa_stage3_sheets_operations_acceptance.json` |
-| Offline test suite (98 checks) | `tests/test_sheets_operations_qa.js` |
+| Offline test suite (162 checks) | `tests/test_sheets_operations_qa.js` |
 
 The workflow lives under `ops/` so it is **excluded** from the production runtime manifest
 (`config/workflow_manifest.json`), the Python workflow validator, and the Sheets-contract validator
@@ -71,9 +79,10 @@ In n8n: *Workflows → Import from File* → select
 `ops/n8n/workflows/qa_stage3_sheets_operations_acceptance.json`. It imports **inactive**. Keep it inactive.
 
 ### 2. Select the credential (no new credential)
-On **every** HTTP Request node (*Get Spreadsheet Metadata*, *Get Header Rows*, *Get Before Snapshot*,
-*Expand Grid (spreadsheets:batchUpdate)*, *Apply Writes (values:batchUpdate)*, *Get After Snapshot*),
-select the existing **“Google Sheets - Marketing Scout Service Account”** credential. On that Google
+On **every** HTTP Request node — all **7**: *Get Spreadsheet Metadata*, *Get Header Rows*, *Get Before
+Snapshot*, *Expand Grid (spreadsheets:batchUpdate)*, *Apply Writes (values:batchUpdate)*, *Get After
+Snapshot*, *Get Request-A Cell Types* — select the existing **“Google Sheets - Marketing Scout Service
+Account”** credential. On that Google
 Service Account credential, enable *“Set up for use in HTTP Request node”* and restrict allowed domains to
 `https://sheets.googleapis.com`. The workflow contains **no credential id** — selection is manual.
 
@@ -114,10 +123,57 @@ The Report must show every `DUPLICATE_*_CREATED = 0`, `UPSERT_ROW_COUNT_STABLE =
   show the literal text `=1+1`, `+SUM(1,1)`, `@IMPORTXML(...)`, `-CMD|' /C calc'!A0` — **not** evaluated
   results. `estimated_source_cost_usd = -5` and `estimated_analysis_cost_usd = -4.5` remain real negative
   numbers (not text). Markers: `FORMULA_INJECTION_NEUTRALIZATION = PASS`, `NEGATIVE_NUMBER_PRESERVATION = PASS`.
+  This is verified two ways and they are **separate** assertions: (a) the contract-aware read-back proves the
+  *value* matches, and (b) a **bounded typed read** (*Get Request-A Cell Types* → `spreadsheets.get?
+  includeGridData=true`, `fields=…userEnteredValue,effectiveValue,formattedValue`, scoped to request A's single
+  row) proves Google stored each formula-bearing cell as `userEnteredValue.stringValue` and **not**
+  `userEnteredValue.formulaValue`. `FORMULA_INJECTION_NEUTRALIZATION = PASS` requires *both*; the detail is in
+  `FORMULA_SAFETY_DETAILS`.
 - **Isolation:** the harness filters `conversation_state` to owner A and `agent_requests` to request A and
   asserts nothing foreign is returned. Google Sheets has no server-side row ACL, so this is enforced by a
   **strict post-read assertion** (the limitation is explicit). Markers: `OWNER_ISOLATION = PASS`,
   `REQUEST_ISOLATION = PASS`, `FOREIGN_ROWS_RETURNED = 0`.
+
+---
+
+## Live retest sequence (QA-018 / QA-019 closure)
+
+QA-018 and QA-019 are **FIXED IN CODE — LIVE RETEST REQUIRED**. Run the following four executions, in order,
+against the staging spreadsheet to close them. Record the Report item from each run.
+
+1. **Dry-run** — `execute_writes=false`, `confirm_staging_spreadsheet=false`, leave `reuse_qa_run_id` empty.
+   Expect: `WRITE_PLAN=PASS`, `NEXT_DATA_ROWS` populated, all live-operation markers `NOT_EXECUTED_DRY_RUN`,
+   `WRITE_NODE_EXECUTED=false`, `CHANGES_APPLIED=false`, `RESULT=PASS`.
+2. **First live write, new `QA_RUN_ID`** — set `execute_writes=true` **and** `confirm_staging_spreadsheet=true`,
+   leave `reuse_qa_run_id` empty (a fresh run id is generated). Expect the closure markers below, plus
+   `EXPECTED_ROWS_WRITTEN=7` and `UNEXPECTED_ROWS_WRITTEN=0`. Copy the `QA_RUN_ID`.
+3. **Repeat live write, same `QA_RUN_ID`** — paste the copied id into `reuse_qa_run_id`, keep both write flags
+   true. Expect every `DUPLICATE_*_CREATED=0`, `UPSERT_ROW_COUNT_STABLE=PASS`, `IDEMPOTENCY=PASS` (no new rows),
+   and the same closure markers.
+4. **Final dry-run** — flip `execute_writes=false`, `confirm_staging_spreadsheet=false`. Expect a clean plan over
+   the now-populated sheet: `WRITE_PLAN=PASS`, live markers `NOT_EXECUTED_DRY_RUN`, `RESULT=PASS`.
+
+**Live closure markers** (runs 2 and 3 must show all of):
+
+```
+READ_BACK_AGENT_REQUEST = PASS
+BEFORE_AFTER_SCOPE      = PASS
+ACCEPTANCE_VERIFIED     = true
+RESULT                  = PASS
+```
+
+with the scope evidence:
+
+```
+EXPECTED_ROWS_WRITTEN    = 7
+UNEXPECTED_ROWS_WRITTEN  = 0
+FOREIGN_ROWS_MODIFIED    = 0
+HEADERS_MODIFIED         = 0
+UNDECLARED_TABS_MODIFIED = 0
+```
+
+and on the repeat run `IDEMPOTENCY = PASS` with `0` duplicates of every kind. Only after these four runs may
+QA-018 / QA-019 be marked closed; until then they remain **FIXED IN CODE — LIVE RETEST REQUIRED**.
 
 ---
 
@@ -169,22 +225,27 @@ tests are disabled, the two formula/negative markers read `SKIPPED`.
 | `WRITE_PLAN` | plan-level guarantees knowable without writing: every range targets a data row (≥ 2), only the 5 test sheets, no destructive request, planned cells neutralized, and the plan is idempotent. Can be `PASS` in a dry-run; `NOT_APPLICABLE` when blocked. |
 | `NEXT_DATA_ROWS` | the physical next-free data row chosen per sheet (e.g. `{agent_requests: 2}`). Derived from occupied rows, never grid capacity. |
 | `GRID_EXPANSIONS` | per-sheet `{from,to}` capacity growth the run will perform at the boundary (usually `{}`). |
-| `APPEND_AGENT_REQUEST` / `READ_BACK_AGENT_REQUEST` | request A was appended and read back field-for-field (formula cells as literal text, negatives numeric). |
+| `WRITE_NODE_EXECUTED` | the values:batchUpdate node actually ran (a live write was attempted). `false` on a dry-run. |
+| `WRITE_REQUEST_SUCCEEDED` | Google returned 2xx for the values write. `false` if the request was rejected. |
+| `MUTATIONS_EXECUTED` | the write node ran, the request succeeded, **and** the plan carried ≥1 mutation — i.e. Google applied changes. |
+| `AFTER_SNAPSHOT_READ` | the after-snapshot was re-read so the result could be verified. |
+| `ACCEPTANCE_VERIFIED` | after a real write + after-read, **every** live-operation marker passed and all scope guards are zero. This is the verification verdict — it is `false` if read-back or scope failed even though the mutation was applied. |
+| `APPEND_AGENT_REQUEST` / `READ_BACK_AGENT_REQUEST` | request A was appended and read back **field-for-field via the contract-aware comparator** — numeric columns compared numerically (`-5 == "-5.00"`), checkbox columns as booleans (`false == "FALSE"`), timestamps as instants, formula cells as literal text — so Google's re-rendering (number format, `TRUE`/`FALSE`) is not a false mismatch. Mismatches are listed in `READ_BACK_FAILURES`. |
 | `APPEND_REQUEST_EVENT` | an event row linked to request A was appended with a valid state transition. |
 | `UPSERT_INSERT` / `UPSERT_UPDATE` / `UPSERT_ROW_COUNT_STABLE` | conversation_state inserted once, updated in place (key stable, `current_state` changed), still exactly one row. |
 | `TRACKED_SOURCE_UPSERT` | tracked_sources inserted once then lifecycle-updated (`status` active→paused), one row. |
 | `OUTBOX_IDEMPOTENCY` | exactly one outbox row for the deterministic `delivery_id`; re-enqueue adds nothing. |
 | `OWNER_ISOLATION` / `REQUEST_ISOLATION` / `FOREIGN_ROWS_RETURNED` | owner A’s view excludes owner B; request A’s view excludes request B; zero foreign rows leaked. |
-| `FORMULA_INJECTION_NEUTRALIZATION` / `NEGATIVE_NUMBER_PRESERVATION` | formula strings stored as text; finite negatives stay numeric. (`SKIPPED` if `formula_tests_enabled = false`.) |
-| `BEFORE_AFTER_SCOPE` | only this run’s expected rows were added/updated. |
+| `FORMULA_INJECTION_NEUTRALIZATION` / `NEGATIVE_NUMBER_PRESERVATION` | formula strings stored as text — proven by the planned neutralization **and** the typed `spreadsheets.get` read (`userEnteredValue.stringValue`, never `formulaValue`); finite negatives stay numeric. (`SKIPPED` if `formula_tests_enabled = false`.) Typed detail in `FORMULA_SAFETY_DETAILS`. |
+| `BEFORE_AFTER_SCOPE` | only this run’s expected rows were added/updated, judged **by row identity** (not byte equality), so Google's normalization of the run's *own* rows is not mistaken for a foreign change. PASS requires every expected insert/update present, zero unexpected QA rows, foreign rows + foreign-owner rows unchanged, headers unchanged, and undeclared tabs untouched. Violations are listed in `BEFORE_AFTER_FAILURES`. |
 | `EXPECTED_ROWS_WRITTEN` / `UNEXPECTED_ROWS_WRITTEN` | rows this run added vs. any it should not have (`0`). |
 | `FOREIGN_ROWS_MODIFIED` / `HEADERS_MODIFIED` / `UNDECLARED_TABS_MODIFIED` | other owners/requests untouched (`0`); header row unchanged (`0`); no tab outside the 5 test sheets written (`0`). |
 | `DUPLICATE_AGENT_REQUESTS_CREATED` / `_CONVERSATION_STATES_` / `_TRACKED_SOURCES_` / `_OUTBOX_DELIVERIES_` | duplicates a repeat run would create (`0`). |
 | `IDEMPOTENCY` | re-planning against the **real after-snapshot** yields zero new inserts (in a dry-run this is `NOT_EXECUTED_DRY_RUN`; the plan-level idempotency is folded into `WRITE_PLAN`). |
 | `EXTERNAL_NON_GOOGLE_CALLS` | always `0` — no Telegram/Apify/Firecrawl/VK/Claude call is made. |
-| `CHANGES_APPLIED` | `true` **only** after a verified live write: the values write succeeded, the after-snapshot was re-read, and **all** live-operation markers passed. `false` on a dry-run, when blocked, or if any live verification failed. |
+| `CHANGES_APPLIED` | `true` whenever Google **applied** the mutation (`MUTATIONS_EXECUTED`), **independent** of whether verification later passed. A failed read-back or scope check sets `ACCEPTANCE_VERIFIED=false`/`RESULT=FAIL` but leaves `CHANGES_APPLIED=true` — a verification failure must never falsely imply Google wrote nothing. `false` on a dry-run, when blocked, or when the write request was rejected. |
 | `QA_RUN_ID` / `DATA_MODE` | the generated run id; always `manual_test`. |
-| `RESULT` | dry-run: `PASS` when `PREFLIGHT`+`SHEETS_READ`+`WRITE_PLAN` pass (plan is valid). Live: `PASS` only when every live-operation marker passed against the after-snapshot. `FAIL` if a marker tripped; `BLOCKED_PREFLIGHT` if a preflight gate failed (no write happened). |
+| `RESULT` | dry-run (write node never ran): `PASS` when `PREFLIGHT`+`SHEETS_READ`+`WRITE_PLAN` pass (plan is valid). Live (write node executed): the verdict is **acceptance-based** — `PASS` only when `ACCEPTANCE_VERIFIED=true`; `FAIL` if the write was rejected **or** any read-back/scope check tripped (it never falls back to the dry-run success path). `BLOCKED_PREFLIGHT` if a preflight gate failed (no write attempted). |
 
 ---
 

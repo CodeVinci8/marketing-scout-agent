@@ -202,6 +202,7 @@ function build() {
     "  mutations_planned: (plan.batchBody.data || []).length, batchBody: plan.batchBody,",
     "  needs_expansion: plan.needs_expansion === true, expansionBody: plan.expansion_body || { requests: [] },",
     "  expanded_tabs: plan.expanded_tabs, next_data_rows: plan.next_data_rows,",
+    "  request_a_row: (plan.decisions.filter(function (d) { return d.tab === 'agent_requests' && d.role === 'request_a'; })[0] || {}).row || 0,",
     "  preflight: pre, qa_run_id: id.qa_run_id",
     "} }];"
   ].join('\n');
@@ -256,6 +257,26 @@ function build() {
   // -- node 13: get AFTER snapshot
   const nAfter = httpGet('msq-13-getafter', 'Get After Snapshot', [2480, -120], '={{ $json.url }}');
 
+  // -- node 13b: build a bounded TYPED read URL (spreadsheets.get?includeGridData) for request A's row only,
+  //    so formula safety can distinguish userEnteredValue.stringValue from .formulaValue (separate from read-back).
+  const typeRangeJs = [
+    "// Build a bounded spreadsheets.get (includeGridData) URL for ONLY request A's row on agent_requests.",
+    "const init = $('Init, Guard & Embed Engine').first().json;",
+    "const sid = init.spreadsheet_id;",
+    "const plan = $('Preflight & Plan').first().json;",
+    "const row = plan.request_a_row || 2;",
+    "function col(n) { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s || 'A'; }",
+    "const ar = (init.test_sheets || []).filter(function (t) { return t.name === 'agent_requests'; })[0] || { ncols: 29 };",
+    "const range = \"'agent_requests'!A\" + row + ':' + col(ar.ncols) + row;",
+    "const fields = 'sheets(properties.title,data.rowData.values(userEnteredValue,effectiveValue,formattedValue))';",
+    "const url = '" + SHEETS_BASE + "' + encodeURIComponent(sid) + '?ranges=' + encodeURIComponent(range) + '&includeGridData=true&fields=' + encodeURIComponent(fields);",
+    "return [{ json: { url: url } }];"
+  ].join('\n');
+  const nTypeRange = code('msq-13b-typerange', 'Build Request-A Type Range', [2700, -120], typeRangeJs);
+
+  // -- node 13c: typed read (spreadsheets.get includeGridData) of request A's row
+  const nTyped = httpGet('msq-13c-gettypes', 'Get Request-A Cell Types', [2920, -120], '={{ $json.url }}');
+
   // -- node 14: verify + assemble the single machine-readable summary (both branches converge here)
   const reportGlue = [
     "",
@@ -275,12 +296,18 @@ function build() {
     "// applied === a real, successful values write happened AND a real after-snapshot read came back.",
     "let after = null, applied = false;",
     "try { const a = $('Get After Snapshot').first().json; if (a && a.valueRanges) { after = parseSnapshot(a, { identity: identity, grid_row_counts: gridRowCounts }); applied = true; } } catch (e) { after = null; applied = false; }",
-    "const ver = verifyAll({ resolved: resolved, identity: id, config: config, row_set: set, before: before, plan: plan, after: applied ? after : null, applied: applied });",
+    "// typed read (formula safety): parse request A's row cell types when the write executed.",
+    "let typed = null;",
+    "try { const tr = $('Get Request-A Cell Types').first().json; if (applied && tr && tr.sheets) typed = parseTypedRow(tr, 'agent_requests', headerRows.agent_requests || []); } catch (e) { typed = null; }",
+    "const ver = verifyAll({ resolved: resolved, identity: id, config: config, row_set: set, before: before, plan: plan, after: applied ? after : null, applied: applied, typed: typed });",
     "const summary = assembleSummary({ preflight: pre, verify: ver, identity: id, config: config, plan: plan, changes_applied: applied, sheets_read: true });",
     "summary.SOURCE_HASH = init.snapshot.source_hash;",
+    "summary.READ_BACK_FAILURES = ver.markers.READ_BACK_FAILURES || [];",
+    "summary.BEFORE_AFTER_FAILURES = ver.markers.BEFORE_AFTER_FAILURES || [];",
+    "summary.FORMULA_SAFETY_DETAILS = ver.markers.FORMULA_SAFETY_DETAILS || null;",
     "return [{ json: summary }];"
   ].join('\n');
-  const nReport = code('msq-14-report', 'Verify & Report', [2700, 0], ENGINE + '\n' + reportGlue);
+  const nReport = code('msq-14-report', 'Verify & Report', [3140, 0], ENGINE + '\n' + reportGlue);
 
   // -- sticky notes
   const s1 = sticky('msq-note-setup', [-380, 240], 560, 460, [
@@ -323,10 +350,14 @@ function build() {
     'the affected sheet (updateSheetProperties, rowCount up only) before the values write.',
     '',
     'Every write is one values:batchUpdate (USER_ENTERED) to explicit data rows (>= 2); the header row is',
-    'never written and only the 5 declared test sheets are targeted. No deleteSheet/deleteRange/values.clear.'
+    'never written and only the 5 declared test sheets are targeted. No deleteSheet/deleteRange/values.clear.',
+    '',
+    'READ-BACK is contract-aware (numeric *_usd columns read FORMATTED e.g. "-5.00" => compared numerically;',
+    'booleans TRUE/FALSE; blanks; timestamps as instants; formula-escape apostrophe tolerated). FORMULA SAFETY',
+    'is a SEPARATE typed read (spreadsheets.get includeGridData) proving stringValue, never formulaValue.'
   ].join('\n'), 4);
 
-  const nodes = [nManual, nConfig, nInit, nMeta, nHeaderRanges, nHeaders, nBeforeRanges, nBefore, nPlan, nIf, nExpandIf, nExpand, nApply, nAfterRanges, nAfter, nReport, s1, s2];
+  const nodes = [nManual, nConfig, nInit, nMeta, nHeaderRanges, nHeaders, nBeforeRanges, nBefore, nPlan, nIf, nExpandIf, nExpand, nApply, nAfterRanges, nAfter, nTypeRange, nTyped, nReport, s1, s2];
 
   // -- connections
   const wires = [
@@ -346,7 +377,9 @@ function build() {
     conn('Expand Grid (spreadsheets:batchUpdate)', 'Apply Writes (values:batchUpdate)'),
     conn('Apply Writes (values:batchUpdate)', 'Build After Ranges'),
     conn('Build After Ranges', 'Get After Snapshot'),
-    conn('Get After Snapshot', 'Verify & Report')
+    conn('Get After Snapshot', 'Build Request-A Type Range'),      // typed read for formula safety
+    conn('Build Request-A Type Range', 'Get Request-A Cell Types'),
+    conn('Get Request-A Cell Types', 'Verify & Report')
   ];
   const connections = {};
   wires.forEach(function (w) {

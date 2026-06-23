@@ -4,6 +4,46 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-23 (session 24) — Stage 3C QA-018/QA-019 fix + Stage 4A readiness audit (DEC-156)
+
+**Status (exact):** branch `fix/stage3-verification-stage4-readiness` off `main` `820a593`. **$0, 0 external
+calls, every workflow `active=false`, NOT pushed/merged/imported, no n8n import, no credentials touched, no
+production change.** Consolidated repair of the two live Stage 3C defects + a read-only Stage 4A Telegram
+live-readiness audit.
+
+**QA-018 (read-back) — FIXED IN CODE, LIVE RETEST REQUIRED.** The first live write was correct but
+`READ_BACK_AGENT_REQUEST` failed because `USER_ENTERED` values come back **rendered**: `-5`→`-5.00` /
+`-4.5`→`-4.50` (bootstrap number format `#,##0.00####` on `*_usd` columns), `false`→`FALSE` (checkbox). Fix =
+one shared **contract-aware comparison layer** in `n8n/lib/sheets_operations_qa.js` (numeric/boolean/timestamp/
+text/blank semantics; blank never == 0/false; locale digits only on proven-numeric columns; legitimate
+apostrophes preserved) with structured `READ_BACK_FAILURES` diagnostics. Formula safety stays **separate**: a
+bounded `spreadsheets.get?includeGridData=true` typed read (new nodes *Build Request-A Type Range* + *Get
+Request-A Cell Types*) proves each formula cell is `userEnteredValue.stringValue`, never `formulaValue`.
+
+**QA-019 (before/after scope) — FIXED IN CODE, LIVE RETEST REQUIRED.** Byte comparison mis-counted the run's
+own normalized rows as foreign, so `BEFORE_AFTER_SCOPE` failed while all scope counters were 0. Fix =
+**identity-based** `verifyBeforeAfter` (run-owned vs foreign by marker/identity; foreign rows compared with the
+same contract-aware comparator) returning structured `BEFORE_AFTER_FAILURES`. No check removed.
+
+**Markers (D):** `WRITE_NODE_EXECUTED / WRITE_REQUEST_SUCCEEDED / MUTATIONS_EXECUTED / AFTER_SNAPSHOT_READ /
+ACCEPTANCE_VERIFIED / CHANGES_APPLIED / RESULT` are now separable & truthful — `CHANGES_APPLIED=true` even when
+verification fails; once the write node ran, `RESULT` is acceptance-based (no fall-back to the dry-run PASS).
+
+**Evidence (offline):** `tests/test_sheets_operations_qa.js` **162 checks** PASS; generated workflow **20 nodes**,
+deterministic (`source_hash=h1287b23e`, regen twice byte-identical); `node tests/run_all.js` ALL SUITES PASS
+(`$0`, 0 external calls); manifest 187, `validate_workflows.py` 277, `validate_sheet_contracts` 363.
+
+**Stage 4A audit:** read-only (`docker compose ps`, `docker ps`, `n8n --version`); no import/activation/restart;
+no secrets printed. See `docs/STAGE_4A_TELEGRAM_LIVE_READINESS.md`.
+
+**Commits (local only):** `fix(sheets): verify normalized Stage 3C read-back`, `docs(stage4): add Telegram
+live-readiness audit`.
+
+**Next:** operator live retest sequence (dry-run → first write new `QA_RUN_ID` → repeat same id → final dry-run)
+to close QA-018/QA-019; then Stage 4A controlled live E2E. See `docs/STAGE3_SHEETS_OPERATIONS_ACCEPTANCE.md`.
+
+---
+
 ## Session: 2026-06-21 (session 23) — Reporting UX & release-verification phase (DEC-155)
 
 **Status (exact):** branch `feat/reporting-ux-and-release-verification` (baseline `b7a95c1`). **$0, 0 external
