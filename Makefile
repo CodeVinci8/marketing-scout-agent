@@ -32,6 +32,7 @@ test-js:
 	node tests/test_lineage_contract.js
 	node tests/test_website_pipeline.js
 	node tests/test_stage3_gates.js
+	node tests/test_stage5_adapters.js
 	node tests/test_stage4_contracts.js
 	node tests/test_stage4_workflows.js
 	node tests/test_stage4_e2e.js
