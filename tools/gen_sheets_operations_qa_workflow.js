@@ -23,6 +23,7 @@
 const fs = require('fs');
 const path = require('path');
 const resolver = require('../n8n/lib/sheets_contract_resolver.js');
+const embed = require('./embed_lib.js');
 
 const ROOT = path.join(__dirname, '..');
 const ENGINE_PATH = path.join(ROOT, 'n8n', 'lib', 'sheets_operations_qa.js');
@@ -33,11 +34,21 @@ const CRED_NAME = 'Google Sheets - Marketing Scout Service Account';
 const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets/';
 const TEST_SHEETS = ['agent_requests', 'agent_request_events', 'conversation_state', 'tracked_sources', 'telegram_outbox'];
 
-// ----- embed the engine source (strip its module.exports so it runs inline inside an n8n Code node) ------------
-function engineSource() {
-  let src = fs.readFileSync(ENGINE_PATH, 'utf8');
-  src = src.replace(/\nmodule\.exports\s*=\s*\{[\s\S]*?\};\s*$/, '\n');
-  return src.trim();
+// ----- embed the engine inside each n8n Code node as an ISOLATED module (IIFE) -----------------------------------
+// The engine is a pure module. n8n Code nodes cannot require() local files, so the generator inlines it. Earlier
+// the stripped core was concatenated directly into the node scope, which leaked the engine's private top-level
+// `var MS_TZ` into the SAME lexical scope as the node glue's own `const MS_TZ` => SyntaxError. We now embed the
+// engine via embed_lib.isolatedModule(): the core runs inside an IIFE that returns ONLY its declared exports,
+// which are destructured into the node scope. Private constants (MS_TZ et al.) stay inside the IIFE forever.
+function engineCore() {
+  return embed.stripCore(fs.readFileSync(ENGINE_PATH, 'utf8'));
+}
+function engineExportNames() {
+  return Object.keys(require(ENGINE_PATH)).sort();
+}
+// Build a Code-node body: strict-mode glue + isolated engine module + the node's own glue.
+function nodeBody(engineModule, glue) {
+  return "'use strict';\n" + engineModule + '\n' + glue;
 }
 
 // ----- node helpers -------------------------------------------------------------------------------------------
@@ -70,7 +81,10 @@ function conn(from, to, fromOut) { return { from: from, to: to, out: fromOut || 
 
 function build() {
   const resolved = resolver.resolveOrThrow();
-  const ENGINE = engineSource();
+  const ENGINE_CORE = engineCore();
+  const ENGINE_EXPORTS = engineExportNames();
+  // The isolated engine module is identical in every node; its private constants (MS_TZ, etc.) never leak.
+  const ENGINE = embed.isolatedModule('__sheetsOpsQa', ENGINE_CORE, ENGINE_EXPORTS);
 
   // fail generation if any field used by the QA workflow is not declared in the relevant sheet contract
   // (the engine validates its plan against the embedded resolved snapshot — re-run it here at generation time).
@@ -82,7 +96,8 @@ function build() {
   }
 
   const snapshot = { resolved: resolved };
-  const sourceHash = resolver.djb2(resolver.stableStringify(resolved) + '|' + ENGINE);
+  // hash over the (stripped) engine core so the marker tracks real engine changes, independent of the wrapper.
+  const sourceHash = resolver.djb2(resolver.stableStringify(resolved) + '|' + ENGINE_CORE);
   const snapshotJson = JSON.stringify(snapshot);
 
   // -- node 1: manual trigger
@@ -144,7 +159,7 @@ function build() {
     "const test_sheets = TEST_SHEETS.map(function (n) { const cs = (snapshot.resolved.sheets || []).filter(function (s) { return s.sheet_name === n; })[0]; return { name: n, ncols: cs ? cs.headers.length : 0 }; });",
     "return [{ json: { spreadsheet_id: sid, config: config, identity: identity, snapshot: snapshot, test_sheets: test_sheets } }];"
   ].join('\n');
-  const nInit = code('msq-03-init', 'Init, Guard & Embed Engine', [60, 0], ENGINE + '\n' + initJs);
+  const nInit = code('msq-03-init', 'Init, Guard & Embed Engine', [60, 0], nodeBody(ENGINE, initJs));
 
   // -- node 4: get metadata (proves all 40 contract tabs present + carries the bootstrap developerMetadata marker)
   const metaUrl = "={{ '" + SHEETS_BASE + "' + encodeURIComponent($json.spreadsheet_id) + '?fields=' + encodeURIComponent('sheets.properties,developerMetadata') + '&includeGridData=false' }}";
@@ -217,7 +232,7 @@ function build() {
     "  preflight: pre, qa_run_id: id.qa_run_id",
     "} }];"
   ].join('\n');
-  const nPlan = code('msq-09-plan', 'Preflight & Plan', [1380, 0], ENGINE + '\n' + planGlue);
+  const nPlan = code('msq-09-plan', 'Preflight & Plan', [1380, 0], nodeBody(ENGINE, planGlue));
 
   // -- node 10: IF should_apply (writes require execute_writes=true AND confirm_staging=true AND preflight pass)
   const nIf = {
@@ -318,7 +333,7 @@ function build() {
     "summary.FORMULA_SAFETY_DETAILS = ver.markers.FORMULA_SAFETY_DETAILS || null;",
     "return [{ json: summary }];"
   ].join('\n');
-  const nReport = code('msq-14-report', 'Verify & Report', [3140, 0], ENGINE + '\n' + reportGlue);
+  const nReport = code('msq-14-report', 'Verify & Report', [3140, 0], nodeBody(ENGINE, reportGlue));
 
   // -- sticky notes
   const s1 = sticky('msq-note-setup', [-380, 240], 560, 460, [
@@ -432,4 +447,4 @@ if (require.main === module) {
   console.log('Wrote ' + path.relative(ROOT, OUT_FILE) + ' (' + built.workflow.nodes.length + ' nodes, source_hash=' + built.sourceHash + ', active=false).');
 }
 
-module.exports = { build, render, OUT_FILE, engineSource, TEST_SHEETS };
+module.exports = { build, render, OUT_FILE, engineCore, engineExportNames, TEST_SHEETS };

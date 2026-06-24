@@ -181,7 +181,14 @@ function conns(edges) {
 function wf(name, nodes, edges) {
   return { name: name, nodes: nodes, connections: conns(edges), active: false, settings: { executionOrder: 'v1' }, pinData: {} };
 }
-function write(file, obj) { fs.writeFileSync(path.join(WF, file), JSON.stringify(obj, null, 2) + '\n'); console.log('wrote', file, '(' + obj.nodes.length + ' nodes)'); }
+// Registry of every workflow this generator builds. write() records here ALWAYS, but only touches disk when
+// the file is run directly as a CLI (require.main === module). When required as a module (e.g. by the
+// generated-Code compilation test) it builds the workflows in memory with NO disk side-effects.
+const GENERATED = [];
+function write(file, obj) {
+  GENERATED.push({ file: file, workflow: obj });
+  if (require.main === module) { fs.writeFileSync(path.join(WF, file), JSON.stringify(obj, null, 2) + '\n'); console.log('wrote', file, '(' + obj.nodes.length + ' nodes)'); }
+}
 
 const ENV = "var __env=(typeof $env!=='undefined'&&$env)?$env:{};";
 
@@ -763,4 +770,8 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),statu
   ['Build VK Alert', 'Send VK Alert']
 ]));
 
-console.log('Stage 4 workflows generated.');
+if (require.main === module) console.log('Stage 4 workflows generated.');
+
+// Exported so the generated-Code compilation test can build the Stage 4-8 workflows in memory and parse every
+// Code node body BEFORE it is written to disk — catching embed/composition syntax defects at generation time.
+module.exports = { generated: GENERATED };

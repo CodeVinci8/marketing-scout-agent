@@ -10,6 +10,7 @@ test:
 	node tests/run_all.js
 
 test-js:
+	node tests/test_generated_code_compiles.js
 	node tests/test_taxonomy.js
 	node tests/test_semantic_contract.js
 	node tests/test_quality_gate.js

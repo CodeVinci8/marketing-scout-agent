@@ -6,6 +6,8 @@ const { execFileSync } = require('child_process');
 const path = require('path');
 
 const JS_SUITES = [
+  // --- Release gate: every generated/committed n8n Code node must parse (catches the MS_TZ-class collision) ---
+  ['generated-code-compiles', 'test_generated_code_compiles.js'],
   ['taxonomy', 'test_taxonomy.js'],
   ['semantic-contract', 'test_semantic_contract.js'],
   ['quality-gate', 'test_quality_gate.js'],
