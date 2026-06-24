@@ -78,14 +78,121 @@ function columnTypeInfo(resolved, sheet, col) { return { boolean: booleanColumns
 function isBlankCell(v) { return v === undefined || v === null || str(v).trim() === ''; }
 // canonical boolean: only literal true/"TRUE"/false/"FALSE" (case-insensitive). Arbitrary truthy strings -> null (reject).
 function toBoolStrict(v) { if (typeof v === 'boolean') return v; var s = lc(v); if (s === 'true') return true; if (s === 'false') return false; return null; }
-// parse a contractually-numeric cell to a finite Number, tolerating en-US thousands separators. Arbitrary free
-// text -> NaN (we never coerce non-numeric text). Applied ONLY to columns the contract proves numeric.
+// Parse a contractually numeric cell to a finite Number.
+// Supports Google Sheets locale renderings:
+//   -5.00, -5,00, 1,234.50, 1.234,50, 1 234,50,
+// including NBSP / narrow-NBSP grouping.
+// Arbitrary free text remains NaN. Applied ONLY to contract-proven numeric columns.
 function toNumberStrict(v) {
   if (typeof v === 'number') return isFinite(v) ? v : NaN;
-  var s = str(v).trim(); if (s === '') return NaN;
-  var cleaned = s.replace(/,/g, '');
-  if (/^[+\-]?(\d+\.?\d*|\.\d+)([eE][+\-]?\d+)?$/.test(cleaned)) return Number(cleaned);
-  return NaN;
+
+  var s = str(v).trim().replace(/[\s\u00A0\u202F]/g, '');
+  if (s === '') return NaN;
+
+  var match = s.match(/^([+\-]?)([^eE]+)([eE][+\-]?\d+)?$/);
+  if (!match) return NaN;
+
+  var sign = match[1];
+  var body = match[2];
+  var exponent = match[3] || '';
+
+  if (!/^(?:\d+(?:[.,]\d*)*|[.,]\d+)$/.test(body)) return NaN;
+
+  function isGroupedInteger(raw, separator) {
+    var parts = raw.split(separator);
+    if (parts.length < 2 || !/^\d{1,3}$/.test(parts[0])) return false;
+    for (var i = 1; i < parts.length; i++) {
+      if (!/^\d{3}$/.test(parts[i])) return false;
+    }
+    return true;
+  }
+
+  var commaCount = (body.match(/,/g) || []).length;
+  var dotCount = (body.match(/\./g) || []).length;
+  var decimalSeparator = null;
+
+  if (commaCount > 0 && dotCount > 0) {
+    // When both separators exist, the rightmost separator is decimal:
+    // 1,234.50 or 1.234,50.
+    decimalSeparator =
+      body.lastIndexOf(',') > body.lastIndexOf('.') ? ',' : '.';
+  } else if (commaCount > 0) {
+    if (commaCount > 1 && isGroupedInteger(body, ',')) {
+      decimalSeparator = null;
+    } else if (commaCount === 1) {
+      var commaIndex = body.indexOf(',');
+      var commaLeft = body.slice(0, commaIndex);
+      var commaRight = body.slice(commaIndex + 1);
+
+      // Preserve legacy en-US grouped integer semantics for 1,234,
+      // but parse -5,00 / -4,50 / 0,125 as decimal comma.
+      decimalSeparator =
+        commaRight.length === 3 &&
+        /^\d{1,3}$/.test(commaLeft) &&
+        commaLeft !== '0'
+          ? null
+          : ',';
+    } else {
+      decimalSeparator = ',';
+    }
+  } else if (dotCount > 0) {
+    if (dotCount > 1 && isGroupedInteger(body, '.')) {
+      decimalSeparator = null;
+    } else {
+      decimalSeparator = '.';
+    }
+  }
+
+  var normalizedBody;
+
+  if (decimalSeparator === null) {
+    if (/^\d+$/.test(body)) {
+      normalizedBody = body;
+    } else if (
+      commaCount > 0 &&
+      dotCount === 0 &&
+      isGroupedInteger(body, ',')
+    ) {
+      normalizedBody = body.split(',').join('');
+    } else if (
+      dotCount > 0 &&
+      commaCount === 0 &&
+      isGroupedInteger(body, '.')
+    ) {
+      normalizedBody = body.split('.').join('');
+    } else {
+      return NaN;
+    }
+  } else {
+    var decimalIndex = body.lastIndexOf(decimalSeparator);
+    var integerRaw = body.slice(0, decimalIndex);
+    var fractionRaw = body.slice(decimalIndex + 1);
+    var groupingSeparator = decimalSeparator === ',' ? '.' : ',';
+
+    // Earlier occurrences of the selected decimal separator can only
+    // represent valid three-digit grouping.
+    if (integerRaw.indexOf(decimalSeparator) >= 0) {
+      if (!isGroupedInteger(integerRaw, decimalSeparator)) return NaN;
+      integerRaw = integerRaw.split(decimalSeparator).join('');
+    }
+
+    if (integerRaw.indexOf(groupingSeparator) >= 0) {
+      if (!isGroupedInteger(integerRaw, groupingSeparator)) return NaN;
+      integerRaw = integerRaw.split(groupingSeparator).join('');
+    }
+
+    if (integerRaw === '') integerRaw = '0';
+    if (fractionRaw === '') fractionRaw = '0';
+
+    if (!/^\d+$/.test(integerRaw) || !/^\d+$/.test(fractionRaw)) {
+      return NaN;
+    }
+
+    normalizedBody = integerRaw + '.' + fractionRaw;
+  }
+
+  var parsed = Number(sign + normalizedBody + exponent);
+  return isFinite(parsed) ? parsed : NaN;
 }
 // normalized instant (epoch ms) for a timestamp value; NaN if not a recognizable timestamp (a bare number is
 // ambiguous and never coerced). Offset-less / locale renderings are interpreted in the PRODUCT timezone
@@ -770,7 +877,7 @@ function verifyAll(input) {
   var formulaOk = plannedSafe && !!raReadFt && ftLiteral && (typedSafety ? typedSafety.ok : true);
   v.FORMULA_INJECTION_NEUTRALIZATION = (set.formula_tests_enabled === false) ? 'SKIPPED' : (formulaOk ? 'PASS' : 'FAIL');
   v.FORMULA_SAFETY_DETAILS = typedSafety ? typedSafety.details : [];
-  // negatives stay numeric (compared numerically, since the *_usd columns read back FORMATTED e.g. "-5.00") AND
+  // negatives stay numeric (compared numerically, since the *_usd columns may read back FORMATTED e.g. "-5.00" or "-5,00") AND
   // are not apostrophe-prefixed in what we send.
   var negFields = (set.negative_fields.agent_requests || []);
   var negNotPrefixed = negFields.every(function (f) { return neutralize(set.sheets.agent_requests.desired[0].values[f]).charAt(0) !== "'"; });
@@ -914,7 +1021,10 @@ function fieldsEqual(written, readBack) {
   return Object.keys(written).every(function (k) {
     var w = written[k]; var r = (readBack || {})[k];
     if (typeof w === 'boolean') return low(r) === String(w) || String(r) === String(w);
-    if (isFiniteNumber(w)) return String(r) === String(Number(w));
+    if (isFiniteNumber(w)) {
+      var parsedReadBack = toNumberStrict(r);
+      return isFinite(parsedReadBack) && parsedReadBack === Number(w);
+    }
     return str(r) === str(w);
   });
 }
