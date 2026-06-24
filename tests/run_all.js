@@ -51,6 +51,8 @@ const JS_SUITES = [
   ['deep-analysis-workflows', 'test_deep_analysis_workflows.js'],
   // --- Proactive delivery + scheduled tracked-source monitoring (WF23) ---
   ['monitoring', 'test_monitoring.js'],
+  // --- Stage 7: change classification + digest + outbox retry/dead-letter + stalled detection + cleanup ---
+  ['stage7-monitoring-e2e', 'test_stage7_monitoring_e2e.js'],
   ['agent-e2e', 'test_agent_e2e.js'],
   // --- Release hardening: n8n topology/trigger audit + persistence + delivery proof + full E2E ---
   ['release-audit', 'test_release_audit.js'],
