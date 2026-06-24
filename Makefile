@@ -61,6 +61,7 @@ test-js:
 	node tests/test_sheets_contracts.js
 	node tests/test_url_safety.js
 	node tests/test_reporting_e2e.js
+	node tests/test_stage6_research_e2e.js
 	node tests/test_workflow_manifest.js
 	node tests/test_binding_tool.js
 	node tests/test_deploy_preflight.js

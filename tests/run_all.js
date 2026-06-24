@@ -79,6 +79,8 @@ const JS_SUITES = [
   ['url-safety', 'test_url_safety.js'],
   // --- Capstone: full offline conversational E2E (request->preview->report->exports->VK->digest->audit) ---
   ['reporting-e2e', 'test_reporting_e2e.js'],
+  // --- Stage 6: raw-records -> research_pipeline -> report -> real XLSX -> Telegram -> linked follow-up ---
+  ['stage6-research-e2e', 'test_stage6_research_e2e.js'],
   // --- QA Stage 1/2 repair package (QA-001..QA-012) ---
   ['workflow-manifest', 'test_workflow_manifest.js'],
   ['binding-tool', 'test_binding_tool.js'],
