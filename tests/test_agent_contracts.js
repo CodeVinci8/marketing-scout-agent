@@ -13,7 +13,8 @@ const CFG_FULL = { source_allowlist: ['website', 'telegram_channel', 'vk_communi
 
 // ============================================================================================================
 A.section('agent_charter — immutable charter + deterministic capability registry');
-A.ok('charter is versioned', /charter-v1/.test(charter.charterText()));
+A.ok('charter is versioned', /charter-v2/.test(charter.charterText()));
+A.ok('charter identity is Vinci AI Pilot', /Vinci AI Pilot/.test(charter.charterText()));
 A.ok('charter states the never-invent rule', /never invents/.test(charter.charterText()));
 A.eq('capability ids are unique', new Set(charter.CAPABILITIES.map(c => c.id)).size, charter.CAPABILITIES.length);
 A.ok('capabilityById finds a real id', !!charter.capabilityById('deep_competitor_analysis'));
@@ -31,6 +32,15 @@ for (const id of capIds) {
   if (id === 'status' || id === 'cancel' || id === 'help' || id === 'manage_memory') { A.ok(id + ' routable', router.INTENT_IDS.indexOf(id) >= 0); continue; }
   A.ok('router knows capability ' + id, router.INTENT_IDS.indexOf(id) >= 0);
 }
+
+A.section('identity questions route deterministically to a non-external answer (no paid call, no pipeline)');
+const identity = require('../n8n/lib/agent_identity');
+A.ok('charter product identity matches the canonical agent_identity', charter.CHARTER.identity.indexOf(identity.PRODUCT_NAME) >= 0);
+['Кто ты?', 'Ты кто?', 'Для чего ты нужен?', 'Что такое Vinci AI Pilot?', 'Какие задачи ты решаешь?'].forEach(function (q) {
+  const it = router.deterministicIntent(parse(q));
+  A.ok('"' + q + '" routes to help intent', it && it.intent === 'help');
+  A.ok('"' + q + '" is not an approval/external action', it && it.requires_approval !== true && it.requested_action !== 'build_plan');
+});
 
 A.section('intent_router — deterministic free-text routing (no buttons)');
 function parse(text, kind) { return { kind: kind || 'request', text: text, callback_data: '', update_id: '1', message_id: '1', chat_id: '5', user_id: '111' }; }

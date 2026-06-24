@@ -5,6 +5,32 @@ Most recent first.
 
 ---
 
+## 2026-06-24 (session 26) — MVP Stage 4–8 hardening (DEC-158)
+
+**Agent role:** final-engineer · **Branch:** `feat/vinci-mvp-stage4-8` (off `f1a9d47`). **$0, 0 external calls,
+all 31 workflows `active=false`, NOT pushed/merged/imported, no production change, no secret exposed.**
+
+**Done:**
+- Fixed the release‑blocking `MS_TZ` Code‑node collision at the composition layer (`tools/embed_lib.js`
+  `isolatedModule()` IIFE); regenerated the Stage 3C ops‑QA workflow (deterministic).
+- Added `tests/test_generated_code_compiles.js` — parses every Code node (215) in 33 workflows + every
+  generator's in‑memory output; wired first in `run_all.js` + `make test-js`.
+- Added canonical versioned `n8n/lib/agent_identity.js` (Vinci AI Pilot identity + Claude system prompt +
+  deterministic Russian identity answer); `agent_charter.js` → `charter-v2`; identity routing in `intent_router`.
+- Added `scripts/configure_telegram_commands.sh` (dry‑run default, env‑only token, fail‑closed verify) + test.
+- New docs: `MVP_IMPLEMENTATION_STATUS.md`, `MVP_STAGE4_8_REQUIREMENTS_MATRIX.md`,
+  `config/stage_acceptance_manifest.json`, `MVP_LIVE_ROLLOUT_RUNBOOK.md`, `MVP_SECURITY_REVIEW.md`.
+
+**Files changed:** `tools/embed_lib.js` (new), `tools/gen_sheets_operations_qa_workflow.js`,
+`tools/gen_stage4_workflows.js`, `ops/n8n/workflows/qa_stage3_sheets_operations_acceptance.json`,
+`n8n/lib/agent_identity.js` (new), `agent_charter.js`, `intent_router.js`, WF18/20/21/23/26,
+`scripts/configure_telegram_commands.sh` (new), `tests/test_generated_code_compiles.js` (new),
+`tests/test_agent_identity.js` (new), `tests/test_telegram_commands.js` (new), `tests/test_agent_contracts.js`,
+`tests/run_all.js`, `Makefile`, plus the docs above and `DECISIONS.md`/`recent.md`.
+
+**Result:** `make test` ALL SUITES PASS (66 suites). QA‑018/QA‑019 remain **FIXED IN CODE — LIVE RETEST REQUIRED**.
+**Next:** operator Stage 3C live retest → Stage 4 live deploy (`docs/MVP_LIVE_ROLLOUT_RUNBOOK.md`).
+
 ## 2026-06-21 (session 23) — Reporting UX & release-verification phase (DEC-155)
 
 **Agent role:** project-engineer · **Scope:** reporting outputs, conversation UX, optional VK collector, honest

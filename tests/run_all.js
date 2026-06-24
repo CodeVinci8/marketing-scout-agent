@@ -6,6 +6,8 @@ const { execFileSync } = require('child_process');
 const path = require('path');
 
 const JS_SUITES = [
+  // --- Release gate: every generated/committed n8n Code node must parse (catches the MS_TZ-class collision) ---
+  ['generated-code-compiles', 'test_generated_code_compiles.js'],
   ['taxonomy', 'test_taxonomy.js'],
   ['semantic-contract', 'test_semantic_contract.js'],
   ['quality-gate', 'test_quality_gate.js'],
@@ -33,12 +35,15 @@ const JS_SUITES = [
   ['website-pipeline', 'test_website_pipeline.js'],
   // --- Stage 3 closure: production analysis/aggregation/reporting gates (WF05/06/08/09/10/12) ---
   ['stage3-gates', 'test_stage3_gates.js'],
+  // --- Stage 5: guarded provider adapter contract (real runAdapter path + parsers + cost + acceptance) ---
+  ['stage5-adapters', 'test_stage5_adapters.js'],
   // --- Stage 4: single-user Telegram agent MVP (libs + generated WF17-20) ---
   ['stage4-contracts', 'test_stage4_contracts.js'],
   ['stage4-workflows', 'test_stage4_workflows.js'],
   ['stage4-e2e', 'test_stage4_e2e.js'],
   ['stage4-freepath', 'test_stage4_freepath.js'],
   // --- Conversational agent: charter, intent router, bounded memory, sources ---
+  ['agent-identity', 'test_agent_identity.js'],
   ['agent-contracts', 'test_agent_contracts.js'],
   ['agent-workflows', 'test_agent_workflows.js'],
   // --- Deep competitor analysis + conversation-aware orchestration reuse ---
@@ -46,6 +51,8 @@ const JS_SUITES = [
   ['deep-analysis-workflows', 'test_deep_analysis_workflows.js'],
   // --- Proactive delivery + scheduled tracked-source monitoring (WF23) ---
   ['monitoring', 'test_monitoring.js'],
+  // --- Stage 7: change classification + digest + outbox retry/dead-letter + stalled detection + cleanup ---
+  ['stage7-monitoring-e2e', 'test_stage7_monitoring_e2e.js'],
   ['agent-e2e', 'test_agent_e2e.js'],
   // --- Release hardening: n8n topology/trigger audit + persistence + delivery proof + full E2E ---
   ['release-audit', 'test_release_audit.js'],
@@ -74,10 +81,13 @@ const JS_SUITES = [
   ['url-safety', 'test_url_safety.js'],
   // --- Capstone: full offline conversational E2E (request->preview->report->exports->VK->digest->audit) ---
   ['reporting-e2e', 'test_reporting_e2e.js'],
+  // --- Stage 6: raw-records -> research_pipeline -> report -> real XLSX -> Telegram -> linked follow-up ---
+  ['stage6-research-e2e', 'test_stage6_research_e2e.js'],
   // --- QA Stage 1/2 repair package (QA-001..QA-012) ---
   ['workflow-manifest', 'test_workflow_manifest.js'],
   ['binding-tool', 'test_binding_tool.js'],
   ['deploy-preflight', 'test_deploy_preflight.js'],
+  ['telegram-commands', 'test_telegram_commands.js'],
   ['attachment-routing', 'test_attachment_routing.js'],
   ['smoke-hardening', 'test_smoke_hardening.js'],
   // --- Stage 3 Google Sheets staging bootstrap (resolver + pure planner + generated QA workflow) ---

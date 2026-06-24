@@ -9,9 +9,12 @@
 function str(v) { return v == null ? '' : String(v).trim(); }
 
 // ---- L0 charter (compact, versioned, immutable) -----------------------------------------------------------
+// NOTE: the canonical product identity + Claude system prompt live in n8n/lib/agent_identity.js
+// (identity-v1). This charter mirrors the SAME product identity for prompt injection; an anti-drift test
+// (test_agent_identity.js / test_agent_contracts.js) asserts the two stay consistent on the product name.
 const CHARTER = {
-  version: 'charter-v1',
-  identity: 'Marketing Scout — конкурентная и маркетинговая разведка по публичным источникам.',
+  version: 'charter-v2',
+  identity: 'Vinci AI Pilot — бизнес-агент для исследования рынков, анализа конкурентов, поиска точек роста и подготовки обоснованных решений.',
   does: [
     'collects and monitors public marketing data',
     'searches competitors and market signals',
@@ -189,7 +192,7 @@ function capabilityCatalogText(cfg) {
   const anns = availableCapabilities(cfg);
   const ok = anns.filter(a => a.available);
   const off = anns.filter(a => !a.available);
-  const lines = ['Что я умею (доступно сейчас):'];
+  const lines = [CHARTER.identity, '', 'Что я умею (доступно сейчас):'];
   ok.forEach(a => lines.push('• ' + a.name));
   if (off.length) {
     lines.push('Недоступно (нужна настройка):');

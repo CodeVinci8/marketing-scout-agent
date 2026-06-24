@@ -10,6 +10,7 @@ test:
 	node tests/run_all.js
 
 test-js:
+	node tests/test_generated_code_compiles.js
 	node tests/test_taxonomy.js
 	node tests/test_semantic_contract.js
 	node tests/test_quality_gate.js
@@ -31,14 +32,17 @@ test-js:
 	node tests/test_lineage_contract.js
 	node tests/test_website_pipeline.js
 	node tests/test_stage3_gates.js
+	node tests/test_stage5_adapters.js
 	node tests/test_stage4_contracts.js
 	node tests/test_stage4_workflows.js
 	node tests/test_stage4_e2e.js
+	node tests/test_agent_identity.js
 	node tests/test_agent_contracts.js
 	node tests/test_agent_workflows.js
 	node tests/test_deep_analysis_contracts.js
 	node tests/test_deep_analysis_workflows.js
 	node tests/test_monitoring.js
+	node tests/test_stage7_monitoring_e2e.js
 	node tests/test_agent_e2e.js
 	node tests/test_release_audit.js
 	node tests/test_release_e2e.js
@@ -58,9 +62,11 @@ test-js:
 	node tests/test_sheets_contracts.js
 	node tests/test_url_safety.js
 	node tests/test_reporting_e2e.js
+	node tests/test_stage6_research_e2e.js
 	node tests/test_workflow_manifest.js
 	node tests/test_binding_tool.js
 	node tests/test_deploy_preflight.js
+	node tests/test_telegram_commands.js
 	node tests/test_attachment_routing.js
 	node tests/test_smoke_hardening.js
 	node tests/test_sheets_bootstrap.js
