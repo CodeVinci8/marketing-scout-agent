@@ -378,7 +378,7 @@ function build() {
     'Every write is one values:batchUpdate (USER_ENTERED) to explicit data rows (>= 2); the header row is',
     'never written and only the 5 declared test sheets are targeted. No deleteSheet/deleteRange/values.clear.',
     '',
-    'READ-BACK is contract-aware (numeric *_usd columns read FORMATTED e.g. "-5.00" => compared numerically;',
+    'READ-BACK is contract-aware (numeric *_usd columns read FORMATTED e.g. "-5.00" / "-5,00" => compared numerically;',
     'booleans TRUE/FALSE; blanks; timestamps as instants; formula-escape apostrophe tolerated). FORMULA SAFETY',
     'is a SEPARATE typed read (spreadsheets.get includeGridData) proving stringValue, never formulaValue.'
   ].join('\n'), 4);

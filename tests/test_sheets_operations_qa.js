@@ -310,7 +310,10 @@ A.ok('blank is NEVER equal to 0', QA.cellEquals('', 0, { numeric: true }) === fa
 A.ok('blank is NEVER equal to false', QA.cellEquals('', false, { boolean: true }) === false);
 A.ok('boolean: false=="FALSE", true=="TRUE" (case-insensitive)', QA.cellEquals(false, 'FALSE', { boolean: true }) && QA.cellEquals(true, 'true', { boolean: true }));
 A.ok('boolean rejects arbitrary truthy strings', QA.cellEquals(true, 'yes', { boolean: true }) === false && QA.cellEquals(true, '1', { boolean: true }) === false);
-A.ok('numeric: -5 == "-5.00", -4.5 == "-4.50", 1234.5 == "1,234.50"', QA.cellEquals(-5, '-5.00', { numeric: true }) && QA.cellEquals(-4.5, '-4.50', { numeric: true }) && QA.cellEquals(1234.5, '1,234.50', { numeric: true }));
+A.ok('numeric dot-decimal + en-US grouping', QA.cellEquals(-5, '-5.00', { numeric: true }) && QA.cellEquals(-4.5, '-4.50', { numeric: true }) && QA.cellEquals(1234.5, '1,234.50', { numeric: true }));
+A.ok('numeric comma-decimal Google locale regression', QA.cellEquals(-5, '-5,00', { numeric: true }) && QA.cellEquals(-4.5, '-4,50', { numeric: true }));
+A.ok('numeric localized grouping: space / NBSP / narrow NBSP / European', QA.cellEquals(1234.5, '1 234,50', { numeric: true }) && QA.cellEquals(1234.5, '1\u00A0234,50', { numeric: true }) && QA.cellEquals(1234.5, '1\u202F234,50', { numeric: true }) && QA.cellEquals(1234.5, '1.234,50', { numeric: true }));
+A.ok('numeric parser rejects malformed localized values', QA.cellEquals(5, '5 рублей', { numeric: true }) === false && QA.cellEquals(5, 'abc-5', { numeric: true }) === false && QA.cellEquals(5, '5,0,0', { numeric: true }) === false);
 A.ok('numeric never parses arbitrary free text as a number', QA.cellEquals('hello', 'hello', { numeric: true }) && QA.cellEquals(5, 'five', { numeric: true }) === false);
 A.ok('missing trailing cell equals "" for a text column', QA.cellEquals('', undefined, tinfo('agent_requests', 'request_text')));
 A.ok('timestamp: same instant in different ISO forms compares equal', QA.cellEquals('2026-06-22T12:00:00.000Z', '2026-06-22T12:00:00Z', tinfo('agent_requests', 'created_at')));
