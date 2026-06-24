@@ -44,7 +44,9 @@ const TEXT_RULES = [
   ['rerun_request', /запусти.{0,10}снова|повтор|сделай снова|again|rerun|перезапус|next week|на след/i],
   ['report_followup', /(что по|расскажи (о|про)|объясни|подробнее о|поясни|explain|what about|tell me about).{0,40}(конкурент|перв|втор|компан|first|second|them|их)/i],
   ['competitor_search', /найд|поищ|ищ[уи]|подбери|find|search|конкурент|competitor|рынок|market/i],
-  ['help', /умеешь|умеете|что ты можешь|какие возможност|что ещё|what (can|else)|\bhelp\b|помощь|capabilit/i]
+  // identity / "who are you" / capability questions resolve deterministically to help — a non-external,
+  // no-paid, no-pipeline answer that leads with the Vinci AI Pilot identity (see agent_identity.js).
+  ['help', /умеешь|умеете|что ты можешь|какие возможност|твои возможност|что ещё|what (can|else)|\bhelp\b|помощь|capabilit|кто ты|ты кто|кто вы|вы кто|что ты такое|что ты за|что такое vinci|что за (бот|агент|сервис|vinci)|расскажи о себе|представься|как ты работаешь|как вы работаете|для чего ты|зачем ты|чем (ты )?(можешь )?помоч|какие задачи ты решаешь|who are you|what are you/i]
 ];
 
 function entityExtract(text, ctx) {

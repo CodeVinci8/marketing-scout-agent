@@ -41,6 +41,7 @@ const JS_SUITES = [
   ['stage4-e2e', 'test_stage4_e2e.js'],
   ['stage4-freepath', 'test_stage4_freepath.js'],
   // --- Conversational agent: charter, intent router, bounded memory, sources ---
+  ['agent-identity', 'test_agent_identity.js'],
   ['agent-contracts', 'test_agent_contracts.js'],
   ['agent-workflows', 'test_agent_workflows.js'],
   // --- Deep competitor analysis + conversation-aware orchestration reuse ---
@@ -80,6 +81,7 @@ const JS_SUITES = [
   ['workflow-manifest', 'test_workflow_manifest.js'],
   ['binding-tool', 'test_binding_tool.js'],
   ['deploy-preflight', 'test_deploy_preflight.js'],
+  ['telegram-commands', 'test_telegram_commands.js'],
   ['attachment-routing', 'test_attachment_routing.js'],
   ['smoke-hardening', 'test_smoke_hardening.js'],
   // --- Stage 3 Google Sheets staging bootstrap (resolver + pure planner + generated QA workflow) ---

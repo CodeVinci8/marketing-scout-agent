@@ -35,6 +35,7 @@ test-js:
 	node tests/test_stage4_contracts.js
 	node tests/test_stage4_workflows.js
 	node tests/test_stage4_e2e.js
+	node tests/test_agent_identity.js
 	node tests/test_agent_contracts.js
 	node tests/test_agent_workflows.js
 	node tests/test_deep_analysis_contracts.js
@@ -62,6 +63,7 @@ test-js:
 	node tests/test_workflow_manifest.js
 	node tests/test_binding_tool.js
 	node tests/test_deploy_preflight.js
+	node tests/test_telegram_commands.js
 	node tests/test_attachment_routing.js
 	node tests/test_smoke_hardening.js
 	node tests/test_sheets_bootstrap.js
