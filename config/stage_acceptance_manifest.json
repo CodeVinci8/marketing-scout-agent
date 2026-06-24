@@ -1,0 +1,89 @@
+{
+  "product": "Vinci AI Pilot",
+  "purpose": "Machine-readable Stage 3C-8 acceptance matrix. Offline status is proven by tests/run_all.js; live status stays pending until the operator runs docs/MVP_LIVE_ROLLOUT_RUNBOOK.md. No stage may be marked live-PASS here by tooling.",
+  "branch": "feat/vinci-mvp-stage4-8",
+  "base": "fix/stage3-verification-stage4-readiness@f1a9d47",
+  "status_vocabulary": ["IMPLEMENTED", "OFFLINE_PASS", "LIVE_PENDING", "BLOCKED_BY_CREDENTIAL", "EXPERIMENTAL", "UNSUPPORTED"],
+  "invariants": {
+    "manifest_workflow_count": 31,
+    "runtime_closure_workflows": 15,
+    "execute_workflow_binding_edges": 8,
+    "all_workflows_active": false,
+    "expected_n8n_version": "2.23.3",
+    "unexpected_external_calls": 0,
+    "live_api_calls": 0,
+    "secrets_in_git": 0,
+    "generated_code_node_syntax_errors": 0
+  },
+  "release_gate": {
+    "ms_tz_collision": {"status": "FIXED_ROOT_CAUSE", "impl": "tools/embed_lib.js", "test": "tests/test_generated_code_compiles.js"},
+    "code_node_compilation": {"offline": "OFFLINE_PASS", "workflows_scanned": 33, "code_nodes": 215, "test": "tests/test_generated_code_compiles.js"}
+  },
+  "stages": [
+    {
+      "stage": "3C",
+      "title": "Google Sheets operations acceptance (empty + populated staging)",
+      "offline": "OFFLINE_PASS",
+      "live": "LIVE_PENDING",
+      "defects": {"QA-018": "FIXED_IN_CODE_LIVE_RETEST_REQUIRED", "QA-019": "FIXED_IN_CODE_LIVE_RETEST_REQUIRED"},
+      "impl": ["n8n/lib/sheets_operations_qa.js", "n8n/lib/ms_time.js", "tools/gen_sheets_operations_qa_workflow.js"],
+      "workflows": ["ops/n8n/workflows/qa_stage3_sheets_operations_acceptance.json"],
+      "tests": ["tests/test_sheets_operations_qa.js", "tests/test_ms_time.js", "tests/test_generated_code_compiles.js"]
+    },
+    {
+      "stage": "4",
+      "title": "Russian Telegram conversational agent (zero-paid free path)",
+      "offline": "OFFLINE_PASS",
+      "live": "LIVE_PENDING",
+      "impl": ["n8n/lib/agent_identity.js", "n8n/lib/agent_charter.js", "n8n/lib/agent_config.js", "n8n/lib/telegram_io.js", "n8n/lib/progress_tracker.js", "n8n/lib/intent_router.js", "n8n/lib/conversation_memory.js", "n8n/lib/conversation_response.js", "n8n/lib/approval_gate.js", "n8n/lib/agent_state.js", "n8n/lib/request_planner.js", "n8n/lib/ms_time.js", "scripts/configure_telegram_commands.sh"],
+      "workflows": ["n8n/workflows/17_agent_settings_config.json", "n8n/workflows/18_telegram_agent_gateway.json", "n8n/workflows/19_request_planner.json", "n8n/workflows/20_agent_orchestrator.json", "n8n/workflows/21_deep_competitor_analysis.json", "n8n/workflows/22_conversation_control.json"],
+      "tests": ["tests/test_agent_identity.js", "tests/test_agent_contracts.js", "tests/test_agent_workflows.js", "tests/test_stage4_contracts.js", "tests/test_stage4_workflows.js", "tests/test_stage4_e2e.js", "tests/test_stage4_freepath.js", "tests/test_progress_tracker.js", "tests/test_telegram_commands.js"],
+      "blockers": ["MS_TELEGRAM_BOT_TOKEN", "MS_TELEGRAM_ALLOWED_USER_IDS", "MS_SPREADSHEET_ID", "google credential", "public HTTPS webhook"]
+    },
+    {
+      "stage": "5",
+      "title": "Integration adapters",
+      "offline": "OFFLINE_PASS",
+      "live": "LIVE_PENDING",
+      "adapters": {
+        "website": {"status": "IMPLEMENTED", "first_class": true, "live": "LIVE_PENDING"},
+        "claude": {"status": "IMPLEMENTED", "live": "BLOCKED_BY_CREDENTIAL"},
+        "firecrawl": {"status": "IMPLEMENTED", "live": "BLOCKED_BY_CREDENTIAL"},
+        "apify": {"status": "IMPLEMENTED", "live": "BLOCKED_BY_CREDENTIAL"},
+        "vk": {"status": "IMPLEMENTED", "optional": true, "live": "BLOCKED_BY_CREDENTIAL"},
+        "avito": {"status": "EXPERIMENTAL", "live": "BLOCKED_BY_CREDENTIAL"}
+      },
+      "impl": ["n8n/lib/source_adapter.js", "n8n/lib/url_safety.js", "n8n/lib/vk_collector.js"],
+      "workflows": ["n8n/workflows/03_firecrawl_single_url_resilient.json", "n8n/workflows/04_firecrawl_url_list_resilient.json", "n8n/workflows/05_apify_search_candidate_discovery.json", "n8n/workflows/09_avito_classifieds_listing_connector.json", "n8n/workflows/16_source_quality_gate_health_score.json", "n8n/workflows/26_vk_public_community_collector.json"],
+      "tests": ["tests/test_url_safety.js", "tests/test_website_pipeline.js", "tests/test_vk_collector.js", "tests/test_wf04_processed.js", "tests/test_wf05_classify.js", "tests/test_wf09_actor_input.js"]
+    },
+    {
+      "stage": "6",
+      "title": "Evidence-backed research pipeline + reporting + export + delivery + follow-up",
+      "offline": "OFFLINE_PASS",
+      "live": "LIVE_PENDING",
+      "impl": ["n8n/lib/evidence.js", "n8n/lib/lineage.js", "n8n/lib/semantic_core.js", "n8n/lib/quality_gate.js", "n8n/lib/report_export.js", "n8n/lib/xlsx_writer.js", "n8n/lib/report_charts.js", "n8n/lib/report_compare.js", "n8n/lib/report_filter.js", "n8n/lib/report_gate.js", "n8n/lib/report_package.js", "n8n/lib/deep_analysis.js", "n8n/lib/scope_preview.js"],
+      "workflows": ["n8n/workflows/12_market_intelligence_report_builder.json", "n8n/workflows/24_report_export_delivery.json"],
+      "tests": ["tests/test_evidence.js", "tests/test_report_export.js", "tests/test_xlsx_writer.js", "tests/test_report_charts.js", "tests/test_report_compare.js", "tests/test_report_filter.js", "tests/test_deep_analysis_contracts.js", "tests/test_reporting_e2e.js", "tests/test_agent_e2e.js"]
+    },
+    {
+      "stage": "7",
+      "title": "Monitoring, change detection, weekly digest, reliability, cost",
+      "offline": "OFFLINE_PASS",
+      "live": "LIVE_PENDING",
+      "inactive_by_default": true,
+      "flags": {"MS_MONITORING_ENABLED": false, "MS_WEEKLY_DIGEST_ENABLED": false},
+      "impl": ["n8n/lib/source_monitor.js", "n8n/lib/weekly_digest.js", "n8n/lib/refresh_policy.js", "n8n/lib/retention_policy.js", "n8n/lib/tracked_sources.js"],
+      "workflows": ["n8n/workflows/23_scheduled_source_monitor.json", "n8n/workflows/25_weekly_digest.json"],
+      "tests": ["tests/test_monitoring.js", "tests/test_weekly_digest.js", "tests/test_refresh_policy.js"]
+    },
+    {
+      "stage": "8",
+      "title": "Release engineering: preflight, backup, deploy, rollback, restore, E2E",
+      "offline": "OFFLINE_PASS",
+      "live": "LIVE_PENDING",
+      "impl": ["tools/preflight_config.js", "tools/audit_workflows.js", "tools/validate_workflow_manifest.js", "tools/bind_n8n_workflow_ids.js", "scripts/deploy_n8n.sh", "scripts/n8n_import_smoke.sh", "scripts/lib/disposable_n8n.sh", "scripts/backup.sh.example", "scripts/restore.sh.example", "ops/n8n/docker-compose.pinned.example.yml"],
+      "tests": ["tests/test_deploy_preflight.js", "tests/test_release_audit.js", "tests/test_release_e2e.js", "tests/test_binding_tool.js", "tests/test_smoke_hardening.js", "tests/test_workflow_manifest.js"]
+    }
+  ]
+}

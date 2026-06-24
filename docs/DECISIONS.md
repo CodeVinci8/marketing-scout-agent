@@ -5,6 +5,40 @@ Most recent first.
 
 ---
 
+## DEC-158 — Embedded modules isolated in IIFEs; generated Code‑node compile gate; Vinci AI Pilot identity
+
+**Date:** 2026-06-24 · **Branch:** `feat/vinci-mvp-stage4-8` (off `fix/stage3-verification-stage4-readiness` @ `f1a9d47`)
+
+**Decision:**
+1. **Embedded modules are isolated, not concatenated.** The live Stage 3C failure
+   (`Identifier 'MS_TZ' has already been declared`) was caused by embedding a pure module's stripped core
+   directly into a Code node, leaking its private top‑level `var MS_TZ` into the same scope as the node glue's
+   `const MS_TZ`. New shared `tools/embed_lib.js` `isolatedModule()` wraps a module's stripped core in an IIFE
+   that returns an explicit exports object, destructured into the node scope — private constants stay inside the
+   IIFE forever and no literal `module.exports` is emitted. The Stage 3C ops‑QA generator uses it for all three
+   engine nodes. The fix is in the **composition system**, not the JSON.
+2. **Every generated Code node must parse offline.** New `tests/test_generated_code_compiles.js` runs
+   `new Function(body)` (parse‑only, never executed, $0) on every Code node in all 33 committed workflows
+   (215 nodes) **and** every generator's in‑memory `build()` output. `gen_stage4_workflows.js` now records its
+   workflows in a registry and only writes to disk when run as a CLI, so it can be built in memory with no side
+   effects. Wired first in `run_all.js` as a fast‑fail release gate.
+3. **Product identity is Vinci AI Pilot.** New canonical, versioned `n8n/lib/agent_identity.js`
+   (`identity-v1` / `vinci-system-v1`) is the single source of the Russian identity, the deterministic zero‑cost
+   identity answer (no request, no paid call, no pipeline), and the Claude system prompt. `agent_charter.js`
+   adopts the identity and bumps to `charter-v2`; an anti‑drift test ties the two together. `intent_router`
+   routes "кто ты?"‑class questions to the non‑external help intent.
+4. **Telegram command menu via a fail‑closed script.** `scripts/configure_telegram_commands.sh` sets the exact
+   public Russian menu; dry‑run by default (zero network), token env‑only and never printed/in argv, `--live`
+   verifies via `getMyCommands`.
+
+**Reason:** the collision was a release blocker; the compile gate makes the whole class of defect impossible to
+ship; the brief requires a coherent Vinci AI Pilot identity and an exact, safe command menu. **Invariants kept:**
+31 manifest workflows / 15 runtime closure / 8 binding edges / all inactive / n8n 2.23.3 / 0 external calls / $0.
+Offline `make test` ALL SUITES PASS. **Not pushed/merged/imported; no production change; no live API; no secret
+exposed.** QA‑018/QA‑019 remain **FIXED IN CODE — LIVE RETEST REQUIRED**.
+
+---
+
 ## DEC-157 — Europe/Moscow product timezone; Stage 3C works on non-empty staging; Stage 4 zero-paid free path
 
 **Date:** 2026-06-23

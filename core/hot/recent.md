@@ -4,6 +4,37 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-24 (session 26) — MVP Stage 4–8 hardening: module isolation, compile gate, Vinci identity (DEC-158)
+
+**Status (exact):** NEW branch `feat/vinci-mvp-stage4-8` off `fix/stage3-verification-stage4-readiness` @ `f1a9d47`
+(all prior commits preserved). **$0, 0 external calls, every workflow `active=false`, NOT pushed/merged/imported,
+no production change, no secret exposed.** `make test` ALL SUITES PASS (66 suites).
+
+**Release blocker fixed (root cause):** the live Stage 3C `Identifier 'MS_TZ' has already been declared` came from
+the ops‑QA generator concatenating the engine core directly into the Code node, so the engine's private
+`var MS_TZ` collided with the node glue's `const MS_TZ`. New `tools/embed_lib.js` `isolatedModule()` wraps the
+stripped core in an IIFE returning an explicit exports object (no `module.exports` literal); engine privates stay
+inside the IIFE. Regenerated the QA workflow (deterministic). 3 commits: `e9c7c2c` (fix+compile gate),
+`57d2882` (identity+command menu), docs commit pending.
+
+**Compile gate (new):** `tests/test_generated_code_compiles.js` parses every Code node (215) in all 33 committed
+workflows + every generator's in‑memory `build()` output via `new Function` (never executed). `gen_stage4` now
+builds in memory with no disk writes unless run as CLI. Wired first in `run_all.js`.
+
+**Vinci AI Pilot identity:** new canonical versioned `n8n/lib/agent_identity.js` (`identity-v1`/`vinci-system-v1`)
+— Russian identity, deterministic zero‑cost identity answer, Claude system prompt. `agent_charter.js` →
+`charter-v2` with the Vinci identity; `intent_router` routes "кто ты?"‑class to non‑external help. Regenerated
+WF18/20/21/23/26.
+
+**Command menu:** `scripts/configure_telegram_commands.sh` (dry‑run default, env‑only token never printed/in argv,
+`--live` verifies via `getMyCommands`, fail‑closed). Offline tests: `test_agent_identity` (48), `test_telegram_commands` (16).
+
+**Docs (new):** `MVP_IMPLEMENTATION_STATUS.md`, `MVP_STAGE4_8_REQUIREMENTS_MATRIX.md`,
+`config/stage_acceptance_manifest.json`, `MVP_LIVE_ROLLOUT_RUNBOOK.md`, `MVP_SECURITY_REVIEW.md`.
+
+**Invariants kept:** 31 manifest / 15 runtime closure / 8 binding edges / n8n 2.23.3.
+**Next:** operator Stage 3C live retest (QA‑018/019 still FIXED IN CODE — LIVE RETEST REQUIRED) → Stage 4 live deploy.
+
 ## Session: 2026-06-23 (session 25) — Moscow time + non-empty staging + Stage 4 free path (DEC-157)
 
 **Status (exact):** same branch `fix/stage3-verification-stage4-readiness`. **$0, 0 external calls, every
