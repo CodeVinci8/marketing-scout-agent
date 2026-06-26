@@ -3,7 +3,7 @@
 	release-help release-discovery release-setup-check release-preflight release-preflight-activate \
 	release-core-acceptance release-backup release-restore-validate release-smoke \
 	deploy-dry-run deploy-inactive verify-production wf18-gate \
-	telegram-prelive telegram-activate telegram-deactivate rollback \
+	telegram-prelive telegram-activate telegram-deactivate rollback rollback-dry-run \
 	release-lock-status release-clean
 
 help:
@@ -30,7 +30,8 @@ release-help:
 	@echo "  make wf18-gate                # check the hard WF18 pre-live blocker gate"
 	@echo "  make telegram-prelive         # read-only Telegram pre-live checks (getWebhookInfo; activation preflight)"
 	@echo "  make telegram-activate        # GATED: publish WF18 + register webhook (separate explicit step)"
-	@echo "  make telegram-deactivate / make rollback  # unpublish WF18 + delete webhook"
+	@echo "  make telegram-deactivate      # unpublish WF18 + delete webhook"
+	@echo "  make rollback-dry-run / make rollback  # REAL rollback: webhook+publish+id-map+backup restore + verify"
 	@echo "  make release-lock-status / make release-clean"
 
 release-discovery:
@@ -76,15 +77,21 @@ telegram-prelive:
 	node tools/preflight_config.js --for-activation --require-zlib
 	scripts/telegram_webhook.sh info
 
+# Transactional WF18-only activation (ACTIVATE-002): publish WF18, register + verify the webhook in ONE step;
+# auto-unpublish WF18 if the webhook step fails. Never activates WF23/WF25 (scheduled activation is separate).
 telegram-activate:
-	scripts/deploy_n8n.sh --activate-triggers
-	scripts/telegram_webhook.sh set --apply
+	scripts/deploy_n8n.sh --activate-telegram
 
 telegram-deactivate:
 	scripts/deploy_n8n.sh --deactivate-triggers
 	scripts/telegram_webhook.sh delete --apply
 
-rollback: telegram-deactivate
+# Real release rollback (ROLLBACK-001): webhook delete + unpublish + runtime-id map restore + documented DB
+# restore path + verification — NOT merely Telegram deactivation. Dry-run first to see the plan.
+rollback-dry-run:
+	scripts/rollback.sh
+rollback:
+	scripts/rollback.sh --apply
 
 release-lock-status:
 	scripts/release_lock.sh status
@@ -164,6 +171,8 @@ test-js:
 	node tests/test_release_scripts.js
 	node tests/test_reconcile_and_gate.js
 	node tests/test_stage8_release_e2e.js
+	node tests/test_release_integration.js
+	node tests/test_prepare_staged.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

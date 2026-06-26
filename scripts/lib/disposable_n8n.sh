@@ -50,6 +50,35 @@ disp_filter() {
   grep -ivE 'Task Broker|Python task|license SDK|No encryption|Auto-generating|Starting migration|Finished migration|DEPRECAT|renewal|Permissions 0644|external mode|Registered runner' || true
 }
 
+# --- PERSISTENT disposable container (so the SAME host-side shared release pipeline — scripts/deploy_n8n.sh via
+#     the n8n_exec docker abstraction — can be driven against it with `docker exec`, exactly like production).
+#     The container runs the pinned n8n image with the entrypoint overridden to a long sleep, so the n8n CLI works
+#     against its throwaway SQLite without starting the server. Production names are NEVER targeted.
+DISP_PROD_CONTAINER="n8n-n8n-1"
+DISP_PROD_VOLUME="n8n_n8n_data"
+# Refuse to ever create/remove anything that is not an explicitly disposable name (defense in depth; never the
+# production container/volume, and never an image/ancestor filter — the documented past prod-removal footgun).
+disp_guard_name() {
+  case "${1:-}" in
+    ""|"$DISP_PROD_CONTAINER"|"$DISP_PROD_VOLUME"|*n8n_n8n_data*|*n8n-n8n-1*) printf 'REFUSED: "%s" looks like production\n' "${1:-}" >&2; return 1 ;;
+  esac
+  case "$1" in ms-disp-e2e-*|ms_disposable_e2e_*) return 0 ;; *) printf 'REFUSED: "%s" is not a disposable name\n' "$1" >&2; return 1 ;; esac
+}
+# disp_start_persistent <container> <volume>: create a throwaway named volume + detached disposable container.
+disp_start_persistent() {
+  disp_guard_name "$1" || return 1; disp_guard_name "$2" || return 1
+  docker volume create "$2" >/dev/null 2>&1 || return 1
+  docker run -d --rm --name "$1" --network none -e N8N_USER_FOLDER=/home/node/.n8n \
+    -v "$2":/home/node/.n8n --entrypoint sh "$(disp_image)" -c 'sleep 1800' >/dev/null 2>&1
+}
+# disp_stop_persistent <container> [volume]: remove ONLY these disposable resources by EXACT name (never a filter).
+disp_stop_persistent() {
+  disp_guard_name "$1" || return 1
+  docker rm -f "$1" >/dev/null 2>&1 || true
+  if [ -n "${2:-}" ] && disp_guard_name "$2"; then docker volume rm "$2" >/dev/null 2>&1 || true; fi
+  return 0
+}
+
 # Confirm the production container (if any) is still running and was never targeted by us.
 disp_production_untouched() {
   if command -v docker >/dev/null 2>&1; then

@@ -4,7 +4,38 @@ Status legend — **Code:** fixed in source · **Offline:** proven by `node test
 **Disposable:** needs a throwaway n8n container (operator-run) · **Prod:** verified against the live export /
 production (operator-run) · **Live:** controlled live acceptance (operator-run).
 
-## Release-core defects ADDRESSED this session (offline-proven)
+## Release-path INTEGRATION defects ADDRESSED in `fix/stage8-release-integration` (disposable-proven)
+
+The first release-core session built good standalone components but did **not wire them into the real operator
+deploy path**. This repair connected them into one shared, ordered, fail-closed pipeline used by both production
+and the disposable acceptance. Proven against **real n8n 2.23.3** (`DISPOSABLE_DEPLOY=PASS`; production
+`n8n-n8n-1` / `n8n_n8n_data` never touched).
+
+| ID | Sev | Root cause | Fix | Tests | Code | Disposable | Prod |
+|---|---|---|---|---|---|---|---|
+| RELEASE-005 | P0 | release-core tools existed but `deploy_n8n.sh`/disposable never called them | shared `release_plan.js` + `release_pipeline.sh`; deploy + disposable both invoke them | release-integration | ✅ | ✅ | pending |
+| DEPLOY-001b | P0 | docker-mode `import --input=<host path>` ENOENTs (CLI runs in-container) | `n8n_exec.sh` `n8n_put`/`n8n_get` (docker cp); deploy copies staged in before import | release-integration | ✅ | ✅ | pending |
+| DEPLOY-002b | P0 | first-match `awk … {print $1; exit}` still in deploy | strict exact-name 0/1/>1 `resolve_exact_name`; ambiguous aborts | release-integration | ✅ | ✅ | pending |
+| DEPLOY-003b | P0 | deploy printed `id=(assigned on import)` | fingerprint logs (`id_fp=`); raw ids only in gitignored local map | release-integration | ✅ | ✅ | pending |
+| DEPLOY-004 | P0 | dry-run "successful" with 0/15 coverage / unresolved env | production dry-run fails closed; explicit soft `--offline-plan` | release-integration | ✅ | ✅ | pending |
+| CONFIG/PREFLIGHT | P1 | preflight inspected only the shell env (prod vars reported missing) | `env_discovery.js` (file/compose/container/process; SET/MISSING/fp, secrets never printed) | release-integration | ✅ | ✅ | pending |
+| STAGE-001 | P1 | apply imported RAW templates (no id/bindings/creds) | `prepare_staged_workflows.js` → staged JSON (resolved id+bindings+creds, active=false); import staged only | prepare-staged, release-integration | ✅ | ✅ | pending |
+| BACKUP-003 | P1 | backup container (user `node`) couldn't write root-owned dest | `backup.sh` runs the backup container `--user 0:0`; volume still `:ro`, never decrypts | release-integration (disposable) | ✅ | ✅ | pending |
+| ACTIVATE-001 | P0 | activation called bare `n8n publish:workflow` (no host CLI in prod) | publish/unpublish via `n8n_cli` Docker-safe abstraction | release-integration | ✅ | n/a | pending |
+| ACTIVATE-002 | P0 | publish-then-set: webhook failure left WF18 published | transactional `--activate-telegram`: WF18 only, register+verify webhook, auto-unpublish on failure | release-integration | ✅ | n/a | pending |
+| ROLLBACK-001 | P1 | rollback = Telegram deactivation only | `scripts/rollback.sh`: webhook+publication+id-map+backup restore + verify | release-integration | ✅ | ✅ (readiness) | pending |
+| TEST-002 | P1 | disposable smoke tested the legacy path | disposable e2e drives the shared `deploy_n8n.sh --apply` | release-integration | ✅ | ✅ | n/a |
+| TEST-003 | P2 | broad `\|\| true` hid primary failures | exit codes captured + asserted | smoke-hardening, release-integration | ✅ | ✅ | n/a |
+| MARKER-001 | P2 | `PARENT_CHILD_RUNTIME=PASS` overclaimed | renamed `PARENT_CHILD_TOPOLOGY` (no real child execution claimed) | release-integration | ✅ | ✅ | n/a |
+| DOCS-001 | P2 | docs resolved ids AFTER deploy | corrected to discovery→resolve→preflight→dry-run→backup→apply→verify everywhere | (docs) | ✅ | n/a | n/a |
+
+## Release-core defects ADDRESSED in the first session (now disposable-proven)
+
+> The `Disposable`/`Prod` columns below were `pending` after the first session. The integration repair's disposable
+> acceptance (`DISPOSABLE_DEPLOY=PASS` against real n8n 2.23.3) now exercises import/reimport, exact-name
+> reconciliation, id resolution, credential reconciliation, bindings, backup/restore, the release lock and
+> sanitized evidence end-to-end — so DEPLOY-001/002/003/005/006/007/008/011, BACKUP-001/002, RELEASE-002/003/004
+> are **Disposable ✅** now (Prod still operator-run).
 
 | ID | Sev | Root cause | Fix | Tests | Code | Disposable | Prod |
 |---|---|---|---|---|---|---|---|

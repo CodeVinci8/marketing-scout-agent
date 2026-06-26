@@ -4,22 +4,43 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-26, session 27) — Stage 8 release-core DONE → WF18 rearchitecture next (DEC-159)
+## CURRENT PRIORITY (2026-06-26, session 28) — Stage 8 release-path INTEGRATION REPAIR done (DISPOSABLE_DEPLOY=PASS) → WF18 rearchitecture next
 
-Branch `feat/stage8-release-engineering` off `main` @ `d3a392c`. **Release-core offline-proven, $0, 0 calls, all
-`active=false`, NOT pushed/merged, production untouched.** `node tests/run_all.js` ALL SUITES PASS;
-`make release-core-acceptance` ⇒ `STAGE8_RELEASE_CORE=PASS`. Markers honestly scoped:
-`WF18_REARCHITECTURE=PENDING`, `CONTROLLED_LIVE_ACCEPTANCE=PENDING`, `PRODUCTION_UNTOUCHED=true`.
+Branch `fix/stage8-release-integration` off `main` @ `2ee4a71`. The first release-core session's standalone tools
+were **not wired into the real deploy path**; this repair connected them into ONE shared, ordered, fail-closed,
+idempotent release pipeline used by **both** production deploy and the disposable acceptance. **Proven against real
+n8n 2.23.3** in a throwaway container — `DISPOSABLE_DEPLOY=PASS`; **production `n8n-n8n-1` / `n8n_n8n_data` never
+touched** (Up 16h throughout); `$0`, no secrets printed, no workflow activated, no production volume touched,
+`sing-box` untouched. `node tests/run_all.js` ALL SUITES PASS. 6 commits.
+
+**Corrected operator sequence (DOCS-001), wired and documented everywhere:**
+```
+discovery → resolve IDs → preflight → dry-run → backup → apply inactive → verify
+```
+Ids are resolved **as part of** `make deploy-inactive` (lock→capture live export→resolve+persist installation-local
+ids→reconcile workflows+credentials→strict preflight→**backup before any import**→import STAGED inactive→bind→
+fresh-export verify→sanitized evidence→release lock). A failure stops, preserves diagnostics, prints rollback,
+releases the lock.
+
+**Fixed (all disposable-proven):** RELEASE-005 (tools wired), DEPLOY-002 (strict exact-name 0/1/>1, no first-match),
+DEPLOY-003 (`id_fp` fingerprints, never `(assigned on import)`), DEPLOY-004 (production dry-run fails closed; explicit
+soft `--offline-plan`), CONFIG/PREFLIGHT (`env_discovery.js` from file/container/process, secrets never printed),
+staged import (`prepare_staged_workflows.js`, never raw), credential reconciliation (compatible preserved, ambiguous
+aborts), backup/lock/evidence/rollback in apply, ACTIVATE-001 (docker-safe publish), ACTIVATE-002 (transactional
+WF18-only activation, auto-unpublish on webhook failure), ROLLBACK-001 (real `scripts/rollback.sh`), TEST-002/003 +
+MARKER-001 (disposable drives the shared pipeline; `PARENT_CHILD_TOPOLOGY`). Also fixed a docker-only blocker no prior
+session caught: a docker-exec `import --input=<host path>` ENOENTs → `n8n_exec.sh` `n8n_put`/`n8n_get` (docker cp) +
+`backup.sh` backup container `--user 0:0`.
+
+**Operator, when ready (Docker-only VPS):** `make release-help`. Short version:
+`make release-discovery` → `make release-smoke` → `make deploy-dry-run` → `make deploy-inactive` →
+`make verify-production`. WF18 activation (`make telegram-activate`) stays BLOCKED by the gate until the WF18
+rearchitecture lands. Rollback: `make rollback-dry-run` / `make rollback`. Runbook: `docs/STAGE8_RELEASE_CORE.md`;
+defects: `docs/DEFECT_REGISTRY_STAGE8.md`.
 
 **Next session (separate, focused):** WF18 gateway rearchitecture — exact work order in
-`docs/WF18_REARCHITECTURE_HANDOFF.md`. The hard gate (`node tools/wf18_activation_gate.js`) keeps WF18
-unpublishable until all 19 P0/P1 blockers in `config/wf18_blockers.json` are resolved with a named regression test.
-
-**Operator, when ready (Docker-only VPS):** `make release-help` for the full path. Short version:
-`make deploy-dry-run` → `make deploy-inactive` → `node tools/runtime_ids.js seed --from <ids> --apply` then
-`runtime_ids.js resolve --export-dir <export> --apply` → `make verify-production`. WF18 activation
-(`make telegram-activate`) stays BLOCKED by the gate until the WF18 work lands. Full runbook:
-`docs/STAGE8_RELEASE_CORE.md`; defects: `docs/DEFECT_REGISTRY_STAGE8.md`.
+`docs/WF18_REARCHITECTURE_HANDOFF.md`. The hard gate keeps WF18 unpublishable until all 19 P0/P1 blockers in
+`config/wf18_blockers.json` are resolved with a named regression test.
 
 ---
 

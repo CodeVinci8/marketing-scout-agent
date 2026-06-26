@@ -4,6 +4,52 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-26 (session 28) — Stage 8 release-path INTEGRATION REPAIR (DEC-160), DISPOSABLE_DEPLOY=PASS
+
+**Status (exact):** NEW branch `fix/stage8-release-integration` off `main` @ `2ee4a71`. The first release-core
+session (session 27) built good standalone tools but they were **NOT wired into the real operator deploy path**
+(operator inspection confirmed: `deploy_n8n.sh` still imported raw JSON, printed `id=(assigned on import)`,
+selected by first-match, never called runtime_ids/reconcile/lock/backup/release_report; disposable tested the
+legacy path). This focused repair connected them into **ONE shared, ordered, fail-closed, idempotent release
+pipeline** used by BOTH production deploy and the disposable acceptance. **Proven against REAL n8n 2.23.3** in a
+throwaway container: **`DISPOSABLE_DEPLOY=PASS`** with the full honest §14 marker block. **Production `n8n-n8n-1` /
+volume `n8n_n8n_data` NEVER touched** (Up 16h throughout), `$0`, no secret printed, no workflow activated, no
+production volume touched, `sing-box` untouched. `node tests/run_all.js` ALL SUITES PASS. **6 commits, NOT pushed.**
+
+**Built/fixed (all disposable-proven against real n8n 2.23.3):**
+- **New tools:** `env_discovery.js` (effective config from file/compose/container/process; SET/MISSING/fingerprint,
+  secrets NEVER printed — fixes the CONFIG/PREFLIGHT defect), `release_plan.js` (the ordered fail-closed planner
+  composing runtime_ids+reconcile+preflight+gate), `prepare_staged_workflows.js` (staged JSON: resolved id+bindings
+  +reconciled creds+active=false; import STAGED not raw).
+- **`scripts/lib/release_pipeline.sh`** shared lock/backup/evidence/rollback layer; **`scripts/rollback.sh`** real
+  rollback (webhook+publication+id-map+backup restore+verify), Makefile `rollback` no longer telegram-only.
+- **`deploy_n8n.sh`:** dry-run runs live discovery + the ordered planner (production fails closed = DEPLOY-004;
+  explicit soft `--offline-plan`); `id_fp` fingerprints (DEPLOY-003); strict exact-name 0/1/>1 (DEPLOY-002,
+  ambiguous aborts); `--apply` = lock→resolve+persist ids→reconcile→backup→import STAGED inactive→bind→verify→
+  evidence→unlock (EXIT-trap writes ABORT diagnostics+rollback+frees lock on failure); transactional WF18-only
+  `--activate-telegram` (ACTIVATE-002, auto-unpublish on webhook failure); publish via `n8n_cli` (ACTIVATE-001).
+- **Docker-only blocker no prior session caught:** a docker-exec `import:workflow --input=<host path>` ENOENTs (CLI
+  runs INSIDE the container) → `n8n_exec.sh` gained `n8n_put`/`n8n_get` (docker cp); deploy copies staged in before
+  import; bindings pre-resolved so a single fresh-export VERIFY replaces the re-import dance; `backup.sh` runs the
+  backup container `--user 0:0` (node user couldn't write the root-owned dest).
+- **Disposable e2e** (`n8n_disposable_e2e.sh`) drives the SAME `deploy_n8n.sh --apply` (TEST-002); broad `|| true`
+  removed from the primary apply (exit codes asserted, TEST-003); `PARENT_CHILD_RUNTIME`→`PARENT_CHILD_TOPOLOGY`
+  (MARKER-001); guarded disposable names (never production / never image-ancestor filter); honest SKIP without docker.
+- **Tests:** `test_release_integration.js` (112) proves the deploy path calls discovery→reconcile→resolve IN ORDER,
+  fails closed on every negative path, and a runtime proof that rp_finish writes ABORT evidence + releases the lock;
+  `test_prepare_staged.js` (23). Registered in run_all.js + Makefile.
+- **Docs:** corrected the sequence everywhere to `discovery→resolve IDs→preflight→dry-run→backup→apply inactive→
+  verify` (DOCS-001) — STAGE8_RELEASE_CORE, NEXT_ACTIONS, WF18 handoff, DEFECT_REGISTRY (new integration table +
+  first-session table now Disposable ✅).
+
+**Commits:** `6b90a15` ids+discovery · `7a294c6` staged+cred reconcile · `dd5fe3e` lock+backup+evidence+rollback ·
+`3932dc1` docker-safe+transactional activation · `8dc1b8e` disposable via shared pipeline · (docs commit pending).
+
+**Next:** the WF18 gateway rearchitecture session (`docs/WF18_REARCHITECTURE_HANDOFF.md`) → then operator prod/live
+acceptance. The hard gate keeps WF18 unpublishable until the 19 P0/P1 blockers are resolved with named tests.
+
+---
+
 ## Session: 2026-06-26 (session 27) — Stage 8 RELEASE-CORE built (DEC-159)
 
 **Status (exact):** NEW branch `feat/stage8-release-engineering` off `main` @ `d3a392c` (Stage 5/6/7 already on

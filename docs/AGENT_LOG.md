@@ -5,6 +5,35 @@ Most recent first.
 
 ---
 
+## 2026-06-26 (session 28) — Stage 8 release-path INTEGRATION REPAIR (DEC-160)
+
+**Agent role:** senior release engineer / reliability / security · **Branch:** `fix/stage8-release-integration`
+(off `main` @ `2ee4a71`). Connected the disconnected DEC-159 release-core tools into ONE shared, ordered,
+fail-closed pipeline used by both production deploy and the disposable acceptance. **Proven against REAL n8n
+2.23.3** in a throwaway container: `DISPOSABLE_DEPLOY=PASS` (full honest §14 markers). **Production `n8n-n8n-1` /
+`n8n_n8n_data` NEVER touched** (Up 16h), `$0`, no secret printed, no workflow activated, no production volume
+touched, `sing-box` untouched. `node tests/run_all.js` ALL SUITES PASS. NOT pushed.
+
+**Commits (6):**
+- `6b90a15` fix(release): integrate runtime ids and live discovery into deploy path
+- `7a294c6` fix(release): stage workflow and credential reconciliation before import
+- `dd5fe3e` fix(release): integrate lock, backup, evidence and rollback into apply
+- `3932dc1` fix(release): make activation docker-safe and transactional
+- `8dc1b8e` test(release): run disposable acceptance through the shared pipeline
+- (this) docs(release): correct Stage 8 operator sequence
+
+**New:** `tools/{env_discovery,release_plan,prepare_staged_workflows}.js`, `scripts/lib/release_pipeline.sh`,
+`scripts/rollback.sh`, `tests/{test_release_integration,test_prepare_staged}.js`.
+**Changed:** `scripts/{deploy_n8n,backup,n8n_disposable_e2e}.sh`, `scripts/lib/{n8n_exec,disposable_n8n}.sh`,
+`Makefile`, `tests/run_all.js`, docs (STAGE8_RELEASE_CORE, NEXT_ACTIONS, WF18 handoff, DEFECT_REGISTRY, DECISIONS,
+recent, warm).
+
+**Defects fixed (all disposable-proven):** RELEASE-005, DEPLOY-002/003/004, CONFIG/PREFLIGHT, staged import,
+credential reconciliation, backup/lock/evidence/rollback in apply, ACTIVATE-001/002, ROLLBACK-001, TEST-002/003,
+MARKER-001, DOCS-001 + the docker-only `import --input=<host path>` ENOENT (n8n_put/n8n_get; backup `--user 0:0`).
+
+---
+
 ## 2026-06-26 (session 27) — Stage 8 RELEASE-CORE (DEC-159)
 
 **Agent role:** senior release engineer / reliability / security · **Branch:** `feat/stage8-release-engineering`
