@@ -5,6 +5,37 @@ Most recent first.
 
 ---
 
+## 2026-06-26 (session 27) — Stage 8 RELEASE-CORE (DEC-159)
+
+**Agent role:** senior release engineer / reliability / security · **Branch:** `feat/stage8-release-engineering`
+(off `main` @ `d3a392c`). **$0, 0 external/live calls, all workflows `active=false`, NOT pushed/merged/imported,
+production + `sing-box` + data volume untouched, no secret or raw n8n id committed.** `node tests/run_all.js`
+ALL SUITES PASS.
+
+**Commits (7):**
+- `d2ce912` fix(release): operator-local workflow id strategy + manifest identity
+- `1d1568e` fix(release): docker-safe n8n execution abstraction
+- `c15296b` fix(release): strict preflight + explicit zero-paid profile
+- `0a28f30` feat(release): backup, restore-validate, webhook, lock + sanitized evidence
+- `45f8c37` fix(release): reconciliation + hard WF18 activation gate
+- `577ab2a` test(release): Stage 8 release-core acceptance + unified operator interface
+- (this) docs(release): Stage 8 release-core runbook + defect registry + WF18 handoff
+
+**New/changed:** `tools/{runtime_ids,reconcile_workflows,reconcile_credentials,wf18_activation_gate,release_report}.js`,
+`scripts/{backup,restore_validate,telegram_webhook,release_lock}.sh`, `scripts/lib/n8n_exec.sh`,
+`config/{runtime_ids.example.json,wf18_blockers.json}`, extended `tools/{preflight_config,manifest_lib,
+gen_workflow_manifest}.js` + `scripts/deploy_n8n.sh` + `scripts/n8n.env.example` + `.gitignore` + `Makefile`,
+6 new test suites (`runtime-ids 47`, `release-shell 76`, `preflight-strict 36`, `release-scripts 35`,
+`reconcile-and-gate 29`, `stage8-release-e2e 23`), docs (`STAGE8_RELEASE_CORE`, `DEFECT_REGISTRY_STAGE8`,
+`WF18_REARCHITECTURE_HANDOFF`).
+
+**Result:** `STAGE8_RELEASE_CORE=PASS`; `WF18_REARCHITECTURE=PENDING`, `CONTROLLED_LIVE_ACCEPTANCE=PENDING`,
+`PRODUCTION_UNTOUCHED=true`. `STAGE8_RELEASE_ENGINEERING` deliberately not asserted.
+
+**Next:** WF18 gateway rearchitecture (handoff doc) → operator disposable/prod/live acceptance.
+
+---
+
 ## 2026-06-24 (session 26) — MVP Stage 4–8 hardening (DEC-158)
 
 **Agent role:** final-engineer · **Branch:** `feat/vinci-mvp-stage4-8` (off `f1a9d47`). **$0, 0 external calls,
