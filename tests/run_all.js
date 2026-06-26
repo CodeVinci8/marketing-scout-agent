@@ -100,6 +100,8 @@ const JS_SUITES = [
   ['runtime-ids', 'test_runtime_ids.js'],
   // --- Stage 8 release core: shell safety + docker-only n8n execution abstraction (host/docker/dry/guard) ---
   ['release-shell', 'test_release_shell.js'],
+  // --- Stage 8 release core: strict preflight (token/$env/tz/report-mode/webhook/secret + cross-field invariants) ---
+  ['preflight-strict', 'test_preflight_strict.js'],
 ];
 
 let failed = 0;

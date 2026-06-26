@@ -73,6 +73,7 @@ test-js:
 	node tests/test_sheets_operations_qa.js
 	node tests/test_runtime_ids.js
 	node tests/test_release_shell.js
+	node tests/test_preflight_strict.js
 
 test-wf:
 	python3 scripts/validate_workflows.py
