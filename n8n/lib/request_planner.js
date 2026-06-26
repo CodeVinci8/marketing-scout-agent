@@ -117,4 +117,65 @@ function planToApprovalText(plan) {
   ].join('\n');
 }
 
-module.exports = { deterministicPlan, normalizePlan, validatePlanJSON, planToApprovalText };
+// --- durable plan identity + approval binding (WF19-PLAN-001 / WF18-APPROVAL-002) --------------------------
+// A plan shown for approval MUST be persisted first, and approval MUST execute the exact reviewed plan. We
+// derive a deterministic plan_hash over the immutable plan fields so a later/modified plan cannot be approved
+// under an old callback. djb2 keeps it dependency-free (mirrors telegram_io.payloadHash; inlined to avoid a
+// cross-lib require inside a single Code node).
+function planHash(plan) {
+  plan = plan || {};
+  const canon = JSON.stringify([
+    str(plan.intent), str(plan.niche), str(plan.service), str(plan.region),
+    (Array.isArray(plan.sources) ? plan.sources : []).map(low).sort(),
+    num(plan.max_items, 0), num(plan.max_external_calls, 0),
+    num(plan.est_source_cost_usd, 0), num(plan.est_llm_cost_usd, 0),
+    str(plan.expected_output), str(plan.plan_source)
+  ]);
+  let h = 5381;
+  for (let i = 0; i < canon.length; i++) h = ((h << 5) + h + canon.charCodeAt(i)) >>> 0;
+  return 'h' + h.toString(16);
+}
+function planIdentity(plan, agentRequestId, version) {
+  const hash = planHash(plan);
+  const v = num(version, 1) || 1;
+  return { plan_id: ['plan', str(agentRequestId) || 'req', hash].join('_'), plan_hash: hash, plan_version: v };
+}
+// One flat durable row for the execution_plans tab (the canonical plan store). Status starts awaiting_approval.
+function buildPlanRow(plan, identity, ctx) {
+  plan = plan || {}; identity = identity || {}; ctx = ctx || {};
+  return {
+    plan_id: str(identity.plan_id), plan_version: num(identity.plan_version, 1), plan_hash: str(identity.plan_hash),
+    agent_request_id: str(ctx.agent_request_id), owner_user_id: str(ctx.owner_user_id), chat_id: str(ctx.chat_id),
+    intent: str(plan.intent), niche: str(plan.niche), service: str(plan.service), region: str(plan.region),
+    sources: (Array.isArray(plan.sources) ? plan.sources : []).join(','),
+    max_items: num(plan.max_items, 0), max_external_calls: num(plan.max_external_calls, 0),
+    est_source_cost_usd: num(plan.est_source_cost_usd, 0), est_llm_cost_usd: num(plan.est_llm_cost_usd, 0),
+    expected_output: str(plan.expected_output), plan_source: str(plan.plan_source),
+    status: 'awaiting_approval', created_at: str(ctx.ts), decided_at: '', decided_by: ''
+  };
+}
+// Validate an approval callback against the stored plan (WF18-APPROVAL-002 / TELEGRAM-013). Fails CLOSED:
+// wrong owner/chat, missing plan, hash mismatch, or a request not awaiting approval all reject. `claim` carries
+// owner_user_id, chat_id, agent_request_id and (optionally) plan_hash from the callback context.
+function validateApproval(planRow, claim) {
+  planRow = planRow || null; claim = claim || {};
+  const reasons = [];
+  if (!planRow || !str(planRow.plan_id)) reasons.push('no_plan');
+  else {
+    if (str(planRow.owner_user_id) !== str(claim.owner_user_id)) reasons.push('owner_mismatch');
+    if (claim.chat_id != null && str(planRow.chat_id) !== str(claim.chat_id)) reasons.push('chat_mismatch');
+    if (str(planRow.agent_request_id) !== str(claim.agent_request_id)) reasons.push('request_mismatch');
+    if (str(planRow.status) !== 'awaiting_approval') reasons.push('not_awaiting_approval:' + str(planRow.status));
+    if (claim.plan_hash != null && str(planRow.plan_hash) !== str(claim.plan_hash)) reasons.push('plan_hash_mismatch');
+  }
+  return { ok: reasons.length === 0, reason: reasons.join('; '), plan_id: planRow ? str(planRow.plan_id) : '' };
+}
+// Resolve the single latest awaiting-approval plan for one owner (free-text approval needs exactly one).
+function pendingPlansForOwner(planRows, ownerUserId) {
+  return (planRows || []).filter(r => str(r.owner_user_id) === str(ownerUserId) && str(r.status) === 'awaiting_approval');
+}
+
+module.exports = {
+  deterministicPlan, normalizePlan, validatePlanJSON, planToApprovalText,
+  planHash, planIdentity, buildPlanRow, validateApproval, pendingPlansForOwner
+};

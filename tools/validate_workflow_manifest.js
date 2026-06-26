@@ -74,7 +74,7 @@ function runChecks(m) {
 
   // binding edges: count, target presence, caller node + type, target trigger, no edge without a runtime dependency
   ok('binding_edge_count matches edges length', d.binding_edge_count === d.binding_edges.length);
-  ok('exactly 8 runtime binding edges', d.binding_edges.length === 8);
+  ok('exactly 13 runtime binding edges', d.binding_edges.length === 13);
   for (const e of d.binding_edges) {
     const caller = wf[e.caller_workflow];
     ok('binding caller exists in runtime: ' + e.caller_workflow, !!caller && runtime.has(e.caller_workflow));
@@ -113,7 +113,7 @@ function runChecks(m) {
     const flagged = d.activation.when_monitoring.indexOf(f) >= 0 || d.activation.when_weekly_digest.indexOf(f) >= 0;
     ok('scheduled runtime workflow is gated by a feature flag: ' + f, flagged);
   }
-  ok('callable_trigger_count equals callable target count (6)', d.activation.callable_trigger_count === 6);
+  ok('callable_trigger_count equals callable target count (11)', d.activation.callable_trigger_count === 11);
 
   return { passed, failed, fails };
 }

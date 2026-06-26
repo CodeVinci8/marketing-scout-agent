@@ -22,7 +22,7 @@ A.section('§8 — staged files carry resolved ids + resolved bindings + reconci
   const r = PS.prepareStaged({ localMap: resolvedMap(), credExport: COMPAT });
   A.ok('staging ok with compatible credentials', r.ok);
   A.eq('all 15 runtime workflows staged', r.summary.staged_count, 15);
-  A.eq('all 8 binding edges resolved', r.summary.bindings_resolved, 8);
+  A.eq('all 13 binding edges resolved', r.summary.bindings_resolved, 13);
   A.eq('0 bindings left unresolved', r.summary.bindings_unresolved, 0);
   A.eq('all credential references reconciled', r.summary.credentials_deferred, 0);
   A.ok('every staged workflow inactive', r.summary.all_inactive);

@@ -23,8 +23,9 @@ A.section('QA-001 — runtime closure (15) is the single source of truth');
 const closure = L.runtimeClosure().slice().sort();
 A.eq('runtime closure is exactly the 15 expected workflows', closure, EXPECTED_CLOSURE.slice().sort());
 A.eq('runtime-count == 15', L.deployment().runtime_workflow_count, 15);
-A.eq('binding edges == 8', L.bindingEdges().length, 8);
-A.eq('callable targets == 6', L.callableTargets().length, 6);
+// 13 = 8 legacy collection/analysis edges + 5 new WF18 dispatch edges (WF19/20/21/22/24); DEC-161 rearchitecture.
+A.eq('binding edges == 13', L.bindingEdges().length, 13);
+A.eq('callable targets == 11', L.callableTargets().length, 11);
 A.eq('expected n8n version', L.expectedN8nVersion(), '2.23.3');
 for (const f of ['04_firecrawl_url_list_resilient.json', '08_touchpoint_analyzer.json', '10_competitor_audience_intelligence_aggregator.json', '12_market_intelligence_report_builder.json', '16_source_quality_gate_health_score.json'])
   A.ok('callable dependency in closure: ' + f, closure.indexOf(f) >= 0);
@@ -45,7 +46,7 @@ A.ok('weekly digest adds WF25', L.activationPlan({ weeklyDigest: true }).indexOf
 A.ok('WF25 is NOT in the always set', L.deployment().activation.always.indexOf('25_weekly_digest.json') < 0);
 const fullPlan = L.activationPlan({ monitoring: true, weeklyDigest: true });
 A.ok('no callable target ever appears in an activation plan', fullPlan.every(f => !callable.has(f)));
-A.eq('callable_trigger_count == 6', L.deployment().activation.callable_trigger_count, 6);
+A.eq('callable_trigger_count == 11', L.deployment().activation.callable_trigger_count, 11);
 
 A.section('manifest validator passes on the committed manifest');
 A.eq('runChecks(committed) has zero failures', runChecks(freshManifest()).failed, 0);

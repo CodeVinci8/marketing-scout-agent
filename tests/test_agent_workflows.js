@@ -18,7 +18,7 @@ function extract(code, name) {
 
 A.section('Conversational agent — Code nodes embed n8n/lib/* with no drift');
 const EMBEDS = [
-  ['18_telegram_agent_gateway.json', 'Route Intent', ['intent_router', 'agent_charter']],
+  ['18_telegram_agent_gateway.json', 'Route Intent', ['intent_router', 'agent_charter', 'telegram_io', 'request_planner']],
   ['18_telegram_agent_gateway.json', 'Build Conversation Context', ['conversation_memory']],
   ['18_telegram_agent_gateway.json', 'Build Conversational Reply', ['conversation_response', 'agent_charter']],
   ['22_conversation_control.json', 'Apply Control Command', ['conversation_memory', 'tracked_sources']],
@@ -31,57 +31,53 @@ for (const [file, node, libs] of EMBEDS) {
   for (const lib of libs) A.eq(file + ' :: ' + node + ' embeds ' + lib + ' (no drift)', extract(code, lib), libCore(lib));
 }
 
-// ---- WF18 conversational gateway flow ---------------------------------------------------------------------
+// ---- WF18 conversational gateway flow (post-DEC-161: gate output injected; dispatcher routes locally vs child) --
 const WF18 = WFS['18_telegram_agent_gateway.json'];
-const CFG18 = { telegram_allowed_user_ids: ['111'], source_allowlist: ['website'], require_approval: true, max_external_calls: 40, source_budget_usd: 0.2, config_complete: true, enable_llm_intent: false, max_context_tokens: 6000 };
-function gateway(update, opts) {
+const CFG18 = { telegram_allowed_user_ids: ['111'], source_allowlist: ['website'], require_approval: true, max_external_calls: 40, source_budget_usd: 0.2, config_complete: true, enable_llm_intent: false, max_context_tokens: 6000, report_data_mode: 'live', recent_window: 8 };
+function gateOut(parsed) {
+  return { accepted: true, stop_reason: '', secret_ok: true, telegram_enabled: true, supported: true, is_private: true, authorized: true, is_callback: parsed.kind === 'callback', ack_needed: false, callback_query_id: parsed.callback_query_id || '', idempotency_key: 'tg::' + (parsed.update_id || '') + '::' + (parsed.chat_id || '') };
+}
+function P(o) { return Object.assign({ kind: 'request', update_type: 'message', chat_type: 'private', from_is_bot: false, callback_data: '', callback_query_id: '', text: '' }, o); }
+function gateway(parsed, opts) {
   opts = opts || {};
   const run = H.makeRun();
-  H.inject(run, 'Resolve Agent Config', [CFG18]);
-  H.runCodeNode(run, WF18, 'Parse Telegram Update', [{ json: { body: update } }]);
+  H.inject(run, 'Ingress Security Gate', [{ gate: gateOut(parsed), parsed: parsed, cfg: CFG18 }]);
   H.inject(run, 'Read agent_request_events', opts.events || []);
   H.inject(run, 'Read conversation_state', opts.state || []);
+  H.inject(run, 'Read conversation_messages', opts.msgs || []);
+  H.inject(run, 'Read conversation_summaries', opts.sums || []);
+  H.inject(run, 'Read durable_memories', opts.mem || []);
+  H.inject(run, 'Read execution_plans', opts.plans || []);
   H.runCodeNode(run, WF18, 'Route Intent', []);
-  H.runCodeNode(run, WF18, 'Build Intake Decision', []);
-  H.runCodeNode(run, WF18, 'Build Conversation Context', []);
+  const intake = H.runCodeNode(run, WF18, 'Build Intake Decision', [])[0].json;
   const ctx = H.runCodeNode(run, WF18, 'Build Conversation Context', [])[0].json;
   const reply = H.runCodeNode(run, WF18, 'Build Conversational Reply', [])[0].json;
-  const intake = H.runCodeNode(run, WF18, 'Build Intake Decision', [])[0].json;
   return { reply, intake, ctx, send: JSON.parse(reply.telegram_send_body) };
 }
 
-A.section('WF18 — free-text request creates a plan-bound intake WITHOUT buttons');
-const req = gateway({ update_id: 1, message: { message_id: 1, text: 'найди конкурентов по займам под ПТС в Москве', from: { id: 111 }, chat: { id: 555 } } });
+A.section('WF18 — free-text competitor request => dispatched to WF19 (no premature "building plan")');
+const req = gateway(P({ update_id: 1, message_id: 1, text: 'найди конкурентов по займам под ПТС в Москве', user_id: '111', chat_id: '555' }));
 A.eq('authorized free-text accepted', req.intake.decision, 'accepted');
-A.eq('competitor search => external + startable', req.intake.start_work, true);
-A.eq('routed intent is competitor_search', req.reply.intent, 'competitor_search');
-A.ok('reply asks for approval (text, no button required)', /подтвержд/i.test(req.send.text));
-A.ok('optional action buttons offered as shortcuts', !!(req.send.reply_markup && req.send.reply_markup.inline_keyboard));
+A.eq('competitor search routed to WF19 planner', req.intake.dispatch_target, 'wf19');
+A.eq('routed intent is competitor_search', req.intake.intent.intent, 'competitor_search');
+A.ok('local reply node does NOT claim a plan is being built (WF18 owns no premature claim)', !/стро[юя]\s*план/i.test(req.send.text));
 
-A.section('WF18 — unauthorized user => no work, no plan');
-const un = gateway({ update_id: 2, message: { message_id: 2, text: 'найди конкурентов', from: { id: 999 }, chat: { id: 555 } } });
-A.eq('unauthorized decision', un.intake.decision, 'unauthorized');
-A.eq('unauthorized => start_work false', un.intake.start_work, false);
-
-A.section('WF18 — ambiguous free text => one clarification, no external work');
-const amb = gateway({ update_id: 3, message: { message_id: 3, text: 'ну и что теперь', from: { id: 111 }, chat: { id: 555 } } });
-A.eq('ambiguous not startable', amb.intake.start_work, false);
+A.section('WF18 — ambiguous free text => local clarification, no dispatch');
+const amb = gateway(P({ update_id: 3, message_id: 3, text: 'ну и что теперь', user_id: '111', chat_id: '555' }));
+A.eq('ambiguous stays local', amb.intake.dispatch_target, 'local');
 A.ok('ambiguous reply is a clarification question', amb.send.text.length > 0 && /\?/.test(amb.send.text));
 
-A.section('WF18 — /help lists only configured capabilities');
-const help = gateway({ update_id: 4, message: { message_id: 4, text: '/help', from: { id: 111 }, chat: { id: 555 } } });
+A.section('WF18 — /help lists only configured capabilities (local)');
+const help = gateway(P({ update_id: 4, message_id: 4, text: '/help', kind: 'command', user_id: '111', chat_id: '555' }));
+A.eq('help stays local', help.intake.dispatch_target, 'local');
 A.ok('help reply lists capabilities', /умею/i.test(help.send.text));
 A.ok('help reply is honest about unavailable platforms', /Недоступно/.test(help.send.text));
 
-A.section('WF18 — duplicate update => one request');
-const ev = [{ idempotency_key: 'tg::5::555' }];
-const dup = gateway({ update_id: 5, message: { message_id: 9, text: 'найди конкурентов', from: { id: 111 }, chat: { id: 555 } } }, { events: ev });
-A.eq('duplicate update blocked', dup.intake.decision, 'duplicate');
-
-A.section('WF18 — context build is token-budgeted and keeps critical sections');
+A.section('WF18 — context build is token-budgeted, owner-isolated, keeps critical sections');
 A.ok('charter always in context', req.ctx.context.sections_included.indexOf('charter') >= 0);
 A.ok('newest user message always in context', req.ctx.context.sections_included.indexOf('newest') >= 0);
 A.ok('context usage records token estimate', req.ctx.context_usage.est_input_tokens > 0);
+A.ok('conversation id binds chat AND user (cross-user isolation)', req.ctx.conversation_id === 'conv_555_111');
 
 // ---- WF22 control plane -----------------------------------------------------------------------------------
 const WF22 = WFS['22_conversation_control.json'];

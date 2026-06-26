@@ -33,7 +33,24 @@ function scheduleTrigger(id, name, pos, hours) {
   return { parameters: { rule: { interval: [{ field: 'hours', hoursInterval: hours || 6 }] } }, type: 'n8n-nodes-base.scheduleTrigger', typeVersion: 1.2, position: pos, id: id, name: name };
 }
 function webhook(id, name, pos, p) {
-  return { parameters: { httpMethod: 'POST', path: p, options: {} }, type: 'n8n-nodes-base.webhook', typeVersion: 2, position: pos, id: id, name: name };
+  // responseMode:'responseNode' => a Respond to Webhook node returns the HTTP response fast (WEBHOOK-001), so
+  // Telegram is acknowledged before Sheets/dispatch and never retries due to a slow downstream.
+  return { parameters: { httpMethod: 'POST', path: p, responseMode: 'responseNode', options: {} }, type: 'n8n-nodes-base.webhook', typeVersion: 2, position: pos, id: id, name: name };
+}
+// Respond to Webhook — immediate 200 (WEBHOOK-001). Used on every WF18 terminal branch (accept + every safe stop).
+function respond(id, name, pos) {
+  return { parameters: { respondWith: 'text', responseCode: 200, responseBody: 'ok', options: {} }, type: 'n8n-nodes-base.respondToWebhook', typeVersion: 1.1, position: pos, id: id, name: name };
+}
+// answerCallbackQuery — acknowledge a callback fast so Telegram drops the spinner (TELEGRAM-006). Body has no token.
+function httpTelegramAnswer(id, name, pos) {
+  return {
+    parameters: {
+      method: 'POST', url: '=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/answerCallbackQuery',
+      sendBody: true, specifyBody: 'json', jsonBody: '={{ $json.answer_callback_body }}',
+      options: { ignoreHttpStatusErrors: true }
+    },
+    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
+  };
 }
 function sheetsAppend(id, name, pos, tab) {
   return {
@@ -191,6 +208,10 @@ function write(file, obj) {
 }
 
 const ENV = "var __env=(typeof $env!=='undefined'&&$env)?$env:{};";
+// Robust caller-input read for a CALLABLE child: read the named Execute Sub-workflow Trigger output (the canonical
+// fields the parent passed) and fall back to $json for manual diagnosis. A child must NEVER rely on $json alone,
+// because an intervening config/Sheets node replaces $json (RUNTIME-002 / ORCH-CONTRACT-001).
+const CALLER = "function callerInput(){try{var __t=$('When Called by Agent').first().json;if(__t&&Object.keys(__t).length)return __t;}catch(e){}return $json||{};}";
 
 // =========================================================================================== WF17 config
 write('17_agent_settings_config.json', wf('17 — Agent Settings & Config Loader', [
@@ -200,96 +221,401 @@ write('17_agent_settings_config.json', wf('17 — Agent Settings & Config Loader
 ], [['Manual Start', 'Resolve Agent Config']]));
 
 // =========================================================================================== WF18 gateway
-// Conversational front door: parse -> route intent (deterministic + guarded LLM) -> intake decision ->
-// bounded conversation context (token budget) -> conversational reply (text useful WITHOUT buttons).
-write('18_telegram_agent_gateway.json', wf('18 — Telegram Agent Gateway (conversational)', [
-  webhook('wf18-hook', 'Telegram Webhook', [-560, 0], 'ms-telegram-agent'),
-  code('wf18-cfg', 'Resolve Agent Config', [-340, 0], ['agent_config'],
-    ENV + "\nreturn [{json:resolveConfig(__env)}];"),
-  code('wf18-parse', 'Parse Telegram Update', [-120, 0], ['telegram_io'],
-    "var body=($json&&$json.body)?$json.body:$json;\nvar parsed=parseUpdate(body);\nvar cfg=$('Resolve Agent Config').first().json;\nparsed.authorized=isAuthorized(parsed,cfg.telegram_allowed_user_ids);\nparsed.idempotency_key=updateIdempotencyKey(parsed);\nreturn [{json:parsed}];"),
-  sheetsRead('wf18-readev', 'Read agent_request_events', [100, -160], 'agent_request_events'),
-  sheetsRead('wf18-readstate', 'Read conversation_state', [100, 160], 'conversation_state'),
-  code('wf18-route', 'Route Intent', [320, 0], ['intent_router', 'agent_charter'],
-    "var cfg=$('Resolve Agent Config').first().json;\nvar p=$('Parse Telegram Update').first().json;\nfunction J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}\nvar ctx={};try{var rows=($('Read conversation_state').all()||[]).map(function(r){return r.json;}).filter(function(r){return String(r.owner_user_id||r.user_id)===String(p.user_id);});if(rows.length)ctx=Object.assign({},rows[rows.length-1]);}catch(e){}\nif(ctx.last_report)ctx.last_report=J(ctx.last_report);\nif(ctx.selected_competitors)ctx.selected_competitors=J(ctx.selected_competitors);\nvar routed=routeIntent(p,ctx,cfg);\nvar caps=availableCapabilities(cfg);\nvar capId=routed.intent?routed.intent.intent:'clarify_request';\nvar cap=null;for(var i=0;i<caps.length;i++){if(caps[i].id===capId)cap=caps[i];}\nreturn [{json:{parsed:p,route:routed.route,intent:routed.intent,clarification:routed.clarification,capability:cap,capability_available:cap?cap.available:true,cfg:cfg,ctx:ctx,charter:charterText()}}];"),
-  code('wf18-intake', 'Build Intake Decision', [540, 0], ['agent_state'],
-    "var r=$('Route Intent').first().json;var p=r.parsed;\nvar seen={};try{($('Read agent_request_events').all()||[]).forEach(function(x){var k=(x.json&&x.json.idempotency_key)||'';if(k)seen[k]=1;});}catch(e){}\nvar dup=!!seen[p.idempotency_key];\nvar stamp=(new Date()).toISOString();\nif(!p.authorized){return [{json:{decision:'unauthorized',start_work:false,routed:r}}];}\nif(dup){return [{json:{decision:'duplicate',start_work:false,routed:r}}];}\nvar intent=r.intent||{intent:'clarify_request',requested_action:'clarify'};\nvar external=intent.requested_action==='build_plan';\nvar startable=external&&r.capability_available===true&&r.route==='deterministic';\nvar arid='req_'+(p.update_id||p.message_id||stamp.replace(/[^0-9]/g,''));\nvar rec={agent_request_id:arid,update_id:p.update_id,chat_id:p.chat_id,user_id:p.user_id,request_text:p.text,kind:p.kind,intent:intent.intent,requested_action:intent.requested_action,idempotency_key:p.idempotency_key,created_at:stamp,state:'received'};\nvar t=transition(rec,'classified',{ts:stamp});\nreturn [{json:{decision:'accepted',start_work:startable,external:external,request:rec,intent:intent,event:t.event,routed:r}}];"),
-  sheetsRead('wf18-readmsg', 'Read conversation_messages', [100, 320], 'conversation_messages'),
-  code('wf18-ctx', 'Build Conversation Context', [760, 0], ['conversation_memory'],
-    "var d=$('Build Intake Decision').first().json;var r=d.routed;var cfg=r.cfg;var p=r.parsed||{};\nvar convId=(r.ctx&&r.ctx.conversation_id)||('conv_'+(p.chat_id||''));\nvar newest=String((d.request&&d.request.request_text)||p.text||'');\nvar msgs=[];try{msgs=($('Read conversation_messages').all()||[]).map(function(x){return x.json;}).filter(function(m){return String(m.conversation_id)===convId;});}catch(e){}\nmsgs=msgs.concat([{role:'user',message_id:p.message_id,text:newest}]);\nvar win=recentWindow(msgs,cfg.recent_window||8);\nvar summary_row=null;var did=false;\nif(shouldSummarize(msgs,cfg)){var older=msgs.slice(0,msgs.length-win.length);if(older.length){var sum=rollingSummary(null,older,{ts:(new Date()).toISOString()});summary_row={conversation_id:convId,version:sum.version,prev_version:sum.prev_version,text:sum.text,preserved_ids:(sum.preserved_ids||[]).join(','),covers_message_ids:(sum.covers_message_ids||[]).join(','),decisions:JSON.stringify(sum.decisions||[]),entities:(sum.entities||[]).join(','),unresolved:(sum.unresolved||[]).join(','),created_at:sum.created_at};did=true;}}\nvar recentText=win.map(function(m){return (m.role||'user')+': '+String(m.text||'');}).join('\\n');\nvar state='conv='+convId+' intent='+((d.intent&&d.intent.intent)||'')+' arid='+((d.request&&d.request.agent_request_id)||'');\nvar safety=cfg.require_approval!==false?'APPROVAL REQUIRED before paid/external work':'approval not required';\nvar sections={charter:r.charter,state:state,safety:safety,newest:newest,artifacts:'',recent:recentText,summary:summary_row?summary_row.text:'',summary_version:summary_row?summary_row.version:0};\nvar ctxRes=buildContext(sections,cfg);\nvar usage=contextUsageRecord(ctxRes,{conversation_id:convId,agent_request_id:(d.request&&d.request.agent_request_id)||'',ts:(new Date()).toISOString()});\nreturn [{json:{context:ctxRes,context_usage:usage,decision:d,conversation_id:convId,summary_row:summary_row,did_summarize:did}}];"),
-  sheetsAppend('wf18-apreq', 'Append agent_requests', [980, -260], 'agent_requests'),
-  sheetsAppend('wf18-apev', 'Append agent_request_events', [980, -120], 'agent_request_events'),
-  sheetsAppend('wf18-apctx', 'Append context_usage', [980, 20], 'context_usage'),
-  code('wf18-pmsg', 'Persist Message Row', [980, 160], [],
-    "var c=$('Build Conversation Context').first().json;var d=c.decision;var r=d.routed;var p=r.parsed||{};\nreturn [{json:{conversation_id:c.conversation_id,message_id:p.message_id,role:'user',text:p.text,intent:(d.intent&&d.intent.intent)||'',created_at:(new Date()).toISOString(),archived:false}}];"),
-  sheetsAppend('wf18-apmsg', 'Append conversation_messages', [1200, 160], 'conversation_messages'),
-  code('wf18-pstate', 'Persist State Row', [980, 300], ['conversation_memory'],
-    "var c=$('Build Conversation Context').first().json;var d=c.decision;var r=d.routed;var p=r.parsed||{};\nvar base=newConversationState(c.conversation_id,p.user_id);\nvar row=patchState(base,{chat_id:p.chat_id,active_agent_request_id:(d.request&&d.request.agent_request_id)||'',current_intent:(d.intent&&d.intent.intent)||'',current_state:(d.request&&d.request.state)||'received',pending_approval:!!(d.external&&d.start_work)},(new Date()).toISOString());\nreturn [{json:row}];"),
-  sheetsUpsert('wf18-upstate', 'Upsert conversation_state', [1200, 300], 'conversation_state', 'conversation_id'),
-  ifNode('wf18-ifsum', 'Summary Created?', [980, 440], '={{ $json.did_summarize }}'),
-  code('wf18-shapesum', 'Shape Summary Row', [1200, 440], [],
-    "var c=$('Build Conversation Context').first().json;return [{json:c.summary_row||{conversation_id:c.conversation_id}}];"),
-  sheetsAppend('wf18-apsum', 'Append conversation_summaries', [1420, 440], 'conversation_summaries'),
-  code('wf18-reply', 'Build Conversational Reply', [1200, 0], ['conversation_response', 'agent_charter'],
-    "var c=$('Build Conversation Context').first().json;var d=c.decision;var r=d.routed;var cfg=r.cfg;\nvar chat=String((d.request&&d.request.chat_id)||(r.parsed&&r.parsed.chat_id)||'');\nvar caps=availableCapabilities(cfg);var text,kb=null;\nif(d.decision==='unauthorized'){text='Доступ запрещён.';}\nelse if(d.decision==='duplicate'){text='Запрос уже принят (дубликат обновления).';}\nelse if(r.route==='clarify'){text=clarificationReply(r.clarification);}\nelse if(d.external&&r.capability_available!==true){text='Это действие сейчас недоступно: '+((r.capability&&r.capability.unavailable_reason)||'нужна настройка источников')+'.';}\nelse if(d.external&&d.start_work){text=buildConversationalReply({understood:(r.capability&&r.capability.name)||d.intent.intent,next:'строю план и пришлю на подтверждение',requires_approval:true,source_scope:(cfg.source_allowlist||[]).join(', '),budget_ceiling:'\\u2264'+cfg.max_external_calls+' \\u0432\\u044b\\u0437\\u043e\\u0432\\u043e\\u0432, ~$'+cfg.source_budget_usd});kb=actionButtons(caps);}\nelse if(d.intent&&d.intent.intent==='help'){text=capabilityCatalogText(cfg);}\nelse{text=buildConversationalReply({understood:(r.capability&&r.capability.name)||(d.intent&&d.intent.intent),next:'готов помочь'});}\nvar body={chat_id:chat,text:text};if(kb)body.reply_markup=kb;\nreturn [{json:{telegram_send_body:JSON.stringify(body),decision:d.decision,intent:(d.intent&&d.intent.intent)||'clarify_request',start_work:d.start_work}}];"),
-  httpTelegram('wf18-send', 'Send Telegram Reply', [1420, 0])
+// Conversational front door, REARCHITECTED (DEC-161):
+//   webhook -> FAIL-CLOSED ingress security (secret + kill-switch + supported-type + private-chat + auth) ->
+//   hard-stop branches for every reject (NO Sheets / NO business send) -> durable idempotency claim ->
+//   owner-isolated reads -> route intent -> intake decision (real dispatch target) -> shaped persistence ->
+//   REAL dispatcher (executeWorkflow) to WF19 plan / WF20 orchestrate / WF21 deep / WF22 control / WF24 report.
+// Approval is bound to a durable plan (execution_plans) persisted BEFORE the approval message is sent.
+write('18_telegram_agent_gateway.json', wf('18 — Telegram Agent Gateway (secure dispatcher)', [
+  webhook('wf18-hook', 'Telegram Webhook', [-1180, 0], 'ms-telegram-agent'),
+  // ---- ingress security: ONE pure node, NO side effects (the secret never leaves it / is never persisted) ----
+  code('wf18-gate', 'Ingress Security Gate', [-960, 0], ['telegram_io', 'agent_config'], `
+${ENV}
+var cfg=resolveConfig(__env);
+var hook=$('Telegram Webhook').first().json||{};
+var headers=hook.headers||{};
+var update=hook.body||hook;
+var dec=ingressDecision({update:update,headers:headers,expectedSecret:__env.MS_TELEGRAM_WEBHOOK_SECRET,cfg:cfg});
+var gate={accepted:dec.accepted,stop_reason:dec.stop_reason,secret_ok:dec.secret_ok,telegram_enabled:dec.telegram_enabled,supported:dec.supported,is_private:dec.is_private,authorized:dec.authorized,is_callback:dec.is_callback,ack_needed:dec.ack_needed,callback_query_id:dec.callback_query_id,idempotency_key:dec.idempotency_key};
+return [{json:{gate:gate,parsed:dec.parsed,cfg:cfg}}];`),
+  ifNode('wf18-ifacc', 'Ingress Accepted?', [-740, 0], '={{ $json.gate.accepted }}'),
+  // ---- shared safe-stop path (used by ingress reject AND duplicate): no business, fast 200, optional ack ----
+  code('wf18-term', 'Terminate Safely', [-520, 260], ['telegram_io'], `
+var inp=$json||{};var gate=inp.gate||{};
+var dup=inp.duplicate===true;
+var reason=dup?'duplicate':(gate.stop_reason||'stopped');
+var ack=false,body='';
+if(gate.ack_needed){ack=true;body=JSON.stringify(answerCallbackBody(gate.callback_query_id,dup?'Уже обработано.':'Доступ ограничен.'));}
+return [{json:{terminated:true,reason:reason,ack:ack,answer_callback_body:body}}];`),
+  ifNode('wf18-iftermack', 'Terminate Ack Needed?', [-300, 260], '={{ $json.ack }}'),
+  httpTelegramAnswer('wf18-termack', 'Send Terminate Ack', [-80, 200]),
+  respond('wf18-respond', 'Respond 200', [140, 260]),
+  // ---- durable idempotency claim BEFORE any persistence / dispatch (IDEMP-002) ----
+  sheetsRead('wf18-readev', 'Read agent_request_events', [-520, -60], 'agent_request_events'),
+  code('wf18-claim', 'Claim Idempotency', [-300, -60], [], `
+var g=$('Ingress Security Gate').first().json;var gate=g.gate;
+var seen={};try{($('Read agent_request_events').all()||[]).forEach(function(x){var k=(x.json&&x.json.idempotency_key)||'';if(k)seen[String(k)]=1;});}catch(e){}
+var duplicate=!!seen[String(gate.idempotency_key)];
+return [{json:{duplicate:duplicate,gate:gate,parsed:g.parsed,cfg:g.cfg}}];`),
+  ifNode('wf18-ifnew', 'New Update?', [-80, -60], '={{ !$json.duplicate }}'),
+  // ---- owner-isolated reads (only after we know the update is accepted + new) ----
+  sheetsRead('wf18-readstate', 'Read conversation_state', [140, -60], 'conversation_state'),
+  sheetsRead('wf18-readmsg', 'Read conversation_messages', [360, -60], 'conversation_messages'),
+  sheetsRead('wf18-readsum', 'Read conversation_summaries', [580, -60], 'conversation_summaries'),
+  sheetsRead('wf18-readmem', 'Read durable_memories', [800, -60], 'durable_memories'),
+  sheetsRead('wf18-readplans', 'Read execution_plans', [1020, -60], 'execution_plans'),
+  code('wf18-route', 'Route Intent', [1240, -60], ['intent_router', 'agent_charter', 'telegram_io', 'request_planner'], `
+var g=$('Ingress Security Gate').first().json;var cfg=g.cfg;var p=g.parsed;
+function J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}
+var convId='conv_'+String(p.chat_id||'')+'_'+String(p.user_id||'');
+var stateRows=[];try{stateRows=($('Read conversation_state').all()||[]).map(function(r){return r.json;});}catch(e){}
+var mine=stateRows.filter(function(r){return String(r.conversation_id)===convId&&String(r.owner_user_id)===String(p.user_id);});
+mine.sort(function(a,b){var dr=(Number(b.revision)||0)-(Number(a.revision)||0);if(dr)return dr;return String(b.updated_at)<String(a.updated_at)?-1:1;});
+var ctx=mine.length?Object.assign({},mine[0]):{};
+if(ctx.last_report)ctx.last_report=J(ctx.last_report);
+if(ctx.selected_competitors)ctx.selected_competitors=J(ctx.selected_competitors);
+var routed=routeIntent(p,ctx,cfg);
+var planRows=[];try{planRows=($('Read execution_plans').all()||[]).map(function(r){return r.json;});}catch(e){}
+var pending=pendingPlansForOwner(planRows,p.user_id);
+var ftSignal=(p.kind==='request')?freetextApprovalSignal(p.text):'';
+var freetext_approval={signal:ftSignal,pending_count:pending.length,bound_request_id:'',ambiguous:false,nothing:false};
+if(ftSignal){
+  if(pending.length===1){var bound=pending[0];routed={route:'deterministic',intent:Object.assign({},routed.intent||{},{intent:bound.intent||'competitor_search',requested_action:ftSignal,from:'freetext'}),clarification:''};freetext_approval.bound_request_id=bound.agent_request_id;}
+  else if(pending.length===0){freetext_approval.nothing=true;routed={route:'clarify',intent:{intent:'clarify_request',requested_action:'clarify'},clarification:'Сейчас нечего подтверждать — нет плана, ожидающего запуска.'};}
+  else {freetext_approval.ambiguous=true;routed={route:'clarify',intent:{intent:'clarify_request',requested_action:'clarify'},clarification:'Есть несколько запросов на подтверждение — уточните, какой именно запустить.'};}
+}
+var caps=availableCapabilities(cfg);
+var capId=routed.intent?routed.intent.intent:'clarify_request';
+var cap=null;for(var i=0;i<caps.length;i++){if(caps[i].id===capId)cap=caps[i];}
+return [{json:{parsed:p,conversation_id:convId,route:routed.route,intent:routed.intent,clarification:routed.clarification,capability:cap,capability_available:cap?cap.available:true,capability_execution_available:cap?cap.execution_available:true,freetext_approval:freetext_approval,ctx:ctx,cfg:cfg,charter:charterText()}}];`),
+  code('wf18-intake', 'Build Intake Decision', [1460, -60], ['agent_state', 'request_planner'], `
+var r=$('Route Intent').first().json;var p=r.parsed;var cfg=r.cfg;
+var stamp=(new Date()).toISOString();
+var intent=r.intent||{intent:'clarify_request',requested_action:'clarify'};
+var action=intent.requested_action||'clarify';
+var isCallback=p.kind==='callback';
+var boundArid=(r.freetext_approval&&r.freetext_approval.bound_request_id)||'';
+if(!boundArid&&isCallback&&p.callback_data){var m=String(p.callback_data).match(/^(approve|reject|cancel):(.+)$/);if(m)boundArid=m[2];}
+var isLifecycle=(action==='approve'||action==='reject');
+var arid=(isLifecycle&&boundArid)?boundArid:('req_'+(p.update_id||p.message_id||stamp.replace(/[^0-9]/g,'')));
+var rec={agent_request_id:arid,update_id:p.update_id,chat_id:p.chat_id,user_id:p.user_id,owner_user_id:p.user_id,request_text:p.text||p.callback_data,kind:p.kind,intent:intent.intent,requested_action:action,idempotency_key:p.idempotency_key,plan_source:'',data_mode:cfg.report_data_mode||'live',created_at:stamp,state:'received'};
+var t=transition(rec,'classified',{ts:stamp});
+var request=t.record;
+var planRowsAll=[];try{planRowsAll=($('Read execution_plans').all()||[]).map(function(x){return x.json;});}catch(e){}
+var approval={ok:false,reason:'',plan:null};
+var dispatch_target='local';var dispatch_reason=action;
+if(action==='build_plan'){dispatch_target=(r.capability_available===true)?'wf19':'local';if(r.capability_available!==true)dispatch_reason='capability_unavailable';}
+else if(action==='approve'){
+  var planRow=null;for(var i=0;i<planRowsAll.length;i++){if(String(planRowsAll[i].agent_request_id)===String(arid)&&String(planRowsAll[i].status)==='awaiting_approval'){planRow=planRowsAll[i];}}
+  var v=validateApproval(planRow,{owner_user_id:p.user_id,chat_id:p.chat_id,agent_request_id:arid});
+  approval={ok:v.ok,reason:v.reason,plan:planRow};
+  if(v.ok){dispatch_target=(String(planRow.intent).indexOf('deep')>=0)?'wf21':'wf20';}
+  else{dispatch_target='local';dispatch_reason='approval_invalid:'+v.reason;}
+}
+else if(action==='reject'){dispatch_target='wf22';dispatch_reason='reject';}
+else if(action==='cancel'||action==='status'||action==='manage_memory'||action==='manage_sources'){dispatch_target='wf22';}
+else if(['export_report','show_chart','show_evidence','filter_report','compare_periods'].indexOf(intent.intent)>=0){dispatch_target='wf24';}
+else{dispatch_target='local';}
+return [{json:{decision:'accepted',is_new_request:!isLifecycle,is_lifecycle:isLifecycle,request:request,intent:intent,action:action,event:t.event,dispatch_target:dispatch_target,dispatch_reason:dispatch_reason,approval:approval,routed:r,conversation_id:r.conversation_id}}];`),
+  code('wf18-ctx', 'Build Conversation Context', [1680, -60], ['conversation_memory'], `
+var d=$('Build Intake Decision').first().json;var r=d.routed;var cfg=r.cfg;var p=r.parsed||{};
+var convId=d.conversation_id;var owner=String(p.user_id||'');
+var newest=String((d.request&&d.request.request_text)||p.text||'');
+var msgs=[];try{msgs=($('Read conversation_messages').all()||[]).map(function(x){return x.json;}).filter(function(m){return String(m.conversation_id)===convId;});}catch(e){}
+msgs=msgs.concat([{role:'user',message_id:p.message_id,text:newest}]);
+var win=recentWindow(msgs,cfg.recent_window||8);
+var sumRows=[];try{sumRows=($('Read conversation_summaries').all()||[]).map(function(x){return x.json;});}catch(e){}
+var prevSummary=selectLatestSummary(sumRows,convId,owner);
+var summary_row=null;var did=false;
+if(shouldSummarize(msgs,cfg)){var older=msgs.slice(0,msgs.length-win.length);if(older.length){var sum=rollingSummary(prevSummary,older,{ts:(new Date()).toISOString()});summary_row={conversation_id:convId,owner_user_id:owner,version:sum.version,prev_version:sum.prev_version,text:sum.text,preserved_ids:(sum.preserved_ids||[]).join(','),covers_message_ids:(sum.covers_message_ids||[]).join(','),decisions:JSON.stringify(sum.decisions||[]),entities:(sum.entities||[]).join(','),unresolved:(sum.unresolved||[]).join(','),created_at:sum.created_at};did=true;}}
+var memRows=[];try{memRows=($('Read durable_memories').all()||[]).map(function(x){return x.json;});}catch(e){}
+var durable=memoriesForUser(memRows,owner).map(function(m){return m.memory_type+':'+m.key+'='+(typeof m.value_json==='string'?m.value_json:JSON.stringify(m.value_json));}).join('\\n');
+var artifacts='';
+if(['report_followup','generate_ideas','compare_periods','export_report','show_chart','show_evidence','filter_report','deep_competitor_analysis'].indexOf((d.intent&&d.intent.intent))>=0){artifacts=(r.ctx&&r.ctx.last_report_id)?('last_report_id='+r.ctx.last_report_id):'';}
+var recentText=win.map(function(m){return (m.role||'user')+': '+String(m.text||'');}).join('\\n');
+var state='conv='+convId+' intent='+((d.intent&&d.intent.intent)||'')+' arid='+((d.request&&d.request.agent_request_id)||'')+' target='+d.dispatch_target;
+var safety=cfg.require_approval!==false?'APPROVAL REQUIRED before paid/external work':'approval not required';
+var sections={charter:r.charter,state:state,safety:safety,newest:newest,artifacts:artifacts,recent:recentText,summary:summary_row?summary_row.text:(prevSummary?prevSummary.text:''),summary_version:summary_row?summary_row.version:(prevSummary?prevSummary.version:0),durable:durable};
+var ctxRes=buildContext(sections,cfg);
+var usage=contextUsageRecord(ctxRes,{conversation_id:convId,agent_request_id:(d.request&&d.request.agent_request_id)||'',ts:(new Date()).toISOString()});
+var prevState=selectLatestState(($('Read conversation_state').all()||[]).map(function(x){return x.json;}),convId,owner);
+var state_row=advanceState(prevState,{conversation_id:convId,owner_user_id:owner,chat_id:p.chat_id,active_agent_request_id:(d.request&&d.request.agent_request_id)||'',current_intent:(d.intent&&d.intent.intent)||'',current_state:(d.request&&d.request.state)||'classified',pending_approval:false},(new Date()).toISOString());
+return [{json:{context:ctxRes,context_usage:usage,decision:d,conversation_id:convId,owner_user_id:owner,summary_row:summary_row,did_summarize:did,state_row:state_row}}];`),
+  // ---- shaped persistence (DATA-001): one explicit shape node per Append, only declared columns ----
+  code('wf18-shapereq', 'Shape Agent Request Row', [1900, -260], ['telegram_io'], `
+var d=$('Build Intake Decision').first().json;var req=d.request||{};var esc=escapeSheetValue;
+return [{json:{agent_request_id:req.agent_request_id,update_id:req.update_id,chat_id:req.chat_id,user_id:req.user_id,request_text:esc(req.request_text),idempotency_key:req.idempotency_key,state:req.state,plan_source:req.plan_source||'',created_ts:req.created_at,updated_ts:req.created_at,created_at:req.created_at,requested_by:req.user_id,request_type:req.kind,query:esc(req.request_text),status:req.state,approval_required:((d.routed&&d.routed.cfg&&d.routed.cfg.require_approval)!==false),next_action:d.dispatch_target,notes:esc(d.dispatch_reason||'')}}];`),
+  sheetsAppend('wf18-apreq', 'Append agent_requests', [2120, -260], 'agent_requests'),
+  code('wf18-shapeev', 'Shape Agent Request Event Row', [1900, -120], [], `
+var d=$('Build Intake Decision').first().json;var e=d.event||{};
+return [{json:{agent_request_id:e.agent_request_id||(d.request&&d.request.agent_request_id),from_state:e.from_state,to_state:e.to_state,accepted:e.accepted,reason:e.reason||d.dispatch_reason||'',idempotency_key:(d.request&&d.request.idempotency_key)||'',ts:e.ts}}];`),
+  sheetsAppend('wf18-apev', 'Append agent_request_events', [2120, -120], 'agent_request_events'),
+  code('wf18-pstate', 'Persist State Row', [1900, 20], [], `
+return [{json:$('Build Conversation Context').first().json.state_row}];`),
+  sheetsUpsert('wf18-upstate', 'Upsert conversation_state', [2120, 20], 'conversation_state', 'conversation_id'),
+  code('wf18-pmsg', 'Persist Message Row', [1900, 160], ['telegram_io'], `
+var c=$('Build Conversation Context').first().json;var d=c.decision;var p=(d.routed&&d.routed.parsed)||{};
+return [{json:{conversation_id:c.conversation_id,message_id:p.message_id,role:'user',text:escapeSheetValue(p.text||p.callback_data),intent:(d.intent&&d.intent.intent)||'',created_at:(new Date()).toISOString(),archived:false}}];`),
+  sheetsAppend('wf18-apmsg', 'Append conversation_messages', [2120, 160], 'conversation_messages'),
+  code('wf18-shapectx', 'Shape Context Usage Row', [1900, 300], [], `
+return [{json:$('Build Conversation Context').first().json.context_usage}];`),
+  sheetsAppend('wf18-apctx', 'Append context_usage', [2120, 300], 'context_usage'),
+  // summary side-branch (non-critical audit)
+  ifNode('wf18-ifsum', 'Summary Created?', [1900, 440], '={{ $json.did_summarize }}'),
+  code('wf18-shapesum', 'Shape Summary Row', [2120, 440], [], `
+var c=$('Build Conversation Context').first().json;return [{json:c.summary_row||{conversation_id:c.conversation_id,version:0}}];`),
+  sheetsAppend('wf18-apsum', 'Append conversation_summaries', [2340, 440], 'conversation_summaries'),
+  // ---- REAL dispatcher (RUNTIME-001/003): deterministic IF-chain on dispatch_target -> executeWorkflow ----
+  ifNode('wf18-d19', 'Dispatch WF19?', [2340, -60], "={{ $('Build Intake Decision').first().json.dispatch_target === 'wf19' }}"),
+  execWf('wf18-wf19', 'Run WF19 (Planner)', [2560, -200], 'WF19 request planner', {
+    agent_request_id: "={{ $('Build Intake Decision').first().json.request.agent_request_id }}",
+    chat_id: "={{ $('Build Intake Decision').first().json.request.chat_id }}",
+    owner_user_id: "={{ $('Build Intake Decision').first().json.request.user_id }}",
+    conversation_id: "={{ $('Build Intake Decision').first().json.conversation_id }}",
+    request_text: "={{ $('Build Intake Decision').first().json.request.request_text }}",
+    data_mode: "={{ $('Build Intake Decision').first().json.request.data_mode }}"
+  }),
+  code('wf18-planres', 'Handle Plan Result', [2780, -200], ['request_planner', 'telegram_io'], `
+var d=$('Build Intake Decision').first().json;var req=d.request||{};
+var res=$json||{};
+var status=res.status||(res.plan?'plan_ready':'planning_failed');
+var p=(d.routed&&d.routed.parsed)||{};var chat=String(req.chat_id||p.chat_id||'');var owner=String(req.user_id||p.user_id||'');
+if(status!=='plan_ready'||!res.plan){
+  var ctext=status==='clarification_required'?(res.clarification||'Уточните запрос, пожалуйста.'):'Не удалось построить план. Уточните запрос, пожалуйста.';
+  return [{json:{plan_ready:false,status:status,telegram_send_body:JSON.stringify({chat_id:chat,text:ctext}),plan_row:null}}];
+}
+var plan=res.plan;var ident=planIdentity(plan,req.agent_request_id,1);
+var planRow=buildPlanRow(plan,ident,{agent_request_id:req.agent_request_id,owner_user_id:owner,chat_id:chat,ts:(new Date()).toISOString()});
+var kb=approvalKeyboard(req.agent_request_id);
+var text=(res.approval_text||planToApprovalText(plan))+'\\n\\nПодтвердите запуск кнопками ниже или ответьте «да»/«нет».';
+return [{json:{plan_ready:true,status:'plan_ready',plan:plan,plan_id:ident.plan_id,plan_hash:ident.plan_hash,plan_row:planRow,agent_request_id:req.agent_request_id,telegram_send_body:JSON.stringify({chat_id:chat,text:text,reply_markup:kb})}}];`),
+  ifNode('wf18-ifplan', 'Plan Ready?', [3000, -200], '={{ $json.plan_ready }}'),
+  code('wf18-shapeplan', 'Shape Plan Row', [3220, -300], [], `
+return [{json:$('Handle Plan Result').first().json.plan_row}];`),
+  sheetsAppend('wf18-applan', 'Append execution_plans', [3440, -300], 'execution_plans'),
+  code('wf18-shapeawait', 'Shape Awaiting State', [3660, -300], [], `
+var c=$('Build Conversation Context').first().json;var h=$('Handle Plan Result').first().json;var base=c.state_row||{};
+return [{json:Object.assign({},base,{current_state:'awaiting_approval',current_plan_id:h.plan_id,pending_approval:true,revision:(Number(base.revision)||1)+1,updated_at:(new Date()).toISOString()})}];`),
+  sheetsUpsert('wf18-upawait', 'Upsert Awaiting State', [3880, -300], 'conversation_state', 'conversation_id'),
+  code('wf18-planbody', 'Plan Reply Body', [4100, -300], [], `
+return [{json:{telegram_send_body:$('Handle Plan Result').first().json.telegram_send_body}}];`),
+  httpTelegram('wf18-sendplan', 'Send Plan Reply', [3220, -120]),
+  ifNode('wf18-d20', 'Dispatch WF20?', [2340, 80], "={{ $('Build Intake Decision').first().json.dispatch_target === 'wf20' }}"),
+  execWf('wf18-wf20', 'Run WF20 (Orchestrator)', [2560, 40], 'WF20 agent orchestrator', {
+    agent_request_id: "={{ $('Build Intake Decision').first().json.request.agent_request_id }}",
+    chat_id: "={{ $('Build Intake Decision').first().json.request.chat_id }}",
+    owner_user_id: "={{ $('Build Intake Decision').first().json.request.user_id }}",
+    conversation_id: "={{ $('Build Intake Decision').first().json.conversation_id }}",
+    plan_id: "={{ ($('Build Intake Decision').first().json.approval.plan || {}).plan_id || '' }}",
+    plan_hash: "={{ ($('Build Intake Decision').first().json.approval.plan || {}).plan_hash || '' }}",
+    data_mode: "={{ $('Build Intake Decision').first().json.request.data_mode }}",
+    state: 'approved'
+  }),
+  ifNode('wf18-d21', 'Dispatch WF21?', [2340, 220], "={{ $('Build Intake Decision').first().json.dispatch_target === 'wf21' }}"),
+  execWf('wf18-wf21', 'Run WF21 (Deep Analysis)', [2560, 180], 'WF21 deep competitor analysis', {
+    agent_request_id: "={{ $('Build Intake Decision').first().json.request.agent_request_id }}",
+    chat_id: "={{ $('Build Intake Decision').first().json.request.chat_id }}",
+    owner_user_id: "={{ $('Build Intake Decision').first().json.request.user_id }}",
+    conversation_id: "={{ $('Build Intake Decision').first().json.conversation_id }}",
+    plan_id: "={{ ($('Build Intake Decision').first().json.approval.plan || {}).plan_id || '' }}",
+    plan_hash: "={{ ($('Build Intake Decision').first().json.approval.plan || {}).plan_hash || '' }}",
+    data_mode: "={{ $('Build Intake Decision').first().json.request.data_mode }}",
+    state: 'approved'
+  }),
+  ifNode('wf18-d22', 'Dispatch WF22?', [2340, 360], "={{ $('Build Intake Decision').first().json.dispatch_target === 'wf22' }}"),
+  execWf('wf18-wf22', 'Run WF22 (Control)', [2560, 320], 'WF22 conversation control', {
+    domain: "={{ ($('Build Intake Decision').first().json.action === 'manage_memory') ? 'memory' : (($('Build Intake Decision').first().json.action === 'manage_sources') ? 'source' : 'request') }}",
+    op: "={{ $('Build Intake Decision').first().json.action }}",
+    arg: "={{ (($('Build Intake Decision').first().json.routed.intent || {}).entities || {}).arg || '' }}",
+    owner_user_id: "={{ $('Build Intake Decision').first().json.request.user_id }}",
+    chat_id: "={{ $('Build Intake Decision').first().json.request.chat_id }}",
+    agent_request_id: "={{ $('Build Intake Decision').first().json.request.agent_request_id }}",
+    conversation_id: "={{ $('Build Intake Decision').first().json.conversation_id }}"
+  }),
+  ifNode('wf18-d24', 'Dispatch WF24?', [2340, 500], "={{ $('Build Intake Decision').first().json.dispatch_target === 'wf24' }}"),
+  execWf('wf18-wf24', 'Run WF24 (Reporting)', [2560, 460], 'WF24 report export delivery', {
+    owner_user_id: "={{ $('Build Intake Decision').first().json.request.user_id }}",
+    agent_request_id: "={{ $('Build Intake Decision').first().json.request.agent_request_id }}",
+    report_id: "={{ $('Build Intake Decision').first().json.routed.ctx.last_report_id || '' }}",
+    action: "={{ $('Build Intake Decision').first().json.intent.intent }}",
+    filter_text: "={{ $('Build Intake Decision').first().json.request.request_text }}",
+    data_mode: "={{ $('Build Intake Decision').first().json.request.data_mode }}"
+  }),
+  // local answer (help / clarify / answer-from-context / unavailable / invalid-approval) — WF18 owns this delivery
+  code('wf18-reply', 'Build Conversational Reply', [2560, 620], ['conversation_response', 'agent_charter'], `
+var d=$('Build Intake Decision').first().json;var r=d.routed;var cfg=r.cfg;
+var chat=String((d.request&&d.request.chat_id)||(r.parsed&&r.parsed.chat_id)||'');
+var caps=availableCapabilities(cfg);var text;
+if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_invalid')===0){text='Это подтверждение нельзя применить ('+d.dispatch_reason.replace('approval_invalid:','')+'). Возможно, план устарел или уже обработан.';}
+else if(d.dispatch_reason==='capability_unavailable'){text='Это действие сейчас недоступно: '+((r.capability&&r.capability.unavailable_reason)||'нужна настройка источников')+'.';}
+else if(r.route==='clarify'){text=clarificationReply(r.clarification);}
+else if(d.intent&&d.intent.intent==='help'){text=capabilityCatalogText(cfg);}
+else{text=buildConversationalReply({understood:(r.capability&&r.capability.name)||(d.intent&&d.intent.intent),next:'готов помочь'});}
+return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),intent:(d.intent&&d.intent.intent)||'clarify_request',dispatch_target:d.dispatch_target}}];`),
+  httpTelegram('wf18-send', 'Send Telegram Reply', [2780, 620])
 ], [
-  ['Telegram Webhook', 'Resolve Agent Config'],
-  ['Resolve Agent Config', 'Parse Telegram Update'],
-  ['Parse Telegram Update', 'Read agent_request_events'],
-  ['Read agent_request_events', 'Read conversation_state'],
+  ['Telegram Webhook', 'Ingress Security Gate'],
+  ['Ingress Security Gate', 'Ingress Accepted?'],
+  ['Ingress Accepted?', 'Read agent_request_events', 0],
+  ['Ingress Accepted?', 'Terminate Safely', 1],
+  ['Read agent_request_events', 'Claim Idempotency'],
+  ['Claim Idempotency', 'New Update?'],
+  ['New Update?', 'Read conversation_state', 0],
+  ['New Update?', 'Terminate Safely', 1],
+  ['Terminate Safely', 'Terminate Ack Needed?'],
+  ['Terminate Ack Needed?', 'Send Terminate Ack', 0],
+  ['Terminate Ack Needed?', 'Respond 200', 1],
+  ['Send Terminate Ack', 'Respond 200'],
   ['Read conversation_state', 'Read conversation_messages'],
-  ['Read conversation_messages', 'Route Intent'],
+  ['Read conversation_messages', 'Read conversation_summaries'],
+  ['Read conversation_summaries', 'Read durable_memories'],
+  ['Read durable_memories', 'Read execution_plans'],
+  ['Read execution_plans', 'Route Intent'],
   ['Route Intent', 'Build Intake Decision'],
   ['Build Intake Decision', 'Build Conversation Context'],
-  ['Build Conversation Context', 'Append agent_requests'],
-  ['Build Conversation Context', 'Append agent_request_events'],
-  ['Build Conversation Context', 'Append context_usage'],
-  ['Build Conversation Context', 'Persist Message Row'],
-  ['Persist Message Row', 'Append conversation_messages'],
-  ['Build Conversation Context', 'Persist State Row'],
+  ['Build Conversation Context', 'Shape Agent Request Row'],
+  ['Shape Agent Request Row', 'Append agent_requests'],
+  ['Append agent_requests', 'Shape Agent Request Event Row'],
+  ['Shape Agent Request Event Row', 'Append agent_request_events'],
+  ['Append agent_request_events', 'Persist State Row'],
   ['Persist State Row', 'Upsert conversation_state'],
+  ['Upsert conversation_state', 'Persist Message Row'],
+  ['Persist Message Row', 'Append conversation_messages'],
+  ['Append conversation_messages', 'Shape Context Usage Row'],
+  ['Shape Context Usage Row', 'Append context_usage'],
   ['Build Conversation Context', 'Summary Created?'],
   ['Summary Created?', 'Shape Summary Row', 0],
   ['Shape Summary Row', 'Append conversation_summaries'],
-  ['Append agent_requests', 'Build Conversational Reply'],
+  ['Append context_usage', 'Dispatch WF19?'],
+  ['Dispatch WF19?', 'Run WF19 (Planner)', 0],
+  ['Dispatch WF19?', 'Dispatch WF20?', 1],
+  ['Run WF19 (Planner)', 'Handle Plan Result'],
+  ['Handle Plan Result', 'Plan Ready?'],
+  ['Plan Ready?', 'Shape Plan Row', 0],
+  ['Plan Ready?', 'Send Plan Reply', 1],
+  ['Shape Plan Row', 'Append execution_plans'],
+  ['Append execution_plans', 'Shape Awaiting State'],
+  ['Shape Awaiting State', 'Upsert Awaiting State'],
+  ['Upsert Awaiting State', 'Plan Reply Body'],
+  ['Plan Reply Body', 'Send Plan Reply'],
+  ['Dispatch WF20?', 'Run WF20 (Orchestrator)', 0],
+  ['Dispatch WF20?', 'Dispatch WF21?', 1],
+  ['Dispatch WF21?', 'Run WF21 (Deep Analysis)', 0],
+  ['Dispatch WF21?', 'Dispatch WF22?', 1],
+  ['Dispatch WF22?', 'Run WF22 (Control)', 0],
+  ['Dispatch WF22?', 'Dispatch WF24?', 1],
+  ['Dispatch WF24?', 'Run WF24 (Reporting)', 0],
+  ['Dispatch WF24?', 'Build Conversational Reply', 1],
   ['Build Conversational Reply', 'Send Telegram Reply']
 ]));
 
 // =========================================================================================== WF22 control
-// Conversational control plane: memory commands (/new, /context, /memory, /forget, /forget_all) and source
-// management (add/list/pause/resume/remove/check). Per-user isolation + audit; no secrets stored.
+// Conversational control plane, CALLABLE + REAL persistence (WF22-CALLABLE/PERSIST/CANCEL-001):
+//   memory (/new,/context,/memory,/forget,/forget_all), source (add/list/pause/resume/remove/check) and request
+//   lifecycle (cancel/reject/status). Mutations are UPSERTED to the canonical stores (durable_memories /
+//   tracked_sources / execution_plans) and the lifecycle event is appended; an audit row is written only AFTER
+//   the mutation is applied (an audit never claims a change that did not happen). Per-user isolation; no secrets.
 write('22_conversation_control.json', wf('22 — Conversation Control & Sources', [
-  manual('wf22-trig', 'Manual Start', [-560, 0]),
-  code('wf22-cfg', 'Resolve Agent Config', [-340, 0], ['agent_config'],
+  manual('wf22-trig', 'Manual Start', [-780, -160]),
+  subTrigger('wf22-sub', 'When Called by Agent', [-780, 60], ['domain', 'op', 'arg', 'owner_user_id', 'chat_id', 'agent_request_id', 'conversation_id', 'confirmed']),
+  code('wf22-cfg', 'Resolve Agent Config', [-560, 0], ['agent_config'],
     ENV + "\nreturn [{json:resolveConfig(__env)}];"),
-  sheetsRead('wf22-readmem', 'Read durable_memories', [-120, -120], 'durable_memories'),
-  sheetsRead('wf22-readsrc', 'Read tracked_sources', [-120, 120], 'tracked_sources'),
-  code('wf22-apply', 'Apply Control Command', [120, 0], ['conversation_memory', 'tracked_sources'],
-    "var cfg=$('Resolve Agent Config').first().json;\nvar inp=$json||{};var owner=String(inp.owner_user_id||'');\nvar memories=[];try{memories=($('Read durable_memories').all()||[]).map(function(r){return r.json;});}catch(e){}\nvar sources=[];try{sources=($('Read tracked_sources').all()||[]).map(function(r){return r.json;});}catch(e){}\nvar ts=(new Date()).toISOString();\nvar out={domain:inp.domain,op:inp.op,owner_user_id:owner,chat_id:String(inp.chat_id||''),reply:'',memory_audit:[],source_audit:[],memories:memories,sources:sources};\nif(inp.domain==='memory'){\n if(inp.op==='memory'||inp.op==='view'){out.reply='\\u041f\\u0430\\u043c\\u044f\\u0442\\u044c: '+JSON.stringify(memoryView(memoriesForUser(memories,owner)));}\n else if(inp.op==='forget'){var f=forgetMemory(memories,inp.arg,{owner_user_id:owner,ts:ts});out.memories=f.memories;out.memory_audit=f.audit;out.reply=f.removed?('\\u0423\\u0434\\u0430\\u043b\\u0435\\u043d\\u043e: '+f.removed):'\\u041d\\u0435 \\u043d\\u0430\\u0448\\u0451\\u043b.';}\n else if(inp.op==='forget_all'){var fa=forgetAll(memories,{owner_user_id:owner,confirmed:inp.confirmed===true,ts:ts});if(!fa.ok){out.reply='\\u041f\\u043e\\u0434\\u0442\\u0432\\u0435\\u0440\\u0434\\u0438\\u0442\\u0435 \\u0443\\u0434\\u0430\\u043b\\u0435\\u043d\\u0438\\u0435.';}else{out.memories=fa.memories;out.memory_audit=fa.audit;out.reply='\\u041f\\u0430\\u043c\\u044f\\u0442\\u044c \\u043e\\u0447\\u0438\\u0449\\u0435\\u043d\\u0430 ('+fa.removed+').';}}\n else if(inp.op==='new'){out.reply='\\u041d\\u043e\\u0432\\u044b\\u0439 \\u043a\\u043e\\u043d\\u0442\\u0435\\u043a\\u0441\\u0442. \\u041f\\u0440\\u0435\\u0434\\u043f\\u043e\\u0447\\u0442\\u0435\\u043d\\u0438\\u044f \\u0441\\u043e\\u0445\\u0440\\u0430\\u043d\\u0435\\u043d\\u044b.';}\n else if(inp.op==='context'){out.reply='\\u041a\\u043e\\u043d\\u0442\\u0435\\u043a\\u0441\\u0442: '+(inp.arg||'(\\u043f\\u0443\\u0441\\u0442\\u043e)');}\n else{out.reply='\\u041a\\u043e\\u043c\\u0430\\u043d\\u0434\\u0430 \\u043f\\u0430\\u043c\\u044f\\u0442\\u0438 \\u043d\\u0435 \\u0440\\u0430\\u0441\\u043f\\u043e\\u0437\\u043d\\u0430\\u043d\\u0430.';}\n}else if(inp.domain==='source'){\n if(inp.op==='add'){var a=addSource(sources,inp.arg,{owner_user_id:owner,cfg:cfg,ts:ts});out.sources=a.sources;if(a.audit)out.source_audit=[a.audit];out.reply=a.added?('\\u0418\\u0441\\u0442\\u043e\\u0447\\u043d\\u0438\\u043a \\u0434\\u043e\\u0431\\u0430\\u0432\\u043b\\u0435\\u043d: '+a.source.label):('\\u041d\\u0435 \\u0434\\u043e\\u0431\\u0430\\u0432\\u043b\\u0435\\u043d: '+a.reason);}\n else if(inp.op==='list'){out.reply='\\u0418\\u0441\\u0442\\u043e\\u0447\\u043d\\u0438\\u043a\\u0438: '+JSON.stringify(listSources(sources,owner).map(function(s){return s.label+' ['+s.status+']';}));}\n else if(inp.op==='pause'||inp.op==='resume'||inp.op==='remove'){var st=inp.op==='pause'?'paused':(inp.op==='resume'?'active':'removed');var r2=setSourceStatus(sources,inp.arg,st,{owner_user_id:owner,ts:ts});out.sources=r2.sources;if(r2.audit)out.source_audit=[r2.audit];out.reply=r2.changed?('\\u0418\\u0441\\u0442\\u043e\\u0447\\u043d\\u0438\\u043a: '+inp.op):('\\u041d\\u0435 \\u0438\\u0437\\u043c\\u0435\\u043d\\u0435\\u043d\\u043e: '+r2.reason);}\n else if(inp.op==='check'){out.reply='\\u0421\\u0442\\u0430\\u0442\\u0443\\u0441: '+JSON.stringify(checkSource(sources,inp.arg,{owner_user_id:owner}));}\n else{out.reply='\\u041a\\u043e\\u043c\\u0430\\u043d\\u0434\\u0430 \\u0438\\u0441\\u0442\\u043e\\u0447\\u043d\\u0438\\u043a\\u043e\\u0432 \\u043d\\u0435 \\u0440\\u0430\\u0441\\u043f\\u043e\\u0437\\u043d\\u0430\\u043d\\u0430.';}\n}else{out.reply='\\u041d\\u0435\\u0438\\u0437\\u0432\\u0435\\u0441\\u0442\\u043d\\u044b\\u0439 \\u0434\\u043e\\u043c\\u0435\\u043d \\u043a\\u043e\\u043c\\u0430\\u043d\\u0434\\u044b.';}\nreturn [{json:out}];"),
-  sheetsAppend('wf22-apmem', 'Append memory_audit_events', [340, -120], 'memory_audit_events'),
-  sheetsAppend('wf22-apsrc', 'Append source_audit_events', [340, 120], 'source_audit_events'),
-  code('wf22-reply', 'Build Control Reply', [560, 0], ['conversation_response'],
+  sheetsRead('wf22-readmem', 'Read durable_memories', [-340, -160], 'durable_memories'),
+  sheetsRead('wf22-readsrc', 'Read tracked_sources', [-340, 0], 'tracked_sources'),
+  sheetsRead('wf22-readplans', 'Read execution_plans', [-340, 160], 'execution_plans'),
+  code('wf22-apply', 'Apply Control Command', [-120, 0], ['conversation_memory', 'tracked_sources'], CALLER + `
+var cfg=$('Resolve Agent Config').first().json;
+var inp=callerInput();var owner=String(inp.owner_user_id||'');
+var ts=(new Date()).toISOString();
+var memories=[];try{memories=($('Read durable_memories').all()||[]).map(function(r){return r.json;});}catch(e){}
+var sources=[];try{sources=($('Read tracked_sources').all()||[]).map(function(r){return r.json;});}catch(e){}
+var plans=[];try{plans=($('Read execution_plans').all()||[]).map(function(r){return r.json;});}catch(e){}
+var out={domain:inp.domain,op:inp.op,owner_user_id:owner,chat_id:String(inp.chat_id||''),agent_request_id:String(inp.agent_request_id||''),reply:'',memory_audit:[],source_audit:[],changed_memories:[],changed_sources:[],changed_plans:[],request_event:null};
+function diff(before,after,key){var b={};before.forEach(function(x){b[x[key]]=JSON.stringify(x);});return after.filter(function(x){return b[x[key]]!==JSON.stringify(x);});}
+if(inp.domain==='memory'){
+ if(inp.op==='memory'||inp.op==='view'){out.reply='Память: '+JSON.stringify(memoryView(memoriesForUser(memories,owner)));}
+ else if(inp.op==='forget'){var f=forgetMemory(memories,inp.arg,{owner_user_id:owner,ts:ts});out.changed_memories=diff(memories,f.memories,'memory_id');out.memory_audit=f.audit;out.reply=f.removed?('Удалено: '+f.removed):'Не нашёл.';}
+ else if(inp.op==='forget_all'){var fa=forgetAll(memories,{owner_user_id:owner,confirmed:inp.confirmed===true,ts:ts});if(!fa.ok){out.reply='Подтвердите удаление (/forget_all confirm).';}else{out.changed_memories=diff(memories,fa.memories,'memory_id');out.memory_audit=fa.audit;out.reply='Память очищена ('+fa.removed+').';}}
+ else if(inp.op==='new'){out.reply='Новый контекст. Предпочтения сохранены.';}
+ else if(inp.op==='context'){out.reply='Контекст: '+(inp.arg||'(пусто)');}
+ else{out.reply='Команда памяти не распознана.';}
+}else if(inp.domain==='source'){
+ if(inp.op==='add'){var a=addSource(sources,inp.arg,{owner_user_id:owner,cfg:cfg,ts:ts});out.changed_sources=diff(sources,a.sources,'source_id');if(a.audit)out.source_audit=[a.audit];out.reply=a.added?('Источник добавлен: '+a.source.label):('Не добавлен: '+a.reason);}
+ else if(inp.op==='list'){out.reply='Источники: '+JSON.stringify(listSources(sources,owner).map(function(s){return s.label+' ['+s.status+']';}));}
+ else if(inp.op==='pause'||inp.op==='resume'||inp.op==='remove'){var st=inp.op==='pause'?'paused':(inp.op==='resume'?'active':'removed');var r2=setSourceStatus(sources,inp.arg,st,{owner_user_id:owner,ts:ts});out.changed_sources=diff(sources,r2.sources,'source_id');if(r2.audit)out.source_audit=[r2.audit];out.reply=r2.changed?('Источник: '+inp.op):('Не изменено: '+r2.reason);}
+ else if(inp.op==='check'){out.reply='Статус: '+JSON.stringify(checkSource(sources,inp.arg,{owner_user_id:owner}));}
+ else{out.reply='Команда источников не распознана.';}
+}else if(inp.domain==='request'){
+ var arid=String(inp.agent_request_id||'');
+ var mine=plans.filter(function(p){return String(p.owner_user_id)===owner;});
+ if(inp.op==='cancel'){
+  var active=mine.filter(function(p){return ['awaiting_approval','approved','collecting'].indexOf(String(p.status))>=0;});if(arid)active=active.filter(function(p){return String(p.agent_request_id)===arid;});
+  if(!active.length){out.reply='Нет активного запроса для отмены.';}
+  else{var tg=active[0];out.changed_plans=[Object.assign({},tg,{status:'cancelled',decided_at:ts,decided_by:owner})];out.request_event={agent_request_id:tg.agent_request_id,from_state:tg.status,to_state:'cancelled',accepted:true,reason:'user_cancel',idempotency_key:'cancel::'+tg.plan_id,ts:ts};out.reply='Запрос отменён. Дальнейшие шаги выполняться не будут.';}
+ }else if(inp.op==='reject'){
+  var aw=mine.filter(function(p){return String(p.status)==='awaiting_approval';});if(arid)aw=aw.filter(function(p){return String(p.agent_request_id)===arid;});
+  if(!aw.length){out.reply='Нет плана, ожидающего подтверждения.';}
+  else{var t2=aw[0];out.changed_plans=[Object.assign({},t2,{status:'rejected',decided_at:ts,decided_by:owner})];out.request_event={agent_request_id:t2.agent_request_id,from_state:'awaiting_approval',to_state:'cancelled',accepted:true,reason:'user_reject',idempotency_key:'reject::'+t2.plan_id,ts:ts};out.reply='План отклонён. Запуск не выполнен.';}
+ }else if(inp.op==='status'){
+  var act=mine.filter(function(p){return ['awaiting_approval','approved','collecting'].indexOf(String(p.status))>=0;});
+  out.reply=act.length?('Текущий статус: '+act.map(function(p){return p.intent+' ['+p.status+']';}).join('; ')):'Активных запросов нет.';
+ }else{out.reply='Команда не распознана.';}
+}else{out.reply='Неизвестный домен команды.';}
+return [{json:out}];`),
+  // ---- mutation branches (write to the canonical store BEFORE the audit) ----
+  code('wf22-shapemem', 'Shape Memory Upserts', [120, -200], [],
+    "return ($('Apply Control Command').first().json.changed_memories||[]).map(function(m){return {json:m};});"),
+  sheetsUpsert('wf22-upmem', 'Upsert durable_memories', [340, -200], 'durable_memories', 'memory_id'),
+  code('wf22-shapememaud', 'Shape Memory Audit', [560, -200], [],
+    "return ($('Apply Control Command').first().json.memory_audit||[]).map(function(a){return {json:a};});"),
+  sheetsAppend('wf22-apmem', 'Append memory_audit_events', [780, -200], 'memory_audit_events'),
+  code('wf22-shapesrc', 'Shape Source Upserts', [120, -60], [],
+    "return ($('Apply Control Command').first().json.changed_sources||[]).map(function(s){return {json:s};});"),
+  sheetsUpsert('wf22-upsrc', 'Upsert tracked_sources', [340, -60], 'tracked_sources', 'source_id'),
+  code('wf22-shapesrcaud', 'Shape Source Audit', [560, -60], [],
+    "return ($('Apply Control Command').first().json.source_audit||[]).map(function(a){return {json:a};});"),
+  sheetsAppend('wf22-apsrc', 'Append source_audit_events', [780, -60], 'source_audit_events'),
+  code('wf22-shapeplan', 'Shape Plan Upserts', [120, 100], [],
+    "return ($('Apply Control Command').first().json.changed_plans||[]).map(function(p){return {json:p};});"),
+  sheetsUpsert('wf22-upplan', 'Upsert execution_plans', [340, 100], 'execution_plans', 'plan_id'),
+  code('wf22-shapeev', 'Shape Request Event', [120, 240], [],
+    "var ev=$('Apply Control Command').first().json.request_event;return ev?[{json:ev}]:[];"),
+  sheetsAppend('wf22-apev', 'Append agent_request_events', [340, 240], 'agent_request_events'),
+  code('wf22-reply', 'Build Control Reply', [120, 380], ['conversation_response'],
     "var o=$('Apply Control Command').first().json;\nvar chat=String(o.chat_id||'');\nvar body={chat_id:chat,text:clarificationReply(o.reply)};\nreturn [{json:{telegram_send_body:JSON.stringify(body),domain:o.domain,op:o.op}}];"),
-  httpTelegram('wf22-send', 'Send Control Reply', [780, 0])
+  httpTelegram('wf22-send', 'Send Control Reply', [340, 380])
 ], [
   ['Manual Start', 'Resolve Agent Config'],
+  ['When Called by Agent', 'Resolve Agent Config'],
   ['Resolve Agent Config', 'Read durable_memories'],
   ['Read durable_memories', 'Read tracked_sources'],
-  ['Read tracked_sources', 'Apply Control Command'],
-  ['Apply Control Command', 'Append memory_audit_events'],
-  ['Apply Control Command', 'Append source_audit_events'],
+  ['Read tracked_sources', 'Read execution_plans'],
+  ['Read execution_plans', 'Apply Control Command'],
+  ['Apply Control Command', 'Shape Memory Upserts'],
+  ['Shape Memory Upserts', 'Upsert durable_memories'],
+  ['Upsert durable_memories', 'Shape Memory Audit'],
+  ['Shape Memory Audit', 'Append memory_audit_events'],
+  ['Apply Control Command', 'Shape Source Upserts'],
+  ['Shape Source Upserts', 'Upsert tracked_sources'],
+  ['Upsert tracked_sources', 'Shape Source Audit'],
+  ['Shape Source Audit', 'Append source_audit_events'],
+  ['Apply Control Command', 'Shape Plan Upserts'],
+  ['Shape Plan Upserts', 'Upsert execution_plans'],
+  ['Apply Control Command', 'Shape Request Event'],
+  ['Shape Request Event', 'Append agent_request_events'],
   ['Apply Control Command', 'Build Control Reply'],
   ['Build Control Reply', 'Send Control Reply']
 ]));
 
 // =========================================================================================== WF19 planner
 write('19_request_planner.json', wf('19 — Request Planner (deterministic + guarded Claude)', [
-  manual('wf19-trig', 'Manual Start', [-480, 0]),
+  manual('wf19-trig', 'Manual Start', [-480, -160]),
+  subTrigger('wf19-sub', 'When Called by Agent', [-480, 60], ['agent_request_id', 'chat_id', 'owner_user_id', 'conversation_id', 'request_text', 'data_mode']),
   code('wf19-cfg', 'Resolve Agent Config', [-260, 0], ['agent_config'],
     ENV + "\nreturn [{json:resolveConfig(__env)}];"),
   code('wf19-det', 'Deterministic Plan', [-40, 0], ['request_planner'],
-    "var cfg=$('Resolve Agent Config').first().json;\nvar text=String(($json&&($json.request_text||$json.text))||'');\nvar plan=deterministicPlan(text,cfg);\nreturn [{json:{request_text:text,plan:plan,cfg:cfg}}];"),
+    CALLER + "\nvar ci=callerInput();\nvar cfg=$('Resolve Agent Config').first().json;\nvar text=String(ci.request_text||ci.text||'');\nvar plan=deterministicPlan(text,cfg);\nreturn [{json:{request_text:text,agent_request_id:String(ci.agent_request_id||''),chat_id:String(ci.chat_id||''),owner_user_id:String(ci.owner_user_id||''),conversation_id:String(ci.conversation_id||''),data_mode:String(ci.data_mode||'live'),plan:plan,cfg:cfg}}];"),
   code('wf19-guard', 'Planner LLM Guard', [180, 0], ['approval_gate'],
     "var j=$('Deterministic Plan').first().json;var cfg=j.cfg;\nvar approvalTok=String(($json&&$json.planner_approval_token)||'');\nvar enabled=cfg.enable_llm_planner===true;\nvar tokOk=approvalTok==='WF19_PLANNER_APPROVED';\nvar budgetOk=Number(cfg.llm_budget_usd)>=0.01;\nvar call_llm=enabled&&tokOk&&budgetOk;\nvar reason=!enabled?'planner_llm_disabled':(!tokOk?'planner_token_invalid':(!budgetOk?'over_llm_budget':'ok'));\nreturn [{json:Object.assign({},j,{call_llm:call_llm,llm_guard_reason:reason})}];"),
   ifNode('wf19-if', 'LLM Planner Enabled?', [400, 0], '={{ $json.call_llm }}'),
@@ -298,10 +624,13 @@ write('19_request_planner.json', wf('19 — Request Planner (deterministic + gua
   httpClaude('wf19-claude', 'Claude Planner API Request', [840, -120]),
   code('wf19-validate', 'Validate Plan', [1060, -120], ['request_planner'],
     "var j=$('Build Planner Prompt').first().json;var cfg=j.cfg;\nvar text='';try{var c=($json&&$json.content)||[];for(var i=0;i<c.length;i++){if(c[i]&&c[i].type==='text')text+=String(c[i].text||'');}}catch(e){}\nvar v=validatePlanJSON(text,cfg);\nvar plan=v.valid?v.plan:deterministicPlan(j.request_text,cfg);\nreturn [{json:{plan:plan,plan_valid:v.valid,plan_reason:v.reason,plan_source:plan.plan_source,cfg:cfg}}];"),
+  // Canonical planner RESULT (WF19-PLAN-002): one of plan_ready / clarification_required / planning_failed.
+  // WF19 NEVER sends Telegram directly — WF18 owns the approval-message delivery and the durable plan persistence.
   code('wf19-approval', 'Build Approval Message', [840, 120], ['request_planner', 'telegram_io', 'scope_preview'],
-    "var src;try{src=$('Validate Plan').first().json;}catch(e){src=$('Deterministic Plan').first().json;}\nvar plan=src.plan;var cfg=src.cfg||{};\nvar text=planToApprovalText(plan);\nvar arid=String(($json&&$json.agent_request_id)||'req_pending');\nvar kb=approvalKeyboard(arid);\n// scope + cost preview shown BEFORE approval (honest budgets; never a fabricated price)\nvar preview=buildScopePreview({goal:plan.intent||plan.expected_output,niche:plan.niche,region:plan.region,competitors:plan.competitors||[],platforms:plan.sources||['website'],cfg:cfg,refresh_plan:{expected_calls:Number(plan.max_external_calls)||0},expected_llm_calls:0,max_items:Number(plan.max_items)||undefined,outputs:{telegram_summary:true,xlsx:true,charts:true,evidence:true}});\nvar combined=preview.text+'\\n\\n'+text;\nreturn [{json:{plan:plan,plan_source:plan.plan_source,approval_text:text,scope_preview:preview,scope_preview_text:preview.text,combined_approval_text:combined,approval_keyboard:kb}}];")
+    "var src;try{src=$('Validate Plan').first().json;}catch(e){src=$('Deterministic Plan').first().json;}\nvar dp=$('Deterministic Plan').first().json;\nvar plan=src.plan;var cfg=src.cfg||{};\nif(!plan||!(plan.sources&&plan.sources.length)){return [{json:{status:'clarification_required',clarification:'Уточните нишу/регион и источник для поиска конкурентов.',plan:null}}];}\nvar text=planToApprovalText(plan);\nvar arid=String(dp.agent_request_id||'req_pending');\nvar kb=approvalKeyboard(arid);\n// scope + cost preview shown BEFORE approval (honest budgets; never a fabricated price)\nvar preview=buildScopePreview({goal:plan.intent||plan.expected_output,niche:plan.niche,region:plan.region,competitors:plan.competitors||[],platforms:plan.sources||['website'],cfg:cfg,refresh_plan:{expected_calls:Number(plan.max_external_calls)||0},expected_llm_calls:0,max_items:Number(plan.max_items)||undefined,outputs:{telegram_summary:true,xlsx:true,charts:true,evidence:true}});\nvar combined=preview.text+'\\n\\n'+text;\nreturn [{json:{status:'plan_ready',plan:plan,plan_source:plan.plan_source,approval_text:combined,scope_preview:preview,scope_preview_text:preview.text,combined_approval_text:combined,approval_keyboard:kb,state_transition:'awaiting_approval',agent_request_id:arid,chat_id:String(dp.chat_id||''),owner_user_id:String(dp.owner_user_id||'')}}];")
 ], [
   ['Manual Start', 'Resolve Agent Config'],
+  ['When Called by Agent', 'Resolve Agent Config'],
   ['Resolve Agent Config', 'Deterministic Plan'],
   ['Deterministic Plan', 'Planner LLM Guard'],
   ['Planner LLM Guard', 'LLM Planner Enabled?'],
@@ -314,11 +643,12 @@ write('19_request_planner.json', wf('19 — Request Planner (deterministic + gua
 
 // =========================================================================================== WF20 orchestrator
 write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)', [
-  manual('wf20-trig', 'Manual Start', [-940, 0]),
+  manual('wf20-trig', 'Manual Start', [-940, -180]),
+  subTrigger('wf20-sub', 'When Called by Agent', [-940, 60], ['agent_request_id', 'chat_id', 'owner_user_id', 'conversation_id', 'plan_id', 'plan_hash', 'data_mode', 'state']),
   code('wf20-cfg', 'Resolve Agent Config', [-720, 0], ['agent_config'],
     ENV + "\nreturn [{json:resolveConfig(__env)}];"),
   code('wf20-reuse', 'Orchestration Reuse Decision', [-500, 0], ['orchestration_policy'],
-    "var cfg=$('Resolve Agent Config').first().json;\nvar inp=$json||{};\nvar intent=inp.intent||{intent:(inp.request&&inp.request.intent)||'competitor_search',entities:inp.entities||{}};\nvar ctx=inp.ctx||{};\nvar dec=reuseDecision({intent:intent,ctx:ctx,cfg:cfg,now:(new Date()).toISOString()});\nvar rec=decisionRecord(dec,{agent_request_id:(inp.request&&inp.request.agent_request_id)||'req',conversation_id:ctx.conversation_id||'',intent:intent.intent,ts:(new Date()).toISOString()});\nreturn [{json:Object.assign({},inp,{reuse_decision:dec,needs_external_call:dec.needs_external_call,orchestration_decision:rec,cfg:cfg})}];"),
+    CALLER + "\nvar cfg=$('Resolve Agent Config').first().json;\nvar ci=callerInput();\nvar inp;\nif(ci&&ci.request){inp=ci;}else{var st=String(ci.state||'approved');inp={request:{agent_request_id:String(ci.agent_request_id||'req'),chat_id:String(ci.chat_id||''),owner_user_id:String(ci.owner_user_id||''),state:st,approved:st==='approved',data_mode:String(ci.data_mode||'live'),plan_id:String(ci.plan_id||''),plan_hash:String(ci.plan_hash||'')},intent:{intent:'competitor_search',entities:{}},ctx:{conversation_id:String(ci.conversation_id||'')},plan:{sources:['website'],source:'website'}};}\nvar intent=inp.intent||{intent:(inp.request&&inp.request.intent)||'competitor_search',entities:inp.entities||{}};\nvar ctx=inp.ctx||{};\nvar dec=reuseDecision({intent:intent,ctx:ctx,cfg:cfg,now:(new Date()).toISOString()});\nvar rec=decisionRecord(dec,{agent_request_id:(inp.request&&inp.request.agent_request_id)||'req',conversation_id:ctx.conversation_id||'',intent:intent.intent,ts:(new Date()).toISOString()});\nreturn [{json:Object.assign({},inp,{reuse_decision:dec,needs_external_call:dec.needs_external_call,orchestration_decision:rec,cfg:cfg})}];"),
   sheetsAppend('wf20-apdec', 'Append orchestration_decisions', [-500, 180], 'orchestration_decisions'),
   ifNode('wf20-needext', 'Needs External Call?', [-380, 0], '={{ $json.needs_external_call }}'),
   code('wf20-reuseresp', 'Build Reuse Response', [-160, 200], ['conversation_response'],
@@ -375,6 +705,7 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   httpTelegram('wf20-sendprogress', 'Send Progress', [400, -300])
 ], [
   ['Manual Start', 'Resolve Agent Config'],
+  ['When Called by Agent', 'Resolve Agent Config'],
   ['Resolve Agent Config', 'Orchestration Reuse Decision'],
   ['Orchestration Reuse Decision', 'Append orchestration_decisions'],
   ['Append orchestration_decisions', 'Needs External Call?'],
@@ -404,12 +735,13 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
 // Bounded deep competitor analysis: build an explicit, approval-gated plan that degrades gracefully across only
 // the configured sources; collect; separate evidence-backed FACTS from RECOMMENDATIONS; deliver.
 write('21_deep_competitor_analysis.json', wf('21 — Deep Competitor Analysis (bounded, evidence-based)', [
-  manual('wf21-trig', 'Manual Start', [-820, 0]),
+  manual('wf21-trig', 'Manual Start', [-820, -160]),
+  subTrigger('wf21-sub', 'When Called by Agent', [-820, 60], ['agent_request_id', 'chat_id', 'owner_user_id', 'conversation_id', 'plan_id', 'plan_hash', 'competitors', 'data_mode', 'state']),
   code('wf21-cfg', 'Resolve Agent Config', [-600, 0], ['agent_config'],
     ENV + "\nreturn [{json:resolveConfig(__env)}];"),
   sheetsRead('wf21-readsrc', 'Read tracked_sources', [-380, 160], 'tracked_sources'),
   code('wf21-plan', 'Build Deep Plan', [-160, 0], ['deep_analysis', 'agent_charter'],
-    "var cfg=$('Resolve Agent Config').first().json;\nvar inp=$json||{};\nvar tracked=[];try{tracked=($('Read tracked_sources').all()||[]).map(function(r){return r.json;});}catch(e){}\nvar plan=buildDeepPlan({competitors:inp.competitors||[],requested_platforms:inp.requested_platforms||['website'],cfg:cfg,history_available:inp.history_available===true,tracked_sources:tracked});\nvar caps=availableCapabilities(cfg);var cap=null;for(var i=0;i<caps.length;i++){if(caps[i].id==='deep_competitor_analysis')cap=caps[i];}\nvar req=inp.request||{agent_request_id:inp.agent_request_id||'req',chat_id:inp.chat_id,state:inp.state||'approved',approved:inp.approved===true||inp.state==='approved'};\nreturn [{json:{deep_plan:plan,capability:cap,capability_available:cap?cap.available:true,request:req,cfg:cfg}}];"),
+    CALLER + "\nvar cfg=$('Resolve Agent Config').first().json;\nvar inp=callerInput();\nfunction J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}\nvar comps=Array.isArray(inp.competitors)?inp.competitors:(inp.competitors?J(inp.competitors):[]);\nvar tracked=[];try{tracked=($('Read tracked_sources').all()||[]).map(function(r){return r.json;});}catch(e){}\nvar plan=buildDeepPlan({competitors:comps||[],requested_platforms:inp.requested_platforms||['website'],cfg:cfg,history_available:inp.history_available===true,tracked_sources:tracked});\nvar caps=availableCapabilities(cfg);var cap=null;for(var i=0;i<caps.length;i++){if(caps[i].id==='deep_competitor_analysis')cap=caps[i];}\nvar req=inp.request||{agent_request_id:String(inp.agent_request_id||'req'),chat_id:String(inp.chat_id||''),owner_user_id:String(inp.owner_user_id||''),data_mode:String(inp.data_mode||'live'),state:String(inp.state||'approved'),approved:inp.approved===true||String(inp.state||'approved')==='approved'};\nreturn [{json:{deep_plan:plan,capability:cap,capability_available:cap?cap.available:true,request:req,cfg:cfg}}];"),
   code('wf21-gate', 'Deep Approval & Budget Gate', [60, 0], ['approval_gate', 'agent_state'],
     "var j=$('Build Deep Plan').first().json;var cfg=j.cfg;var dp=j.deep_plan;var req=j.request;\nvar gplan={source:(dp.selected_platforms&&dp.selected_platforms[0])||'website',attempt:1,est_items:dp.page_limit_per_competitor*Math.max(1,(dp.selected_competitors||[]).length),est_external_calls:dp.est_external_calls,est_source_cost_usd:dp.est_source_budget_usd,est_llm_cost_usd:dp.est_llm_budget_usd};\nvar ctx={agent_request_id:req.agent_request_id,state:req.state||'approved',approved:req.approved===true||req.state==='approved',cancelled:req.state==='cancelled',completed_keys:req.completed_keys||[],external_calls_made:0,source_spend_usd:0,llm_spend_usd:0};\nvar canCall=canMakeExternalCall(ctx.state);var g=evaluateGate(gplan,ctx,cfg);\nvar allowed=g.allowed&&canCall&&j.capability_available===true;\nreturn [{json:{gate_allowed:allowed,gate_reason:allowed?'ok':(g.reason||(j.capability_available!==true?'capability_unavailable':'state_blocks_external_call')),deep_plan:dp,request:req,cfg:cfg}}];"),
   ifNode('wf21-if', 'Deep Gate Allowed?', [280, 0], '={{ $json.gate_allowed }}'),
@@ -430,6 +762,7 @@ write('21_deep_competitor_analysis.json', wf('21 — Deep Competitor Analysis (b
   httpTelegram('wf21-sendblock', 'Send Deep Blocked', [720, 160])
 ], [
   ['Manual Start', 'Resolve Agent Config'],
+  ['When Called by Agent', 'Resolve Agent Config'],
   ['Resolve Agent Config', 'Read tracked_sources'],
   ['Read tracked_sources', 'Build Deep Plan'],
   ['Build Deep Plan', 'Deep Approval & Budget Gate'],

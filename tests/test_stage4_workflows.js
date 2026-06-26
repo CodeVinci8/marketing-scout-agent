@@ -19,8 +19,9 @@ function extract(code, name) {
 A.section('Stage 4 — workflow Code nodes embed n8n/lib/* with no drift');
 const EMBEDS = [
   ['17_agent_settings_config.json', 'Resolve Agent Config', ['agent_config']],
-  ['18_telegram_agent_gateway.json', 'Parse Telegram Update', ['telegram_io']],
-  ['18_telegram_agent_gateway.json', 'Build Intake Decision', ['agent_state']],
+  ['18_telegram_agent_gateway.json', 'Ingress Security Gate', ['telegram_io', 'agent_config']],
+  ['18_telegram_agent_gateway.json', 'Build Intake Decision', ['agent_state', 'request_planner']],
+  ['18_telegram_agent_gateway.json', 'Build Conversation Context', ['conversation_memory']],
   ['19_request_planner.json', 'Deterministic Plan', ['request_planner']],
   ['19_request_planner.json', 'Planner LLM Guard', ['approval_gate']],
   ['20_agent_orchestrator.json', 'Approval & Budget Gate', ['approval_gate', 'agent_state']],
@@ -45,28 +46,54 @@ A.eq('WF17 resolves require_approval=true', cfg17.require_approval, true);
 A.eq('WF17 resolves website-only allowlist', cfg17.source_allowlist.join(','), 'website');
 A.eq('WF17 flags missing config (no env)', cfg17.config_complete, false);
 
-// ----- WF18: gateway authorization + duplicate-update protection -----------------------------------------
-A.section('WF18 — gateway: unauthorized blocked, duplicate update => one request');
+// ----- WF18: fail-closed ingress (lib level) + real dispatcher (node level) -------------------------------
+A.section('WF18 — fail-closed ingress: secret + kill-switch + auth + supported-type, no side effects');
 const WF18 = WFS['18_telegram_agent_gateway.json'];
-function gateway(update, opts) {
+const TG = require('../n8n/lib/telegram_io.js');
+const CFG18 = { enable_telegram: true, telegram_allowed_user_ids: ['111'] };
+const goodHdr = { 'X-Telegram-Bot-Api-Secret-Token': 'sekret' };
+const reqUpd = { update_id: 900, message: { message_id: 7, text: 'найди конкурентов по ПТС', from: { id: 111 }, chat: { id: 555, type: 'private' } } };
+A.eq('valid secret + enabled + authorized + private => accepted', TG.ingressDecision({ update: reqUpd, headers: goodHdr, expectedSecret: 'sekret', cfg: CFG18 }).accepted, true);
+A.eq('wrong secret => reject (bad_secret)', TG.ingressDecision({ update: reqUpd, headers: { 'X-Telegram-Bot-Api-Secret-Token': 'nope' }, expectedSecret: 'sekret', cfg: CFG18 }).stop_reason, 'bad_secret');
+A.eq('missing secret => reject (bad_secret)', TG.ingressDecision({ update: reqUpd, headers: {}, expectedSecret: 'sekret', cfg: CFG18 }).stop_reason, 'bad_secret');
+A.eq('blank expected secret fails closed', TG.ingressDecision({ update: reqUpd, headers: goodHdr, expectedSecret: '', cfg: CFG18 }).stop_reason, 'bad_secret');
+A.eq('telegram disabled => reject', TG.ingressDecision({ update: reqUpd, headers: goodHdr, expectedSecret: 'sekret', cfg: { enable_telegram: false, telegram_allowed_user_ids: ['111'] } }).stop_reason, 'telegram_disabled');
+A.eq('unauthorized user => reject', TG.ingressDecision({ update: { update_id: 1, message: { message_id: 1, text: 'hi', from: { id: 999 }, chat: { id: 5, type: 'private' } } }, headers: goodHdr, expectedSecret: 'sekret', cfg: CFG18 }).stop_reason, 'unauthorized');
+A.eq('edited_message unsupported => reject', TG.ingressDecision({ update: { update_id: 2, edited_message: { message_id: 1, text: 'x', from: { id: 111 }, chat: { id: 5, type: 'private' } } }, headers: goodHdr, expectedSecret: 'sekret', cfg: CFG18 }).stop_reason, 'unsupported_update');
+A.eq('group chat => reject (private only)', TG.ingressDecision({ update: { update_id: 3, message: { message_id: 1, text: 'x', from: { id: 111 }, chat: { id: 5, type: 'group' } } }, headers: goodHdr, expectedSecret: 'sekret', cfg: CFG18 }).stop_reason, 'non_private_chat');
+
+A.section('WF18 — real dispatcher: intent => dispatch_target, duplicate claim, approval binding');
+function gateOut(parsed) {
+  return { accepted: true, stop_reason: '', secret_ok: true, telegram_enabled: true, supported: true, is_private: true, authorized: true, is_callback: parsed.kind === 'callback', ack_needed: false, callback_query_id: parsed.callback_query_id || '', idempotency_key: 'tg::' + (parsed.update_id || '') + '::' + (parsed.chat_id || '') };
+}
+function dispatch(parsed, opts) {
   opts = opts || {};
   const run = H.makeRun();
-  H.inject(run, 'Resolve Agent Config', [{ telegram_allowed_user_ids: ['111'], source_allowlist: ['website'], require_approval: true, config_complete: true, enable_llm_intent: false, max_context_tokens: 6000 }]);
-  H.runCodeNode(run, WF18, 'Parse Telegram Update', [{ json: { body: update } }]);
+  const cfg = { telegram_allowed_user_ids: ['111'], source_allowlist: ['website'], require_approval: true, config_complete: true, enable_llm_intent: false, max_context_tokens: 6000, report_data_mode: 'live', recent_window: 8 };
+  H.inject(run, 'Ingress Security Gate', [{ gate: gateOut(parsed), parsed: parsed, cfg: cfg }]);
   H.inject(run, 'Read agent_request_events', opts.events || []);
   H.inject(run, 'Read conversation_state', opts.state || []);
+  H.inject(run, 'Read execution_plans', opts.plans || []);
+  const claim = H.runCodeNode(run, WF18, 'Claim Idempotency', [])[0].json;
   H.runCodeNode(run, WF18, 'Route Intent', []);
-  return H.runCodeNode(run, WF18, 'Build Intake Decision', [])[0].json;
+  const intake = H.runCodeNode(run, WF18, 'Build Intake Decision', [])[0].json;
+  return { claim, intake };
 }
-const reqUpdate = { update_id: 900, message: { message_id: 7, text: 'найди конкурентов по ПТС', from: { id: 111 }, chat: { id: 555 } } };
-const accepted = gateway(reqUpdate);
-A.eq('authorized request => accepted + start_work', accepted.decision + ':' + accepted.start_work, 'accepted:true');
-A.ok('accepted request gets an agent_request_id', /^req_/.test(accepted.request.agent_request_id));
-const unauth = gateway({ update_id: 901, message: { message_id: 8, text: 'hi', from: { id: 999 }, chat: { id: 555 } } });
-A.eq('unauthorized => no work', unauth.decision + ':' + unauth.start_work, 'unauthorized:false');
-const dupEvents = [{ idempotency_key: accepted.routed.parsed.idempotency_key }];
-const dup = gateway(reqUpdate, { events: dupEvents });
-A.eq('duplicate update => no new work', dup.decision + ':' + dup.start_work, 'duplicate:false');
+const reqParsed = { kind: 'request', update_type: 'message', update_id: '900', chat_id: '555', chat_type: 'private', user_id: '111', from_is_bot: false, message_id: '7', text: 'найди конкурентов по ПТС', callback_data: '', callback_query_id: '' };
+const d1 = dispatch(reqParsed);
+A.eq('search request => dispatch_target wf19', d1.intake.dispatch_target, 'wf19');
+A.ok('intake transitions received=>classified (state==event.to_state)', d1.intake.request.state === 'classified' && d1.intake.event.to_state === 'classified');
+A.eq('not a duplicate on empty events', d1.claim.duplicate, false);
+const d1dup = dispatch(reqParsed, { events: [{ idempotency_key: 'tg::900::555' }] });
+A.eq('duplicate idempotency_key => claim.duplicate true', d1dup.claim.duplicate, true);
+const cbParsed = { kind: 'callback', update_type: 'callback_query', update_id: '901', chat_id: '555', chat_type: 'private', user_id: '111', from_is_bot: false, message_id: '8', text: '', callback_data: 'approve:req_900', callback_query_id: 'cbq1' };
+const planRow = { plan_id: 'plan_req_900_h1', plan_hash: 'h1', agent_request_id: 'req_900', owner_user_id: '111', chat_id: '555', intent: 'competitor_search', status: 'awaiting_approval' };
+const dAppr = dispatch(cbParsed, { plans: [planRow] });
+A.eq('approve callback bound to awaiting plan => wf20', dAppr.intake.dispatch_target, 'wf20');
+A.eq('approve binds the existing request id', dAppr.intake.request.agent_request_id, 'req_900');
+const dStale = dispatch(cbParsed, { plans: [Object.assign({}, planRow, { status: 'approved' })] });
+A.eq('stale/already-approved => local (not re-dispatched)', dStale.intake.dispatch_target, 'local');
+A.ok('stale reason recorded', /approval_invalid/.test(dStale.intake.dispatch_reason));
 
 // ----- WF19: deterministic plan + planner LLM guard (off by default) -------------------------------------
 A.section('WF19 — planner: deterministic plan always built; LLM guard OFF by default');
