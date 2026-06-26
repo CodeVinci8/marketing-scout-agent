@@ -4,6 +4,56 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-27 (session 29) — WF18 gateway REARCHITECTURE: real secure dispatcher (DEC-161)
+
+**Status (exact):** branch `fix/wf18-gateway-rearchitecture` off `main` @ `2631499`. **3 commits, NOT pushed**
+(`66fe401` core rearchitecture · `f4618e1` real-topology suite · docs commit pending). **$0, 0 external/live
+calls, all workflows `active=false`, no secret/raw-id committed, production `n8n-n8n-1`/volume untouched,
+`sing-box`/443 untouched, no API call, no activation.** `make test` → **MAKE_TEST_RC=0, ALL SUITES PASS**
+(external calls=0, $0); new `wf18-real-topology` = **85 checks**.
+
+**Root cause (why libs passed while the graph was dead):** the offline E2E suites SIMULATED the sequence in JS;
+the committed WF18 graph was `webhook→reads→persist→reply` with **0 `executeWorkflow` nodes**, no secret/kill-
+switch/auth/dedup hard-stop, and `Build Conversation Context` fanning out to every Sheets write + the Telegram
+send for unauthorized AND duplicate updates. WF19/20/21/22 were **manual-only (not callable)**.
+
+**Built (DEC-161, all generator-driven + drift-proof, regenerated WF17-26):**
+- **Fail-closed ingress** — `telegram_io.ingressDecision` (secret header vs `MS_TELEGRAM_WEBHOOK_SECRET`, constant-
+  time, blank=reject; `MS_ENABLE_TELEGRAM` kill switch; supported-type message/callback only; private-chat-only;
+  bot filter; auth) as ONE pure node BEFORE any read. `agent_config.enable_telegram` default **false**;
+  `enable_llm_intent` pinned false (no in-graph classifier ⇒ clarify; WF19-LLM-001 honest). `Ingress Accepted?` /
+  `New Update?` IFs hard-stop to **Respond-200**; reject/duplicate reach **0 Sheets / 0 child / 0 business send**
+  (only an authorized-but-duplicate callback gets `answerCallbackQuery`).
+- **Real dispatcher** — WF18 routes `dispatch_target` → `executeWorkflow` to **WF19** (plan) / **WF20** (orchestrate)
+  / **WF21** (deep) / **WF22** (control: memory/source/cancel/reject/status) / **WF24** (report ops). WF19/20/21/22
+  gained Execute Sub-workflow Triggers + named contracts + robust caller-input read. Manifest auto-derives **8→13
+  binding edges**, **6→11 callable targets**; `audit_workflows` passes.
+- **Durable plan + approval binding** — `request_planner.planIdentity/buildPlanRow/validateApproval` + new
+  `execution_plans` tab. Plan persisted (status `awaiting_approval`) BEFORE the approval message; approval bound by
+  owner/chat/request/**plan_hash**, rejected when stale/cancelled/completed/replayed; free-text да/нет binds only on
+  exactly one pending plan (STATE-002 / WF18-APPROVAL-002/003).
+- **State/memory/persist** — `request=t.record` (STATE-001); conv id = chat+user (cross-user isolation);
+  `selectLatestState/advanceState` monotonic revision (STATE-004); WF18 reads durable_memories + latest summary +
+  scoped artifacts (MEMORY-001/002/003); explicit Shape node before every Append (DATA-001); formula-injection
+  escape (SHEETS-004); WF22 UPSERTS canonical stores, audit only after mutation (WF22-PERSIST/CANCEL-001).
+- **Tests** — `tests/test_wf18_real_topology.js` (85) inspects the committed JSON graph (reachability) for §19's 20
+  assertions + §20 negative matrix; existing drift/manifest/binding/release count tests updated (13 edges / 11
+  callables / 41 sheet tabs).
+
+**Blockers registry:** 18/19 `config/wf18_blockers.json` resolved with named tests; **TELEGRAM-001 (public HTTPS
+ingress) LEFT OPEN** (operator sing-box/443 infra). `wf18_activation_gate.js` → **WF18_REARCHITECTURE=PENDING**,
+WF18 activation correctly still BLOCKED (honest: dispatcher-ready, not live-ready). **IDEMP-001 caveat:** claim-
+before-side-effect + deterministic key + sequential-dup proven; true concurrent atomicity needs WF18 single-
+concurrency (documented). **ORCH-STATE-001 partial:** entry gate enforces approved/not-cancelled; per-stage
+re-read in WF20 is a documented follow-up. **RELEASE-006/DISCOVERY-001** (prod export-capture) unchanged — still
+block `make deploy-inactive`/`telegram-activate`; left as exact handoff (no prod dry-run run this session).
+
+**Next:** operator (1) provision HTTPS ingress (TELEGRAM-001) → resolve in registry; (2) disposable n8n import/
+export round-trip of the new topology (n8n CLI absent here); (3) prod dry-run to clear RELEASE-006/DISCOVERY-001;
+(4) gated controlled live acceptance. No code work queued for WF18 core.
+
+---
+
 ## Session: 2026-06-26 (session 28) — Stage 8 release-path INTEGRATION REPAIR (DEC-160), DISPOSABLE_DEPLOY=PASS
 
 **Status (exact):** NEW branch `fix/stage8-release-integration` off `main` @ `2ee4a71`. The first release-core
