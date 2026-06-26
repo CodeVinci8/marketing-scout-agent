@@ -96,6 +96,8 @@ const JS_SUITES = [
   ['sheets-operations-qa', 'test_sheets_operations_qa.js'],
   // --- Product timezone: Europe/Moscow system-timestamp helper (RFC3339 +03:00 / Russian display) ---
   ['ms-time', 'test_ms_time.js'],
+  // --- Stage 8 release core: operator-local workflow id resolver (fail-closed, idempotent, sanitized) ---
+  ['runtime-ids', 'test_runtime_ids.js'],
 ];
 
 let failed = 0;

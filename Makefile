@@ -71,6 +71,7 @@ test-js:
 	node tests/test_smoke_hardening.js
 	node tests/test_sheets_bootstrap.js
 	node tests/test_sheets_operations_qa.js
+	node tests/test_runtime_ids.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

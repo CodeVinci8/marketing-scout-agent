@@ -218,6 +218,33 @@ function build() {
     };
   }).sort((x, y) => (x.file < y.file ? -1 : 1));
 
+  // ---- runtime LOGICAL identity (single source of truth for the operator-local id resolver) ----
+  // This block carries only NON-secret logical identity: the WF key, the exact expected name, the source file,
+  // the deployment role, callable/trigger expectations and the binding edges this workflow OWNS as a caller.
+  // The real installation-specific n8n workflow id is NEVER stored here — it lives in the gitignored
+  // config/runtime_ids.local.json (id_source=operator_local). canonical_id stays null in the committed repo.
+  const callableSet = new Set(callableTargets);
+  const orderPos = {}; importOrder.forEach((f, i) => { orderPos[f] = i; });
+  const runtimeIdentity = {};
+  entries
+    .filter(e => e.runtime && e.wf_number)
+    .sort((a, b) => orderPos[a.file] - orderPos[b.file])
+    .forEach(e => {
+      runtimeIdentity[e.wf_number] = {
+        wf: e.wf_number,
+        file: e.file,
+        name: e.name,
+        role: e.deployment_role,
+        callable: callableSet.has(e.file),
+        trigger_entrypoint: entrypoints.has(e.file),
+        activation_flag: e.activation_flag,
+        expected_target_trigger: callableSet.has(e.file) ? EXECUTE_WORKFLOW_TRIGGER : null,
+        binding_calls: (e.binding_nodes || []).map(b => ({ caller_node: b.node, target_wf: b.target })),
+        canonical_id: null,
+        id_source: 'operator_local'
+      };
+    });
+
   return {
     generated_by: 'tools/gen_workflow_manifest.js',
     purpose: 'Single source of truth for capability/archive classification AND the production deployment plan (runtime closure, import order, sub-workflow binding edges, activation policy). Derived from the workflow Execute Sub-workflow graph + the POLICY block in the generator; the deploy/smoke tooling consumes deployment.* so the runtime set is defined in exactly one place.',
@@ -248,6 +275,8 @@ function build() {
       expected_active_after_import: [],
       excluded_from_runtime: all.map(w => w.file).filter(f => !closure.has(f)).sort(numSort)
     },
+    // logical identity for the 15 runtime workflows (non-secret); real ids live in config/runtime_ids.local.json
+    runtime_identity: runtimeIdentity,
     // legacy mirrors (kept so existing readers keep working); authoritative copies live under deployment.*
     deploy_import_order: importOrder,
     trigger_workflows_always: ACTIVATION.always.slice(),

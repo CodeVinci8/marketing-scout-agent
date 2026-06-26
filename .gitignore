@@ -51,3 +51,11 @@ n8n.env
 docker-compose.yml
 /opt/n8n/
 *.tar.gz
+
+# Operator-local installation-specific runtime workflow id map (real n8n ids — never commit).
+# Only the schema example (config/runtime_ids.example.json) and resolver code are committed.
+config/runtime_ids.local.json
+config/runtime_ids.local.json.bak.*
+# Sanitized release evidence (fingerprints only; keep installation reports out of the repo).
+release-evidence/
+.release.lock

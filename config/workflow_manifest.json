@@ -195,6 +195,238 @@
       "15_live_source_run_logger.json"
     ]
   },
+  "runtime_identity": {
+    "WF17": {
+      "wf": "WF17",
+      "file": "17_agent_settings_config.json",
+      "name": "17 — Agent Settings & Config Loader",
+      "role": "orchestration",
+      "callable": false,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": null,
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF04": {
+      "wf": "WF04",
+      "file": "04_firecrawl_url_list_resilient.json",
+      "name": "04 - Firecrawl URL List Mini-Batch to Resilient Analyzer",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF08": {
+      "wf": "WF08",
+      "file": "08_touchpoint_analyzer.json",
+      "name": "08 - Touchpoint Analyzer",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF10": {
+      "wf": "WF10",
+      "file": "10_competitor_audience_intelligence_aggregator.json",
+      "name": "10 - Competitor Audience Intelligence Aggregator",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF12": {
+      "wf": "WF12",
+      "file": "12_market_intelligence_report_builder.json",
+      "name": "12 - Market Intelligence Report Builder (Stakeholder v0.3)",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF16": {
+      "wf": "WF16",
+      "file": "16_source_quality_gate_health_score.json",
+      "name": "16 - Source Quality Gate & Health Score",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF26": {
+      "wf": "WF26",
+      "file": "26_vk_public_community_collector.json",
+      "name": "26 — VK Public Community Collector (bounded, official API)",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF19": {
+      "wf": "WF19",
+      "file": "19_request_planner.json",
+      "name": "19 — Request Planner (deterministic + guarded Claude)",
+      "role": "orchestration",
+      "callable": false,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": null,
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF20": {
+      "wf": "WF20",
+      "file": "20_agent_orchestrator.json",
+      "name": "20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)",
+      "role": "orchestration",
+      "callable": false,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": null,
+      "binding_calls": [
+        {
+          "caller_node": "Run WF08 Analyzer",
+          "target_wf": "WF08"
+        },
+        {
+          "caller_node": "Run WF10 Aggregator",
+          "target_wf": "WF10"
+        },
+        {
+          "caller_node": "Run WF12 Report",
+          "target_wf": "WF12"
+        },
+        {
+          "caller_node": "Run WF16 Quality Gate",
+          "target_wf": "WF16"
+        },
+        {
+          "caller_node": "Run Website Source (WF04)",
+          "target_wf": "WF04"
+        }
+      ],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF21": {
+      "wf": "WF21",
+      "file": "21_deep_competitor_analysis.json",
+      "name": "21 — Deep Competitor Analysis (bounded, evidence-based)",
+      "role": "orchestration",
+      "callable": false,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": null,
+      "binding_calls": [
+        {
+          "caller_node": "Collect Deep Evidence (WF04)",
+          "target_wf": "WF04"
+        }
+      ],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF22": {
+      "wf": "WF22",
+      "file": "22_conversation_control.json",
+      "name": "22 — Conversation Control & Sources",
+      "role": "orchestration",
+      "callable": false,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": null,
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF24": {
+      "wf": "WF24",
+      "file": "24_report_export_delivery.json",
+      "name": "24 — Report Export, Filter, Compare, Refresh & Delivery",
+      "role": "orchestration",
+      "callable": false,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": null,
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF18": {
+      "wf": "WF18",
+      "file": "18_telegram_agent_gateway.json",
+      "name": "18 — Telegram Agent Gateway (conversational)",
+      "role": "entrypoint",
+      "callable": false,
+      "trigger_entrypoint": true,
+      "activation_flag": "always",
+      "expected_target_trigger": null,
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF23": {
+      "wf": "WF23",
+      "file": "23_scheduled_source_monitor.json",
+      "name": "23 — Scheduled Tracked Source Monitor",
+      "role": "entrypoint",
+      "callable": false,
+      "trigger_entrypoint": true,
+      "activation_flag": "MS_MONITORING_ENABLED",
+      "expected_target_trigger": null,
+      "binding_calls": [
+        {
+          "caller_node": "Run VK Check (WF26)",
+          "target_wf": "WF26"
+        },
+        {
+          "caller_node": "Run Website Check (WF04)",
+          "target_wf": "WF04"
+        }
+      ],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF25": {
+      "wf": "WF25",
+      "file": "25_weekly_digest.json",
+      "name": "25 — Weekly Digest (stored data only, one per owner per ISO week)",
+      "role": "entrypoint",
+      "callable": false,
+      "trigger_entrypoint": true,
+      "activation_flag": "MS_WEEKLY_DIGEST_ENABLED",
+      "expected_target_trigger": null,
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    }
+  },
   "deploy_import_order": [
     "17_agent_settings_config.json",
     "04_firecrawl_url_list_resilient.json",

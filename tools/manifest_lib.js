@@ -32,6 +32,8 @@ function runtimeClosure() { return deployment().runtime_closure.slice(); }
 function callableTargets() { return deployment().callable_targets.slice(); }
 function bindingEdges() { return deployment().binding_edges.map(e => Object.assign({}, e)); }
 function expectedN8nVersion() { return deployment().n8n_version; }
+// Logical (non-secret) identity for the 15 runtime workflows; real ids live in config/runtime_ids.local.json.
+function runtimeIdentity() { return JSON.parse(JSON.stringify(loadManifest().runtime_identity || {})); }
 
 // Files that may be activated for the given feature flags. Never includes a callable sub-workflow.
 function activationPlan(opts) {
@@ -54,7 +56,7 @@ function workflowName(file) {
 
 module.exports = {
   loadManifest, deployment, importOrder, runtimeClosure, callableTargets, bindingEdges,
-  expectedN8nVersion, activationPlan, workflowName, MANIFEST, WF_DIR
+  expectedN8nVersion, activationPlan, workflowName, runtimeIdentity, MANIFEST, WF_DIR
 };
 
 if (require.main === module) {
