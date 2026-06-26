@@ -4,6 +4,42 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-26 (session 27) — Stage 8 RELEASE-CORE built (DEC-159)
+
+**Status (exact):** NEW branch `feat/stage8-release-engineering` off `main` @ `d3a392c` (Stage 5/6/7 already on
+main via PR #39 + locale fix PR #40 — nothing lost). **$0, 0 external/live calls, every workflow `active=false`,
+NOT pushed/merged/imported, production untouched, `sing-box`/volume untouched, no secret or raw n8n id committed.**
+`node tests/run_all.js` ALL SUITES PASS. 7 commits.
+
+**Scope decision (operator-confirmed):** focus = **release-engineering core** (the literal Stage 8 spine), NOT
+the WF18 rearchitecture. Honest markers only: `STAGE8_RELEASE_CORE=PASS`, `WF18_REARCHITECTURE=PENDING`,
+`CONTROLLED_LIVE_ACCEPTANCE=PENDING`, `PRODUCTION_UNTOUCHED=true`. `STAGE8_RELEASE_ENGINEERING` intentionally NOT
+asserted. ID strategy: gitignored operator-local map (operator-confirmed), real ids never committed.
+
+**Built (all offline-proven, $0):**
+- **Operator-local id strategy** (DEPLOY-007/003/002/006): manifest `runtime_identity` (logical, `canonical_id:null`)
+  + `tools/runtime_ids.js` fail-closed/idempotent resolver (verified/discover/generate/create/abort). Real ids
+  live ONLY in gitignored `config/runtime_ids.local.json` (mode 600, backup-before-write); reports = fingerprints
+  only. `tests/test_runtime_ids.js` (47).
+- **Docker-safe exec** (DEPLOY-001/BACKUP-001): `scripts/lib/n8n_exec.sh` (host/docker/`/bin/sh`, `--entrypoint
+  /bin/sh`, dry-echo `MS_N8N_EXEC_DRY`, destructive guard); deploy routes through `n8n_cli`. `test_release_shell.js` (76).
+- **Strict preflight** (CONFIG/PREFLIGHT/LIVE-001/TELEGRAM-001/002/FUTURE-015): token/$env/IANA-tz/report-mode/
+  webhook-url/secret + cross-field invariants + 22-key zero-paid profile assertion. `test_preflight_strict.js` (36).
+- **Operator scripts**: `backup.sh` (entrypoint-override, never `--decrypted`/volume-rm), `restore_validate.sh`
+  (offline sha256+content; disposable when docker), `telegram_webhook.sh` (token env-only never printed),
+  `release_lock.sh` (stale-safe), `tools/release_report.js` (sanitized evidence). `test_release_scripts.js` (35).
+  Fixed a real `tar|grep -q` pipefail/SIGPIPE false-negative in restore.
+- **Reconciliation + WF18 gate**: `reconcile_workflows.js` (exact-name 0/1/>1), `reconcile_credentials.js`
+  (non-decrypted, refuses `PASTE_CREDENTIAL_ID_HERE`), `wf18_activation_gate.js` + `config/wf18_blockers.json`
+  (19 P0/P1 open → deploy `--activate-triggers` refuses WF18). `test_reconcile_and_gate.js` (29).
+- **Acceptance + interface**: `test_stage8_release_e2e.js` (23) emits the §21 marker block; `make release-*`
+  unified operator interface.
+- **Docs**: `docs/STAGE8_RELEASE_CORE.md`, `docs/DEFECT_REGISTRY_STAGE8.md`, `docs/WF18_REARCHITECTURE_HANDOFF.md`.
+
+**Next:** the WF18 gateway rearchitecture session (see handoff) → then operator disposable/prod/live acceptance.
+
+---
+
 ## Session: 2026-06-24 (session 26) — MVP Stage 4–8 hardening: module isolation, compile gate, Vinci identity (DEC-158)
 
 **Status (exact):** NEW branch `feat/vinci-mvp-stage4-8` off `fix/stage3-verification-stage4-readiness` @ `f1a9d47`

@@ -34,6 +34,9 @@ WF_DIR="${ROOT}/n8n/workflows"
 MANIFEST_LIB="${ROOT}/tools/manifest_lib.js"
 BIND_TOOL="${ROOT}/tools/bind_n8n_workflow_ids.js"
 PREFLIGHT="${ROOT}/tools/preflight_config.js"
+# DEPLOY-001: Docker-only-safe execution abstraction (host CLI OR `docker exec <container> …`; /bin/sh, not bash).
+# shellcheck source=scripts/lib/n8n_exec.sh
+. "${ROOT}/scripts/lib/n8n_exec.sh"
 MODE="dry-run"
 ASSUME_YES="no"
 N8N_VERSION="unknown"
@@ -156,17 +159,19 @@ print_plan() {
 }
 
 require_n8n() {
-  if ! command -v n8n >/dev/null 2>&1; then
-    say "ERROR: n8n CLI not found on PATH. This step needs a real n8n environment."
-    say "Run a fully disposable smoke import instead (throwaway DB, nothing activated):"
+  # DEPLOY-001: accept either a host CLI OR a reachable docker container (the production VPS is Docker-only).
+  if ! n8n_available; then
+    say "ERROR: no reachable n8n (no host CLI and no running container '$(n8n_resolve_container)')."
+    say "Set MS_N8N_MODE=docker MS_N8N_CONTAINER=<name> for the Docker-only VPS, or run a disposable smoke:"
     say "    scripts/n8n_import_smoke.sh"
     return 1
   fi
+  say "n8n execution mode: $(n8n_resolve_mode) (container=$(n8n_resolve_container) when docker)"
   return 0
 }
 
 detect_n8n_version() {
-  local v; v="$(n8n --version 2>/dev/null | head -1)"
+  local v; v="$(n8n_version_string)"
   N8N_VERSION="${v:-unknown}"
   say "n8n CLI detected: version ${N8N_VERSION} (repository is tested against ${N8N_EXPECTED_VERSION})"
   if [ "$N8N_VERSION" != "unknown" ] && [ "$N8N_VERSION" != "$N8N_EXPECTED_VERSION" ]; then
@@ -178,18 +183,18 @@ detect_n8n_version() {
 }
 
 # True if the running n8n CLI exposes a given subcommand (e.g. publish:workflow). Used to prefer modern commands.
-n8n_has_command() { n8n "$1" --help >/dev/null 2>&1; }
+n8n_has_command() { n8n_cli "$1" --help >/dev/null 2>&1; }
 
 # Activate (publish) one workflow id by the proven 2.23.3 mechanism, with a deprecated fallback.
 n8n_activate_id() {
   local id="$1"
   if n8n_has_command publish:workflow; then n8n publish:workflow --id="$id"
-  else n8n update:workflow --id="$id" --active=true; fi   # deprecated fallback (pre-publish CLI)
+  else n8n_cli update:workflow --id="$id" --active=true; fi   # deprecated fallback (pre-publish CLI)
 }
 n8n_deactivate_id() {
   local id="$1"
   if n8n_has_command unpublish:workflow; then n8n unpublish:workflow --id="$id"
-  else n8n update:workflow --id="$id" --active=false; fi  # deprecated fallback (pre-publish CLI)
+  else n8n_cli update:workflow --id="$id" --active=false; fi  # deprecated fallback (pre-publish CLI)
 }
 
 # Map a workflow JSON file -> the assigned workflow id after import, by EXACT name match in `n8n list:workflow`.
@@ -200,7 +205,7 @@ id_for_workflow_name() {
 }
 
 # Export every workflow n8n knows about into $1 (separate files), so the binder can read assigned ids.
-export_all() { local out="$1"; mkdir -p "$out"; n8n export:workflow --all --separate --output="$out" >/dev/null 2>&1; }
+export_all() { local out="$1"; mkdir -p "$out"; n8n_cli export:workflow --all --separate --output="$out" >/dev/null 2>&1; }
 
 do_import() {
   require_n8n || exit 1
@@ -212,7 +217,7 @@ do_import() {
   fi
   for f in "${IMPORT_ORDER[@]}"; do
     say ">> importing ${f} (--activeState=false → lands INACTIVE regardless of JSON; credentials untouched)"
-    n8n import:workflow --input="${WF_DIR}/${f}" --activeState=false
+    n8n_cli import:workflow --input="${WF_DIR}/${f}" --activeState=false
   done
   hr
   # --- automatic binding (QA-002/QA-009): no manual UI step ----------------------------------------------------
@@ -223,7 +228,7 @@ do_import() {
   # Re-import the rewritten caller workflows so the bound ids take effect (update by id; no duplicates).
   for f in "$tmp/exported"/*.json; do
     if grep -q '"type": "n8n-nodes-base.executeWorkflow"' "$f"; then
-      n8n import:workflow --input="$f" --activeState=false >/dev/null
+      n8n_cli import:workflow --input="$f" --activeState=false >/dev/null
     fi
   done
   say "Re-exporting to verify bindings..."
@@ -231,7 +236,7 @@ do_import() {
   node "$BIND_TOOL" --dir "$tmp/verify" --verify || die "post-bind verification failed — placeholders remain."
   hr
   say "Capturing assigned workflow IDs (active=false for all):"
-  local listing; listing="$(n8n list:workflow 2>/dev/null || true)"
+  local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
   for f in "${IMPORT_ORDER[@]}"; do
     local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
     id="$(id_for_workflow_name "$nm" "$listing")"
@@ -283,6 +288,14 @@ activate_triggers() {
   say "Fail-closed config preflight before activation (zlib required for XLSX-capable workflows):"
   check_config "" "require-zlib" >/dev/null || die "config preflight failed — refusing to activate. Run: scripts/deploy_n8n.sh --check-config"
   say "  [ok] config preflight passed"
+  # HARD WF18 gate: refuse to publish the Telegram gateway while known WF18/Telegram P0/P1 blockers are open.
+  if printf '%s\n' "${TRIGGER_WORKFLOWS_ALWAYS[@]}" | grep -q '18_telegram_agent_gateway.json'; then
+    say "WF18 pre-live blocker gate:"
+    if ! node "${ROOT}/tools/wf18_activation_gate.js"; then
+      die "WF18 is NOT cleared for activation (see open blockers above). The WF18 gateway rearchitecture is pending."
+    fi
+    say "  [ok] WF18 activation gate is open"
+  fi
   require_n8n || exit 1
   detect_n8n_version
   local to_activate; mapfile -t to_activate < <(activation_set)
@@ -294,7 +307,7 @@ activate_triggers() {
     read -r reply
     case "$reply" in y|Y|yes|YES) ;; *) say "Aborted. Nothing activated."; exit 0 ;; esac
   fi
-  local listing; listing="$(n8n list:workflow 2>/dev/null || true)"
+  local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
   for f in "${to_activate[@]}"; do
     local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
     id="$(id_for_workflow_name "$nm" "$listing")"
@@ -320,7 +333,7 @@ deactivate_triggers() {
     read -r reply
     case "$reply" in y|Y|yes|YES) ;; *) say "Aborted. Nothing changed."; exit 0 ;; esac
   fi
-  local listing; listing="$(n8n list:workflow 2>/dev/null || true)"
+  local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
   for f in "${to_deactivate[@]}"; do
     local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
     id="$(id_for_workflow_name "$nm" "$listing")"
@@ -335,7 +348,7 @@ show_status() {
   load_manifest_arrays
   require_n8n || exit 1
   detect_n8n_version
-  local listing; listing="$(n8n list:workflow 2>/dev/null || true)"
+  local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
   hr; say "Runtime workflow status (active flag from n8n):"
   for f in "${IMPORT_ORDER[@]}"; do
     local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"

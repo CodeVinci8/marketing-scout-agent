@@ -5,6 +5,35 @@ Most recent first.
 
 ---
 
+## DEC-159 — Stage 8 release-core: operator-local ids, Docker-safe exec, hard WF18 gate, honest scoped markers
+
+**Date:** 2026-06-26 · **Branch:** `feat/stage8-release-engineering` (off `main` @ `d3a392c`)
+
+**Decision:**
+1. **Real n8n workflow ids are operator-local, never committed.** The committed manifest carries only logical
+   identity (`runtime_identity`: WF key, exact name, file, role, callable/trigger expectations, binding edges,
+   `canonical_id:null`, `id_source:operator_local`). Real ids live in gitignored `config/runtime_ids.local.json`
+   (mode 600, backup-before-write). `tools/runtime_ids.js` reconciles them against a real export fail-closed
+   (verified/discover/generate/create-with-local-id/abort) and emits **fingerprints only**.
+   *Why:* satisfies DEPLOY-007 idempotent reconciliation while honoring the standing "no n8n-DB-ids in Git" rule.
+   The 15 production ids may be operator migration input (`runtime_ids.js seed`) but are never committed.
+2. **Deployment is Docker-only-safe.** `scripts/lib/n8n_exec.sh` abstracts host CLI vs `docker exec <container>`
+   and forces `--entrypoint /bin/sh` for `docker run` (backup) paths — the image entrypoint is `n8n` and the
+   container has `/bin/sh`, not bash (BACKUP-001). A destructive guard refuses `down -v`/`volume rm|prune`/
+   `system prune`/`--decrypted`. `MS_N8N_EXEC_DRY=1` rehearses without touching anything.
+3. **A hard WF18 gate blocks activation while gateway blockers are open.** `config/wf18_blockers.json` (19 P0/P1)
+   + `tools/wf18_activation_gate.js`; `deploy_n8n.sh --activate-triggers` refuses WF18 while any is open, and a
+   `resolved` item must cite proving evidence. *Why:* WF18 is not safe to publish; the gate makes that mechanical,
+   not a matter of operator memory.
+4. **Markers are honestly scoped.** Offline-proven ⇒ PASS; disposable/production/live ⇒ `OPERATOR_PENDING`;
+   `STAGE8_RELEASE_CORE=PASS` but `STAGE8_RELEASE_ENGINEERING` is NOT asserted until WF18 rearchitecture + live
+   acceptance complete. *Why:* the prior over-claim feedback — never print PASS for an unproven layer.
+
+**Status:** offline-proven (`run_all.js` ALL PASS, $0, 0 calls, all `active=false`); NOT pushed/merged; production,
+`sing-box`, and the data volume untouched; disposable/production/live deferred to the operator + WF18 session.
+
+---
+
 ## DEC-158 — Embedded modules isolated in IIFEs; generated Code‑node compile gate; Vinci AI Pilot identity
 
 **Date:** 2026-06-24 · **Branch:** `feat/vinci-mvp-stage4-8` (off `fix/stage3-verification-stage4-readiness` @ `f1a9d47`)

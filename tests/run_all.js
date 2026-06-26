@@ -96,6 +96,18 @@ const JS_SUITES = [
   ['sheets-operations-qa', 'test_sheets_operations_qa.js'],
   // --- Product timezone: Europe/Moscow system-timestamp helper (RFC3339 +03:00 / Russian display) ---
   ['ms-time', 'test_ms_time.js'],
+  // --- Stage 8 release core: operator-local workflow id resolver (fail-closed, idempotent, sanitized) ---
+  ['runtime-ids', 'test_runtime_ids.js'],
+  // --- Stage 8 release core: shell safety + docker-only n8n execution abstraction (host/docker/dry/guard) ---
+  ['release-shell', 'test_release_shell.js'],
+  // --- Stage 8 release core: strict preflight (token/$env/tz/report-mode/webhook/secret + cross-field invariants) ---
+  ['preflight-strict', 'test_preflight_strict.js'],
+  // --- Stage 8 release core: operator scripts (backup/restore/webhook/lock) + sanitized release evidence ---
+  ['release-scripts', 'test_release_scripts.js'],
+  // --- Stage 8 release core: workflow/credential reconciliation (exact-name) + hard WF18 activation gate ---
+  ['reconcile-and-gate', 'test_reconcile_and_gate.js'],
+  // --- Stage 8 release core: end-to-end acceptance harness emitting honest §21 markers (CORE PASS; live PENDING) ---
+  ['stage8-release-e2e', 'test_stage8_release_e2e.js'],
 ];
 
 let failed = 0;

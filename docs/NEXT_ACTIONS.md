@@ -4,7 +4,26 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-19, session 13) — STAGE C.1 PATCH applied → operator runtime retest (DEC-141)
+## CURRENT PRIORITY (2026-06-26, session 27) — Stage 8 release-core DONE → WF18 rearchitecture next (DEC-159)
+
+Branch `feat/stage8-release-engineering` off `main` @ `d3a392c`. **Release-core offline-proven, $0, 0 calls, all
+`active=false`, NOT pushed/merged, production untouched.** `node tests/run_all.js` ALL SUITES PASS;
+`make release-core-acceptance` ⇒ `STAGE8_RELEASE_CORE=PASS`. Markers honestly scoped:
+`WF18_REARCHITECTURE=PENDING`, `CONTROLLED_LIVE_ACCEPTANCE=PENDING`, `PRODUCTION_UNTOUCHED=true`.
+
+**Next session (separate, focused):** WF18 gateway rearchitecture — exact work order in
+`docs/WF18_REARCHITECTURE_HANDOFF.md`. The hard gate (`node tools/wf18_activation_gate.js`) keeps WF18
+unpublishable until all 19 P0/P1 blockers in `config/wf18_blockers.json` are resolved with a named regression test.
+
+**Operator, when ready (Docker-only VPS):** `make release-help` for the full path. Short version:
+`make deploy-dry-run` → `make deploy-inactive` → `node tools/runtime_ids.js seed --from <ids> --apply` then
+`runtime_ids.js resolve --export-dir <export> --apply` → `make verify-production`. WF18 activation
+(`make telegram-activate`) stays BLOCKED by the gate until the WF18 work lands. Full runbook:
+`docs/STAGE8_RELEASE_CORE.md`; defects: `docs/DEFECT_REGISTRY_STAGE8.md`.
+
+---
+
+## PRIOR PRIORITY (2026-06-19, session 13) — STAGE C.1 PATCH applied → operator runtime retest (DEC-141)
 
 Corrective patch from real operator runtime evidence + operator-approved monitored-VK engine. Local validation
 **132/132 PASS ($0)** (`node n8n/fixtures/lead_scout/run_all.js`). All `active=false`. **Stage C.1 NOT passed.**

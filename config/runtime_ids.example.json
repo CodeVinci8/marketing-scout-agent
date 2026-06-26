@@ -1,0 +1,18 @@
+{
+  "schema": "marketing-scout/runtime-ids/v1",
+  "_comment": "OPERATOR-LOCAL TEMPLATE (schema illustration only). Do NOT hand-copy this. Run `node tools/runtime_ids.js init` to scaffold config/runtime_ids.local.json (gitignored, chmod 600) with the exact 15 workflow keys + names pulled from config/workflow_manifest.json -> runtime_identity, then let the resolver populate real ids. NEVER commit real n8n workflow ids. id_source: operator_local = seeded by operator migration; discovered = found by exact-name match in a real n8n export; generated = stable installation-local id minted for a brand-new install.",
+  "n8n_version": "2.23.3",
+  "updated_at": null,
+  "workflows": {
+    "WF18": {
+      "name": "<exact workflow name as it appears in n8n>",
+      "id": null,
+      "id_source": "operator_local"
+    },
+    "WF08": {
+      "name": "<exact workflow name as it appears in n8n>",
+      "id": null,
+      "id_source": "operator_local"
+    }
+  }
+}
