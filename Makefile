@@ -72,6 +72,7 @@ test-js:
 	node tests/test_sheets_bootstrap.js
 	node tests/test_sheets_operations_qa.js
 	node tests/test_runtime_ids.js
+	node tests/test_release_shell.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

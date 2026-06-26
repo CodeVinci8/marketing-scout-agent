@@ -98,6 +98,8 @@ const JS_SUITES = [
   ['ms-time', 'test_ms_time.js'],
   // --- Stage 8 release core: operator-local workflow id resolver (fail-closed, idempotent, sanitized) ---
   ['runtime-ids', 'test_runtime_ids.js'],
+  // --- Stage 8 release core: shell safety + docker-only n8n execution abstraction (host/docker/dry/guard) ---
+  ['release-shell', 'test_release_shell.js'],
 ];
 
 let failed = 0;
