@@ -106,6 +106,8 @@ const JS_SUITES = [
   ['release-scripts', 'test_release_scripts.js'],
   // --- Stage 8 release core: workflow/credential reconciliation (exact-name) + hard WF18 activation gate ---
   ['reconcile-and-gate', 'test_reconcile_and_gate.js'],
+  // --- Stage 8 release core: end-to-end acceptance harness emitting honest §21 markers (CORE PASS; live PENDING) ---
+  ['stage8-release-e2e', 'test_stage8_release_e2e.js'],
 ];
 
 let failed = 0;
