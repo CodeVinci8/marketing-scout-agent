@@ -176,6 +176,16 @@ A.section('§13.20 + ACTIVATE-001/MARKER-001/DOCS-001 — the SCRIPTS actually w
   // DEPLOY-004: production-target dry-run fails closed; offline plan is explicitly named + soft
   A.ok('explicit offline-plan mode exists and does not claim production readiness', /--offline-plan/.test(deploy) && /does NOT assert production readiness/.test(deploy));
   A.ok('production dry-run fails closed', /production-target dry-run FAILED CLOSED/.test(deploy));
+  // §8/§13.9 — apply imports STAGED prepared JSON (never raw source), resolving ids + creds first
+  A.ok('deploy stages prepared workflows before import', /prepare_staged_workflows\.js/.test(deploy));
+  A.ok('apply imports from the staged dir, not the raw WF_DIR', /import:workflow --input="\$\{tmp\}\/staged\//.test(deploy));
+  A.ok('apply no longer imports raw WF_DIR templates in the main loop', !/import:workflow --input="\$\{WF_DIR\}\/\$\{f\}" --activeState=false/.test(deploy));
+  A.ok('apply resolves+persists installation-local ids before staging', /RUNTIME_IDS_TOOL" resolve --export-dir[^\n]*--apply/.test(deploy));
+  // non-decrypted credential metadata only; the actual CODE must never pass --decrypted (comments may mention it)
+  A.ok('apply reconciles credentials via a non-decrypted export', codeLines.some(l => /export:credentials --all/.test(l)));
+  A.ok('deploy CODE never passes --decrypted', !codeLines.some(l => /--decrypted/.test(l)));
+  // §12/DOCS-001 — no instruction to manually attach COMPATIBLE credentials in the UI
+  A.ok('compatible credentials are preserved automatically (no blanket manual-UI attach step)', /preserved automatically/.test(deploy) && !/In the n8n UI, attach credentials \(Google Sheets/.test(deploy));
 }
 
 A.report('release-integration');

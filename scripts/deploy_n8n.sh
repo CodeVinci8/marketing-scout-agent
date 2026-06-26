@@ -42,6 +42,8 @@ PREFLIGHT="${ROOT}/tools/preflight_config.js"
 RUNTIME_IDS_TOOL="${ROOT}/tools/runtime_ids.js"
 ENV_DISCOVERY="${ROOT}/tools/env_discovery.js"
 RELEASE_PLAN="${ROOT}/tools/release_plan.js"
+STAGE_TOOL="${ROOT}/tools/prepare_staged_workflows.js"
+RECONCILE_CREDS="${ROOT}/tools/reconcile_credentials.js"
 RUNTIME_IDS_LOCAL="${MS_RUNTIME_IDS_LOCAL:-${ROOT}/config/runtime_ids.local.json}"
 # DEPLOY-001: Docker-only-safe execution abstraction (host CLI OR `docker exec <container> …`; /bin/sh, not bash).
 # shellcheck source=scripts/lib/n8n_exec.sh
@@ -288,14 +290,42 @@ do_import() {
     read -r reply
     case "$reply" in y|Y|yes|YES) ;; *) say "Aborted. No changes made."; exit 0 ;; esac
   fi
+  local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
+  # --- (1) resolve installation-local ids against the LIVE export (fail-closed, idempotent; DEPLOY-007/002) -----
+  say "Capturing live export and resolving installation-local workflow ids..."
+  capture_export "$tmp/preexport"
+  node "$RUNTIME_IDS_TOOL" resolve --export-dir "$tmp/preexport" --local "$RUNTIME_IDS_LOCAL" --apply \
+    || die "runtime id resolution aborted (exact-name/id-mismatch — see report) — refusing to import."
+  # --- (2) non-decrypted credential metadata for automatic reconciliation (NEVER --decrypted) ------------------
+  local credflag=()
+  if n8n_cli export:credentials --all --output="$tmp/creds.json" >/dev/null 2>&1 && [ -f "$tmp/creds.json" ]; then
+    credflag=( --cred-export "$tmp/creds.json" )
+    say "  [ok] credential metadata exported (encrypted; ids/types only used for reconciliation)"
+  else
+    say "  [info] no credential export available — compatible credentials cannot be auto-reconciled (placeholders stay deferred for the n8n UI)"
+  fi
+  # --- (3) STAGE prepared workflows (resolved ids + bindings + reconciled creds + active=false); import STAGED ---
+  say "Staging prepared workflows (resolved ids, reconciled credentials, bindings; active=false)..."
+  node "$STAGE_TOOL" --out "$tmp/staged" --local "$RUNTIME_IDS_LOCAL" "${credflag[@]}" \
+    || die "staging failed (unresolved id / ambiguous credential) — refusing to import."
+  # verify the staged credential references reconcile cleanly against production (DEPLOY-008)
+  if [ "${#credflag[@]}" -gt 0 ]; then
+    node -e '
+      const RC=require(process.argv[1]),fs=require("fs"),path=require("path");
+      const dir=process.argv[2],exp=JSON.parse(fs.readFileSync(process.argv[3],"utf8"));
+      const files=fs.readdirSync(dir).filter(f=>f.endsWith(".json"));
+      const r=RC.reconcile(RC.collectReferences(files,dir),exp);
+      if(!r.ok){ console.error("CREDENTIAL_RECONCILIATION=FAIL failures="+r.summary.failures); process.exit(1); }
+      console.log("  [ok] staged credential reconciliation: references="+r.summary.references+" failures=0");
+    ' "$RECONCILE_CREDS" "$tmp/staged" "$tmp/creds.json" || die "staged credential reconciliation failed — refusing to import."
+  fi
   for f in "${IMPORT_ORDER[@]}"; do
-    say ">> importing ${f} (--activeState=false → lands INACTIVE regardless of JSON; credentials untouched)"
-    n8n_cli import:workflow --input="${WF_DIR}/${f}" --activeState=false
+    say ">> importing STAGED ${f} (--activeState=false → INACTIVE; resolved id; credentials preserved)"
+    n8n_cli import:workflow --input="${tmp}/staged/${f}" --activeState=false
   done
   hr
-  # --- automatic binding (QA-002/QA-009): no manual UI step ----------------------------------------------------
-  local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
-  say "Exporting assigned ids and auto-binding ${BINDING_COUNT} Execute Sub-workflow edges..."
+  # --- automatic binding (QA-002/QA-009): no manual UI step (staged files are already bound; this re-verifies) --
+  say "Exporting assigned ids and verifying ${BINDING_COUNT} Execute Sub-workflow edges..."
   export_all "$tmp/exported"
   node "$BIND_TOOL" --dir "$tmp/exported" --report "$tmp/bind_report.json" || die "automatic binding failed (see report above)."
   # Re-import the rewritten caller workflows so the bound ids take effect (update by id; no duplicates).
@@ -320,12 +350,15 @@ do_import() {
     esac
   done
   hr
-  say "Imported ${#IMPORT_ORDER[@]} runtime workflows. They are INACTIVE and the 8 sub-workflow ids are bound."
-  say "Rollback: scripts/deploy_n8n.sh --deactivate-triggers  (then delete in the n8n UI if a full rollback is needed)."
+  say "Imported ${#IMPORT_ORDER[@]} runtime workflows from STAGED JSON. They are INACTIVE, with resolved ids, the 8"
+  say "sub-workflow ids bound, and compatible production credentials preserved automatically (no manual UI step)."
+  say "Rollback: scripts/rollback.sh --apply  (or: make rollback) — restores publication/webhook/id-map state."
   say "Next steps:"
-  say "  1. In the n8n UI, attach credentials (Google Sheets / Telegram / Claude / Apify)."
+  say "  1. Any credential TYPE with no compatible production credential yet stays a deferred placeholder — attach"
+  say "     it once in the n8n UI, then re-run --apply to reconcile it (compatible types are preserved automatically)."
   say "  2. Verify central config env vars: scripts/deploy_n8n.sh --check-config"
-  say "  3. Activate triggers: scripts/deploy_n8n.sh --activate-triggers (WF18 always; WF23/WF25 if enabled)."
+  say "  3. Verify the release end-to-end:  scripts/deploy_n8n.sh --verify-bindings (and make verify-production)"
+  say "  4. Activate the Telegram gateway (separate explicit step): make telegram-activate (WF18 only; gate-protected)."
 }
 
 # Export current workflows and confirm every sub-workflow edge is bound (zero PASTE_WORKFLOW_ID placeholders).
