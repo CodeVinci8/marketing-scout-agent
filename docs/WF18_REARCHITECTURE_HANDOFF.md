@@ -61,8 +61,17 @@ controlled live acceptance checklist (§17): preflight → publish WF18 only →
 `/start` → exact-row checks → approve-once → reject/cancel/stale → deactivate → rollback.
 
 ## Then: disposable + production + live (operator-run)
-Run `make release-smoke` (disposable import/reimport/bind), `make deploy-inactive` + `make verify-production`
-(real export reconciliation via `runtime_ids.js resolve --apply` and `reconcile_credentials.js`), then the gated
-`make telegram-activate`. These flip `DISPOSABLE_IMPORT`, `WORKFLOW_VERSION_SEMANTICS`, `TELEGRAM_PRELIVE`,
-`CONTROLLED_LIVE_ACCEPTANCE` from `OPERATOR_PENDING` to PASS, after which `STAGE8_RELEASE_ENGINEERING=PASS` may be
-asserted.
+The release path is now one shared, ordered pipeline (the `fix/stage8-release-integration` repair), so the
+operator sequence is **discovery → resolve IDs → preflight → dry-run → backup → apply inactive → verify** — ids are
+resolved as part of the deploy, never after it. Run, in order:
+
+1. `make release-smoke` — disposable acceptance via the SAME shared pipeline (already **DISPOSABLE_DEPLOY=PASS**
+   against real n8n 2.23.3 in the integration repair).
+2. `make deploy-dry-run` — production-target discovery + id resolution + reconcile + ordered plan (fail-closed).
+3. `make deploy-inactive` — the full inactive release (lock→resolve→reconcile→preflight→backup→import staged→bind→
+   verify→evidence); `make verify-production` confirms 15 workflows / exact-name count 1 / resolved ids / all
+   inactive / creds valid / 8 edges bound / zero placeholders.
+4. Only after the WF18 gate is OPEN: the gated, transactional `make telegram-activate` (WF18 only).
+
+These flip `WORKFLOW_VERSION_SEMANTICS`, `TELEGRAM_PRELIVE`, `CONTROLLED_LIVE_ACCEPTANCE` from `OPERATOR_PENDING`
+to PASS, after which `STAGE8_RELEASE_ENGINEERING=PASS` may be asserted.

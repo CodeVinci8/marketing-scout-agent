@@ -5,6 +5,30 @@ Curated subset of `docs/DECISIONS.md`.
 
 ---
 
+## DEC-160 — Release path is ONE shared, ordered, fail-closed pipeline (prod == disposable)
+
+**Rule:** there is a single release implementation — the disposable acceptance drives the SAME
+`scripts/deploy_n8n.sh --apply` production uses (no parallel reimplementation). The apply spine is ordered and
+fail-closed: lock → capture live export → resolve+persist installation-local ids → reconcile workflows+credentials
+→ strict preflight → **backup BEFORE any import** → import STAGED JSON inactive → bind → fresh-export verify →
+sanitized evidence → release lock. Operator sequence = **discovery → resolve IDs → preflight → dry-run → backup →
+apply inactive → verify** (ids resolved as PART of the deploy, never after). Import STAGED, never raw
+(`prepare_staged_workflows.js`: resolved id+bindings+reconciled creds, active=false; ambiguous cred type aborts).
+Production dry-run fails closed when ids/env/export are unresolved (`--offline-plan` is the explicit soft rehearsal).
+Logs show `id_fp` fingerprints, never raw ids or `(assigned on import)`; exact-name resolution is strict 0/1/>1.
+Activation is docker-safe (`n8n_cli publish`) and transactional (`--activate-telegram`: WF18 only, register+verify
+webhook, auto-unpublish on failure). Docker-only reality: a `docker exec import --input=<host path>` ENOENTs, so
+`n8n_exec.sh` `n8n_put`/`n8n_get` (docker cp) copy staged files in, and `backup.sh` runs the backup container
+`--user 0:0`.
+
+**Reason:** the DEC-159 tools were green in isolation but never wired into the deploy/disposable paths, so the
+"PASS" markers didn't prove the operator path worked.
+
+**Validation:** `DISPOSABLE_DEPLOY=PASS` against real n8n 2.23.3 (full honest §14 markers); production untouched, $0,
+no secrets, nothing activated. Full text: DEC-160 in `docs/DECISIONS.md`. Related: [[project-release-hardening-callable-triggers]].
+
+---
+
 ## DEC-001 — Lightweight Architecture
 
 **Decision:** Build a custom lightweight agent structure using only Markdown files and Claude Code.

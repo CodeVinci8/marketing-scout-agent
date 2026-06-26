@@ -5,6 +5,48 @@ Most recent first.
 
 ---
 
+## DEC-160 — Stage 8 release-path integration: ONE shared, ordered, fail-closed pipeline (prod == disposable)
+
+**Date:** 2026-06-26 · **Branch:** `fix/stage8-release-integration` (off `main` @ `2ee4a71`)
+
+**Context:** the DEC-159 release-core tools were good but **disconnected** — `deploy_n8n.sh` still imported raw
+JSON, printed `id=(assigned on import)`, selected workflows by first-match, and never called the resolver /
+reconcilers / lock / backup / evidence; the disposable smoke tested the legacy import path. So `STAGE8_RELEASE_CORE=PASS`
+did **not** prove the operator deployment path worked.
+
+**Decision:**
+1. **One shared release implementation for production and disposable.** The disposable acceptance drives the SAME
+   `scripts/deploy_n8n.sh --apply` (via the `n8n_exec` docker abstraction against a throwaway persistent container),
+   not a parallel reimplementation. `scripts/lib/release_pipeline.sh` is the shared lock/backup/evidence/rollback
+   layer. *Why:* a green offline test of each component separately is exactly what hid the integration gap.
+2. **The apply is one ordered, fail-closed spine** (§5): lock → capture live export → resolve+persist
+   installation-local ids → reconcile workflows + credentials → strict preflight → **backup BEFORE any import** →
+   import STAGED JSON inactive → bind → fresh-export verify → sanitized evidence → release lock. A failure stops,
+   the EXIT-trap writes sanitized ABORT diagnostics + the rollback command and releases the lock. Operator order:
+   **discovery → resolve IDs → preflight → dry-run → backup → apply inactive → verify** (DOCS-001 — ids are
+   resolved as PART of the deploy, never after it).
+3. **Import STAGED, never raw** (`prepare_staged_workflows.js`): resolved installation-local id + resolved binding
+   ids + reconciled credential ids (compatible production cred per type preserved; ambiguous type ABORTS; a type
+   with no production cred stays a deferred placeholder) + `active=false`. Removes the manual "attach credentials
+   in the UI" step for compatible types.
+4. **Docker-only file transfer is mandatory** (the gap no earlier session caught): a `docker exec n8n
+   import:workflow --input=<host path>` ENOENTs because the CLI runs INSIDE the container. `n8n_exec.sh` gained
+   `n8n_put`/`n8n_get` (docker cp); the backup container runs `--user 0:0` so it can write the root-owned dest.
+5. **Production-target dry-run fails closed** (DEPLOY-004) when ids/env/export are unresolved; a purely offline
+   rehearsal must be the explicitly-named `--offline-plan` and must not claim production readiness. Logs show
+   `id_fp` fingerprints, never raw ids or `(assigned on import)`; exact-name resolution is strict 0/1/>1 (DEPLOY-002).
+6. **Activation is docker-safe and transactional** (ACTIVATE-001/002): publish/unpublish via `n8n_cli`;
+   `--activate-telegram` activates WF18 ONLY (never WF23/WF25), runs the stricter activation preflight + the hard
+   WF18 gate, registers AND verifies the webhook, and auto-unpublishes WF18 if the webhook step fails. Rollback is
+   a real `scripts/rollback.sh` (webhook + publication + id-map + backup restore + verify), not Telegram-deactivation.
+
+**Validation:** `node tests/run_all.js` ALL SUITES PASS; `tests/test_release_integration.js` (112) proves the
+deploy path calls discovery→reconcile→resolve IN ORDER and fails closed on every negative path. The disposable
+acceptance ran against **real n8n 2.23.3** → `DISPOSABLE_DEPLOY=PASS` (full honest §14 marker block); production
+`n8n-n8n-1` / `n8n_n8n_data` untouched, `$0`, no secrets, nothing activated.
+
+---
+
 ## DEC-159 — Stage 8 release-core: operator-local ids, Docker-safe exec, hard WF18 gate, honest scoped markers
 
 **Date:** 2026-06-26 · **Branch:** `feat/stage8-release-engineering` (off `main` @ `d3a392c`)
