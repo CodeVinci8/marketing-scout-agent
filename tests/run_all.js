@@ -102,6 +102,8 @@ const JS_SUITES = [
   ['release-shell', 'test_release_shell.js'],
   // --- Stage 8 release core: strict preflight (token/$env/tz/report-mode/webhook/secret + cross-field invariants) ---
   ['preflight-strict', 'test_preflight_strict.js'],
+  // --- Stage 8 release core: operator scripts (backup/restore/webhook/lock) + sanitized release evidence ---
+  ['release-scripts', 'test_release_scripts.js'],
 ];
 
 let failed = 0;
