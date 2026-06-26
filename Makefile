@@ -75,6 +75,7 @@ test-js:
 	node tests/test_release_shell.js
 	node tests/test_preflight_strict.js
 	node tests/test_release_scripts.js
+	node tests/test_reconcile_and_gate.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

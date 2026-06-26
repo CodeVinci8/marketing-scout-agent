@@ -1,0 +1,26 @@
+{
+  "schema": "marketing-scout/wf18-blockers/v1",
+  "purpose": "Hard pre-live gate registry for WF18 (Telegram gateway). While any P0/P1 item is unresolved, tools/wf18_activation_gate.js REFUSES to let deploy publish/activate WF18. These are the WF18-rearchitecture blockers handed off to the next focused session; resolving each requires real code + a regression test, then flip status to 'resolved' with the proving test named in `evidence`.",
+  "gate_severities_blocking": ["P0", "P1"],
+  "blockers": [
+    { "id": "TELEGRAM-001", "severity": "P0", "status": "unresolved", "title": "no public HTTPS webhook URL / ingress", "evidence": "" },
+    { "id": "TELEGRAM-002", "severity": "P0", "status": "unresolved", "title": "no Telegram webhook secret validation", "evidence": "" },
+    { "id": "TELEGRAM-003", "severity": "P0", "status": "unresolved", "title": "MS_ENABLE_TELEGRAM kill switch not enforced before side effects", "evidence": "" },
+    { "id": "TELEGRAM-004", "severity": "P0", "status": "unresolved", "title": "unauthorized updates still read/write private Sheets", "evidence": "" },
+    { "id": "TELEGRAM-005", "severity": "P1", "status": "unresolved", "title": "duplicate updates still persist rows / change state", "evidence": "" },
+    { "id": "TELEGRAM-006", "severity": "P1", "status": "unresolved", "title": "callback queries are not acknowledged", "evidence": "" },
+    { "id": "TELEGRAM-007", "severity": "P1", "status": "unresolved", "title": "approval keyboard defined but not wired to real request id", "evidence": "" },
+    { "id": "TELEGRAM-008", "severity": "P1", "status": "unresolved", "title": "bot claims actions the workflow did not perform", "evidence": "" },
+    { "id": "TELEGRAM-013", "severity": "P1", "status": "unresolved", "title": "stale/expired approval callbacks may execute old plans", "evidence": "" },
+    { "id": "RUNTIME-001", "severity": "P0", "status": "unresolved", "title": "WF18 does not call WF19/WF20 (no plan->approval->orchestrate path)", "evidence": "" },
+    { "id": "RUNTIME-002", "severity": "P1", "status": "unresolved", "title": "WF19/WF20/WF21/WF22 not callable from the gateway where required", "evidence": "" },
+    { "id": "RUNTIME-003", "severity": "P1", "status": "unresolved", "title": "capability registry not connected to a real dispatcher", "evidence": "" },
+    { "id": "STATE-001", "severity": "P1", "status": "unresolved", "title": "intake state transition result not used (event vs state disagree)", "evidence": "" },
+    { "id": "STATE-004", "severity": "P0", "status": "unresolved", "title": "no durable once-only marker for approval/orchestrator dispatch", "evidence": "" },
+    { "id": "MEMORY-001", "severity": "P1", "status": "unresolved", "title": "existing conversation state overwritten instead of patched", "evidence": "" },
+    { "id": "DATA-001", "severity": "P1", "status": "unresolved", "title": "nested payload passed to autoMapInputData (no shaping nodes)", "evidence": "" },
+    { "id": "IDEMP-001", "severity": "P1", "status": "unresolved", "title": "read-then-write dedupe race", "evidence": "" },
+    { "id": "SECURITY-001", "severity": "P0", "status": "unresolved", "title": "webhook spoofing (no secret header check)", "evidence": "" },
+    { "id": "SECURITY-006", "severity": "P1", "status": "unresolved", "title": "cross-user state isolation unproven", "evidence": "" }
+  ]
+}

@@ -288,6 +288,14 @@ activate_triggers() {
   say "Fail-closed config preflight before activation (zlib required for XLSX-capable workflows):"
   check_config "" "require-zlib" >/dev/null || die "config preflight failed — refusing to activate. Run: scripts/deploy_n8n.sh --check-config"
   say "  [ok] config preflight passed"
+  # HARD WF18 gate: refuse to publish the Telegram gateway while known WF18/Telegram P0/P1 blockers are open.
+  if printf '%s\n' "${TRIGGER_WORKFLOWS_ALWAYS[@]}" | grep -q '18_telegram_agent_gateway.json'; then
+    say "WF18 pre-live blocker gate:"
+    if ! node "${ROOT}/tools/wf18_activation_gate.js"; then
+      die "WF18 is NOT cleared for activation (see open blockers above). The WF18 gateway rearchitecture is pending."
+    fi
+    say "  [ok] WF18 activation gate is open"
+  fi
   require_n8n || exit 1
   detect_n8n_version
   local to_activate; mapfile -t to_activate < <(activation_set)

@@ -104,6 +104,8 @@ const JS_SUITES = [
   ['preflight-strict', 'test_preflight_strict.js'],
   // --- Stage 8 release core: operator scripts (backup/restore/webhook/lock) + sanitized release evidence ---
   ['release-scripts', 'test_release_scripts.js'],
+  // --- Stage 8 release core: workflow/credential reconciliation (exact-name) + hard WF18 activation gate ---
+  ['reconcile-and-gate', 'test_reconcile_and_gate.js'],
 ];
 
 let failed = 0;
