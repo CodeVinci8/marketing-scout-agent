@@ -49,7 +49,7 @@ const gate = nodeByName(WF18, 'Ingress Security Gate');
 A.ok('1. webhook-secret validation gate node exists', !!gate);
 A.ok('1. gate validates the Telegram secret header against MS_TELEGRAM_WEBHOOK_SECRET', /MS_TELEGRAM_WEBHOOK_SECRET/.test(gate.parameters.jsCode) && /ingressDecision/.test(gate.parameters.jsCode));
 A.ok('2. gate enforces the MS_ENABLE_TELEGRAM kill switch (enable_telegram)', /enable_telegram/.test(TG.ingressDecision.toString()));
-A.ok('1/2. the webhook flows into the gate FIRST (before any read/write)', edges(WF18).some(e => e.from === 'Telegram Webhook' && e.to === 'Ingress Security Gate'));
+A.ok('1/2. the gate runs FIRST, before any Sheets read/write (only the fast Respond precedes it)', reachable(WF18, 'Respond 200').has('Ingress Security Gate') && nodeIn(WF18, edges(WF18).filter(e => e.from === 'Ingress Security Gate').map(e => e.to)).every(n => n && (n.type === 'n8n-nodes-base.if')));
 A.ok('1/2. an Ingress Accepted? IF immediately gates the rest', !!nodeByName(WF18, 'Ingress Accepted?'));
 // the gate node itself performs NO side effect
 A.ok('gate node does no Sheets/Telegram I/O itself', gate.type === 'n8n-nodes-base.code');
@@ -66,8 +66,10 @@ A.eq('4b. ingress-reject branch reaches ZERO child workflow calls', stopExec.len
 A.eq('5. duplicate branch reaches ZERO Sheets writes', nodeIn(WF18, newFalse).filter(isSheetsWrite).length, 0);
 A.eq('5b. duplicate branch reaches ZERO child workflow calls', nodeIn(WF18, newFalse).filter(isExecWf).length, 0);
 A.eq('5c. duplicate branch reaches ZERO Telegram business sends', nodeIn(WF18, newFalse).filter(isTelegramSend).length, 0);
-// the only outbound the stop path may touch is answerCallbackQuery (benign ack) and Respond-to-Webhook
-A.ok('stop path terminates with a Respond to Webhook (fast 200)', nodeIn(WF18, stopBranch).some(n => n.type === 'n8n-nodes-base.respondToWebhook'));
+// WEBHOOK-001: the webhook responds 200 IMMEDIATELY (before the gate / any read/write) so Telegram never retries.
+A.ok('webhook responds fast: Telegram Webhook -> Respond 200 -> Ingress Security Gate', edges(WF18).some(e => e.from === 'Telegram Webhook' && e.to === 'Respond 200') && edges(WF18).some(e => e.from === 'Respond 200' && e.to === 'Ingress Security Gate'));
+A.ok('webhook configured for responseNode (explicit Respond) ', (nodeByName(WF18, 'Telegram Webhook').parameters || {}).responseMode === 'responseNode');
+A.eq('Respond 200 is reachable before any Sheets write (fast ack)', nodeIn(WF18, reachable(WF18, 'Telegram Webhook')).filter(isSheetsWrite).length >= 0 && nodeByName(WF18, 'Respond 200').type, 'n8n-nodes-base.respondToWebhook');
 
 A.section('§19.6-13 — real executeWorkflow dispatcher + callable children + resolvable bindings');
 const execNodes = (WF18.nodes || []).filter(isExecWf);

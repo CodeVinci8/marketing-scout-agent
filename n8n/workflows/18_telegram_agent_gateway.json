@@ -133,8 +133,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        140,
-        260
+        -1180,
+        200
       ],
       "id": "wf18-respond",
       "name": "Respond 200"
@@ -1432,6 +1432,17 @@
       "main": [
         [
           {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 200": {
+      "main": [
+        [
+          {
             "node": "Ingress Security Gate",
             "type": "main",
             "index": 0
@@ -1524,24 +1535,6 @@
         [
           {
             "node": "Send Terminate Ack",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respond 200",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Send Terminate Ack": {
-      "main": [
-        [
-          {
-            "node": "Respond 200",
             "type": "main",
             "index": 0
           }

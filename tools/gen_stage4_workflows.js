@@ -250,7 +250,9 @@ if(gate.ack_needed){ack=true;body=JSON.stringify(answerCallbackBody(gate.callbac
 return [{json:{terminated:true,reason:reason,ack:ack,answer_callback_body:body}}];`),
   ifNode('wf18-iftermack', 'Terminate Ack Needed?', [-300, 260], '={{ $json.ack }}'),
   httpTelegramAnswer('wf18-termack', 'Send Terminate Ack', [-80, 200]),
-  respond('wf18-respond', 'Respond 200', [140, 260]),
+  // WEBHOOK-001: respond 200 IMMEDIATELY (Telegram never retries on a slow downstream); the Respond node passes
+  // its input through, so all fail-closed processing + dispatch continues afterwards.
+  respond('wf18-respond', 'Respond 200', [-1180, 200]),
   // ---- durable idempotency claim BEFORE any persistence / dispatch (IDEMP-002) ----
   sheetsRead('wf18-readev', 'Read agent_request_events', [-520, -60], 'agent_request_events'),
   code('wf18-claim', 'Claim Idempotency', [-300, -60], [], `
@@ -455,7 +457,8 @@ else{text=buildConversationalReply({understood:(r.capability&&r.capability.name)
 return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),intent:(d.intent&&d.intent.intent)||'clarify_request',dispatch_target:d.dispatch_target}}];`),
   httpTelegram('wf18-send', 'Send Telegram Reply', [2780, 620])
 ], [
-  ['Telegram Webhook', 'Ingress Security Gate'],
+  ['Telegram Webhook', 'Respond 200'],
+  ['Respond 200', 'Ingress Security Gate'],
   ['Ingress Security Gate', 'Ingress Accepted?'],
   ['Ingress Accepted?', 'Read agent_request_events', 0],
   ['Ingress Accepted?', 'Terminate Safely', 1],
@@ -465,8 +468,6 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),inten
   ['New Update?', 'Terminate Safely', 1],
   ['Terminate Safely', 'Terminate Ack Needed?'],
   ['Terminate Ack Needed?', 'Send Terminate Ack', 0],
-  ['Terminate Ack Needed?', 'Respond 200', 1],
-  ['Send Terminate Ack', 'Respond 200'],
   ['Read conversation_state', 'Read conversation_messages'],
   ['Read conversation_messages', 'Read conversation_summaries'],
   ['Read conversation_summaries', 'Read durable_memories'],
