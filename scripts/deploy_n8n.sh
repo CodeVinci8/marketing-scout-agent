@@ -23,6 +23,8 @@
 #   scripts/deploy_n8n.sh --plan-triggers      # print which trigger workflows WOULD activate (no changes)
 #   scripts/deploy_n8n.sh --activate-triggers  # activate ONLY trigger workflows (WF18 always; WF23 if monitoring;
 #                                              #   WF25 if weekly digest). Fail-closed config preflight first.
+#   scripts/deploy_n8n.sh --activate-telegram  # TRANSACTIONAL: activate WF18 ONLY (never WF23/WF25) + register &
+#                                              #   verify webhook; auto-unpublish WF18 if the webhook step fails.
 #   scripts/deploy_n8n.sh --deactivate-triggers# deactivate those same trigger workflows
 #   scripts/deploy_n8n.sh --status             # show imported runtime workflows and their active state
 #
@@ -69,6 +71,7 @@ for arg in "$@"; do
     --verify-bindings) MODE="verify-bindings" ;;
     --plan-triggers) MODE="plan-triggers" ;;
     --activate-triggers) MODE="activate-triggers" ;;
+    --activate-telegram) MODE="activate-telegram" ;;
     --deactivate-triggers) MODE="deactivate-triggers" ;;
     --status) MODE="status" ;;
     --yes|-y) ASSUME_YES="yes" ;;
@@ -272,15 +275,17 @@ detect_n8n_version() {
 # True if the running n8n CLI exposes a given subcommand (e.g. publish:workflow). Used to prefer modern commands.
 n8n_has_command() { n8n_cli "$1" --help >/dev/null 2>&1; }
 
-# Activate (publish) one workflow id by the proven 2.23.3 mechanism, with a deprecated fallback.
+# Activate (publish) one workflow id by the proven 2.23.3 mechanism, with a deprecated fallback. ACTIVATE-001:
+# ALWAYS routes through the Docker-safe n8n_cli abstraction (the bare `n8n` binary does not exist on the
+# Docker-only production VPS, so a direct `n8n publish:workflow` would fail there).
 n8n_activate_id() {
   local id="$1"
-  if n8n_has_command publish:workflow; then n8n publish:workflow --id="$id"
+  if n8n_has_command publish:workflow; then n8n_cli publish:workflow --id="$id"
   else n8n_cli update:workflow --id="$id" --active=true; fi   # deprecated fallback (pre-publish CLI)
 }
 n8n_deactivate_id() {
   local id="$1"
-  if n8n_has_command unpublish:workflow; then n8n unpublish:workflow --id="$id"
+  if n8n_has_command unpublish:workflow; then n8n_cli unpublish:workflow --id="$id"
   else n8n_cli update:workflow --id="$id" --active=false; fi  # deprecated fallback (pre-publish CLI)
 }
 
@@ -455,6 +460,59 @@ activate_triggers() {
   say "Rollback: scripts/deploy_n8n.sh --deactivate-triggers"
 }
 
+# TRANSACTIONAL Telegram activation (ACTIVATE-002): publish WF18 ONLY, register the webhook, verify it; if the
+# webhook step fails, automatically UNPUBLISH WF18 so we never leave a published gateway with no/invalid webhook.
+# Never activates WF23/WF25 (scheduled activation is a separate command). Stricter activation preflight + WF18 gate.
+activate_telegram() {
+  load_manifest_arrays
+  local WF18_FILE="18_telegram_agent_gateway.json"
+  say "Strict ACTIVATION preflight (bot token + public HTTPS webhook url + secret + \$env + zlib are fail-closed):"
+  if ! node "$PREFLIGHT" --for-activation --require-zlib >/dev/null 2>&1; then
+    node "$PREFLIGHT" --for-activation --require-zlib || true
+    die "activation preflight failed — refusing to activate WF18 (set bot token / PUBLIC_WEBHOOK_BASE_URL / webhook secret / N8N_BLOCK_ENV_ACCESS_IN_NODE=false / zlib)."
+  fi
+  say "  [ok] activation preflight passed (stricter than the inactive-deploy preflight)"
+  say "WF18 pre-live blocker gate:"
+  node "${ROOT}/tools/wf18_activation_gate.js" || die "WF18 is NOT cleared for activation (open P0/P1 blockers). The WF18 gateway rearchitecture is pending."
+  say "  [ok] WF18 activation gate is open"
+  require_n8n || exit 1
+  detect_n8n_version
+  local nm id listing
+  nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${WF18_FILE}")"
+  listing="$(n8n_cli list:workflow 2>/dev/null || true)"
+  id="$(resolve_exact_name "$nm" "$listing")"
+  case "$RESOLVE_STATUS" in
+    ok) ;;
+    ambiguous) die "ambiguous WF18 exact name in n8n — refusing to activate (DEPLOY-002)." ;;
+    *) die "WF18 not found in n8n — import it first: scripts/deploy_n8n.sh --apply." ;;
+  esac
+  say "Will activate WF18 ONLY (id_fp=$(id_fingerprint "$id")). WF23/WF25 are NOT touched by this command."
+  if [ "$ASSUME_YES" != "yes" ]; then
+    printf 'Activate WF18 (Telegram gateway) and register+verify the webhook? [y/N] '
+    read -r reply
+    case "$reply" in y|Y|yes|YES) ;; *) say "Aborted. Nothing activated."; exit 0 ;; esac
+  fi
+  say ">> publishing WF18 (id_fp=$(id_fingerprint "$id")) via publish:workflow (Docker-safe n8n_cli abstraction)"
+  n8n_activate_id "$id" || die "WF18 publish failed — nothing activated."
+  # Transactional: register the webhook; on ANY failure, unpublish WF18 so there is never a live-but-unreachable gateway.
+  say ">> registering the Telegram webhook (token env-only, never printed)"
+  if ! "${ROOT}/scripts/telegram_webhook.sh" set --apply; then
+    say "  [rollback] webhook registration FAILED — unpublishing WF18 to keep activation transactional"
+    n8n_deactivate_id "$id" || say "  [warn] WF18 unpublish also failed — run: scripts/rollback.sh --apply"
+    die "Telegram activation rolled back (WF18 unpublished). No active gateway."
+  fi
+  say ">> verifying the registered webhook matches the expected URL"
+  if ! "${ROOT}/scripts/telegram_webhook.sh" verify | grep -q 'WEBHOOK_MATCH=PASS'; then
+    say "  [rollback] webhook verification FAILED — deleting the webhook and unpublishing WF18"
+    "${ROOT}/scripts/telegram_webhook.sh" delete --apply >/dev/null 2>&1 || true
+    n8n_deactivate_id "$id" || say "  [warn] WF18 unpublish also failed — run: scripts/rollback.sh --apply"
+    die "Telegram activation rolled back (webhook verify failed; WF18 unpublished)."
+  fi
+  hr
+  say "WF18 (Telegram gateway) is ACTIVE; the webhook is registered AND verified. WF23/WF25 remain inactive."
+  say "Rollback: scripts/rollback.sh --apply  (deletes the webhook + unpublishes WF18)."
+}
+
 # Deactivate the same trigger workflows (rollback of activation). Never touches callables (already inactive).
 deactivate_triggers() {
   load_manifest_arrays
@@ -551,6 +609,10 @@ case "$MODE" in
     load_manifest_arrays
     validate_json
     activate_triggers
+    ;;
+  activate-telegram)
+    validate_json
+    activate_telegram
     ;;
   deactivate-triggers)
     deactivate_triggers

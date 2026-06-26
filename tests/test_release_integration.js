@@ -257,4 +257,30 @@ A.section('§5 failure behavior — rp_finish writes ABORT evidence + releases l
   A.ok('clean run also releases the lock', /RELEASE_LOCK=FREE/.test(clean.out));
 }
 
+// ------------------------------------------------------------------------------------------------------------
+A.section('§13.16/17/18 + ACTIVATE-001/002 — activation is Docker-safe and transactional (WF18 only)');
+{
+  const deploy = fs.readFileSync(path.join(ROOT, 'scripts', 'deploy_n8n.sh'), 'utf8');
+  const code = deploy.split('\n').filter(l => !/^\s*#/.test(l)).join('\n');
+  // ACTIVATE-001: publish/unpublish ALWAYS via the Docker-safe n8n_cli abstraction; never the bare `n8n` binary
+  A.ok('activation uses n8n_cli publish:workflow (Docker-safe)', /n8n_cli publish:workflow/.test(code));
+  A.ok('deactivation uses n8n_cli unpublish:workflow (Docker-safe)', /n8n_cli unpublish:workflow/.test(code));
+  A.ok('no bare `n8n publish:workflow` (would fail on Docker-only VPS)', !/\bn8n publish:workflow/.test(code));
+  A.ok('no bare `n8n unpublish:workflow`', !/\bn8n unpublish:workflow/.test(code));
+  // ACTIVATE-002: transactional WF18-only Telegram activation
+  A.ok('a transactional --activate-telegram mode exists', /--activate-telegram\)\s*MODE="activate-telegram"/.test(deploy));
+  A.ok('activate_telegram publishes WF18 only (the gateway file)', /WF18_FILE="18_telegram_agent_gateway\.json"/.test(deploy));
+  A.ok('activate_telegram states WF23/WF25 are NOT touched', /WF23\/WF25 (are NOT touched|remain inactive)/.test(deploy));
+  A.ok('activation runs the stricter --for-activation preflight', /--for-activation --require-zlib/.test(deploy));
+  A.ok('activation passes the WF18 hard gate', /wf18_activation_gate\.js/.test(deploy));
+  // webhook failure auto-unpublishes WF18 (transactional rollback)
+  const setIdx = deploy.indexOf('telegram_webhook.sh" set --apply');
+  const rollbackIdx = deploy.indexOf('webhook registration FAILED');
+  A.ok('webhook registration failure unpublishes WF18 (transactional)', setIdx >= 0 && rollbackIdx >= 0 && /unpublishing WF18/.test(deploy));
+  A.ok('webhook verification failure also rolls back WF18', /webhook verification FAILED/.test(deploy) && /WEBHOOK_MATCH=PASS/.test(deploy));
+  const mk = fs.readFileSync(path.join(ROOT, 'Makefile'), 'utf8');
+  A.ok('make telegram-activate uses the transactional WF18-only path', /telegram-activate:\n\tscripts\/deploy_n8n\.sh --activate-telegram/.test(mk));
+  A.ok('make telegram-activate is NOT the old publish-then-set two-step', !/--activate-triggers\n\tscripts\/telegram_webhook\.sh set --apply/.test(mk));
+}
+
 A.report('release-integration');

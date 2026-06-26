@@ -77,9 +77,10 @@ telegram-prelive:
 	node tools/preflight_config.js --for-activation --require-zlib
 	scripts/telegram_webhook.sh info
 
+# Transactional WF18-only activation (ACTIVATE-002): publish WF18, register + verify the webhook in ONE step;
+# auto-unpublish WF18 if the webhook step fails. Never activates WF23/WF25 (scheduled activation is separate).
 telegram-activate:
-	scripts/deploy_n8n.sh --activate-triggers
-	scripts/telegram_webhook.sh set --apply
+	scripts/deploy_n8n.sh --activate-telegram
 
 telegram-deactivate:
 	scripts/deploy_n8n.sh --deactivate-triggers
