@@ -178,7 +178,7 @@ A.section('§13.20 + ACTIVATE-001/MARKER-001/DOCS-001 — the SCRIPTS actually w
   A.ok('production dry-run fails closed', /production-target dry-run FAILED CLOSED/.test(deploy));
   // §8/§13.9 — apply imports STAGED prepared JSON (never raw source), resolving ids + creds first
   A.ok('deploy stages prepared workflows before import', /prepare_staged_workflows\.js/.test(deploy));
-  A.ok('apply imports from the staged dir, not the raw WF_DIR', /import:workflow --input="\$\{tmp\}\/staged\//.test(deploy));
+  A.ok('apply imports from the staged dir (import_src), not the raw WF_DIR', /import_src="\$\{tmp\}\/staged"/.test(deploy) && /import:workflow --input="\$\{import_src\}\/\$\{f\}"/.test(deploy));
   A.ok('apply no longer imports raw WF_DIR templates in the main loop', !/import:workflow --input="\$\{WF_DIR\}\/\$\{f\}" --activeState=false/.test(deploy));
   A.ok('apply resolves+persists installation-local ids before staging', /RUNTIME_IDS_TOOL" resolve --export-dir[^\n]*--apply/.test(deploy));
   // non-decrypted credential metadata only; the actual CODE must never pass --decrypted (comments may mention it)
@@ -198,7 +198,7 @@ A.section('§13.7/8 + ROLLBACK-001 — apply acquires the lock, backs up BEFORE 
   A.ok('apply backs up production before mutation', /rp_backup_production/.test(deploy));
   // backup must precede the first staged import
   const backupIdx = deploy.indexOf('rp_backup_production || die');
-  const importIdx = deploy.indexOf('import:workflow --input="${tmp}/staged/');
+  const importIdx = deploy.indexOf('import:workflow --input="${import_src}/${f}"');
   A.ok('backup is invoked BEFORE the first staged import', backupIdx >= 0 && importIdx >= 0 && backupIdx < importIdx);
   A.ok('apply writes sanitized PASS evidence + emits rollback + marks RP_DONE', /rp_write_evidence PASS/.test(deploy) && /rp_emit_rollback/.test(deploy) && /RP_DONE="yes"/.test(deploy));
   // the shared library writes evidence via the sanitizing release_report.js (fingerprints only)
@@ -282,5 +282,38 @@ A.section('§13.16/17/18 + ACTIVATE-001/002 — activation is Docker-safe and tr
   A.ok('make telegram-activate uses the transactional WF18-only path', /telegram-activate:\n\tscripts\/deploy_n8n\.sh --activate-telegram/.test(mk));
   A.ok('make telegram-activate is NOT the old publish-then-set two-step', !/--activate-triggers\n\tscripts\/telegram_webhook\.sh set --apply/.test(mk));
 }
+
+// ------------------------------------------------------------------------------------------------------------
+A.section('§13.20 + TEST-002/003 + MARKER-001 — disposable acceptance drives the SAME shared pipeline');
+{
+  const e2e = fs.readFileSync(path.join(ROOT, 'scripts', 'n8n_disposable_e2e.sh'), 'utf8');
+  const lib = fs.readFileSync(path.join(ROOT, 'scripts', 'lib', 'disposable_n8n.sh'), 'utf8');
+  // TEST-002: it runs the production deploy path, not the legacy stage+bind reimplementation
+  A.ok('disposable e2e drives scripts/deploy_n8n.sh --apply (the shared pipeline)', /deploy_n8n\.sh" --apply/.test(e2e));
+  A.ok('disposable e2e starts/stops a persistent disposable container', /disp_start_persistent/.test(e2e) && /disp_stop_persistent/.test(e2e));
+  A.ok('disposable e2e never targets the production container/volume name', /disp_guard_name/.test(lib) && /n8n-n8n-1/.test(lib) && /n8n_n8n_data/.test(lib));
+  A.ok('disposable removal uses EXACT disposable names, never an image/ancestor filter', !/docker (rm|stop)[^\n]*--filter[^\n]*ancestor/.test(e2e) && /ms-disp-e2e-/.test(e2e));
+  // MARKER-001: the runtime marker is renamed to TOPOLOGY (no false PARENT_CHILD_RUNTIME)
+  A.ok('emits PARENT_CHILD_TOPOLOGY', /PARENT_CHILD_TOPOLOGY/.test(e2e));
+  A.ok('does NOT emit the misleading PARENT_CHILD_RUNTIME', !/PARENT_CHILD_RUNTIME=/.test(e2e));
+  // §14: the honest marker block is present
+  for (const m of ['RELEASE_PIPELINE_SHARED', 'DISPOSABLE_IMPORT', 'DISPOSABLE_REIMPORT', 'RUNTIME_ID_RESOLUTION',
+    'EXACT_NAME_RECONCILIATION', 'CREDENTIAL_RECONCILIATION', 'BACKUP_RESTORE_SMOKE', 'BINDINGS',
+    'RELEASE_LOCK', 'RELEASE_EVIDENCE', 'ROLLBACK_READINESS', 'DISPOSABLE_DEPLOY']) {
+    A.ok('disposable e2e emits ' + m, new RegExp(m).test(e2e));
+  }
+  // PRODUCTION_UNTOUCHED is emitted via the shared disp_production_untouched helper
+  A.ok('disposable e2e emits PRODUCTION_UNTOUCHED', /disp_production_untouched/.test(e2e) && /PRODUCTION_UNTOUCHED/.test(lib));
+  // TEST-003: the PRIMARY shared-pipeline apply captures its exit code (no `deploy ... || true`)
+  A.ok('the shared-pipeline apply captures its exit code (not `|| true`)', /deploy_n8n\.sh" --apply --yes >"\$\{WORK\}\/apply1\.log"[^\n]*; then APPLY1=0; else APPLY1=\$\?; fi/.test(e2e));
+  A.ok('no broad `deploy_n8n.sh --apply ... || true`', !/deploy_n8n\.sh" --apply[^\n]*\|\| true/.test(e2e));
+  // honest skip: without docker it must SKIP (never a fake PASS)
+  A.ok('SKIPs without docker (never fake PASS)', /disp_docker_ready/.test(e2e) && /DISPOSABLE_DEPLOY=SKIPPED/.test(e2e));
+  // n8n_exec gained container copy primitives so a docker-exec import can read its input (DEPLOY-001 reality)
+  const exec = fs.readFileSync(path.join(ROOT, 'scripts', 'lib', 'n8n_exec.sh'), 'utf8');
+  A.ok('n8n_exec provides n8n_put/n8n_get for docker-mode file transfer', /n8n_put\(\)/.test(exec) && /n8n_get\(\)/.test(exec) && /docker cp/.test(exec));
+  A.ok('deploy copies staged files into the container before a docker-mode import', /n8n_put "\$\{tmp\}\/staged"/.test(deployText()));
+}
+function deployText() { return fs.readFileSync(path.join(ROOT, 'scripts', 'deploy_n8n.sh'), 'utf8'); }
 
 A.report('release-integration');

@@ -78,6 +78,33 @@ n8n_cli() {
   fi
 }
 
+# Copy a host DIRECTORY's contents INTO the n8n environment so the CLI can read them. In docker mode the n8n CLI
+# runs INSIDE the container via `docker exec`, so a host path is invisible to it — staged workflows / import
+# inputs MUST be copied in first (this is why a docker-mode `import:workflow --input=<host path>` fails with
+# ENOENT). Host mode is a plain cp. n8n_put <host_src_dir> <env_dest_dir>.
+n8n_put() {
+  src="$1"; dest="$2"
+  if [ "$(n8n_resolve_mode)" = "host" ]; then
+    _n8n_emit_or_run /bin/sh -c "mkdir -p \"$dest\" && cp -a \"$src/.\" \"$dest/\""
+  else
+    c="$(n8n_resolve_container)"
+    _n8n_emit_or_run docker exec "$c" mkdir -p "$dest"
+    _n8n_emit_or_run docker cp "$src/." "$c:$dest"
+  fi
+}
+# Copy a DIRECTORY's contents OUT of the n8n environment to the host (e.g. an export so a host-side tool can read
+# it). Host mode is a plain cp. n8n_get <env_src_dir> <host_dest_dir>.
+n8n_get() {
+  src="$1"; dest="$2"
+  mkdir -p "$dest" 2>/dev/null || true
+  if [ "$(n8n_resolve_mode)" = "host" ]; then
+    _n8n_emit_or_run /bin/sh -c "cp -a \"$src/.\" \"$dest/\" 2>/dev/null || true"
+  else
+    c="$(n8n_resolve_container)"
+    _n8n_emit_or_run docker cp "$c:$src/." "$dest"
+  fi
+}
+
 # Run an sh script inside the n8n environment (host: /bin/sh -c …; docker: docker exec <c> /bin/sh -c …).
 n8n_sh() {
   script="$1"

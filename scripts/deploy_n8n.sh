@@ -289,8 +289,19 @@ n8n_deactivate_id() {
   else n8n_cli update:workflow --id="$id" --active=false; fi  # deprecated fallback (pre-publish CLI)
 }
 
-# Export every workflow n8n knows about into $1 (separate files), so the binder can read assigned ids.
-export_all() { local out="$1"; mkdir -p "$out"; n8n_cli export:workflow --all --separate --output="$out" >/dev/null 2>&1; }
+# Export every workflow n8n knows about into the HOST dir $1 (separate files), so host-side tools (binder,
+# reconciler, id resolver) can read the assigned ids. In docker mode the export is written INSIDE the container,
+# then copied out with n8n_get (a host path is not visible to the container's CLI).
+export_all() {
+  local out="$1"; mkdir -p "$out"
+  if [ "$(n8n_resolve_mode)" = "host" ]; then
+    n8n_cli export:workflow --all --separate --output="$out" >/dev/null 2>&1
+  else
+    local cdir="/tmp/ms-export-$$"
+    n8n_cli export:workflow --all --separate --output="$cdir" >/dev/null 2>&1
+    n8n_get "$cdir" "$out" >/dev/null 2>&1
+  fi
+}
 
 do_import() {
   require_n8n || exit 1
@@ -327,39 +338,47 @@ do_import() {
   say "Staging prepared workflows (resolved ids, reconciled credentials, bindings; active=false)..."
   node "$STAGE_TOOL" --out "$tmp/staged" --local "$RUNTIME_IDS_LOCAL" "${credflag[@]}" \
     || die "staging failed (unresolved id / ambiguous credential) — refusing to import."
-  # verify the staged credential references reconcile cleanly against production (DEPLOY-008)
+  # verify the RESOLVED staged credential references reconcile cleanly against production (DEPLOY-008). A
+  # deliberately-DEFERRED placeholder (a credential type with no production credential yet) is NOT a failure for an
+  # inactive deploy — it is attached later in the UI; only resolved refs must be valid/unambiguous/type-correct.
   if [ "${#credflag[@]}" -gt 0 ]; then
     node -e '
-      const RC=require(process.argv[1]),fs=require("fs"),path=require("path");
+      const RC=require(process.argv[1]),fs=require("fs");
       const dir=process.argv[2],exp=JSON.parse(fs.readFileSync(process.argv[3],"utf8"));
       const files=fs.readdirSync(dir).filter(f=>f.endsWith(".json"));
-      const r=RC.reconcile(RC.collectReferences(files,dir),exp);
+      const all=RC.collectReferences(files,dir);
+      const PH=/paste|placeholder|changeme|change_me|<[^>]+>|your[-_]|todo|replace[-_]?me/i;
+      const resolved=all.filter(r=>!PH.test(String(r.id)));
+      const deferred=all.length-resolved.length;
+      const r=RC.reconcile(resolved,exp);
       if(!r.ok){ console.error("CREDENTIAL_RECONCILIATION=FAIL failures="+r.summary.failures); process.exit(1); }
-      console.log("  [ok] staged credential reconciliation: references="+r.summary.references+" failures=0");
+      console.log("  [ok] staged credential reconciliation: resolved="+resolved.length+" deferred="+deferred+" failures=0");
     ' "$RECONCILE_CREDS" "$tmp/staged" "$tmp/creds.json" || die "staged credential reconciliation failed — refusing to import."
   fi
   # --- (14) production backup BEFORE the first import/mutation (BACKUP-001/§9). Never deletes an existing backup. ---
   hr; say "Creating a production backup BEFORE any import (encrypted at rest; never decrypts credentials, never removes the volume)..."
   rp_backup_production || die "backup failed — refusing to mutate n8n (no import performed)."
   hr
+  # The staged files live on the HOST; in docker mode the n8n CLI runs INSIDE the container, so copy them in first
+  # (a docker-exec `import:workflow --input=<host path>` would ENOENT — DEPLOY-001/§3 Docker-only reality).
+  local import_src
+  if [ "$(n8n_resolve_mode)" = "host" ]; then
+    import_src="${tmp}/staged"
+  else
+    import_src="/tmp/ms-staged-$$"
+    n8n_put "${tmp}/staged" "$import_src" >/dev/null 2>&1 || die "could not copy staged workflows into the n8n container."
+  fi
   for f in "${IMPORT_ORDER[@]}"; do
     say ">> importing STAGED ${f} (--activeState=false → INACTIVE; resolved id; credentials preserved)"
-    n8n_cli import:workflow --input="${tmp}/staged/${f}" --activeState=false
+    n8n_cli import:workflow --input="${import_src}/${f}" --activeState=false
   done
   hr
-  # --- automatic binding (QA-002/QA-009): no manual UI step (staged files are already bound; this re-verifies) --
-  say "Exporting assigned ids and verifying ${BINDING_COUNT} Execute Sub-workflow edges..."
+  # --- binding verification (QA-002/QA-009): the STAGED files already carry resolved binding ids (prepare_staged),
+  #     and n8n preserves our resolved workflow ids on import, so the fresh export must show every edge bound with
+  #     ZERO placeholders. No manual UI step and no re-import-callers dance is needed. ---
+  say "Re-exporting assigned ids and verifying ${BINDING_COUNT} Execute Sub-workflow edges (zero placeholders)..."
   export_all "$tmp/exported"
-  node "$BIND_TOOL" --dir "$tmp/exported" --report "$tmp/bind_report.json" || die "automatic binding failed (see report above)."
-  # Re-import the rewritten caller workflows so the bound ids take effect (update by id; no duplicates).
-  for f in "$tmp/exported"/*.json; do
-    if grep -q '"type": "n8n-nodes-base.executeWorkflow"' "$f"; then
-      n8n_cli import:workflow --input="$f" --activeState=false >/dev/null
-    fi
-  done
-  say "Re-exporting to verify bindings..."
-  rm -rf "$tmp/verify"; export_all "$tmp/verify"
-  node "$BIND_TOOL" --dir "$tmp/verify" --verify || die "post-bind verification failed — placeholders remain."
+  node "$BIND_TOOL" --dir "$tmp/exported" --verify || die "post-import binding verification failed — placeholders remain or an edge is unbound."
   hr
   say "Capturing assigned workflow IDs (active=false for all; fingerprints only — never raw ids):"
   local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"

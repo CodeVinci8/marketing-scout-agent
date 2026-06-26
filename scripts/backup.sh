@@ -77,8 +77,11 @@ do_backup() {
   mkdir -p "$DEST"; chmod 700 "$DEST"
   say ">> creating archive (disposable container, volume read-only, entrypoint overridden to /bin/sh)"
   # The inner sh tars the mounted volume to the mounted backup dir; both are bind mounts of the disposable run.
+  # Run as root (--user 0:0) so the container can READ the encrypted volume and WRITE the archive into the
+  # root-owned destination — the n8n image's default `node` user (uid 1000) cannot write to a 700 root-owned dest
+  # (the "tar: can't open /backup/...: Permission denied" failure). Still read-only volume; still never decrypts.
   n8n_run_image_sh 'cd /data && tar -czf /backup/n8n-data.tar.gz .' \
-    -v "${MS_N8N_VOLUME}:/data:ro" -v "${DEST}:/backup"
+    --user 0:0 -v "${MS_N8N_VOLUME}:/data:ro" -v "${DEST}:/backup"
   if [ "${MS_N8N_EXEC_DRY:-0}" = "1" ]; then say "DRY: archive not actually written."; return 0; fi
   [ -f "${DEST}/n8n-data.tar.gz" ] || die "archive was not produced"
   chmod 600 "${DEST}/n8n-data.tar.gz"
