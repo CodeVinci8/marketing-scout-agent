@@ -108,6 +108,8 @@ const JS_SUITES = [
   ['reconcile-and-gate', 'test_reconcile_and_gate.js'],
   // --- Stage 8 release core: end-to-end acceptance harness emitting honest §21 markers (CORE PASS; live PENDING) ---
   ['stage8-release-e2e', 'test_stage8_release_e2e.js'],
+  // --- Stage 8 release INTEGRATION: ordered fail-closed planner + env discovery wired into the deploy path ---
+  ['release-integration', 'test_release_integration.js'],
 ];
 
 let failed = 0;

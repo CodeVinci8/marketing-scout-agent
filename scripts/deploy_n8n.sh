@@ -13,8 +13,10 @@
 #     preflight (incl. zlib for XLSX-capable workflows). It NEVER activates a callable sub-workflow.
 #
 # Modes:
-#   scripts/deploy_n8n.sh                      # dry-run (default): validate + preflight + print full plan
-#   scripts/deploy_n8n.sh --dry-run            # same as above (explicit)
+#   scripts/deploy_n8n.sh                      # dry-run (default): PRODUCTION discovery + id resolution + reconcile
+#                                              #   plan + fail-closed preflight + full import/bind plan (no changes)
+#   scripts/deploy_n8n.sh --dry-run            # same as above (explicit, production target — fail-closed)
+#   scripts/deploy_n8n.sh --offline-plan       # OFFLINE planning only (soft; never claims production readiness)
 #   scripts/deploy_n8n.sh --check-config       # fail-closed runtime-config preflight only
 #   scripts/deploy_n8n.sh --apply [--yes]      # import (inactive) + auto-bind + verify bindings; never activates
 #   scripts/deploy_n8n.sh --verify-bindings    # export + check all 8 edges bound, zero placeholders
@@ -34,16 +36,27 @@ WF_DIR="${ROOT}/n8n/workflows"
 MANIFEST_LIB="${ROOT}/tools/manifest_lib.js"
 BIND_TOOL="${ROOT}/tools/bind_n8n_workflow_ids.js"
 PREFLIGHT="${ROOT}/tools/preflight_config.js"
+# Release-core integration (RELEASE-005 / DEPLOY-002/003/004/007): the deploy path now consumes the previously
+# disconnected release-core tools — installation-local id resolver, env discovery, and the ordered fail-closed
+# release planner — instead of importing raw JSON with "(assigned on import)" ids and first-match name selection.
+RUNTIME_IDS_TOOL="${ROOT}/tools/runtime_ids.js"
+ENV_DISCOVERY="${ROOT}/tools/env_discovery.js"
+RELEASE_PLAN="${ROOT}/tools/release_plan.js"
+RUNTIME_IDS_LOCAL="${MS_RUNTIME_IDS_LOCAL:-${ROOT}/config/runtime_ids.local.json}"
 # DEPLOY-001: Docker-only-safe execution abstraction (host CLI OR `docker exec <container> …`; /bin/sh, not bash).
 # shellcheck source=scripts/lib/n8n_exec.sh
 . "${ROOT}/scripts/lib/n8n_exec.sh"
 MODE="dry-run"
 ASSUME_YES="no"
 N8N_VERSION="unknown"
+# Release target for the planner: production (fail-closed; default for dry-run/apply) vs offline (explicit,
+# soft planning only — DEPLOY-004: an offline plan must never claim production readiness).
+RELEASE_TARGET="production"
 
 for arg in "$@"; do
   case "$arg" in
     --dry-run) MODE="dry-run" ;;
+    --offline-plan) MODE="dry-run"; RELEASE_TARGET="offline" ;;
     --check-config) MODE="check-config" ;;
     --apply) MODE="apply" ;;
     --verify-bindings) MODE="verify-bindings" ;;
@@ -113,6 +126,71 @@ check_config() {
   node "$PREFLIGHT" "${flags[@]}"
 }
 
+# --- release-core integration: live discovery + ordered fail-closed planning ------------------------------------
+# Capture the current production/disposable n8n export into $1 so the id resolver + reconciler can run against
+# REALITY (exact-name matching, installation-local id discovery). Empty/absent export => $1 stays empty.
+EXPORT_PROVIDED="no"
+capture_export() {
+  local out="$1"; mkdir -p "$out"
+  if n8n_available; then
+    if n8n_cli export:workflow --all --separate --output="$out" >/dev/null 2>&1 && ls "$out"/*.json >/dev/null 2>&1; then
+      EXPORT_PROVIDED="yes"; return 0
+    fi
+  fi
+  EXPORT_PROVIDED="no"; return 0
+}
+
+# Run the ORDERED, fail-closed release planner (tools/release_plan.js) against the captured export + discovered
+# env + detected version. Production target fails closed; offline target is soft. Echoes the sanitized plan.
+run_release_plan() {
+  local mode="$1" export_dir="$2" extra=()
+  [ "$RELEASE_TARGET" = "offline" ] && extra+=( --target offline ) || extra+=( --target production )
+  [ -n "$export_dir" ] && [ "$EXPORT_PROVIDED" = "yes" ] && extra+=( --export-dir "$export_dir" )
+  command -v node >/dev/null 2>&1 || die "node is required for the release planner."
+  node "$RELEASE_PLAN" --mode "$mode" --n8n-version "$N8N_VERSION" --image "${MS_N8N_IMAGE:-n8nio/n8n:2.23.3}" \
+    --local "$RUNTIME_IDS_LOCAL" "${extra[@]}"
+}
+
+# Sanitized environment discovery (NEVER prints secret values; SET/MISSING + fingerprints only).
+discover_environment() {
+  command -v node >/dev/null 2>&1 || return 0
+  say "Configuration discovery (effective env; secret values never shown):"
+  node "$ENV_DISCOVERY" --source "${MS_ENV_SOURCE:-auto}" 2>/dev/null | sed 's/^/  /' || true
+}
+
+# Load installation-local workflow-id FINGERPRINTS (fp_<sha10>) keyed by workflow FILE, so the plan prints a
+# stable fingerprint instead of the forbidden "(assigned on import)" placeholder and never a raw id (DEPLOY-003).
+declare -A ID_FP
+load_runtime_id_fingerprints() {
+  local line file fp
+  while IFS=$'\t' read -r file fp; do [ -n "$file" ] && ID_FP["$file"]="$fp"; done < <(
+    node -e '
+      const L=require(process.argv[1]); const RID=require(process.argv[2]);
+      const id=L.runtimeIdentity(); let map={workflows:{}};
+      try{ map=RID.loadLocalMap(process.argv[3]); }catch(e){ void e; }
+      for(const k of Object.keys(id)){ const e=(map.workflows||{})[k]; process.stdout.write(id[k].file+"\t"+(e&&e.id?RID.fingerprint(e.id):"unresolved")+"\n"); }
+    ' "$MANIFEST_LIB" "$RUNTIME_IDS_TOOL" "$RUNTIME_IDS_LOCAL" 2>/dev/null || true
+  )
+}
+
+# Fingerprint a raw id for SAFE logging (DEPLOY-003): logs show fp_<sha10>, never the raw installation id.
+id_fingerprint() { node -e 'process.stdout.write(require(process.argv[1]).fingerprint(process.argv[2]))' "$RUNTIME_IDS_TOOL" "$1" 2>/dev/null || printf 'fp_err'; }
+
+# Strict exact-name workflow-id resolution (DEPLOY-002): NEVER select the first of several matches.
+#   RESOLVE_STATUS=ok|absent|ambiguous ; on ok, echoes the unique id.
+RESOLVE_STATUS=""
+resolve_exact_name() {
+  local name="$1" listing="$2" count
+  count="$(printf '%s\n' "$listing" | awk -F'|' -v n="$name" '$2==n{c++} END{print c+0}')"
+  if [ "${count:-0}" -eq 1 ]; then
+    RESOLVE_STATUS="ok"; printf '%s' "$(printf '%s\n' "$listing" | awk -F'|' -v n="$name" '$2==n{print $1; exit}')"
+  elif [ "${count:-0}" -eq 0 ]; then
+    RESOLVE_STATUS="absent"; printf ''
+  else
+    RESOLVE_STATUS="ambiguous"; printf ''
+  fi
+}
+
 validate_json() {
   say "Validating workflow JSON (offline; no secrets, active=false enforced)..."
   if command -v python3 >/dev/null 2>&1; then
@@ -131,16 +209,18 @@ validate_json() {
 }
 
 print_plan() {
+  load_runtime_id_fingerprints
   hr; say "Runtime closure: ${RUNTIME_COUNT} workflows (single source of truth: config/workflow_manifest.json)"
   say "Import plan (deterministic order — config first, callable dependencies before orchestration, triggers last):"
+  say "  (ids are installation-local; logs show a FINGERPRINT only — raw ids live in config/runtime_ids.local.json)"
   local i=1
   for f in "${IMPORT_ORDER[@]}"; do
     local path="${WF_DIR}/${f}"
-    local name id nodes
+    local name idfp nodes
     name="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "$path")"
-    id="$(node -e 'process.stdout.write(String(require(process.argv[1]).id||"(assigned on import)"))' "$path")"
+    idfp="${ID_FP[$f]:-unresolved}"
     nodes="$(node -e 'process.stdout.write(String((require(process.argv[1]).nodes||[]).length))' "$path")"
-    printf '  %d. %-46s name="%s"  id=%s  nodes=%s  active=false\n' "$i" "$f" "$name" "$id" "$nodes"
+    printf '  %d. %-46s name="%s"  id_fp=%s  nodes=%s  active=false\n' "$i" "$f" "$name" "$idfp" "$nodes"
     i=$((i+1))
   done
   hr
@@ -197,13 +277,6 @@ n8n_deactivate_id() {
   else n8n_cli update:workflow --id="$id" --active=false; fi  # deprecated fallback (pre-publish CLI)
 }
 
-# Map a workflow JSON file -> the assigned workflow id after import, by EXACT name match in `n8n list:workflow`.
-id_for_workflow_name() {
-  local name="$1" listing="$2"
-  # list:workflow prints lines like "<id>|<name>"; match the name column exactly (no substring).
-  printf '%s\n' "$listing" | awk -F'|' -v n="$name" '$2==n {print $1; exit}'
-}
-
 # Export every workflow n8n knows about into $1 (separate files), so the binder can read assigned ids.
 export_all() { local out="$1"; mkdir -p "$out"; n8n_cli export:workflow --all --separate --output="$out" >/dev/null 2>&1; }
 
@@ -235,12 +308,16 @@ do_import() {
   rm -rf "$tmp/verify"; export_all "$tmp/verify"
   node "$BIND_TOOL" --dir "$tmp/verify" --verify || die "post-bind verification failed — placeholders remain."
   hr
-  say "Capturing assigned workflow IDs (active=false for all):"
+  say "Capturing assigned workflow IDs (active=false for all; fingerprints only — never raw ids):"
   local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
   for f in "${IMPORT_ORDER[@]}"; do
     local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
-    id="$(id_for_workflow_name "$nm" "$listing")"
-    printf '  %-46s id=%s\n' "$f" "${id:-(not found)}"
+    id="$(resolve_exact_name "$nm" "$listing")"
+    case "$RESOLVE_STATUS" in
+      ok) printf '  %-46s id_fp=%s\n' "$f" "$(id_fingerprint "$id")" ;;
+      ambiguous) die "ambiguous exact workflow name in n8n for ${f} (\"${nm}\") — refusing (DEPLOY-002)." ;;
+      *) printf '  %-46s id_fp=%s\n' "$f" "(not found)" ;;
+    esac
   done
   hr
   say "Imported ${#IMPORT_ORDER[@]} runtime workflows. They are INACTIVE and the 8 sub-workflow ids are bound."
@@ -310,9 +387,12 @@ activate_triggers() {
   local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
   for f in "${to_activate[@]}"; do
     local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
-    id="$(id_for_workflow_name "$nm" "$listing")"
-    if [ -z "$id" ]; then say "  [skip] ${f}: not found in n8n (import it first with --apply)"; continue; fi
-    say ">> activating ${f} (id=${id}) via publish:workflow (proven 2.23.3; deprecated update:workflow fallback)"
+    id="$(resolve_exact_name "$nm" "$listing")"
+    case "$RESOLVE_STATUS" in
+      ambiguous) die "ambiguous exact workflow name for ${f} (\"${nm}\") in n8n — refusing to activate (DEPLOY-002)." ;;
+      absent) say "  [skip] ${f}: not found in n8n (import it first with --apply)"; continue ;;
+    esac
+    say ">> activating ${f} (id_fp=$(id_fingerprint "$id")) via publish:workflow (proven 2.23.3; deprecated update:workflow fallback)"
     n8n_activate_id "$id"
   done
   hr
@@ -336,9 +416,12 @@ deactivate_triggers() {
   local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
   for f in "${to_deactivate[@]}"; do
     local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
-    id="$(id_for_workflow_name "$nm" "$listing")"
-    [ -z "$id" ] && { say "  [skip] ${f}: not found"; continue; }
-    say ">> deactivating ${f} (id=${id}) via unpublish:workflow (proven 2.23.3; deprecated update:workflow fallback)"
+    id="$(resolve_exact_name "$nm" "$listing")"
+    case "$RESOLVE_STATUS" in
+      ambiguous) die "ambiguous exact workflow name for ${f} (\"${nm}\") in n8n — refusing to deactivate (DEPLOY-002)." ;;
+      absent) say "  [skip] ${f}: not found"; continue ;;
+    esac
+    say ">> deactivating ${f} (id_fp=$(id_fingerprint "$id")) via unpublish:workflow (proven 2.23.3; deprecated update:workflow fallback)"
     n8n_deactivate_id "$id"
   done
   hr; say "Done. All listed trigger workflows are now inactive."
@@ -349,11 +432,15 @@ show_status() {
   require_n8n || exit 1
   detect_n8n_version
   local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
-  hr; say "Runtime workflow status (active flag from n8n):"
+  hr; say "Runtime workflow status (active flag from n8n; fingerprints only — never raw ids):"
   for f in "${IMPORT_ORDER[@]}"; do
     local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
-    id="$(id_for_workflow_name "$nm" "$listing")"
-    printf '  %-46s id=%s\n' "$f" "${id:-(not imported)}"
+    id="$(resolve_exact_name "$nm" "$listing")"
+    case "$RESOLVE_STATUS" in
+      ok) printf '  %-46s id_fp=%s  exact_name_count=1\n' "$f" "$(id_fingerprint "$id")" ;;
+      ambiguous) printf '  %-46s id_fp=%s  exact_name_count>1 (AMBIGUOUS — fix before deploy)\n' "$f" "(ambiguous)" ;;
+      *) printf '  %-46s id_fp=%s\n' "$f" "(not imported)" ;;
+    esac
   done
   hr
 }
@@ -366,10 +453,30 @@ case "$MODE" in
     ;;
   dry-run)
     load_manifest_arrays
-    check_config soft || true
     validate_json
+    discover_environment
+    # Capture a live export (production target) so id resolution + reconciliation run against reality.
+    PLAN_EXPORT=""
+    if [ "$RELEASE_TARGET" = "production" ]; then
+      if n8n_available; then detect_n8n_version; PLAN_EXPORT="$(mktemp -d)"; trap 'rm -rf "$PLAN_EXPORT"' EXIT; capture_export "$PLAN_EXPORT"; fi
+    fi
     print_plan
-    say "DRY-RUN complete. No changes made. Re-run with --apply to import + auto-bind (workflows stay inactive)."
+    hr; say "Ordered fail-closed release plan (target=${RELEASE_TARGET}):"
+    if run_release_plan dry-run "$PLAN_EXPORT"; then
+      if [ "$RELEASE_TARGET" = "offline" ]; then
+        say "OFFLINE-PLAN complete (SOFT). This is a planning rehearsal only and does NOT assert production readiness."
+        say "Run a real production dry-run on the VPS: MS_N8N_MODE=docker MS_N8N_CONTAINER=n8n-n8n-1 scripts/deploy_n8n.sh --dry-run"
+      else
+        say "DRY-RUN complete (PRODUCTION target, fail-closed). No changes made. Re-run with --apply to stage+import+bind (inactive)."
+      fi
+    else
+      # DEPLOY-004: a production-target dry-run MUST fail closed when ids/env/export are unresolved.
+      if [ "$RELEASE_TARGET" = "production" ]; then
+        die "production-target dry-run FAILED CLOSED (see ABORT_REASON above). For an offline rehearsal use: scripts/deploy_n8n.sh --offline-plan"
+      else
+        die "offline plan reported an abort (see above)."
+      fi
+    fi
     ;;
   apply)
     load_manifest_arrays

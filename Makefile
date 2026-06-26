@@ -164,6 +164,7 @@ test-js:
 	node tests/test_release_scripts.js
 	node tests/test_reconcile_and_gate.js
 	node tests/test_stage8_release_e2e.js
+	node tests/test_release_integration.js
 
 test-wf:
 	python3 scripts/validate_workflows.py
