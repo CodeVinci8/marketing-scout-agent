@@ -48,6 +48,11 @@ RUNTIME_IDS_LOCAL="${MS_RUNTIME_IDS_LOCAL:-${ROOT}/config/runtime_ids.local.json
 # DEPLOY-001: Docker-only-safe execution abstraction (host CLI OR `docker exec <container> …`; /bin/sh, not bash).
 # shellcheck source=scripts/lib/n8n_exec.sh
 . "${ROOT}/scripts/lib/n8n_exec.sh"
+# RELEASE-004/003/§9: shared release lock + backup + sanitized evidence + rollback layer (one implementation,
+# used by both this production path and the disposable acceptance).
+RP_ROOT="${ROOT}"
+# shellcheck source=scripts/lib/release_pipeline.sh
+. "${ROOT}/scripts/lib/release_pipeline.sh"
 MODE="dry-run"
 ASSUME_YES="no"
 N8N_VERSION="unknown"
@@ -290,12 +295,21 @@ do_import() {
     read -r reply
     case "$reply" in y|Y|yes|YES) ;; *) say "Aborted. No changes made."; exit 0 ;; esac
   fi
-  local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
+  # --- (0) acquire the release lock; the EXIT-trap finisher releases it + writes ABORT evidence + rollback on any
+  #         failure, and cleans secret-bearing temp files no matter the outcome (RELEASE-004 / §5 fail behavior) ---
+  RP_DONE="no"
+  rp_lock_acquire || die "another release holds the lock (scripts/release_lock.sh status) — refusing concurrent deploy."
+  local tmp; tmp="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap "rp_finish '$tmp'" EXIT
   # --- (1) resolve installation-local ids against the LIVE export (fail-closed, idempotent; DEPLOY-007/002) -----
   say "Capturing live export and resolving installation-local workflow ids..."
   capture_export "$tmp/preexport"
   node "$RUNTIME_IDS_TOOL" resolve --export-dir "$tmp/preexport" --local "$RUNTIME_IDS_LOCAL" --apply \
     || die "runtime id resolution aborted (exact-name/id-mismatch — see report) — refusing to import."
+  # record coverage + map checksum for the release evidence (sanitized: counts/checksum only)
+  RP_COVERAGE="$(node "$RUNTIME_IDS_TOOL" status --local "$RUNTIME_IDS_LOCAL" 2>/dev/null | sed -n 's/^coverage=\([^ ]*\).*/\1/p' | head -1)"
+  RP_CHECKSUM="$(node "$RUNTIME_IDS_TOOL" status --local "$RUNTIME_IDS_LOCAL" 2>/dev/null | sed -n 's/.*checksum=\([^ ]*\).*/\1/p' | head -1)"
   # --- (2) non-decrypted credential metadata for automatic reconciliation (NEVER --decrypted) ------------------
   local credflag=()
   if n8n_cli export:credentials --all --output="$tmp/creds.json" >/dev/null 2>&1 && [ -f "$tmp/creds.json" ]; then
@@ -319,6 +333,10 @@ do_import() {
       console.log("  [ok] staged credential reconciliation: references="+r.summary.references+" failures=0");
     ' "$RECONCILE_CREDS" "$tmp/staged" "$tmp/creds.json" || die "staged credential reconciliation failed — refusing to import."
   fi
+  # --- (14) production backup BEFORE the first import/mutation (BACKUP-001/§9). Never deletes an existing backup. ---
+  hr; say "Creating a production backup BEFORE any import (encrypted at rest; never decrypts credentials, never removes the volume)..."
+  rp_backup_production || die "backup failed — refusing to mutate n8n (no import performed)."
+  hr
   for f in "${IMPORT_ORDER[@]}"; do
     say ">> importing STAGED ${f} (--activeState=false → INACTIVE; resolved id; credentials preserved)"
     n8n_cli import:workflow --input="${tmp}/staged/${f}" --activeState=false
@@ -352,6 +370,10 @@ do_import() {
   hr
   say "Imported ${#IMPORT_ORDER[@]} runtime workflows from STAGED JSON. They are INACTIVE, with resolved ids, the 8"
   say "sub-workflow ids bound, and compatible production credentials preserved automatically (no manual UI step)."
+  # --- (20/21) sanitized release evidence (fingerprints only) + the exact rollback command ----------------------
+  rp_write_evidence PASS "${RP_COVERAGE:-unknown}" "${RP_CHECKSUM:-unknown}" 0
+  rp_emit_rollback
+  RP_DONE="yes"   # tells the EXIT-trap finisher this was a clean release (no ABORT diagnostics)
   say "Rollback: scripts/rollback.sh --apply  (or: make rollback) — restores publication/webhook/id-map state."
   say "Next steps:"
   say "  1. Any credential TYPE with no compatible production credential yet stays a deferred placeholder — attach"

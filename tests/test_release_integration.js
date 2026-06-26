@@ -188,4 +188,73 @@ A.section('§13.20 + ACTIVATE-001/MARKER-001/DOCS-001 — the SCRIPTS actually w
   A.ok('compatible credentials are preserved automatically (no blanket manual-UI attach step)', /preserved automatically/.test(deploy) && !/In the n8n UI, attach credentials \(Google Sheets/.test(deploy));
 }
 
+// ------------------------------------------------------------------------------------------------------------
+A.section('§13.7/8 + ROLLBACK-001 — apply acquires the lock, backs up BEFORE import, writes evidence + rollback');
+{
+  const deploy = fs.readFileSync(path.join(ROOT, 'scripts', 'deploy_n8n.sh'), 'utf8');
+  A.ok('deploy sources the shared release pipeline', /release_pipeline\.sh/.test(deploy));
+  A.ok('apply acquires the release lock', /rp_lock_acquire/.test(deploy));
+  A.ok('apply installs the EXIT-trap finisher (releases lock + abort evidence on failure)', /trap "rp_finish/.test(deploy));
+  A.ok('apply backs up production before mutation', /rp_backup_production/.test(deploy));
+  // backup must precede the first staged import
+  const backupIdx = deploy.indexOf('rp_backup_production || die');
+  const importIdx = deploy.indexOf('import:workflow --input="${tmp}/staged/');
+  A.ok('backup is invoked BEFORE the first staged import', backupIdx >= 0 && importIdx >= 0 && backupIdx < importIdx);
+  A.ok('apply writes sanitized PASS evidence + emits rollback + marks RP_DONE', /rp_write_evidence PASS/.test(deploy) && /rp_emit_rollback/.test(deploy) && /RP_DONE="yes"/.test(deploy));
+  // the shared library writes evidence via the sanitizing release_report.js (fingerprints only)
+  const lib = fs.readFileSync(path.join(ROOT, 'scripts', 'lib', 'release_pipeline.sh'), 'utf8');
+  A.ok('evidence goes through the sanitizing release_report.js', /release_report\.js/.test(lib));
+  A.ok('abort path preserves diagnostics + rollback (RP_DONE!=yes)', /RP_DONE" != "yes"/.test(lib) && /RELEASE_ABORTED/.test(lib));
+}
+
+// ------------------------------------------------------------------------------------------------------------
+A.section('§13.19 + ROLLBACK-001 — rollback.sh is a REAL rollback, not just Telegram deactivation');
+{
+  const rb = fs.readFileSync(path.join(ROOT, 'scripts', 'rollback.sh'), 'utf8');
+  A.ok('rollback deletes the Telegram webhook', /telegram_webhook\.sh|deleteWebhook|WEBHOOK\}? delete/.test(rb) && /delete --apply/.test(rb));
+  A.ok('rollback unpublishes/deactivates the trigger workflows', /--deactivate-triggers/.test(rb));
+  A.ok('rollback restores the runtime-id map from a backup', /RUNTIME_IDS_LOCAL/.test(rb) && /\.bak\./.test(rb));
+  A.ok('rollback references the pre-release backup for DB restore', /n8n-prerelease-|from-backup|restore_validate\.sh/.test(rb));
+  A.ok('rollback verifies post-rollback state', /--status/.test(rb));
+  A.ok('rollback never removes the volume / decrypts', !/down -v|volume rm|--decrypted/.test(rb.split('\n').filter(l => !/^\s*#/.test(l)).join('\n')));
+  const mk = fs.readFileSync(path.join(ROOT, 'Makefile'), 'utf8');
+  A.ok('make rollback invokes rollback.sh (not only telegram-deactivate)', /rollback:\n\tscripts\/rollback\.sh --apply/.test(mk));
+}
+
+// ------------------------------------------------------------------------------------------------------------
+A.section('§5 failure behavior — rp_finish writes ABORT evidence + releases lock; clean run does not');
+{
+  const { execFileSync } = require('child_process');
+  const os = require('os');
+  function runFinish(done) {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-rpf-'));
+    const ev = path.join(tmp, 'ev'); const lock = path.join(tmp, 'lock');
+    const script = [
+      'set -euo pipefail',
+      'export RP_ROOT="' + ROOT + '"',
+      'export MS_RELEASE_EVIDENCE_DIR="' + ev + '"',
+      'export MS_RELEASE_LOCK="' + lock + '"',
+      '. "' + ROOT + '/scripts/lib/n8n_exec.sh"',
+      '. "' + ROOT + '/scripts/lib/release_pipeline.sh"',
+      'rp_lock_acquire >/dev/null',
+      'RP_DONE="' + done + '"',
+      'rp_finish ""',
+      '"' + ROOT + '/scripts/release_lock.sh" status'
+    ].join('\n');
+    let out; try { out = execFileSync('bash', ['-c', script], { encoding: 'utf8' }); } catch (e) { out = (e.stdout || '') + (e.stderr || ''); }
+    const files = fs.existsSync(ev) ? fs.readdirSync(ev) : [];
+    const evText = files.length ? fs.readFileSync(path.join(ev, files[0]), 'utf8') : '';
+    fs.rmSync(tmp, { recursive: true, force: true });
+    return { out, files, evText };
+  }
+  const aborted = runFinish('no');
+  A.ok('abort run writes exactly one evidence file', aborted.files.length === 1);
+  A.ok('abort evidence result=ABORTED', /"result":\s*"ABORTED"/.test(aborted.evText));
+  A.ok('abort run releases the lock (status FREE)', /RELEASE_LOCK=FREE/.test(aborted.out));
+  A.ok('abort run emits the rollback command', /ROLLBACK_COMMAND=/.test(aborted.out));
+  const clean = runFinish('yes');
+  A.ok('clean run writes NO abort evidence', clean.files.length === 0);
+  A.ok('clean run also releases the lock', /RELEASE_LOCK=FREE/.test(clean.out));
+}
+
 A.report('release-integration');
