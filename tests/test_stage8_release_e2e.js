@@ -38,7 +38,7 @@ mark('STAGE8_DISCOVERY', 'PASS');
 mark('N8N_VERSION_MATCH', d.n8n_version === '2.23.3' ? 'PASS' : 'FAIL');
 mark('RUNTIME_WORKFLOWS', String(d.runtime_workflow_count));
 A.eq('runtime workflow count == 15', d.runtime_workflow_count, 15);
-A.eq('binding edges == 8', d.binding_edge_count, 8);
+A.eq('binding edges == 13', d.binding_edge_count, 13);
 A.eq('n8n version 2.23.3', d.n8n_version, '2.23.3');
 
 // every committed runtime workflow is inactive
@@ -88,9 +88,9 @@ A.section('bindings (manifest edges + zero placeholders by construction)');
   const edges = L.bindingEdges();
   const closure = new Set(L.runtimeClosure());
   const allTargetsInClosure = edges.every(e => closure.has(e.target_workflow));
-  mark('BINDINGS', edges.length === 8 && allTargetsInClosure ? 'PASS' : 'FAIL');
+  mark('BINDINGS', edges.length === 13 && allTargetsInClosure ? 'PASS' : 'FAIL');
   mark('PLACEHOLDERS_REMAINING', '0');
-  A.ok('8 binding edges, all targets in runtime closure', edges.length === 8 && allTargetsInClosure);
+  A.ok('13 binding edges, all targets in runtime closure', edges.length === 13 && allTargetsInClosure);
 }
 
 // ---------------------------------------------------------------------------------------------------------

@@ -5,6 +5,35 @@ Most recent first.
 
 ---
 
+## 2026-06-27 (session 29) — WF18 gateway REARCHITECTURE: real secure dispatcher (DEC-161)
+
+**Branch:** `fix/wf18-gateway-rearchitecture` off `main` @ `2631499`. **3 commits, NOT pushed.** $0, 0 external
+calls, all `active=false`, production/volume/`sing-box`/443 untouched, no secret/raw-id committed.
+
+**Independently confirmed the disconnected topology** (WF18: 21 nodes, 0 `executeWorkflow`, fan-out to all 6
+persistence branches + send with no auth/dedup hard-stop; WF19/20/21/22 manual-only) before changing code.
+
+**Implemented (generator-first, regenerated WF17-26 drift-proof):** fail-closed ingress (secret + kill-switch +
+auth + supported-type + private-chat hard-stops via `telegram_io.ingressDecision`); real `executeWorkflow`
+dispatcher WF18→WF19/20/21/22/24; callable children with named contracts; durable `execution_plans` store with
+plan-before-approval + plan_hash binding (`request_planner`); shaped Sheets writes + formula-injection escape;
+callback ack; cross-user isolation (conv=chat+user); state revision (`conversation_memory`); WF22 real upserts +
+audit-after-mutation; capability planning-vs-execution honesty.
+
+**Tests:** new `tests/test_wf18_real_topology.js` (85 checks — §19 JSON-graph reachability + §20 negative matrix);
+updated drift/manifest/binding/release/bootstrap count tests (13 edges / 11 callables / 41 sheet tabs).
+`make test` → **MAKE_TEST_RC=0, ALL SUITES PASS** ($0, 0 external calls). New `config/sheets_contracts.json`
+`execution_plans` tab; manifest auto-regenerated (15 runtime / 13 edges).
+
+**Honest gate:** 18/19 `wf18_blockers.json` resolved with named tests; **TELEGRAM-001 (public HTTPS ingress) left
+OPEN** (operator infra) → `wf18_activation_gate` correctly still BLOCKS WF18. Caveats: IDEMP-001 needs WF18
+concurrency=1; ORCH-STATE-001 per-stage re-read is a follow-up; RELEASE-006/DISCOVERY-001 unchanged.
+
+**Commits:** `66fe401` core rearchitecture · `f4618e1` real-topology suite · (docs commit this entry).
+**Next:** operator HTTPS ingress + disposable import round-trip + prod dry-run (RELEASE-006) + gated live acceptance.
+
+---
+
 ## 2026-06-26 (session 28) — Stage 8 release-path INTEGRATION REPAIR (DEC-160)
 
 **Agent role:** senior release engineer / reliability / security · **Branch:** `fix/stage8-release-integration`

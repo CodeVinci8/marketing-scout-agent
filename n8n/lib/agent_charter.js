@@ -175,9 +175,26 @@ function annotateAvailability(cap, cfg) {
     if (allow.indexOf(String(p).toLowerCase()) < 0) reasons.push('platform ' + p + ' not configured (not in source allowlist / adapter unavailable)');
   }
   if (cap.external_calls && cfg.config_complete === false) reasons.push('central config incomplete');
+  // `available` = available FOR PLANNING (allowlist + config). CAPABILITY-001: a capability that needs paid
+  // external collection is not actually EXECUTABLE unless the runtime gates are open too (master external-actions
+  // switch + a positive effective call ceiling + the per-platform collector flag). We surface that distinction
+  // honestly so /help never advertises a capability as runnable when execution is impossible.
+  const planning = reasons.length === 0;
+  const execReasons = reasons.slice();
+  if (cap.external_calls) {
+    if (cfg.enable_external_actions !== true) execReasons.push('external actions disabled (MS_ENABLE_EXTERNAL_ACTIONS=false)');
+    if (Number(cfg.effective_max_external_calls != null ? cfg.effective_max_external_calls : cfg.max_external_calls) <= 0) execReasons.push('zero external-call budget');
+    const flag = { website: 'enable_firecrawl', firecrawl: 'enable_firecrawl', avito: 'enable_apify', vk: 'enable_vk' };
+    for (const p of (cap.platforms || [])) {
+      const f = flag[String(p).toLowerCase()];
+      if (f && cfg[f] !== true) execReasons.push('collector ' + p + ' disabled');
+    }
+  }
   return Object.assign({}, cap, {
-    available: reasons.length === 0,
-    unavailable_reason: reasons.join('; ')
+    available: planning,
+    unavailable_reason: reasons.join('; '),
+    execution_available: execReasons.length === 0,
+    execution_disabled_reason: planning && execReasons.length ? execReasons.filter(r => reasons.indexOf(r) < 0).join('; ') : ''
   });
 }
 
@@ -193,7 +210,7 @@ function capabilityCatalogText(cfg) {
   const ok = anns.filter(a => a.available);
   const off = anns.filter(a => !a.available);
   const lines = [CHARTER.identity, '', 'Что я умею (доступно сейчас):'];
-  ok.forEach(a => lines.push('• ' + a.name));
+  ok.forEach(a => lines.push('• ' + a.name + (a.execution_available === false ? ' — только планирование (выполнение отключено: ' + a.execution_disabled_reason + ')' : '')));
   if (off.length) {
     lines.push('Недоступно (нужна настройка):');
     off.forEach(a => lines.push('• ' + a.name + ' — ' + a.unavailable_reason));

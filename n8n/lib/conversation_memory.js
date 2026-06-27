@@ -28,11 +28,42 @@ function newConversationState(conversationId, userId) {
     active_agent_request_id: '', current_intent: '', current_state: 'idle', current_plan_id: '',
     last_report_id: '', last_source_run_ids: [], selected_competitors: [], selected_sources: [],
     pending_clarification: '', pending_approval: false, current_region: '', current_service: '',
-    comparison_baseline_id: '', no_memory: false, updated_at: ''
+    comparison_baseline_id: '', no_memory: false, revision: 0, updated_at: ''
   };
 }
 function patchState(state, patch, ts) {
   return Object.assign({}, state || {}, patch || {}, { updated_at: str(ts) || (state && state.updated_at) || '' });
+}
+
+// STATE-004 / MEMORY-001 / STATE-005: pick the authoritative current state row for one conversation+owner
+// (highest revision, tie-broken by updated_at) instead of "last row in sheet order". Owner is part of the key so
+// group chats / multiple users never read each other's state.
+function selectLatestState(rows, conversationId, ownerUserId) {
+  const mine = (rows || []).filter(r => str(r.conversation_id) === str(conversationId) && (ownerUserId == null || str(r.owner_user_id) === str(ownerUserId)));
+  if (!mine.length) return null;
+  return mine.slice().sort((a, b) => {
+    const dr = num(b.revision, 0) - num(a.revision, 0);
+    if (dr) return dr;
+    return str(b.updated_at) < str(a.updated_at) ? -1 : 1;
+  })[0];
+}
+// Patch the EXISTING latest row (preserving prior fields) and bump a monotonic revision — never overwrite a
+// newer state with a blank fresh object. prev_revision is recorded so a conflict (stale write) is detectable.
+function advanceState(existing, patch, ts) {
+  patch = patch || {};
+  const base = existing || newConversationState(patch.conversation_id, patch.owner_user_id);
+  const rev = num(base.revision, 0) + 1;
+  return Object.assign({}, base, patch, { revision: rev, prev_revision: num(base.revision, 0), updated_at: str(ts) || (base.updated_at || '') });
+}
+// True when the revision we read at the start no longer matches what is durably stored (someone else advanced it).
+function stateConflict(expectedRevision, currentRevision) {
+  return num(expectedRevision, -1) >= 0 && num(currentRevision, 0) !== num(expectedRevision, 0);
+}
+// Latest valid rolling summary for one conversation+owner, by highest version (MEMORY-002 continuity).
+function selectLatestSummary(rows, conversationId, ownerUserId) {
+  const mine = (rows || []).filter(r => str(r.conversation_id) === str(conversationId) && (ownerUserId == null || ownerUserId === '' || str(r.owner_user_id) === str(ownerUserId) || r.owner_user_id == null));
+  if (!mine.length) return null;
+  return mine.slice().sort((a, b) => num(b.version, 0) - num(a.version, 0))[0];
 }
 
 // ---- L2 recent window -------------------------------------------------------------------------------------
@@ -227,7 +258,8 @@ function contextUsageRecord(ctxResult, ids) {
 
 module.exports = {
   WINDOW_DEFAULT, MEMORY_TYPES, PRIORITY, REQUIRED, estimateTokens,
-  newConversationState, patchState, recentWindow, shouldSummarize, rollingSummary, collectIds,
+  newConversationState, patchState, selectLatestState, advanceState, stateConflict, selectLatestSummary,
+  recentWindow, shouldSummarize, rollingSummary, collectIds,
   isSecretLike, makeMemory, memoriesForUser, memoryView, forgetMemory, forgetAll, resetConversation,
   selectArtifacts, buildContext, contextUsageRecord, valueHash, str, low, num
 };

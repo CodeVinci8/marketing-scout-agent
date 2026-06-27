@@ -40,6 +40,8 @@ const JS_SUITES = [
   // --- Stage 4: single-user Telegram agent MVP (libs + generated WF17-20) ---
   ['stage4-contracts', 'test_stage4_contracts.js'],
   ['stage4-workflows', 'test_stage4_workflows.js'],
+  // --- DEC-161: WF18 rearchitecture — REAL n8n graph (fail-closed ingress + dispatcher + plan binding) ---
+  ['wf18-real-topology', 'test_wf18_real_topology.js'],
   ['stage4-e2e', 'test_stage4_e2e.js'],
   ['stage4-freepath', 'test_stage4_freepath.js'],
   // --- Conversational agent: charter, intent router, bounded memory, sources ---

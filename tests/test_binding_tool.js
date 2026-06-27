@@ -32,19 +32,20 @@ function readWf(dir, file) { return JSON.parse(fs.readFileSync(path.join(dir, fi
 const CLOSURE = L.runtimeClosure();
 const EDGES = L.bindingEdges();
 
-A.section('QA-002 — first bind resolves all 8 edges to the exact target id, zero placeholders');
+A.section('QA-002 — first bind resolves all 13 edges to the exact target id, zero placeholders');
 let env = exportDir(CLOSURE);
 const r1 = B.bindDir(env.dir, { write: true });
-A.eq('bindings_expected', r1.bindings_expected, 8);
-A.eq('bindings_resolved', r1.bindings_resolved, 8);
+A.eq('bindings_expected', r1.bindings_expected, 13);
+A.eq('bindings_resolved', r1.bindings_resolved, 13);
 A.eq('placeholders_remaining', r1.placeholders_remaining, 0);
 A.eq('missing_targets', r1.missing_targets, 0);
 A.eq('ambiguous_targets', r1.ambiguous_targets, 0);
 A.eq('duplicate_workflows', r1.duplicate_workflows, 0);
 A.eq('all_inactive', r1.all_inactive, true);
 A.eq('report ok', r1.ok, true);
-A.eq('only the 3 caller workflows were rewritten', r1.files_written.slice().sort(),
-  ['20_agent_orchestrator.json', '21_deep_competitor_analysis.json', '23_scheduled_source_monitor.json']);
+// DEC-161: WF18 is now the 4th caller (dispatcher -> WF19/20/21/22/24)
+A.eq('only the 4 caller workflows were rewritten', r1.files_written.slice().sort(),
+  ['18_telegram_agent_gateway.json', '20_agent_orchestrator.json', '21_deep_competitor_analysis.json', '23_scheduled_source_monitor.json']);
 
 A.section('QA-002 — each caller node now holds the EXACT assigned id of its target (matched by name, not position)');
 for (const e of EDGES) {
@@ -58,7 +59,7 @@ for (const e of EDGES) {
 A.section('QA-009 — second run is a no-op (idempotent) and verify mode passes');
 const r2 = B.bindDir(env.dir, { write: true });
 A.eq('idempotent: nothing rewritten on second run', r2.files_written.length, 0);
-A.eq('idempotent: still 8 resolved', r2.bindings_resolved, 8);
+A.eq('idempotent: still 13 resolved', r2.bindings_resolved, 13);
 const rv = B.bindDir(env.dir, { verify: true });
 A.eq('verify mode: ok', rv.ok, true);
 A.eq('verify mode: zero placeholders', rv.placeholders_remaining, 0);

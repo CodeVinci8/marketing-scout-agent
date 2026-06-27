@@ -22,7 +22,7 @@
   "sheet_order": [
     "agent_requests", "agent_request_events", "conversation_state", "conversation_messages",
     "conversation_summaries", "context_usage", "durable_memories", "memory_audit_events",
-    "source_audit_events", "orchestration_decisions", "execution_summaries", "telegram_outbox",
+    "source_audit_events", "orchestration_decisions", "execution_plans", "execution_summaries", "telegram_outbox",
     "report_bundles", "attachment_outbox", "weekly_digests", "tracked_sources", "source_change_events",
     "source_health", "vk_posts", "vk_post_state", "deep_analysis_findings", "deep_analysis_recommendations",
     "market_intelligence_reports", "competitor_profiles", "competitor_site_snapshots",
@@ -42,6 +42,7 @@
     "memory_audit_events": ["memory_id", "ts"],
     "source_audit_events": ["source_id", "ts"],
     "orchestration_decisions": ["agent_request_id", "ts"],
+    "execution_plans": ["plan_id"],
     "execution_summaries": ["agent_request_id"],
     "telegram_outbox": ["delivery_id"],
     "report_bundles": ["report_id"],
@@ -106,6 +107,11 @@
     "orchestration_decisions": [
       "agent_request_id", "conversation_id", "intent", "action", "reason", "needs_external_call",
       "target_sources", "ts"
+    ],
+    "execution_plans": [
+      "plan_id", "plan_version", "plan_hash", "agent_request_id", "owner_user_id", "chat_id", "intent",
+      "niche", "service", "region", "sources", "max_items", "max_external_calls", "est_source_cost_usd",
+      "est_llm_cost_usd", "expected_output", "plan_source", "status", "created_at", "decided_at", "decided_by"
     ],
     "execution_summaries": [
       "agent_request_id", "owner_user_id", "final_state", "sources_requested", "sources_completed",
@@ -348,7 +354,8 @@
         "idempotency_key"
       ],
       "writers": [
-        "18"
+        "18",
+        "22"
       ],
       "readers": [
         "18"
@@ -403,7 +410,9 @@
       "writers": [
         "18"
       ],
-      "readers": []
+      "readers": [
+        "18"
+      ]
     },
     "context_usage": {
       "purpose": "token-budget telemetry",
@@ -430,8 +439,11 @@
       "required_columns": [
         "owner_user_id"
       ],
-      "writers": [],
+      "writers": [
+        "22"
+      ],
       "readers": [
+        "18",
         "22"
       ]
     },
@@ -481,6 +493,31 @@
         "20"
       ],
       "readers": []
+    },
+    "execution_plans": {
+      "purpose": "durable execution plan store; a plan is persisted before approval and bound to it by plan_hash (WF19-PLAN-001 / WF18-APPROVAL-002)",
+      "owner_scoped": true,
+      "request_scoped": true,
+      "retention_class": "operational",
+      "retention_days": 90,
+      "protected_when": [
+        "request_active"
+      ],
+      "required_columns": [
+        "plan_id",
+        "agent_request_id",
+        "owner_user_id",
+        "status",
+        "created_at"
+      ],
+      "writers": [
+        "18",
+        "22"
+      ],
+      "readers": [
+        "18",
+        "22"
+      ]
     },
     "execution_summaries": {
       "purpose": "per-run execution summary",

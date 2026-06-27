@@ -5,6 +5,49 @@ Most recent first.
 
 ---
 
+## DEC-161 — WF18 gateway rearchitecture: a real fail-closed secure dispatcher (not just correct libs)
+
+**Date:** 2026-06-27 · **Branch:** `fix/wf18-gateway-rearchitecture` (off `main` @ `2631499`)
+
+**Context:** the Stage 4 libraries were proven, but the committed WF18 n8n graph did NOT implement the behaviour
+the offline E2E suites simulated. WF18 was `webhook → 3 Sheets reads → Build Intake Decision → Build Conversation
+Context → (fan-out) every Append + the Telegram send`, with **zero `executeWorkflow` nodes**, **no** webhook-secret
+/ kill-switch / authorization / dedup hard-stop, and the unauthorized and duplicate decisions flowing straight
+through every persistence node and the reply. WF19/20/21/22 were manual-trigger-only (not callable). A green
+`Telegram → plan → approval → collection → report` test proved a JS sequence, not that WF18 calls WF19/WF20.
+
+**Decision:** make the real graph implement the contract, generator-first (no hand-patched JSON):
+- **Fail-closed ingress is one pure node before any side effect.** `telegram_io.ingressDecision` validates the
+  `X-Telegram-Bot-Api-Secret-Token` header against `MS_TELEGRAM_WEBHOOK_SECRET` (case-insensitive, constant-time,
+  blank-expected = reject), the `MS_ENABLE_TELEGRAM` kill switch (now default **false**), supported update types
+  (message/callback only), private-chat-only (group isolation), bot filtering and authorization. `Ingress
+  Accepted?` / `New Update?` IFs hard-stop to a fast `Respond to Webhook`; the reject/duplicate branches are
+  graph-unreachable from any Sheets write, child call or business Telegram send (proven by reachability, not a flag).
+- **Real dispatcher.** `dispatch_target` → deterministic IF-chain → `executeWorkflow` to WF19 (plan) / WF20
+  (orchestrate) / WF21 (deep) / WF22 (control) / WF24 (report). Children gained Execute Sub-workflow Triggers +
+  named input contracts + a robust caller-input read (never `$json` after a config/Sheets node). The manifest
+  AUTO-DERIVES the new edges from the `WF<nn>` token (8→13 edges, 6→11 callables); the static audit hard-fails if
+  any called child lacks a trigger — so the dispatcher and the callable contract can never silently diverge.
+- **Approval is bound to a durable plan.** New `execution_plans` tab; `request_planner.planIdentity/buildPlanRow/
+  validateApproval`. The plan is persisted (status `awaiting_approval`) BEFORE the approval message; approval is
+  rejected unless owner + chat + request + `plan_hash` match and the status is still `awaiting_approval` (stale /
+  replayed / cancelled / completed approvals are blocked; the plan is marked approved once before WF20 — durable,
+  survives restart). Free-text да/нет binds only when exactly one plan is pending for the owner.
+- **Honest gate.** 18/19 `wf18_blockers.json` items resolved with named tests; **TELEGRAM-001 (public HTTPS
+  ingress) is left OPEN** because it is operator infrastructure, so `wf18_activation_gate.js` correctly keeps WF18
+  unpublishable (`WF18_REARCHITECTURE=PENDING`). Code is dispatcher-ready, not live-ready.
+
+**Why this way:** the topology must be the source of truth, proven by inspecting the committed JSON (new
+`tests/test_wf18_real_topology.js`, 85 checks: secret/kill-switch gate present, reject/duplicate reach zero side
+effects, 5 dispatcher edges to trigger-bearing children, plan-before-approval, callback ack, shaped writes,
+state==event, unambiguous delivery ownership) — never by a JS simulation. Honest caveats recorded: IDEMP-001
+needs WF18 single-concurrency for true concurrent atomicity; ORCH-STATE-001 per-stage cancellation re-read is a
+follow-up; RELEASE-006/DISCOVERY-001 (prod export-capture) remain and still block deploy/activate.
+
+**Markers:** `make test` ALL SUITES PASS, $0, 0 external calls, 0 active workflows, production untouched.
+
+---
+
 ## DEC-160 — Stage 8 release-path integration: ONE shared, ordered, fail-closed pipeline (prod == disposable)
 
 **Date:** 2026-06-26 · **Branch:** `fix/stage8-release-integration` (off `main` @ `2ee4a71`)

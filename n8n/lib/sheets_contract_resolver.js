@@ -29,7 +29,7 @@ const FMT_VERSION = 'fmt-v1';
 const VALIDATION_VERSION = 'val-v1';
 const CONTRACT_VERSION = 'bootstrap-contract-v1';
 
-const EXPECTED_TAB_COUNT = 40;
+const EXPECTED_TAB_COUNT = 41;
 
 function readJSON(p) { return JSON.parse(fs.readFileSync(p, 'utf8')); }
 

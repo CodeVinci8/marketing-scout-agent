@@ -110,9 +110,12 @@ A.section('DEPLOY-008 — committed workflows ship a credential PLACEHOLDER; rec
 A.section('WF18 activation gate — BLOCKS while P0/P1 blockers are open (current state)');
 {
   const g = GATE.gate(GATE.load());
-  A.ok('gate is currently PENDING (rearchitecture not done)', g.allow === false && g.marker === 'WF18_REARCHITECTURE=PENDING');
-  A.ok('at least one P0 open', g.blocking_open >= 1);
-  A.ok('open ids include RUNTIME-001 and SECURITY-001', g.open_ids.indexOf('RUNTIME-001') >= 0 && g.open_ids.indexOf('SECURITY-001') >= 0);
+  // DEC-161: the rearchitecture blockers are resolved with named tests; only TELEGRAM-001 (operator HTTPS ingress)
+  // stays open, so the gate correctly remains PENDING (dispatcher-ready, not live-ready).
+  A.ok('gate is currently PENDING (HTTPS ingress is operator infra)', g.allow === false && g.marker === 'WF18_REARCHITECTURE=PENDING');
+  A.ok('exactly one P0/P1 open (the ingress blocker)', g.blocking_open >= 1);
+  A.ok('the open id is TELEGRAM-001 (public HTTPS ingress)', g.open_ids.indexOf('TELEGRAM-001') >= 0);
+  A.ok('RUNTIME-001 and SECURITY-001 are now resolved', g.open_ids.indexOf('RUNTIME-001') < 0 && g.open_ids.indexOf('SECURITY-001') < 0);
 }
 
 A.section('WF18 activation gate — opens ONLY when every P0/P1 is resolved WITH evidence');

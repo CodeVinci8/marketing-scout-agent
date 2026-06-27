@@ -46,7 +46,9 @@ const DEFAULTS = {
   // conversation -> plan -> approval -> persistence loop while making zero paid calls. `max_external_calls` (above)
   // is the master kill-switch: 0 means no paid source/LLM call can occur even after approval.
   timezone: 'Europe/Moscow',
-  enable_telegram: true,
+  // WF18-CONFIG-001: the Telegram ingress is fail-closed. The bot does NOTHING (no parse, no Sheets, no send)
+  // until the operator explicitly sets MS_ENABLE_TELEGRAM=true. WF18 branches on this as a HARD ingress gate.
+  enable_telegram: false,
   enable_external_actions: false,   // master switch for any paid collection/analysis
   enable_claude: false,             // Claude (planner/summary) only when explicitly enabled
   enable_apify: false,
@@ -94,6 +96,11 @@ function resolveConfig(env, overrides) {
   // fail-closed reconciliation: Claude master switch gates the LLM features; the external-actions master switch
   // (or a zero call ceiling) forces the effective paid-call budget to zero so no approval can spend.
   if (!cfg.enable_claude) { cfg.enable_llm_planner = false; cfg.enable_llm_summary = false; }
+  // WF19-LLM-001: there is NO in-graph Claude intent-classifier node in WF18, so the intent router's guarded
+  // LLM branch is unreachable by construction. Pin enable_llm_intent=false in the resolved config so the router
+  // always resolves deterministically or asks ONE clarification — we never advertise a classification path that
+  // cannot run. (The router lib still supports the branch for a future, explicitly-wired classifier.)
+  cfg.enable_llm_intent = false;
   cfg.zero_paid_mode = (cfg.enable_external_actions !== true) || (Number(cfg.max_external_calls) <= 0);
   cfg.effective_max_external_calls = cfg.zero_paid_mode ? 0 : Number(cfg.max_external_calls);
   // completeness check the orchestrator surfaces in the execution summary — never starts paid work blind

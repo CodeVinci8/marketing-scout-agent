@@ -48,12 +48,12 @@
       "10_competitor_audience_intelligence_aggregator.json",
       "12_market_intelligence_report_builder.json",
       "16_source_quality_gate_health_score.json",
-      "26_vk_public_community_collector.json",
       "19_request_planner.json",
       "20_agent_orchestrator.json",
       "21_deep_competitor_analysis.json",
       "22_conversation_control.json",
       "24_report_export_delivery.json",
+      "26_vk_public_community_collector.json",
       "18_telegram_agent_gateway.json",
       "23_scheduled_source_monitor.json",
       "25_weekly_digest.json"
@@ -64,9 +64,64 @@
       "10_competitor_audience_intelligence_aggregator.json",
       "12_market_intelligence_report_builder.json",
       "16_source_quality_gate_health_score.json",
+      "19_request_planner.json",
+      "20_agent_orchestrator.json",
+      "21_deep_competitor_analysis.json",
+      "22_conversation_control.json",
+      "24_report_export_delivery.json",
       "26_vk_public_community_collector.json"
     ],
     "binding_edges": [
+      {
+        "caller_workflow": "18_telegram_agent_gateway.json",
+        "caller_wf": "WF18",
+        "caller_node": "Run WF19 (Planner)",
+        "target_workflow": "19_request_planner.json",
+        "target_wf": "WF19",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "18_telegram_agent_gateway.json",
+        "caller_wf": "WF18",
+        "caller_node": "Run WF20 (Orchestrator)",
+        "target_workflow": "20_agent_orchestrator.json",
+        "target_wf": "WF20",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "18_telegram_agent_gateway.json",
+        "caller_wf": "WF18",
+        "caller_node": "Run WF21 (Deep Analysis)",
+        "target_workflow": "21_deep_competitor_analysis.json",
+        "target_wf": "WF21",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "18_telegram_agent_gateway.json",
+        "caller_wf": "WF18",
+        "caller_node": "Run WF22 (Control)",
+        "target_workflow": "22_conversation_control.json",
+        "target_wf": "WF22",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "18_telegram_agent_gateway.json",
+        "caller_wf": "WF18",
+        "caller_node": "Run WF24 (Reporting)",
+        "target_workflow": "24_report_export_delivery.json",
+        "target_wf": "WF24",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
       {
         "caller_workflow": "20_agent_orchestrator.json",
         "caller_wf": "WF20",
@@ -148,7 +203,7 @@
         "required": true
       }
     ],
-    "binding_edge_count": 8,
+    "binding_edge_count": 13,
     "activation": {
       "always": [
         "18_telegram_agent_gateway.json"
@@ -165,9 +220,14 @@
         "10_competitor_audience_intelligence_aggregator.json",
         "12_market_intelligence_report_builder.json",
         "16_source_quality_gate_health_score.json",
+        "19_request_planner.json",
+        "20_agent_orchestrator.json",
+        "21_deep_competitor_analysis.json",
+        "22_conversation_control.json",
+        "24_report_export_delivery.json",
         "26_vk_public_community_collector.json"
       ],
-      "callable_trigger_count": 6
+      "callable_trigger_count": 11
     },
     "requires_runtime": {
       "xlsx_zlib": [
@@ -274,10 +334,10 @@
       "canonical_id": null,
       "id_source": "operator_local"
     },
-    "WF26": {
-      "wf": "WF26",
-      "file": "26_vk_public_community_collector.json",
-      "name": "26 — VK Public Community Collector (bounded, official API)",
+    "WF19": {
+      "wf": "WF19",
+      "file": "19_request_planner.json",
+      "name": "19 — Request Planner (deterministic + guarded Claude)",
       "role": "callable_dependency",
       "callable": true,
       "trigger_entrypoint": false,
@@ -287,28 +347,15 @@
       "canonical_id": null,
       "id_source": "operator_local"
     },
-    "WF19": {
-      "wf": "WF19",
-      "file": "19_request_planner.json",
-      "name": "19 — Request Planner (deterministic + guarded Claude)",
-      "role": "orchestration",
-      "callable": false,
-      "trigger_entrypoint": false,
-      "activation_flag": "never",
-      "expected_target_trigger": null,
-      "binding_calls": [],
-      "canonical_id": null,
-      "id_source": "operator_local"
-    },
     "WF20": {
       "wf": "WF20",
       "file": "20_agent_orchestrator.json",
       "name": "20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)",
-      "role": "orchestration",
-      "callable": false,
+      "role": "callable_dependency",
+      "callable": true,
       "trigger_entrypoint": false,
       "activation_flag": "never",
-      "expected_target_trigger": null,
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
       "binding_calls": [
         {
           "caller_node": "Run WF08 Analyzer",
@@ -338,11 +385,11 @@
       "wf": "WF21",
       "file": "21_deep_competitor_analysis.json",
       "name": "21 — Deep Competitor Analysis (bounded, evidence-based)",
-      "role": "orchestration",
-      "callable": false,
+      "role": "callable_dependency",
+      "callable": true,
       "trigger_entrypoint": false,
       "activation_flag": "never",
-      "expected_target_trigger": null,
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
       "binding_calls": [
         {
           "caller_node": "Collect Deep Evidence (WF04)",
@@ -356,11 +403,11 @@
       "wf": "WF22",
       "file": "22_conversation_control.json",
       "name": "22 — Conversation Control & Sources",
-      "role": "orchestration",
-      "callable": false,
+      "role": "callable_dependency",
+      "callable": true,
       "trigger_entrypoint": false,
       "activation_flag": "never",
-      "expected_target_trigger": null,
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
       "binding_calls": [],
       "canonical_id": null,
       "id_source": "operator_local"
@@ -369,11 +416,24 @@
       "wf": "WF24",
       "file": "24_report_export_delivery.json",
       "name": "24 — Report Export, Filter, Compare, Refresh & Delivery",
-      "role": "orchestration",
-      "callable": false,
+      "role": "callable_dependency",
+      "callable": true,
       "trigger_entrypoint": false,
       "activation_flag": "never",
-      "expected_target_trigger": null,
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF26": {
+      "wf": "WF26",
+      "file": "26_vk_public_community_collector.json",
+      "name": "26 — VK Public Community Collector (bounded, official API)",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
       "binding_calls": [],
       "canonical_id": null,
       "id_source": "operator_local"
@@ -381,13 +441,34 @@
     "WF18": {
       "wf": "WF18",
       "file": "18_telegram_agent_gateway.json",
-      "name": "18 — Telegram Agent Gateway (conversational)",
+      "name": "18 — Telegram Agent Gateway (secure dispatcher)",
       "role": "entrypoint",
       "callable": false,
       "trigger_entrypoint": true,
       "activation_flag": "always",
       "expected_target_trigger": null,
-      "binding_calls": [],
+      "binding_calls": [
+        {
+          "caller_node": "Run WF19 (Planner)",
+          "target_wf": "WF19"
+        },
+        {
+          "caller_node": "Run WF20 (Orchestrator)",
+          "target_wf": "WF20"
+        },
+        {
+          "caller_node": "Run WF21 (Deep Analysis)",
+          "target_wf": "WF21"
+        },
+        {
+          "caller_node": "Run WF22 (Control)",
+          "target_wf": "WF22"
+        },
+        {
+          "caller_node": "Run WF24 (Reporting)",
+          "target_wf": "WF24"
+        }
+      ],
       "canonical_id": null,
       "id_source": "operator_local"
     },
@@ -434,12 +515,12 @@
     "10_competitor_audience_intelligence_aggregator.json",
     "12_market_intelligence_report_builder.json",
     "16_source_quality_gate_health_score.json",
-    "26_vk_public_community_collector.json",
     "19_request_planner.json",
     "20_agent_orchestrator.json",
     "21_deep_competitor_analysis.json",
     "22_conversation_control.json",
     "24_report_export_delivery.json",
+    "26_vk_public_community_collector.json",
     "18_telegram_agent_gateway.json",
     "23_scheduled_source_monitor.json",
     "25_weekly_digest.json"
@@ -1147,8 +1228,8 @@
     {
       "file": "18_telegram_agent_gateway.json",
       "wf_number": "WF18",
-      "name": "18 — Telegram Agent Gateway (conversational)",
-      "node_count": 21,
+      "name": "18 — Telegram Agent Gateway (secure dispatcher)",
+      "node_count": 51,
       "active": false,
       "trigger_classes": [
         "webhook"
@@ -1162,8 +1243,35 @@
       "activation_flag": "always",
       "expected_active": false,
       "called_by": [],
-      "calls": [],
-      "binding_nodes": [],
+      "calls": [
+        "19_request_planner.json",
+        "20_agent_orchestrator.json",
+        "21_deep_competitor_analysis.json",
+        "22_conversation_control.json",
+        "24_report_export_delivery.json"
+      ],
+      "binding_nodes": [
+        {
+          "node": "Run WF19 (Planner)",
+          "target": "WF19"
+        },
+        {
+          "node": "Run WF20 (Orchestrator)",
+          "target": "WF20"
+        },
+        {
+          "node": "Run WF21 (Deep Analysis)",
+          "target": "WF21"
+        },
+        {
+          "node": "Run WF22 (Control)",
+          "target": "WF22"
+        },
+        {
+          "node": "Run WF24 (Reporting)",
+          "target": "WF24"
+        }
+      ],
       "requires_runtime": [],
       "imported_by_deploy": true,
       "trigger_always": true,
@@ -1178,20 +1286,24 @@
       "file": "19_request_planner.json",
       "wf_number": "WF19",
       "name": "19 — Request Planner (deterministic + guarded Claude)",
-      "node_count": 9,
+      "node_count": 10,
       "active": false,
       "trigger_classes": [
-        "manualTrigger"
+        "manualTrigger",
+        "executeWorkflowTrigger"
       ],
       "classification": [
-        "manual-only"
+        "callable",
+        "manual-diagnostic"
       ],
       "capability_class": "production_dependency",
-      "deployment_role": "orchestration",
+      "deployment_role": "callable_dependency",
       "runtime": true,
       "activation_flag": "never",
       "expected_active": false,
-      "called_by": [],
+      "called_by": [
+        "18_telegram_agent_gateway.json"
+      ],
       "calls": [],
       "binding_nodes": [],
       "requires_runtime": [],
@@ -1201,27 +1313,31 @@
       "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_runtime_closure",
+      "retain_reason": "called_by:18_telegram_agent_gateway.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
       "file": "20_agent_orchestrator.json",
       "wf_number": "WF20",
       "name": "20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)",
-      "node_count": 25,
+      "node_count": 26,
       "active": false,
       "trigger_classes": [
-        "manualTrigger"
+        "manualTrigger",
+        "executeWorkflowTrigger"
       ],
       "classification": [
-        "manual-only"
+        "callable",
+        "manual-diagnostic"
       ],
       "capability_class": "production_dependency",
-      "deployment_role": "orchestration",
+      "deployment_role": "callable_dependency",
       "runtime": true,
       "activation_flag": "never",
       "expected_active": false,
-      "called_by": [],
+      "called_by": [
+        "18_telegram_agent_gateway.json"
+      ],
       "calls": [
         "04_firecrawl_url_list_resilient.json",
         "08_touchpoint_analyzer.json",
@@ -1258,27 +1374,31 @@
       "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_runtime_closure",
+      "retain_reason": "called_by:18_telegram_agent_gateway.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
       "file": "21_deep_competitor_analysis.json",
       "wf_number": "WF21",
       "name": "21 — Deep Competitor Analysis (bounded, evidence-based)",
-      "node_count": 14,
+      "node_count": 15,
       "active": false,
       "trigger_classes": [
-        "manualTrigger"
+        "manualTrigger",
+        "executeWorkflowTrigger"
       ],
       "classification": [
-        "manual-only"
+        "callable",
+        "manual-diagnostic"
       ],
       "capability_class": "production_dependency",
-      "deployment_role": "orchestration",
+      "deployment_role": "callable_dependency",
       "runtime": true,
       "activation_flag": "never",
       "expected_active": false,
-      "called_by": [],
+      "called_by": [
+        "18_telegram_agent_gateway.json"
+      ],
       "calls": [
         "04_firecrawl_url_list_resilient.json"
       ],
@@ -1295,27 +1415,31 @@
       "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_runtime_closure",
+      "retain_reason": "called_by:18_telegram_agent_gateway.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
       "file": "22_conversation_control.json",
       "wf_number": "WF22",
       "name": "22 — Conversation Control & Sources",
-      "node_count": 9,
+      "node_count": 21,
       "active": false,
       "trigger_classes": [
-        "manualTrigger"
+        "manualTrigger",
+        "executeWorkflowTrigger"
       ],
       "classification": [
-        "manual-only"
+        "callable",
+        "manual-diagnostic"
       ],
       "capability_class": "production_dependency",
-      "deployment_role": "orchestration",
+      "deployment_role": "callable_dependency",
       "runtime": true,
       "activation_flag": "never",
       "expected_active": false,
-      "called_by": [],
+      "called_by": [
+        "18_telegram_agent_gateway.json"
+      ],
       "calls": [],
       "binding_nodes": [],
       "requires_runtime": [],
@@ -1325,7 +1449,7 @@
       "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_runtime_closure",
+      "retain_reason": "called_by:18_telegram_agent_gateway.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -1387,11 +1511,13 @@
         "manual-diagnostic"
       ],
       "capability_class": "production_dependency",
-      "deployment_role": "orchestration",
+      "deployment_role": "callable_dependency",
       "runtime": true,
       "activation_flag": "never",
       "expected_active": false,
-      "called_by": [],
+      "called_by": [
+        "18_telegram_agent_gateway.json"
+      ],
       "calls": [],
       "binding_nodes": [],
       "requires_runtime": [
@@ -1403,7 +1529,7 @@
       "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test; in_runtime_closure",
+      "retain_reason": "called_by:18_telegram_agent_gateway.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {

@@ -1,5 +1,30 @@
 # WF18 Gateway Rearchitecture — Handoff for the next focused session
 
+> **RESOLVED IN CODE — DEC-161 (session 29, branch `fix/wf18-gateway-rearchitecture`).** WF18 is now a real
+> fail-closed secure dispatcher: webhook-secret + `MS_ENABLE_TELEGRAM` + auth + supported-type + private-chat
+> hard-stops BEFORE any side effect; a real `executeWorkflow` dispatcher to WF19/20/21/22/24; callable children
+> with named contracts; a durable `execution_plans` store with plan persisted **before** approval and approval
+> bound by owner/chat/plan_hash; shaped Sheets writes; callback ack; cross-user isolation; `request=t.record`.
+> **18 of 19 P0/P1 blockers resolved with named regression tests** (mostly `tests/test_wf18_real_topology.js`,
+> 85 checks). `make test` ALL SUITES PASS ($0, 0 external calls, 0 active workflows).
+>
+> **Still OPEN (by design):**
+> - **TELEGRAM-001** — public HTTPS webhook URL / ingress. This is **operator infrastructure** (sing-box / port
+>   443), not a repo change, so `tools/wf18_activation_gate.js` correctly still reports `WF18_REARCHITECTURE=PENDING`
+>   and refuses to activate WF18. The code is *dispatcher-ready*, not yet *live-ready*.
+> - **IDEMP-001 caveat** — the durable idempotency CLAIM happens before any persistence/dispatch and uses a
+>   deterministic key (sequential-duplicate proven). TRUE concurrent atomicity additionally requires running WF18
+>   at **single concurrency** in this n8n install (set the workflow/instance concurrency to 1) — there is no
+>   atomic compare-and-set primitive in n8n 2.23.3 Sheets. Document/enforce concurrency=1 at deploy.
+> - **ORCH-STATE-001 partial** — WF20/WF21 enforce approved/not-cancelled at the entry gate; a per-stage
+>   cancellation re-read between long-running collection/analysis stages is a documented follow-up.
+> - **RELEASE-006 / DISCOVERY-001** — production export-capture (`make release-discovery`/dry-run) is unchanged;
+>   they still block `make deploy-inactive`/`make telegram-activate`. Not touched this session (no production
+>   dry-run was run, per the no-prod-mutation rule).
+
+---
+
+
 **Why this is separate:** Stage 8 release-core is done and offline-proven, but the Telegram gateway (WF18) is
 **not safe to publish**. `tools/wf18_activation_gate.js` mechanically blocks WF18 activation until every P0/P1
 item in `config/wf18_blockers.json` is resolved **with a named regression test**. This document is the exact work
