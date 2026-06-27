@@ -108,6 +108,8 @@ const JS_SUITES = [
   ['release-scripts', 'test_release_scripts.js'],
   // --- Stage 8 release core: workflow/credential reconciliation (exact-name) + hard WF18 activation gate ---
   ['reconcile-and-gate', 'test_reconcile_and_gate.js'],
+  // --- CRED-002: Docker-safe non-decrypted credential export — fails closed on every error path ---
+  ['credential-export', 'test_credential_export.js'],
   // --- Stage 8 release core: end-to-end acceptance harness emitting honest §21 markers (CORE PASS; live PENDING) ---
   ['stage8-release-e2e', 'test_stage8_release_e2e.js'],
   // --- Stage 8 release INTEGRATION: ordered fail-closed planner + env discovery wired into the deploy path ---

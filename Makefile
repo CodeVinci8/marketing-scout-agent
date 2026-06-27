@@ -173,6 +173,7 @@ test-js:
 	node tests/test_preflight_strict.js
 	node tests/test_release_scripts.js
 	node tests/test_reconcile_and_gate.js
+	node tests/test_credential_export.js
 	node tests/test_stage8_release_e2e.js
 	node tests/test_release_integration.js
 	node tests/test_prepare_staged.js
