@@ -2,7 +2,7 @@
 .PHONY: test test-js test-wf test-taxonomy help \
 	release-help release-discovery release-setup-check release-preflight release-preflight-activate \
 	release-core-acceptance release-backup release-restore-validate release-smoke runtime-acceptance \
-	deploy-dry-run deploy-inactive verify-production wf18-gate \
+	deploy-dry-run deploy-inactive verify-production credential-audit wf18-gate \
 	telegram-prelive telegram-activate telegram-deactivate rollback rollback-dry-run \
 	release-lock-status release-clean
 
@@ -27,7 +27,8 @@ release-help:
 	@echo "  make runtime-acceptance       # DISPOSABLE Stage 4 runtime: webhook reject routing + parent/child (SKIP without docker)"
 	@echo "  make deploy-dry-run           # validate + preflight + print the full import/bind plan (no changes)"
 	@echo "  make deploy-inactive          # import the 15 runtime workflows INACTIVE + auto-bind (operator)"
-	@echo "  make verify-production        # status + binding verification against the live export (operator)"
+	@echo "  make verify-production        # aggregate: inventory + bindings + CREDENTIAL audit + version (one VERIFY_PRODUCTION marker)"
+	@echo "  make credential-audit         # read-only production credential audit (PRODUCTION_*/WF18_* markers; non-decrypted)"
 	@echo "  make wf18-gate                # check the hard WF18 pre-live blocker gate"
 	@echo "  make telegram-prelive         # read-only Telegram pre-live checks (getWebhookInfo; activation preflight)"
 	@echo "  make telegram-activate        # GATED: publish WF18 + register webhook (separate explicit step)"
@@ -70,8 +71,10 @@ deploy-inactive:
 	scripts/deploy_n8n.sh --apply --yes
 
 verify-production:
-	scripts/deploy_n8n.sh --status
-	scripts/deploy_n8n.sh --verify-bindings
+	scripts/deploy_n8n.sh --verify-production
+
+credential-audit:
+	scripts/deploy_n8n.sh --credential-audit
 
 wf18-gate:
 	node tools/wf18_activation_gate.js

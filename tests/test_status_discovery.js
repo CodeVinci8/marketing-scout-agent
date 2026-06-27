@@ -187,7 +187,7 @@ A.section('OPERATOR-REPORT-001 — operator binding counts derive from the manif
   const edges = L.bindingEdges().length;
   A.eq('manifest binding edge count', edges, 13);
   const deployTxt = fs.readFileSync(path.join(ROOT, 'scripts', 'deploy_n8n.sh'), 'utf8');
-  A.ok('do_import success line uses ${BINDING_COUNT}', /resolved ids, the \$\{BINDING_COUNT\}/.test(deployTxt));
+  A.ok('do_import success line uses ${BINDING_COUNT} (not a hardcoded count)', /\$\{BINDING_COUNT\} sub-workflow edges bound/.test(deployTxt));
   A.ok('no hard-coded "the 8" sub-workflow line', !/the 8"\n\s*say "sub-workflow ids bound/.test(deployTxt));
   // release_plan dry-run prints the manifest-derived count in the bind_edges step
   let out = '';

@@ -103,7 +103,7 @@ A.section('RELEASE-004 — release lock: acquire / contention / stale steal / re
 A.section('RELEASE-003 / SECURITY-005 — release evidence is sanitized (no raw ids/secrets)');
 {
   const attempt = {
-    runtime_workflows_found: 15, bindings_resolved: 8, placeholders_remaining: 0,
+    runtime_workflows_found: 15, bindings_resolved: RR.MANIFEST_BINDINGS, placeholders_remaining: 0,
     credential_audit: 'PASS', active_workflows: 0, result: 'PASS',
     runtime_id_coverage: '15/15', runtime_id_map_checksum: 'abc123',
     backup_sha256: 'deadbeef',
@@ -125,6 +125,35 @@ A.section('RELEASE-003 / SECURITY-005 — release evidence is sanitized (no raw 
   A.ok('secret-keyed fields became fingerprints/counts', /_fp"|_count"/.test(blob));
   A.ok('non-secret note preserved', blob.indexOf('safe text') >= 0);
   A.ok('manifest hash + git commit present', !!rec.manifest_hash && !!rec.git_commit);
+}
+
+A.section('RELEASE-003 / Phase 5 — release result is DERIVED, fail-closed (never PASS on unknown/deferred creds)');
+{
+  const B = RR.MANIFEST_BINDINGS; // 13 — from the manifest, not a stale hardcode
+  const ok = { runtime_workflows_found: 15, bindings_resolved: B, placeholders_remaining: 0, active_workflows: 0 };
+  // The exact lie this fixes: caller claims PASS but the credential audit is unknown -> BLOCKED, never PASS.
+  A.eq('claimed PASS + credential_audit unknown -> BLOCKED',
+    RR.buildRecord(Object.assign({}, ok, { credential_audit: 'unknown', result: 'PASS' })).result, 'BLOCKED');
+  A.eq('all verified + credential PASS -> PASS',
+    RR.buildRecord(Object.assign({}, ok, { credential_audit: 'PASS', result: 'PASS' })).result, 'PASS');
+  A.eq('all verified + credentials deferred -> PASS_WITH_DEFERRED_CREDENTIALS',
+    RR.buildRecord(Object.assign({}, ok, { credential_audit: 'DEFERRED', result: 'PASS' })).result, 'PASS_WITH_DEFERRED_CREDENTIALS');
+  A.eq('credential audit FAIL -> FAIL even if caller claims PASS',
+    RR.buildRecord(Object.assign({}, ok, { credential_audit: 'FAIL', result: 'PASS' })).result, 'FAIL');
+  A.eq('binding count mismatch -> FAIL',
+    RR.buildRecord(Object.assign({}, ok, { bindings_resolved: B - 1, credential_audit: 'PASS', result: 'PASS' })).result, 'FAIL');
+  A.eq('a leftover placeholder -> FAIL',
+    RR.buildRecord(Object.assign({}, ok, { placeholders_remaining: 1, credential_audit: 'PASS', result: 'PASS' })).result, 'FAIL');
+  A.eq('active workflow on an inactive deploy -> FAIL',
+    RR.buildRecord(Object.assign({}, ok, { active_workflows: 1, credential_audit: 'PASS', result: 'PASS' })).result, 'FAIL');
+  A.eq('missing workflow -> FAIL',
+    RR.buildRecord(Object.assign({}, ok, { runtime_workflows_found: 14, credential_audit: 'PASS', result: 'PASS' })).result, 'FAIL');
+  A.eq('ABORTED claim is preserved verbatim',
+    RR.buildRecord(Object.assign({}, ok, { credential_audit: 'PASS', result: 'ABORTED' })).result, 'ABORTED');
+  A.eq('the caller claim is recorded transparently (result_claimed)',
+    RR.buildRecord(Object.assign({}, ok, { credential_audit: 'unknown', result: 'PASS' })).result_claimed, 'PASS');
+  A.eq('binding_edges_expected derives from the manifest (13, not stale 8)',
+    RR.buildRecord({}).binding_edges_expected, B);
 }
 
 A.section('release_report CLI writes a mode-600 evidence file');
