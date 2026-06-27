@@ -15,7 +15,14 @@ const identity = L.runtimeIdentity();
 const KEYS = Object.keys(identity);
 // a fully-resolved local map (fresh-install generation gives every key a stable msloc id)
 function resolvedMap() { return RID.resolveAll(identity, RID.emptyMap(), { byName: {}, byId: {} }).nextMap; }
-const COMPAT = [{ id: 'prodGOOGLE', name: 'Google Sheets - SA', type: 'googleApi' }, { id: 'prodHTTP', name: 'Claude', type: 'httpHeaderAuth' }];
+// A fully-provisioned production has one credential of EACH type the runtime workflows require: googleApi (Sheets),
+// httpHeaderAuth (Claude/Firecrawl) and httpQueryAuth (VK). The deferred path (a type with no prod credential yet)
+// is exercised separately below.
+const COMPAT = [
+  { id: 'prodGOOGLE', name: 'Google Sheets - SA', type: 'googleApi' },
+  { id: 'prodHTTP', name: 'Claude', type: 'httpHeaderAuth' },
+  { id: 'prodVK', name: 'VK Access Token', type: 'httpQueryAuth' }
+];
 
 A.section('§8 — staged files carry resolved ids + resolved bindings + reconciled creds + active=false');
 {
