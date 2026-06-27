@@ -56,6 +56,29 @@ for (const e of EDGES) {
   A.eq('caller workflow id preserved: ' + e.caller_wf, readWf(env.dir, callerFile).id, env.idByFile[e.caller_workflow]);
 }
 
+A.section('SECURITY-005 / Phase 7 — the binding report carries FINGERPRINTS only (no raw target/previous ids)');
+{
+  const rep = B.bindDir(env.dir, { verify: true });
+  A.ok('every edge exposes target_id_fp (fp_<sha10> or the PASTE placeholder)',
+    rep.edges.every(e => typeof e.target_id_fp === 'string' && /^(fp_[0-9a-f]{10}|PASTE_WORKFLOW_ID)$/.test(e.target_id_fp)));
+  A.ok('every edge exposes previous_value_fp', rep.edges.every(e => 'previous_value_fp' in e));
+  A.ok('raw target_id / previous_value fields are GONE', rep.edges.every(e => !('target_id' in e) && !('previous_value' in e)));
+  const blob = JSON.stringify(rep);
+  const rawIds = Object.values(env.idByFile);
+  A.ok('no raw assigned workflow id leaks into the report', rawIds.every(id => blob.indexOf(String(id)) < 0));
+  // an UNRESOLVED edge error must also fingerprint the offending value, never print a raw id
+  const env2 = exportDir(CLOSURE);
+  // force a mismatch: point one caller's binding at a bogus raw id
+  const callerFile = '20_agent_orchestrator.json';
+  const wf = readWf(env2.dir, callerFile);
+  const node = wf.nodes.find(n => n.type === 'n8n-nodes-base.executeWorkflow');
+  node.parameters.workflowId.value = 'RAWLEAKID999';
+  fs.writeFileSync(path.join(env2.dir, callerFile), JSON.stringify(wf, null, 2) + '\n');
+  const rmis = B.bindDir(env2.dir, { verify: true });
+  A.ok('unresolved-edge error never prints the raw id', JSON.stringify(rmis.errors).indexOf('RAWLEAKID999') < 0);
+  rm(env2.dir);
+}
+
 A.section('QA-009 — second run is a no-op (idempotent) and verify mode passes');
 const r2 = B.bindDir(env.dir, { write: true });
 A.eq('idempotent: nothing rewritten on second run', r2.files_written.length, 0);
