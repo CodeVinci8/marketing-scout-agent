@@ -1,7 +1,7 @@
 # Marketing Scout Agent — offline regression ($0, no network, no paid APIs).
 .PHONY: test test-js test-wf test-taxonomy help \
 	release-help release-discovery release-setup-check release-preflight release-preflight-activate \
-	release-core-acceptance release-backup release-restore-validate release-smoke \
+	release-core-acceptance release-backup release-restore-validate release-smoke runtime-acceptance \
 	deploy-dry-run deploy-inactive verify-production wf18-gate \
 	telegram-prelive telegram-activate telegram-deactivate rollback rollback-dry-run \
 	release-lock-status release-clean
@@ -24,6 +24,7 @@ release-help:
 	@echo "  make release-backup           # backup DRY-RUN (entrypoint-overriding plan; writes nothing)"
 	@echo "  make release-restore-validate BACKUP_DIR=/path  # validate a backup is restorable (offline + disposable)"
 	@echo "  make release-smoke            # disposable n8n import/reimport/bind/verify (SKIP without docker)"
+	@echo "  make runtime-acceptance       # DISPOSABLE Stage 4 runtime: webhook reject routing + parent/child (SKIP without docker)"
 	@echo "  make deploy-dry-run           # validate + preflight + print the full import/bind plan (no changes)"
 	@echo "  make deploy-inactive          # import the 15 runtime workflows INACTIVE + auto-bind (operator)"
 	@echo "  make verify-production        # status + binding verification against the live export (operator)"
@@ -58,6 +59,9 @@ release-restore-validate:
 
 release-smoke:
 	scripts/n8n_disposable_e2e.sh
+
+runtime-acceptance:
+	scripts/n8n_runtime_acceptance.sh
 
 deploy-dry-run:
 	scripts/deploy_n8n.sh --dry-run
@@ -173,6 +177,8 @@ test-js:
 	node tests/test_release_integration.js
 	node tests/test_prepare_staged.js
 	node tests/test_status_discovery.js
+	node tests/test_runtime_acceptance.js
+	node tests/test_stage567_topology.js
 
 test-wf:
 	python3 scripts/validate_workflows.py
