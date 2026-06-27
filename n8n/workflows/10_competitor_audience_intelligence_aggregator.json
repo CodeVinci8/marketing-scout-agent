@@ -519,6 +519,12 @@
         },
         "options": {}
       },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
       "id": "aa100000-0000-0000-0000-0000000000sh",
       "name": "Read source_health",
       "type": "n8n-nodes-base.googleSheets",

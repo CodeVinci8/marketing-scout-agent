@@ -7,6 +7,22 @@ const path = require('path');
 const LIB = path.join(__dirname, '..', 'n8n', 'lib');
 const WF = path.join(__dirname, '..', 'n8n', 'workflows');
 
+// Credential placeholders (CRED-001 / DEPLOY-008). A node REQUIRES an n8n credential reference ONLY because of its
+// own configuration — never to make an audit count green:
+//   * a googleSheets node cannot read/write without a Google credential -> it carries a googleApi reference;
+//   * an httpRequest node with authentication 'genericCredentialType'/'predefinedCredentialType' tells n8n to look
+//     up a credential of the declared type at runtime -> it carries that exact type (httpHeaderAuth for the Claude
+//     planner, httpQueryAuth for VK);
+//   * an httpRequest node that injects $env directly (every Telegram send uses $env.MS_TELEGRAM_BOT_TOKEN in the
+//     URL, no `authentication`) intentionally needs NO n8n credential and carries none.
+// The committed source ships PASTE_CREDENTIAL_ID_HERE; tools/prepare_staged_workflows.js resolves it to the unique
+// installation-local credential of the SAME TYPE at deploy time (reconcile matches by type — the name is cosmetic),
+// or DEFERS it when no production credential of that type exists yet. The googleApi shape/name mirrors the legacy
+// WF04/08/10/12 references so every Sheets node reconciles identically.
+function credGoogle() { return { googleApi: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'Google Sheets - Marketing Scout Service Account' } }; }
+function credHttpHeader() { return { httpHeaderAuth: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'HTTP Header Auth - Marketing Scout' } }; }
+function credHttpQuery() { return { httpQueryAuth: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'HTTP Query Auth - VK Access Token' } }; }
+
 // Extract a lib's embeddable core: strip the leading 'use strict'; and the trailing module.exports, and drop
 // local cross-require lines (the depended-on lib is embedded alongside in the SAME node scope, so its symbols
 // are already declared — the require() would otherwise throw inside an n8n Code node). Dependencies MUST be
@@ -60,7 +76,8 @@ function sheetsAppend(id, name, pos, tab) {
       sheetName: { __rl: true, value: tab, mode: 'name' },
       mappingMode: 'autoMapInputData', options: {}
     },
-    type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name
+    type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name,
+    credentials: credGoogle()
   };
 }
 function sheetsRead(id, name, pos, tab) {
@@ -70,7 +87,8 @@ function sheetsRead(id, name, pos, tab) {
       documentId: { __rl: true, value: '={{ $env.MS_SPREADSHEET_ID || "PASTE_SPREADSHEET_ID" }}', mode: 'id' },
       sheetName: { __rl: true, value: tab, mode: 'name' }, options: {}
     },
-    type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name
+    type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name,
+    credentials: credGoogle()
   };
 }
 // appendOrUpdate (upsert) keyed by matchCol — used for the single-latest-row conversation_state.
@@ -82,7 +100,8 @@ function sheetsUpsert(id, name, pos, tab, matchCol) {
       sheetName: { __rl: true, value: tab, mode: 'name' },
       columns: { mappingMode: 'autoMapInputData', matchingColumns: [matchCol], schema: [] }, options: {}
     },
-    type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name
+    type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name,
+    credentials: credGoogle()
   };
 }
 function ifNode(id, name, pos, expr) {
@@ -114,7 +133,8 @@ function httpClaude(id, name, pos) {
       genericAuthType: 'httpHeaderAuth', sendBody: true, specifyBody: 'json',
       jsonBody: '={{ $json.claude_request_body }}', options: {}
     },
-    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
+    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name,
+    credentials: credHttpHeader()
   };
 }
 function httpTelegram(id, name, pos) {
@@ -163,7 +183,8 @@ function httpVk(id, name, pos) {
       authentication: 'genericCredentialType', genericAuthType: 'httpQueryAuth',
       sendQuery: true, specifyQuery: 'json', jsonQuery: '={{ JSON.stringify($json.vk_params) }}', options: {}
     },
-    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
+    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name,
+    credentials: credHttpQuery()
   };
 }
 // Execute Sub-workflow Trigger ("When Called by Agent") declaring NAMED canonical input fields (mirrors WF04/08

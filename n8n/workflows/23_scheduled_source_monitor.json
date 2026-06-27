@@ -93,7 +93,13 @@
         -120
       ],
       "id": "wf23-readsrc",
-      "name": "Read tracked_sources"
+      "name": "Read tracked_sources",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -117,7 +123,13 @@
         120
       ],
       "id": "wf23-readchg",
-      "name": "Read source_change_events"
+      "name": "Read source_change_events",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -233,7 +245,13 @@
         0
       ],
       "id": "wf23-upsrc",
-      "name": "Update tracked_sources"
+      "name": "Update tracked_sources",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -301,7 +319,13 @@
         -120
       ],
       "id": "wf23-apchg",
-      "name": "Append source_change_events"
+      "name": "Append source_change_events",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {

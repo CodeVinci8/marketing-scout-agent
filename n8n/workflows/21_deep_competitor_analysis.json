@@ -159,7 +159,13 @@
         160
       ],
       "id": "wf21-readsrc",
-      "name": "Read tracked_sources"
+      "name": "Read tracked_sources",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -309,7 +315,13 @@
         -260
       ],
       "id": "wf21-apf",
-      "name": "Append deep_analysis_findings"
+      "name": "Append deep_analysis_findings",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -334,7 +346,13 @@
         -60
       ],
       "id": "wf21-apr",
-      "name": "Append deep_analysis_recommendations"
+      "name": "Append deep_analysis_recommendations",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {

@@ -161,7 +161,13 @@
         -60
       ],
       "id": "wf18-readev",
-      "name": "Read agent_request_events"
+      "name": "Read agent_request_events",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -228,7 +234,13 @@
         -60
       ],
       "id": "wf18-readstate",
-      "name": "Read conversation_state"
+      "name": "Read conversation_state",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -252,7 +264,13 @@
         -60
       ],
       "id": "wf18-readmsg",
-      "name": "Read conversation_messages"
+      "name": "Read conversation_messages",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -276,7 +294,13 @@
         -60
       ],
       "id": "wf18-readsum",
-      "name": "Read conversation_summaries"
+      "name": "Read conversation_summaries",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -300,7 +324,13 @@
         -60
       ],
       "id": "wf18-readmem",
-      "name": "Read durable_memories"
+      "name": "Read durable_memories",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -324,7 +354,13 @@
         -60
       ],
       "id": "wf18-readplans",
-      "name": "Read execution_plans"
+      "name": "Read execution_plans",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -401,7 +437,13 @@
         -260
       ],
       "id": "wf18-apreq",
-      "name": "Append agent_requests"
+      "name": "Append agent_requests",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -439,7 +481,13 @@
         -120
       ],
       "id": "wf18-apev",
-      "name": "Append agent_request_events"
+      "name": "Append agent_request_events",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -483,7 +531,13 @@
         20
       ],
       "id": "wf18-upstate",
-      "name": "Upsert conversation_state"
+      "name": "Upsert conversation_state",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -521,7 +575,13 @@
         160
       ],
       "id": "wf18-apmsg",
-      "name": "Append conversation_messages"
+      "name": "Append conversation_messages",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -559,7 +619,13 @@
         300
       ],
       "id": "wf18-apctx",
-      "name": "Append context_usage"
+      "name": "Append context_usage",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -627,7 +693,13 @@
         440
       ],
       "id": "wf18-apsum",
-      "name": "Append conversation_summaries"
+      "name": "Append conversation_summaries",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -821,7 +893,13 @@
         -300
       ],
       "id": "wf18-applan",
-      "name": "Append execution_plans"
+      "name": "Append execution_plans",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -865,7 +943,13 @@
         -300
       ],
       "id": "wf18-upawait",
-      "name": "Upsert Awaiting State"
+      "name": "Upsert Awaiting State",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
