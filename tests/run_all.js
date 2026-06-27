@@ -114,6 +114,8 @@ const JS_SUITES = [
   ['release-integration', 'test_release_integration.js'],
   // --- Stage 8 release INTEGRATION: staged workflow + credential reconciliation before import ---
   ['prepare-staged', 'test_prepare_staged.js'],
+  // --- Stage 8 production discovery: status/inventory/check-config/binding-count (STATUS-001/CHECKCONFIG-001/etc) ---
+  ['status-discovery', 'test_status_discovery.js'],
 ];
 
 let failed = 0;
