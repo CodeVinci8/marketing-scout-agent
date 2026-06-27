@@ -110,12 +110,42 @@ A.section('DEPLOY-008 — committed workflows ship a credential PLACEHOLDER; rec
 A.section('WF18 activation gate — BLOCKS while P0/P1 blockers are open (current state)');
 {
   const g = GATE.gate(GATE.load());
-  // DEC-161: the rearchitecture blockers are resolved with named tests; only TELEGRAM-001 (operator HTTPS ingress)
-  // stays open, so the gate correctly remains PENDING (dispatcher-ready, not live-ready).
-  A.ok('gate is currently PENDING (HTTPS ingress is operator infra)', g.allow === false && g.marker === 'WF18_REARCHITECTURE=PENDING');
-  A.ok('exactly one P0/P1 open (the ingress blocker)', g.blocking_open >= 1);
-  A.ok('the open id is TELEGRAM-001 (public HTTPS ingress)', g.open_ids.indexOf('TELEGRAM-001') >= 0);
-  A.ok('RUNTIME-001 and SECURITY-001 are now resolved', g.open_ids.indexOf('RUNTIME-001') < 0 && g.open_ids.indexOf('SECURITY-001') < 0);
+  // DEC-161: rearchitecture blockers resolved with named tests. Two items keep the gate PENDING:
+  //  TELEGRAM-001 (operator HTTPS ingress) and IDEMP-001 (concurrent dedupe is MITIGATED, not resolved — honest).
+  A.ok('gate is currently PENDING (HTTPS ingress + concurrency)', g.allow === false && g.marker === 'WF18_REARCHITECTURE=PENDING');
+  A.ok('at least 2 P0/P1 open', g.blocking_open >= 2);
+  A.ok('TELEGRAM-001 (public HTTPS ingress) is open', g.open_ids.indexOf('TELEGRAM-001') >= 0);
+  A.ok('IDEMP-001 (mitigated, not resolved) is open', g.open_ids.indexOf('IDEMP-001') >= 0);
+  const idempReason = (g.open_reasons || []).find(r => r.id === 'IDEMP-001');
+  A.ok('IDEMP-001 open reason is its mitigated status', !!idempReason && idempReason.reason === 'status_mitigated');
+  A.ok('RUNTIME-001 and SECURITY-001 are resolved (not open)', g.open_ids.indexOf('RUNTIME-001') < 0 && g.open_ids.indexOf('SECURITY-001') < 0);
+}
+
+A.section('IDEMP-001 — honest registry: mitigated with residual_risk + mitigation_options (no overstated resolved)');
+{
+  const reg = GATE.load();
+  const idemp = reg.blockers.find(b => b.id === 'IDEMP-001');
+  A.ok('IDEMP-001 status is mitigated (not resolved)', idemp.status === 'mitigated');
+  A.ok('IDEMP-001 documents residual concurrency risk', /concurrent/i.test(idemp.residual_risk || ''));
+  A.ok('IDEMP-001 lists mitigation options', /atomic|queue mode|accepted/i.test(idemp.mitigation_options || ''));
+  A.ok('registry documents n8n concurrency capability', /N8N_CONCURRENCY_PRODUCTION_LIMIT/.test(reg.n8n_concurrency_capability || ''));
+  A.ok('registry documents cleared_statuses', !!(reg.cleared_statuses && reg.cleared_statuses.resolved && reg.cleared_statuses.accepted));
+}
+
+A.section('WF18 activation gate — clearance semantics (resolved/accepted clear; mitigated/partial/open block)');
+{
+  function reg1(b) { return { gate_severities_blocking: ['P0', 'P1'], blockers: [Object.assign({ id: 'X', severity: 'P0' }, b)] }; }
+  A.ok('mitigated BLOCKS', GATE.gate(reg1({ status: 'mitigated', evidence: 'e' })).allow === false);
+  A.ok('partial BLOCKS', GATE.gate(reg1({ status: 'partial', evidence: 'e' })).allow === false);
+  A.ok('open BLOCKS', GATE.gate(reg1({ status: 'open' })).allow === false);
+  A.ok('resolved+evidence CLEARS', GATE.gate(reg1({ status: 'resolved', evidence: 'tests/x.js' })).allow === true);
+  A.ok('resolved without evidence BLOCKS', GATE.gate(reg1({ status: 'resolved', evidence: '' })).allow === false);
+  // 'accepted' clears ONLY with full operator sign-off (evidence + residual_risk + accepted_by)
+  A.ok('accepted without sign-off BLOCKS', GATE.gate(reg1({ status: 'accepted', evidence: 'e' })).allow === false);
+  A.ok('accepted with full sign-off CLEARS', GATE.gate(reg1({ status: 'accepted', evidence: 'e', residual_risk: 'r', accepted_by: 'operator' })).allow === true);
+  // clearance() reasons are explicit
+  A.eq('clearance reason for mitigated', GATE.clearance({ status: 'mitigated' }).reason, 'status_mitigated');
+  A.eq('clearance reason for accepted-without-signoff', GATE.clearance({ status: 'accepted', evidence: 'e' }).reason, 'accepted_without_full_signoff');
 }
 
 A.section('WF18 activation gate — opens ONLY when every P0/P1 is resolved WITH evidence');

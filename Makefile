@@ -1,7 +1,7 @@
 # Marketing Scout Agent — offline regression ($0, no network, no paid APIs).
 .PHONY: test test-js test-wf test-taxonomy help \
 	release-help release-discovery release-setup-check release-preflight release-preflight-activate \
-	release-core-acceptance release-backup release-restore-validate release-smoke \
+	release-core-acceptance release-backup release-restore-validate release-smoke runtime-acceptance \
 	deploy-dry-run deploy-inactive verify-production wf18-gate \
 	telegram-prelive telegram-activate telegram-deactivate rollback rollback-dry-run \
 	release-lock-status release-clean
@@ -16,7 +16,7 @@ help:
 # Mutating/live targets honor dry-run defaults and the WF18 gate; activation is always a separate explicit step.
 release-help:
 	@echo "Stage 8 release-core operator interface (each step prints machine-readable PASS/FAIL markers):"
-	@echo "  make release-discovery        # manifest plan + runtime-id coverage + git state (read-only)"
+	@echo "  make release-discovery        # LIVE read-only production discovery (inventory/env/id coverage) or repo-only fallback"
 	@echo "  make release-setup-check      # validate env profile (non-secret) — fail-closed preflight"
 	@echo "  make release-preflight        # fail-closed runtime config preflight"
 	@echo "  make release-preflight-activate # activation-strict preflight (token/webhook/secret/\$$env/zlib)"
@@ -24,6 +24,7 @@ release-help:
 	@echo "  make release-backup           # backup DRY-RUN (entrypoint-overriding plan; writes nothing)"
 	@echo "  make release-restore-validate BACKUP_DIR=/path  # validate a backup is restorable (offline + disposable)"
 	@echo "  make release-smoke            # disposable n8n import/reimport/bind/verify (SKIP without docker)"
+	@echo "  make runtime-acceptance       # DISPOSABLE Stage 4 runtime: webhook reject routing + parent/child (SKIP without docker)"
 	@echo "  make deploy-dry-run           # validate + preflight + print the full import/bind plan (no changes)"
 	@echo "  make deploy-inactive          # import the 15 runtime workflows INACTIVE + auto-bind (operator)"
 	@echo "  make verify-production        # status + binding verification against the live export (operator)"
@@ -35,18 +36,17 @@ release-help:
 	@echo "  make release-lock-status / make release-clean"
 
 release-discovery:
-	node tools/manifest_lib.js plan-json
-	-node tools/runtime_ids.js status
-	git status --short || true
+	scripts/deploy_n8n.sh --discover
+	@git status --short || true
 
 release-setup-check:
-	node tools/preflight_config.js --json --soft
+	node tools/preflight_config.js --discover --json --soft
 
 release-preflight:
-	node tools/preflight_config.js
+	node tools/preflight_config.js --discover
 
 release-preflight-activate:
-	node tools/preflight_config.js --for-activation --require-zlib
+	node tools/preflight_config.js --discover --for-activation --require-zlib
 
 release-core-acceptance:
 	node tests/test_stage8_release_e2e.js
@@ -59,6 +59,9 @@ release-restore-validate:
 
 release-smoke:
 	scripts/n8n_disposable_e2e.sh
+
+runtime-acceptance:
+	scripts/n8n_runtime_acceptance.sh
 
 deploy-dry-run:
 	scripts/deploy_n8n.sh --dry-run
@@ -74,7 +77,7 @@ wf18-gate:
 	node tools/wf18_activation_gate.js
 
 telegram-prelive:
-	node tools/preflight_config.js --for-activation --require-zlib
+	node tools/preflight_config.js --discover --for-activation --require-zlib
 	scripts/telegram_webhook.sh info
 
 # Transactional WF18-only activation (ACTIVATE-002): publish WF18, register + verify the webhook in ONE step;
@@ -173,6 +176,9 @@ test-js:
 	node tests/test_stage8_release_e2e.js
 	node tests/test_release_integration.js
 	node tests/test_prepare_staged.js
+	node tests/test_status_discovery.js
+	node tests/test_runtime_acceptance.js
+	node tests/test_stage567_topology.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

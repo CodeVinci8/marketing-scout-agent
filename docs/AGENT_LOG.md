@@ -5,6 +5,42 @@ Most recent first.
 
 ---
 
+## 2026-06-27 (session 30) — Stage 4–8 runtime acceptance + production-discovery repair (DEC-162)
+
+**Branch:** `test/stage4-runtime-acceptance` off `main` @ `d10866b`. **4 commits, NOT pushed.** $0, 0 external/paid
+calls, all committed `active=false`, production `n8n-n8n-1`/volume/`sing-box`/443 untouched, NOTHING activated, no
+Telegram webhook registered, no secret/raw-id committed.
+
+**Read-only production discovery** (live `n8n-n8n-1`, n8n 2.23.3): 21 workflows, ALL inactive; 14/15 runtime match
+by exact name (UPDATE in place), WF18 is a RENAME (conversational→secure dispatcher), 0 duplicates, 0 ambiguous, 7
+legacy/extra. WF20/21/23 child edges already bound (noop); only WF18's 5 dispatch edges unbound. Existing prod
+workflows ARE reconcilable in place. Container env complete except `PUBLIC_WEBHOOK_BASE_URL` + webhook secret.
+
+**Fixed (confirmed):** STATUS-001 (`resolve_exact_name` set `RESOLVE_STATUS` inside a `$()` subshell → all 5 call
+sites read a stale empty status; `--status` reported every workflow "(not imported)" — fixed with `resolve_into` +
+the pure `tools/workflow_inventory.js` classifier; fail-closed on an empty listing). CHECKCONFIG-001 (preflight
+`--discover` evaluates the effective env container>file>process via `env_discovery`). RELEASE-006 (docker-safe
+`capture_export` copies the export OUT of the container + validates it). DISCOVERY-001 (`make release-discovery` =
+live read-only production discovery). OPERATOR-REPORT-001 (binding counts from the manifest=13). IDEMP-001
+`resolved`→`mitigated` (concurrent exactly-once unproven; gate clears only `resolved`/`accepted`).
+
+**Runtime acceptance (RUNTIME-ACCEPTANCE-001):** new `scripts/n8n_runtime_acceptance.sh` runs the COMMITTED
+ingress gate + WF18 routing in a real disposable n8n 2.23.3 — all 8 reject scenarios route to Terminate (zero side
+effects), accept→dispatch, real parent→child + child-failure propagation. **RUNTIME_ACCEPTANCE=PASS.** Live
+webhook-200 / accepted-path-with-Sheets / Telegram = honest OPERATOR_PENDING.
+
+**Rejected:** WF04 SSRF (WF04 calls only fixed allowlisted hosts; the user URL is a Firecrawl parameter, never
+fetched by n8n).
+
+**Tests:** `make test` ALL PASS; `make release-core-acceptance` PASS; new suites status-discovery(65) +
+runtime-acceptance(137) + stage567-topology(56) + reconcile-and-gate updated. $0, 0 external calls.
+
+**Next (operator/live):** production dry-run → inactive deploy (decide WF18 rename) → verify → HTTPS ingress
+(TELEGRAM-001) → telegram-prelive → WF18 activation (gate PENDING on TELEGRAM-001 + IDEMP-001) → controlled live
+acceptance.
+
+---
+
 ## 2026-06-27 (session 29) — WF18 gateway REARCHITECTURE: real secure dispatcher (DEC-161)
 
 **Branch:** `fix/wf18-gateway-rearchitecture` off `main` @ `2631499`. **3 commits, NOT pushed.** $0, 0 external

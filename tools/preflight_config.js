@@ -229,11 +229,32 @@ if (require.main === module) {
     forActivation: args.indexOf('--for-activation') >= 0 || args.indexOf('--activate') >= 0,
     profile: profIdx >= 0 ? args[profIdx + 1] : null
   };
-  const rep = evaluate(process.env, opts);
+  // CHECKCONFIG-001: by default the preflight saw ONLY the current shell (process.env), so a production check
+  // reported container/compose-provided vars as missing. With --discover it evaluates the EFFECTIVE environment the
+  // running n8n actually sees (precedence container > file > process), via the SAME tools/env_discovery.js path the
+  // deploy dry-run uses — so check-config and the deploy preflight can never disagree. Secret values are never shown.
+  let env = process.env;
+  let discoveryReport = null;
+  if (args.indexOf('--discover') >= 0) {
+    const ENV = require('./env_discovery.js');
+    const sIdx = args.indexOf('--env-source');
+    discoveryReport = ENV.discover({ source: sIdx >= 0 ? args[sIdx + 1] : undefined });
+    env = Object.assign({}, process.env, discoveryReport.effective);
+  }
+  const rep = evaluate(env, opts);
+  if (discoveryReport) {
+    rep.env_sources = discoveryReport.sources_present;
+    rep.env_precedence = discoveryReport.effective_precedence;
+    rep.env_agreement = discoveryReport.agree ? 'PASS' : 'MISMATCH';
+    rep.env_mismatches = discoveryReport.mismatches.map(m => ({ key: m.key, secret: m.secret })); // keys only, never values
+  }
   if (json) {
     console.log(JSON.stringify(rep, null, 2));
   } else {
     console.log('Runtime config preflight (' + (opts.soft ? 'soft/dry-run' : 'fail-closed') + (opts.requireZlib ? ', zlib required' : '') + '):');
+    if (discoveryReport) {
+      console.log('  env sources: ' + (discoveryReport.sources_present.join(',') || 'none') + ' (precedence ' + (discoveryReport.effective_precedence.join('>') || 'none') + ')' + (discoveryReport.agree ? '' : ' [MATERIAL DISAGREEMENT file vs container — keys: ' + discoveryReport.mismatches.map(m => m.key).join(',') + ']'));
+    }
     for (const c of rep.checks) console.log('  [' + c.status + '] ' + c.name + (c.detail ? '  ' + c.detail : ''));
     if (rep.warnings.length) { console.log('WARNINGS:'); rep.warnings.forEach(w => console.log('  - ' + w)); }
     if (rep.errors.length) { console.log('ERRORS:'); rep.errors.forEach(e => console.log('  - ' + e)); }

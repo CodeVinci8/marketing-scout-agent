@@ -52,6 +52,8 @@ function plan(input) {
   const activate = !!o.activate;
   const expectedVersion = o.expectedVersion || '2.23.3';
   const expectedCount = o.expectedCount != null ? o.expectedCount : 15;
+  // OPERATOR-REPORT-001: the binding-edge count is derived from the manifest (13 today), never hard-coded.
+  const bindingEdgeCount = o.bindingEdgeCount != null ? o.bindingEdgeCount : null;
   const isProd = target === 'production';
   const isOffline = target === 'offline';
 
@@ -199,7 +201,7 @@ function plan(input) {
 
   // 16-19 + 20-22: import/bind/export/verify + evidence/rollback/unlock (side effects; planned)
   decide('import_inactive', (id) => step(id, mode === 'apply' ? 'planned' : 'ok', 'import staged JSON --activeState=false (never raw source)'));
-  decide('bind_edges', (id) => step(id, mode === 'apply' ? 'planned' : 'ok', '8 Execute Sub-workflow edges auto-bound'));
+  decide('bind_edges', (id) => step(id, mode === 'apply' ? 'planned' : 'ok', (bindingEdgeCount != null ? bindingEdgeCount : 'manifest') + ' Execute Sub-workflow edges auto-bound'));
   decide('fresh_export', (id) => step(id, mode === 'apply' ? 'planned' : 'ok', 're-export to verify against reality'));
   decide('verify_release', (id) => step(id, mode === 'apply' ? 'planned' : 'ok', 'verify ids/names/creds/bindings + active=false'));
   // --- cleanup steps: ALWAYS emitted, even on abort (§5 failure behavior: preserve sanitized diagnostics,
@@ -269,7 +271,9 @@ if (require.main === module) {
     options: {
       target, mode, activate: args.indexOf('--activate') >= 0,
       image: val('--image') || process.env.MS_N8N_IMAGE || 'n8nio/n8n:2.23.3',
-      requireZlib: args.indexOf('--require-zlib') >= 0
+      requireZlib: args.indexOf('--require-zlib') >= 0,
+      expectedCount: Object.keys(identity).length,
+      bindingEdgeCount: L.bindingEdges().length
     }
   });
   console.log(render(p));

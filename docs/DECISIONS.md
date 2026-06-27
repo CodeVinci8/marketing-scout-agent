@@ -5,6 +5,53 @@ Most recent first.
 
 ---
 
+## DEC-162 — Stage 4–8 runtime-acceptance & production-discovery repair (test/stage4-runtime-acceptance)
+
+**Date:** 2026-06-27 · **Branch:** `test/stage4-runtime-acceptance` (off `main` @ `d10866b`)
+
+**Context:** a verification session confirmed five repository-scoped production-discovery/release defects against the
+LIVE `n8n-n8n-1` (read-only), proved actual Stage 4 runtime semantics in a disposable n8n, and made the idempotency
+claim honest.
+
+**Read-only production reality (sanitized, fingerprints only):** 21 workflows, ALL `active=false`; 14/15 runtime
+workflows match by exact name (UPDATE in place, ids preserved), WF18 is a RENAME (prod="…(conversational)" vs
+repo="…(secure dispatcher)" → CREATE + legacy predecessor), 0 duplicates, 0 ambiguous, 7 legacy/extra. The
+production WF20→WF08/10/12/16/04, WF21→WF04, WF23→WF26/04 sub-workflow edges are ALREADY bound (noop); only WF18's
+5 dispatch edges are unbound because the live WF18 is the stale conversational version. **Existing production
+workflows CAN be reconciled in place** (14 exact + the WF18 rename decision); nothing needs deletion.
+
+**Decisions:**
+- **STATUS-001** root cause was a shell subshell-scoping bug (`RESOLVE_STATUS` set inside `$()`), not an empty
+  install. Fixed via `resolve_into`; `--status`/`--discover` now classify the real listing/export through the pure
+  `tools/workflow_inventory.js` (exact-match / renamed / missing / ambiguous / legacy) and FAIL CLOSED on an empty
+  listing instead of reporting "(not imported)". Never persists the local id map.
+- **CHECKCONFIG-001** preflight now evaluates the EFFECTIVE env (container > file > process) via `env_discovery`
+  (`--discover`), the same path the dry-run uses; secret values never printed.
+- **RELEASE-006** `capture_export` is docker-safe (copies the export OUT of the container, verifies it parses), so
+  the production dry-run no longer aborts at `export_existing`.
+- **DISCOVERY-001** `make release-discovery` is now LIVE read-only production discovery (degrades to a labelled
+  repo-only fallback off-VPS). **OPERATOR-REPORT-001** binding counts derive from the manifest (13), never "8".
+- **IDEMP-001** downgraded `resolved`→`mitigated`: sequential dedup is proven, but concurrent exactly-once is not
+  (Sheets read-then-write is not atomic; n8n 2.23.3 OSS has only a GLOBAL `N8N_CONCURRENCY_PRODUCTION_LIMIT`, no
+  per-workflow concurrency=1). The WF18 activation gate now clears ONLY `resolved` (with evidence) or `accepted`
+  (with `residual_risk`+`accepted_by`); `mitigated` BLOCKS — so the gate stays PENDING on TELEGRAM-001 + IDEMP-001.
+- **RUNTIME-ACCEPTANCE-001** added a DISPOSABLE runtime acceptance (`scripts/n8n_runtime_acceptance.sh`) that runs
+  the COMMITTED `telegram_io.ingressDecision` inside real n8n and proves all 8 reject scenarios route to Terminate
+  (zero side effects) while the accept path reaches dispatch, plus real parent→child execution + child-failure
+  propagation. `RUNTIME_ACCEPTANCE=PASS`. The webhook live-200 ack and the accepted-path-with-Sheets/Telegram are
+  honestly `OPERATOR_PENDING` (a live webhook needs a fully-initialised server / credentials). n8n 2.23.3 CLI
+  cannot call an inactive sub-workflow, and its `checkForWorkflowIssues` rejects a `workflowInputs`-schema child
+  under `n8n execute` (passthrough is the CLI-executable trigger mode) — both documented in the fixtures.
+
+**SSRF (rejected as a defect):** the runtime website source WF04 makes httpRequests ONLY to fixed allowlisted hosts
+(`api.firecrawl.dev`, the Claude endpoint); the untrusted user URL is a Firecrawl API parameter, never fetched by
+n8n — so there is no direct n8n SSRF surface and `url_safety.assertSafeUrl` in WF04 would be defense-in-depth only.
+
+**Proof levels:** Group A = PRODUCTION_READ_ONLY_PROVEN. Runtime acceptance = DISPOSABLE_RUNTIME_PROVEN. Live
+webhook / Telegram / accepted-path = OPERATOR_PENDING. Nothing in production was mutated or activated.
+
+---
+
 ## DEC-161 — WF18 gateway rearchitecture: a real fail-closed secure dispatcher (not just correct libs)
 
 **Date:** 2026-06-27 · **Branch:** `fix/wf18-gateway-rearchitecture` (off `main` @ `2631499`)

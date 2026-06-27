@@ -26,7 +26,8 @@
 #   scripts/deploy_n8n.sh --activate-telegram  # TRANSACTIONAL: activate WF18 ONLY (never WF23/WF25) + register &
 #                                              #   verify webhook; auto-unpublish WF18 if the webhook step fails.
 #   scripts/deploy_n8n.sh --deactivate-triggers# deactivate those same trigger workflows
-#   scripts/deploy_n8n.sh --status             # show imported runtime workflows and their active state
+#   scripts/deploy_n8n.sh --status             # classify the live workflow listing vs the manifest (read-only)
+#   scripts/deploy_n8n.sh --discover           # LIVE read-only production discovery (inventory + env + id coverage)
 #
 # This script NEVER: overwrites credentials, pushes, calls any paid API, or activates a callable sub-workflow.
 # Importing leaves every workflow inactive (active=false from the JSON is preserved). Only --activate-triggers
@@ -46,6 +47,8 @@ ENV_DISCOVERY="${ROOT}/tools/env_discovery.js"
 RELEASE_PLAN="${ROOT}/tools/release_plan.js"
 STAGE_TOOL="${ROOT}/tools/prepare_staged_workflows.js"
 RECONCILE_CREDS="${ROOT}/tools/reconcile_credentials.js"
+RECONCILE_WF="${ROOT}/tools/reconcile_workflows.js"
+INVENTORY_TOOL="${ROOT}/tools/workflow_inventory.js"
 RUNTIME_IDS_LOCAL="${MS_RUNTIME_IDS_LOCAL:-${ROOT}/config/runtime_ids.local.json}"
 # DEPLOY-001: Docker-only-safe execution abstraction (host CLI OR `docker exec <container> …`; /bin/sh, not bash).
 # shellcheck source=scripts/lib/n8n_exec.sh
@@ -74,6 +77,7 @@ for arg in "$@"; do
     --activate-telegram) MODE="activate-telegram" ;;
     --deactivate-triggers) MODE="deactivate-triggers" ;;
     --status) MODE="status" ;;
+    --discover) MODE="discover" ;;
     --yes|-y) ASSUME_YES="yes" ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown argument: $arg (try --help)"; exit 2 ;;
@@ -129,7 +133,9 @@ assert_activation_consistency() {
 # --- runtime config preflight (QA-006) --------------------------------------------------------------------------
 check_config() {
   local soft="${1:-}" require_zlib="${2:-}"
-  local flags=( --json )
+  # CHECKCONFIG-001: always evaluate the EFFECTIVE environment (container > file > process) via env_discovery,
+  # the same path the dry-run uses — never just the current shell. Degrades to process.env when no container/file.
+  local flags=( --json --discover )
   [ "$soft" = "soft" ] && flags+=( --soft )
   [ "$require_zlib" = "require-zlib" ] && flags+=( --require-zlib )
   command -v node >/dev/null 2>&1 || die "node is required for the config preflight."
@@ -142,12 +148,22 @@ check_config() {
 EXPORT_PROVIDED="no"
 capture_export() {
   local out="$1"; mkdir -p "$out"
-  if n8n_available; then
-    if n8n_cli export:workflow --all --separate --output="$out" >/dev/null 2>&1 && ls "$out"/*.json >/dev/null 2>&1; then
-      EXPORT_PROVIDED="yes"; return 0
-    fi
+  EXPORT_PROVIDED="no"
+  n8n_available || return 0
+  # RELEASE-006: a docker-mode `n8n export:workflow --output=<dir>` writes INSIDE the container — the host dir
+  # stays empty. The previous code checked the host dir and so ALWAYS captured nothing in docker mode, which made
+  # the production dry-run abort at export_existing. Route through export_all (which copies the export OUT of the
+  # container via n8n_get, host mode = plain cp), then VERIFY the host copy is non-empty AND parseable.
+  export_all "$out" || return 0
+  if ls "$out"/*.json >/dev/null 2>&1 && node -e '
+      const fs=require("fs"),path=require("path"),d=process.argv[1];
+      const files=fs.readdirSync(d).filter(f=>f.endsWith(".json"));
+      if(!files.length) process.exit(1);
+      for(const f of files){ JSON.parse(fs.readFileSync(path.join(d,f),"utf8")); }
+    ' "$out" 2>/dev/null; then
+    EXPORT_PROVIDED="yes"
   fi
-  EXPORT_PROVIDED="no"; return 0
+  return 0
 }
 
 # Run the ORDERED, fail-closed release planner (tools/release_plan.js) against the captured export + discovered
@@ -187,18 +203,30 @@ load_runtime_id_fingerprints() {
 id_fingerprint() { node -e 'process.stdout.write(require(process.argv[1]).fingerprint(process.argv[2]))' "$RUNTIME_IDS_TOOL" "$1" 2>/dev/null || printf 'fp_err'; }
 
 # Strict exact-name workflow-id resolution (DEPLOY-002): NEVER select the first of several matches.
-#   RESOLVE_STATUS=ok|absent|ambiguous ; on ok, echoes the unique id.
-RESOLVE_STATUS=""
+# STATUS-001: this function is ALWAYS called inside a $() command substitution (a subshell), so any global it
+# sets is LOST when the subshell exits — that bug made every caller read a stale empty RESOLVE_STATUS and report
+# imported workflows as "(not imported)" and silently defeated the ambiguous/absent safety guards. The fix:
+# PRINT the verdict ("<status>\t<id>"; status=ok|absent|ambiguous, id only when ok) and let resolve_into populate
+# the globals in the CURRENT shell.
 resolve_exact_name() {
   local name="$1" listing="$2" count
   count="$(printf '%s\n' "$listing" | awk -F'|' -v n="$name" '$2==n{c++} END{print c+0}')"
   if [ "${count:-0}" -eq 1 ]; then
-    RESOLVE_STATUS="ok"; printf '%s' "$(printf '%s\n' "$listing" | awk -F'|' -v n="$name" '$2==n{print $1; exit}')"
+    printf 'ok\t%s' "$(printf '%s\n' "$listing" | awk -F'|' -v n="$name" '$2==n{print $1; exit}')"
   elif [ "${count:-0}" -eq 0 ]; then
-    RESOLVE_STATUS="absent"; printf ''
+    printf 'absent\t'
   else
-    RESOLVE_STATUS="ambiguous"; printf ''
+    printf 'ambiguous\t'
   fi
+}
+
+# Populate RESOLVE_STATUS + RESOLVE_ID in the CURRENT shell from resolve_exact_name's printed verdict (STATUS-001).
+RESOLVE_STATUS=""
+RESOLVE_ID=""
+resolve_into() {
+  local res; res="$(resolve_exact_name "$1" "$2")"
+  RESOLVE_STATUS="${res%%$'\t'*}"
+  RESOLVE_ID="${res#*$'\t'}"
 }
 
 validate_json() {
@@ -300,6 +328,8 @@ export_all() {
     local cdir="/tmp/ms-export-$$"
     n8n_cli export:workflow --all --separate --output="$cdir" >/dev/null 2>&1
     n8n_get "$cdir" "$out" >/dev/null 2>&1
+    # clean up our own in-container temp dir (ephemeral container layer; never the n8n_n8n_data volume)
+    n8n_sh "rm -rf $cdir" >/dev/null 2>&1 || true
   fi
 }
 
@@ -384,7 +414,7 @@ do_import() {
   local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
   for f in "${IMPORT_ORDER[@]}"; do
     local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
-    id="$(resolve_exact_name "$nm" "$listing")"
+    resolve_into "$nm" "$listing"; id="$RESOLVE_ID"
     case "$RESOLVE_STATUS" in
       ok) printf '  %-46s id_fp=%s\n' "$f" "$(id_fingerprint "$id")" ;;
       ambiguous) die "ambiguous exact workflow name in n8n for ${f} (\"${nm}\") — refusing (DEPLOY-002)." ;;
@@ -392,7 +422,7 @@ do_import() {
     esac
   done
   hr
-  say "Imported ${#IMPORT_ORDER[@]} runtime workflows from STAGED JSON. They are INACTIVE, with resolved ids, the 8"
+  say "Imported ${#IMPORT_ORDER[@]} runtime workflows from STAGED JSON. They are INACTIVE, with resolved ids, the ${BINDING_COUNT}"
   say "sub-workflow ids bound, and compatible production credentials preserved automatically (no manual UI step)."
   # --- (20/21) sanitized release evidence (fingerprints only) + the exact rollback command ----------------------
   rp_write_evidence PASS "${RP_COVERAGE:-unknown}" "${RP_CHECKSUM:-unknown}" 0
@@ -466,7 +496,7 @@ activate_triggers() {
   local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
   for f in "${to_activate[@]}"; do
     local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
-    id="$(resolve_exact_name "$nm" "$listing")"
+    resolve_into "$nm" "$listing"; id="$RESOLVE_ID"
     case "$RESOLVE_STATUS" in
       ambiguous) die "ambiguous exact workflow name for ${f} (\"${nm}\") in n8n — refusing to activate (DEPLOY-002)." ;;
       absent) say "  [skip] ${f}: not found in n8n (import it first with --apply)"; continue ;;
@@ -486,8 +516,8 @@ activate_telegram() {
   load_manifest_arrays
   local WF18_FILE="18_telegram_agent_gateway.json"
   say "Strict ACTIVATION preflight (bot token + public HTTPS webhook url + secret + \$env + zlib are fail-closed):"
-  if ! node "$PREFLIGHT" --for-activation --require-zlib >/dev/null 2>&1; then
-    node "$PREFLIGHT" --for-activation --require-zlib || true
+  if ! node "$PREFLIGHT" --discover --for-activation --require-zlib >/dev/null 2>&1; then
+    node "$PREFLIGHT" --discover --for-activation --require-zlib || true
     die "activation preflight failed — refusing to activate WF18 (set bot token / PUBLIC_WEBHOOK_BASE_URL / webhook secret / N8N_BLOCK_ENV_ACCESS_IN_NODE=false / zlib)."
   fi
   say "  [ok] activation preflight passed (stricter than the inactive-deploy preflight)"
@@ -499,7 +529,7 @@ activate_telegram() {
   local nm id listing
   nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${WF18_FILE}")"
   listing="$(n8n_cli list:workflow 2>/dev/null || true)"
-  id="$(resolve_exact_name "$nm" "$listing")"
+  resolve_into "$nm" "$listing"; id="$RESOLVE_ID"
   case "$RESOLVE_STATUS" in
     ok) ;;
     ambiguous) die "ambiguous WF18 exact name in n8n — refusing to activate (DEPLOY-002)." ;;
@@ -548,7 +578,7 @@ deactivate_triggers() {
   local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
   for f in "${to_deactivate[@]}"; do
     local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
-    id="$(resolve_exact_name "$nm" "$listing")"
+    resolve_into "$nm" "$listing"; id="$RESOLVE_ID"
     case "$RESOLVE_STATUS" in
       ambiguous) die "ambiguous exact workflow name for ${f} (\"${nm}\") in n8n — refusing to deactivate (DEPLOY-002)." ;;
       absent) say "  [skip] ${f}: not found"; continue ;;
@@ -564,17 +594,55 @@ show_status() {
   require_n8n || exit 1
   detect_n8n_version
   local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
-  hr; say "Runtime workflow status (active flag from n8n; fingerprints only — never raw ids):"
-  for f in "${IMPORT_ORDER[@]}"; do
-    local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
-    id="$(resolve_exact_name "$nm" "$listing")"
-    case "$RESOLVE_STATUS" in
-      ok) printf '  %-46s id_fp=%s  exact_name_count=1\n' "$f" "$(id_fingerprint "$id")" ;;
-      ambiguous) printf '  %-46s id_fp=%s  exact_name_count>1 (AMBIGUOUS — fix before deploy)\n' "$f" "(ambiguous)" ;;
-      *) printf '  %-46s id_fp=%s\n' "$f" "(not imported)" ;;
-    esac
-  done
+  # STATUS-001: a FAILED/empty listing is a DISCOVERY FAILURE, not an empty install. Stop and report it as such —
+  # never fall back to the local id map and never guess (the old code reported every workflow as "(not imported)").
+  if [ -z "$(printf '%s' "$listing" | tr -d '[:space:]')" ]; then
+    say "WORKFLOW_INVENTORY=ERROR"
+    die "could not list workflows from n8n (empty/failed listing) — DISCOVERY FAILURE, not an empty install. Refusing to guess. Check: docker exec ${MS_N8N_CONTAINER:-n8n-n8n-1} n8n list:workflow"
+  fi
+  hr; say "Runtime workflow status vs production (exact-name authoritative; fingerprints only — never raw ids):"
+  say "Distinguishes: exact match · renamed (same number, different name) · missing · ambiguous duplicate · legacy/extra."
+  # Classify the WHOLE production listing against the manifest (matched / renamed / missing / ambiguous / legacy).
+  local inv; inv="$(printf '%s\n' "$listing" | node "$INVENTORY_TOOL" --listing - 2>&1)" || true
+  printf '%s\n' "$inv" | sed 's/^/  /'
   hr
+}
+
+# Read-only LIVE production discovery (DISCOVERY-001): report production REALITY, never repository-only state and
+# never mutate / persist the id map. Degrades gracefully to a clearly-labelled repo-only plan when no n8n is reachable.
+show_discovery() {
+  load_manifest_arrays
+  hr; say "Read-only production discovery (NO mutation · NO id-map persistence · fingerprints only)"
+  say "Manifest runtime plan: ${RUNTIME_COUNT} workflows · ${BINDING_COUNT} binding edges · expected n8n ${N8N_EXPECTED_VERSION}"
+  if ! n8n_available; then
+    hr; say "No reachable n8n — LIVE discovery requires MS_N8N_MODE=docker MS_N8N_CONTAINER=n8n-n8n-1 on the VPS."
+    say "REPO-ONLY fallback (this is NOT production reality):"
+    node "$MANIFEST_LIB" plan-json | sed 's/^/  /' || true
+    node "$RUNTIME_IDS_TOOL" status --local "$RUNTIME_IDS_LOCAL" 2>/dev/null | sed 's/^/  /' || true
+    say "LIVE_DISCOVERY=UNAVAILABLE"
+    return 0
+  fi
+  detect_n8n_version
+  say "Container=$(n8n_resolve_container) · pinned_image=${MS_N8N_IMAGE:-n8nio/n8n:2.23.3} · detected_version=${N8N_VERSION}"
+  hr; say "Effective configuration (sanitized; secret values never shown):"
+  discover_environment
+  local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
+  hr; say "Capturing a read-only workflow export (docker-safe; copied OUT of the container; container temp cleaned)..."
+  capture_export "$tmp/exported"
+  if [ "$EXPORT_PROVIDED" != "yes" ]; then
+    say "WORKFLOW_INVENTORY=ERROR"
+    die "production export FAILED (no parseable workflows captured) — DISCOVERY FAILURE. Refusing to fall back to the local id map. Check: docker exec ${MS_N8N_CONTAINER:-n8n-n8n-1} n8n export:workflow --all --separate --output=/tmp/x"
+  fi
+  hr; say "Production inventory vs manifest (read-only export — includes active state):"
+  node "$INVENTORY_TOOL" --export-dir "$tmp/exported" 2>&1 | sed 's/^/  /' || true
+  hr; say "In-place reconciliation plan (exact-name: CREATE/UPDATE/ABORT — NO mutation):"
+  node "$RECONCILE_WF" --export-dir "$tmp/exported" 2>&1 | grep -E 'RECONCILIATION|"action"|"wf"|"reason"' | sed 's/^/  /' || true
+  hr; say "Runtime-id coverage against the live export (DRY — config/runtime_ids.local.json is NOT written):"
+  node "$RUNTIME_IDS_TOOL" resolve --export-dir "$tmp/exported" --local "$tmp/throwaway_idmap.json" 2>&1 | grep -E 'RUNTIME_IDS_RESOLVE|coverage' | sed 's/^/  /' || true
+  hr; say "Binding integrity in the live export (${BINDING_COUNT} manifest edges; a stale prod WF18 is expected to show unbound edges):"
+  node "$BIND_TOOL" --dir "$tmp/exported" --verify 2>&1 | sed 's/^/  /' || true
+  hr
+  say "LIVE_DISCOVERY=PASS (read-only · production NOT mutated · runtime_ids.local.json NOT written)"
 }
 
 say "Marketing Scout — n8n deploy (mode: ${MODE})"
@@ -638,5 +706,8 @@ case "$MODE" in
     ;;
   status)
     show_status
+    ;;
+  discover)
+    show_discovery
     ;;
 esac
