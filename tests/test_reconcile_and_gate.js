@@ -163,4 +163,61 @@ A.section('WF18 activation gate — opens ONLY when every P0/P1 is resolved WITH
   A.ok('all-resolved-with-evidence opens the gate', open.allow === true && open.marker === 'WF18_REARCHITECTURE=READY');
 }
 
+A.section('CRED-001 — node-level credential REQUIREMENT model (closes the zero-reference blind spot)');
+{
+  const fs = require('fs'); const os = require('os'); const path = require('path');
+  // requiredCredentialType is derived from each node's OWN config, never to make a count green.
+  A.eq('googleSheets requires googleApi', RC.requiredCredentialType({ type: 'n8n-nodes-base.googleSheets', parameters: {} }), 'googleApi');
+  A.eq('http genericCredentialType/httpHeaderAuth requires httpHeaderAuth',
+    RC.requiredCredentialType({ type: 'n8n-nodes-base.httpRequest', parameters: { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' } }), 'httpHeaderAuth');
+  A.eq('http predefinedCredentialType requires the declared type',
+    RC.requiredCredentialType({ type: 'n8n-nodes-base.httpRequest', parameters: { authentication: 'predefinedCredentialType', nodeCredentialType: 'httpQueryAuth' } }), 'httpQueryAuth');
+  A.eq('telegram $env send (no authentication) requires NO credential',
+    RC.requiredCredentialType({ type: 'n8n-nodes-base.httpRequest', parameters: { url: '=https://api.telegram.org/bot{{ $env.X }}/sendMessage' } }), null);
+
+  // The committed runtime closure must have a reference on EVERY credential-requiring node (the fix). The count is
+  // DERIVED from actual nodes, not hard-coded.
+  const reqs = RC.collectRequirements(L.runtimeClosure());
+  const missing = reqs.filter(r => !r.hasRef);
+  A.ok('runtime closure has credential-requiring nodes (derived count > 36)', reqs.length > 36);
+  A.eq('ZERO credential-requiring nodes lack a reference', missing.length, 0);
+
+  // audit() over the SOURCE with an empty export: every reference is a deferred placeholder, but structurally there
+  // are no missing references and no leaked placeholders -> PASS (nothing to leak yet).
+  const src = RC.audit(L.runtimeClosure(), []);
+  A.eq('source audit: 0 missing references', src.summary.nodes_missing_reference, 0);
+  A.eq('source audit: all references deferred (no export)', src.summary.deferred, src.summary.references);
+  A.ok('source audit PASS structurally', src.ok === true);
+
+  // A workflow whose only Sheets node has NO credentials block must FAIL the audit (the WF18 false-PASS defect).
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'credaudit-'));
+  fs.writeFileSync(path.join(dir, 'bad.json'), JSON.stringify({ name: 'bad', nodes: [
+    { name: 'Read X', type: 'n8n-nodes-base.googleSheets', parameters: { operation: 'read' } }
+  ] }));
+  const bad = RC.audit(['bad.json'], [], dir);
+  A.eq('credential-less Sheets node -> 1 missing reference', bad.summary.nodes_missing_reference, 1);
+  A.ok('credential-less Sheets node -> audit FAIL (not a hollow PASS)', bad.ok === false);
+
+  // A leaked placeholder (a credential of that TYPE exists in the export, yet the ref is still a template) FAILS;
+  // a placeholder for a type with NO production credential is DEFERRED (operator attaches), not a hard failure.
+  fs.writeFileSync(path.join(dir, 'ph.json'), JSON.stringify({ name: 'ph', nodes: [
+    { name: 'Read X', type: 'n8n-nodes-base.googleSheets', parameters: { operation: 'read' }, credentials: { googleApi: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'g' } } }
+  ] }));
+  const leak = RC.audit(['ph.json'], [{ id: 'realG', name: 'g', type: 'googleApi' }], dir);
+  A.eq('placeholder + matching cred type -> leaked (failure)', leak.summary.placeholder_leaked, 1);
+  A.ok('leaked placeholder -> audit FAIL', leak.ok === false);
+  const defer = RC.audit(['ph.json'], [{ id: 'realH', name: 'h', type: 'httpHeaderAuth' }], dir);
+  A.eq('placeholder + no matching cred type -> deferred (not failure)', defer.summary.deferred, 1);
+  A.ok('deferred-only -> audit PASS for inactive deploy', defer.ok === true);
+
+  // resolved real ids of the right type -> clean PASS.
+  fs.writeFileSync(path.join(dir, 'ok.json'), JSON.stringify({ name: 'ok', nodes: [
+    { name: 'Read X', type: 'n8n-nodes-base.googleSheets', parameters: { operation: 'read' }, credentials: { googleApi: { id: 'realG', name: 'g' } } }
+  ] }));
+  const good = RC.audit(['ok.json'], [{ id: 'realG', name: 'g', type: 'googleApi' }], dir);
+  A.eq('resolved real id -> 1 resolved, 0 failures', good.summary.failures, 0);
+  A.ok('resolved real id -> audit PASS', good.ok === true && good.summary.resolved === 1);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 A.report('reconcile-and-gate');
