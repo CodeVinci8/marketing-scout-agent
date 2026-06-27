@@ -5,6 +5,50 @@ Most recent first.
 
 ---
 
+## DEC-163 — Production credential reconciliation: every credential-requiring node carries a reference (fix/production-credential-reconciliation)
+
+**Context.** The Stage-4 inactive deploy reported `credentials_resolved=0 credentials_deferred=36` yet logged
+"compatible production credentials preserved automatically" and wrote release evidence with `credential_audit:
+"unknown"` + `result: "PASS"`. A read-only production audit then found `PRODUCTION_CREDENTIAL_FAILURES=31` (all
+placeholders) with `WF18_CREDENTIAL_AUDIT=PASS` on **zero** detected references.
+
+**Root cause (two independent defects).**
+1. **Generator defect (primary).** `tools/gen_stage4_workflows.js` built every Google Sheets node (and the
+   Claude-planner / VK HTTP nodes) with **no `credentials` block at all**. So 53 of 84 Sheets nodes + 3 HTTP nodes
+   carried NO credential reference. The reconcile audit only flagged *bad* references, so a node with no block was
+   invisible — which is precisely why WF18 (14 credential-less Sheets nodes) falsely audited PASS with 0 references.
+2. **Docker-unsafe export (secondary).** `deploy_n8n.sh` exported credentials with `n8n_cli export:credentials
+   --output="$tmp/creds.json"` then tested `[ -f "$tmp/creds.json" ]`; in docker mode the CLI writes INSIDE the
+   container while the test checked the HOST path — always absent in production → empty `credflag` → every existing
+   placeholder DEFERRED.
+
+**Decision.**
+- Credential requirements are derived **node-by-node from each node's own config**, never to make a count green:
+  a `googleSheets` node requires `googleApi`; an `httpRequest` with `authentication:genericCredentialType`/
+  `predefinedCredentialType` requires the declared type (WF19 Claude `httpHeaderAuth`, WF26 VK ×2 `httpQueryAuth`,
+  legacy WF04/08 ×5 `httpHeaderAuth`); a Telegram send that injects `$env` directly needs NO n8n credential; the
+  inert WF12 Claude node (DEC-122 inline header placeholder) is left untouched. **Expected references = 92**
+  (84 googleApi + 6 httpHeaderAuth + 2 httpQueryAuth), 0 missing.
+- `reconcile_credentials.js` gains a node-requirement model + honest `audit()`/`--audit` emitting fingerprint-only
+  `<PREFIX>_CREDENTIAL_*` markers; a credential-requiring node with no reference is a hard FAILURE; a leaked
+  placeholder (a credential of that type exists) FAILS; a placeholder with no matching production type is DEFERRED.
+- `export_credentials()` is Docker-safe (mirror `export_all`: write to a container temp, copy out via `n8n_get`,
+  verify a non-empty parseable array, fail closed); one implementation reused by apply/dry-run/discover/verify.
+- Release evidence is **fail-closed**: `release_report.deriveResult()` makes `result` PASS only when workflow +
+  binding + active-state + credential audit ALL verifiably pass (else `PASS_WITH_DEFERRED_CREDENTIALS`/`FAIL`/
+  `BLOCKED`); expected counts come from the manifest (15/13), not the stale hardcoded 8. `do_import` runs a
+  POST-IMPORT audit and refuses to claim "preserved automatically" unless `CREDENTIAL_AUDIT=PASS`.
+- New `--verify-production` aggregates inventory + bindings + credential audit + version into one `VERIFY_PRODUCTION`
+  marker. Binding report redacts raw ids (`target_id_fp`/`previous_value_fp`).
+
+**Status.** Repository-scoped repair proven offline: staged against a fully-provisioned 3-credential export →
+92/92 resolved, 0 deferred, 0 failures, WF18 PASS (14 refs). `make test` ALL PASS ($0, 0 calls, 28 workflows
+`active=false`). The **production apply** (docker), the **image pin** (`/opt/n8n/docker-compose.yml` still
+`n8nio/n8n:latest`), **IDEMP-001** serialization (`N8N_CONCURRENCY_PRODUCTION_LIMIT` unset), **TELEGRAM-001**
+ingress (n8n on 127.0.0.1:5678 only; 443 owned by sing-box) and Telegram activation remain **operator-gated**.
+
+---
+
 ## DEC-162 — Stage 4–8 runtime-acceptance & production-discovery repair (test/stage4-runtime-acceptance)
 
 **Date:** 2026-06-27 · **Branch:** `test/stage4-runtime-acceptance` (off `main` @ `d10866b`)

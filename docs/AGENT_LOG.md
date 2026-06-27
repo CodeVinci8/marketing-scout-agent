@@ -5,6 +5,35 @@ Most recent first.
 
 ---
 
+## 2026-06-28 (session 31) — Production credential reconciliation (DEC-163)
+
+**Branch** `fix/production-credential-reconciliation` off `main` @ `752c565` · **9 commits, NOT pushed.**
+
+**Done (repository-scoped):**
+- **Credential references (P0):** `gen_stage4_workflows.js` now attaches a config-derived credential to every
+  credential-requiring node (Sheets→`googleApi`, Claude planner→`httpHeaderAuth`, VK→`httpQueryAuth`); regenerated
+  WF17–26; hand-patched WF10/12/16 (no generator); Telegram `$env` sends + inert WF12 left untouched. 92 references,
+  0 missing.
+- **Audit blind spot:** `reconcile_credentials.js` requirement model (`requiredCredentialType`/`collectRequirements`)
+  + honest `audit()` + `--audit` CLI (fingerprint-only `<PREFIX>_CREDENTIAL_*` markers; missing-ref = FAIL).
+- **Docker-safe export:** `export_credentials()` + `--credential-audit` mode (never `--decrypted`; one impl).
+- **Truthful evidence:** `release_report.deriveResult()` (fail-closed; manifest counts 15/13); `do_import`
+  post-import audit + conditional success message; `--verify-production` aggregate marker.
+- **Redaction:** bind report `target_id_fp`/`previous_value_fp`.
+- **IDEMP-001 doc:** recorded global `N8N_CONCURRENCY_PRODUCTION_LIMIT=1` (main-mode) path; verified UNSET.
+- **Tests:** +44 (credential-export 12, reconcile audit 16, deriveResult 11, bind redaction 5). `make test` ALL PASS;
+  secret scan clean; 0 generator drift; manifest resynced.
+
+**Files changed:** `tools/gen_stage4_workflows.js`, `tools/reconcile_credentials.js`, `tools/bind_n8n_workflow_ids.js`,
+`tools/release_report.js`, `scripts/deploy_n8n.sh`, `scripts/lib/release_pipeline.sh`, `scripts/n8n_disposable_e2e.sh`,
+`Makefile`, `config/workflow_manifest.json`, `config/wf18_blockers.json`, `n8n/workflows/{10,12,16,18,19,20,21,22,23,24,25,26}.json`,
+tests (`test_credential_export.js` new, `test_reconcile_and_gate.js`, `test_release_scripts.js`,
+`test_release_integration.js`, `test_status_discovery.js`, `test_binding_tool.js`, `test_prepare_staged.js`, `run_all.js`).
+
+**Operator-gated / NOT done (hard stops):** production apply, image pin (compose `latest`→`2.23.3`, outside repo),
+IDEMP serialization env+restart+concurrent test, HTTPS ingress (no public route; 443=sing-box; outbound tunnel needs
+operator domain/creds), real Sheets accepted path, Telegram prelive/live, legacy WF18 retirement.
+
 ## 2026-06-27 (session 30) — Stage 4–8 runtime acceptance + production-discovery repair (DEC-162)
 
 **Branch:** `test/stage4-runtime-acceptance` off `main` @ `d10866b`. **4 commits, NOT pushed.** $0, 0 external/paid

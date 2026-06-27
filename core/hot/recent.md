@@ -4,6 +4,38 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-28 (session 31) — Production credential reconciliation (DEC-163)
+
+**Status (exact):** branch `fix/production-credential-reconciliation` off `main` @ `752c565`. **9 commits, NOT
+pushed, no AI attribution.** `ee59912` cred refs · `2189baa` audit missing-ref · `03c73f7` docker-safe cred export
+· `63aa3a4` evidence/verify fail-closed · `cccef38` redact bind ids · `768561e` staged fixture · `6aa5c43` manifest
+resync · (+IDEMP doc). **$0, 0 external/paid calls, all 28 committed workflows `active=false`, no secret/raw-id
+committed, production `n8n-n8n-1`/volume/`sing-box`/443/Amnezia/3x-ui untouched, NOTHING activated, no Telegram
+webhook, no docker mutation, no compose edit.** `make test` ALL PASS; `make release-core-acceptance` PASS.
+
+**Root cause (P0).** Two defects: (1) `gen_stage4_workflows.js` built every Sheets node (+ Claude/VK HTTP) with NO
+`credentials` block — 53/84 Sheets nodes credential-less; the audit only flagged *bad* refs so WF18's 14
+credential-less Sheets nodes falsely PASSed. (2) `deploy_n8n.sh` credential export wrote `--output` to a HOST path
+the docker CLI can't see → empty credflag → all deferred. **Both fixed.**
+
+**Fixed (repository-scoped, committed):** every credential-requiring node now carries a config-derived reference
+(**92 expected** = 84 googleApi + 6 httpHeaderAuth + 2 httpQueryAuth, 0 missing; node-by-node, NOT to make counts
+green); `reconcile_credentials.js` requirement model + honest `--audit`; Docker-safe `export_credentials` +
+`--credential-audit`; `release_report.deriveResult()` (never PASS on unknown/deferred creds; manifest counts 15/13
+not stale 8); `do_import` POST-IMPORT audit + conditional "preserved" message + hard-FAIL blocks clean release;
+`--verify-production` aggregate marker; bind report `*_fp` redaction. **Offline proof:** staged vs 3-cred export →
+92/92 resolved, 0 deferred, 0 failures, WF18 PASS (14 refs). +44 new tests.
+
+**Operator-gated (NOT done — hard stops):** fresh backup / live cred compare / inactive repair apply (docker);
+**IMAGE_PIN=FAIL** (`/opt/n8n/docker-compose.yml` = `n8nio/n8n:latest`, running 2.23.3 — needs pin to `2.23.3` +
+n8n-only restart, **outside repo**); **IDEMP-001** (set `N8N_CONCURRENCY_PRODUCTION_LIMIT=1` main-mode — currently
+UNSET — + concurrent test); **TELEGRAM-001** (n8n on 127.0.0.1:5678 only, 443=sing-box; needs outbound tunnel +
+operator domain/creds + `PUBLIC_WEBHOOK_BASE_URL`/`MS_TELEGRAM_WEBHOOK_SECRET`, both MISSING); real Sheets accepted
+path; Telegram prelive/live; legacy conversational WF18 retirement. WF18 gate correctly CLOSED (TELEGRAM-001 +
+IDEMP-001).
+
+---
+
 ## Session: 2026-06-27 (session 30) — Stage 4–8 runtime acceptance + production-discovery repair (DEC-162)
 
 **Status (exact):** branch `test/stage4-runtime-acceptance` off `main` @ `d10866b`. **4 commits, NOT pushed**
