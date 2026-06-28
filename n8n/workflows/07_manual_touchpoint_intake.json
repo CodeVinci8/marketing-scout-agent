@@ -91,7 +91,7 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "a7000000-0000-0000-0000-0000000000mr",
@@ -170,7 +170,7 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "a7000000-0000-0000-0000-0000000000br",
@@ -223,7 +223,7 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "a7000000-0000-0000-0000-0000000000bq",
@@ -276,7 +276,7 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "a7000000-0000-0000-0000-0000000000fs",
@@ -342,7 +342,7 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     }
   ],
   "connections": {

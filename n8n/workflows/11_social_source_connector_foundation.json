@@ -162,7 +162,7 @@
       "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "bb110000-0000-0000-0000-0000000000dd",
@@ -228,7 +228,7 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "bb110000-0000-0000-0000-0000000000b2",
@@ -281,7 +281,7 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "bb110000-0000-0000-0000-0000000000b3",
@@ -334,7 +334,7 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "bb110000-0000-0000-0000-0000000000fs",
@@ -435,7 +435,7 @@
       ],
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {

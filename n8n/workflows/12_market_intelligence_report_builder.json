@@ -89,7 +89,7 @@
       "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000r2",
@@ -125,7 +125,7 @@
       "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000r3",
@@ -161,7 +161,7 @@
       "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000r4",
@@ -197,7 +197,7 @@
       "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000b1",
@@ -294,7 +294,7 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000q1",
@@ -346,7 +346,7 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000s1",
@@ -461,7 +461,7 @@
       "notes": "v0.3 (DEC-128): tab may not exist yet — onError continue keeps the deterministic report working without it.",
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000r6",
@@ -498,7 +498,7 @@
       "notes": "v0.3 (DEC-128): tab may not exist yet — onError continue keeps the deterministic report working without it.",
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
@@ -551,7 +551,7 @@
       ],
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
@@ -585,7 +585,7 @@
       "alwaysOutputData": true,
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 65000
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {

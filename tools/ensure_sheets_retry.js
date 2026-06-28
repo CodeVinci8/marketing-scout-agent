@@ -9,7 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const RETRY = require('../n8n/lib/sheets_retry_policy.js');
-const WINDOW = RETRY.WINDOW_MS;
+const CAP = RETRY.ENGINE_WAIT_CAP_MS;   // n8n hard-caps node waitBetweenTries at this value
 const cfg = RETRY.nativeSheetsRetry();
 const WF = path.join(__dirname, '..', 'n8n', 'workflows');
 
@@ -21,7 +21,9 @@ for (const f of fs.readdirSync(WF).filter(n => /\.json$/.test(n)).sort()) {
   for (const n of (w.nodes || [])) {
     if (n.type !== 'n8n-nodes-base.googleSheets') continue;
     nodesTotal++;
-    const compliant = n.retryOnFail === true && Number(n.maxTries) >= 2 && Number(n.waitBetweenTries) >= WINDOW;
+    // Honest policy: retry enabled, bounded tries, wait within the engine cap (anything larger is clamped).
+    const compliant = n.retryOnFail === true && Number(n.maxTries) >= 2 && Number(n.maxTries) <= 3 &&
+      Number(n.waitBetweenTries) > 0 && Number(n.waitBetweenTries) <= CAP;
     if (compliant) continue;
     n.retryOnFail = cfg.retryOnFail;
     n.maxTries = cfg.maxTries;

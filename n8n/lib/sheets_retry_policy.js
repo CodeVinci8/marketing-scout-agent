@@ -1,27 +1,36 @@
 'use strict';
-// sheets_retry_policy.js — bounded, storm-free retry policy for Google Sheets API calls.
+// sheets_retry_policy.js — honest retry/backoff policy for Google Sheets API calls under n8n 2.23.3.
 //
 // SHEETS-RATELIMIT-001 root cause: the Google Sheets API default quota is 60 read_requests AND
 // 60 write_requests "per minute per user per project" (quota_unit "1/min/{project}/{user}",
 // status RESOURCE_EXHAUSTED, reason RATE_LIMIT_EXCEEDED, message "The service is receiving too many
-// requests from you"). It is a NORMAL rolling-minute quota — a 429 clears once the minute window
-// refills. It is NOT a misconfiguration and needs no Google Cloud change.
+// requests from you"). It is a NORMAL rolling-minute quota and needs no Google Cloud change.
 //
-// The native n8n googleSheets node only exposes a FIXED waitBetweenTries (no exponential, no jitter).
-// The ONLY storm-free native retry is therefore one whose wait CROSSES the per-minute window: a
-// shorter wait just burns more of the same throttled minute's quota and is guaranteed to fail again
-// (a retry storm). nativeSheetsRetry() refuses any in-window wait for exactly this reason.
+// HARD ENGINE CONSTRAINT (measured on n8n 2.23.3): the execution engine CAPS a node's waitBetweenTries
+// at 5000 ms — `waitBetweenTries = Math.min(5000, Math.max(0, node.waitBetweenTries ?? 1000))` in both
+// n8n-core/.../workflow-execute.js and get-input-connection-data.js. A native node retry therefore can
+// NEVER cross the 60 s per-minute quota window: any retry lands inside the SAME throttled minute. So a
+// native retry is ONLY useful to ride out a brief ISOLATED 429; it is NOT — and cannot be — a remedy for
+// sustained per-minute exhaustion, and a long retry chain actively AMPLIFIES a storm (every retry re-issues
+// the request inside the throttled minute). nativeSheetsRetry() reflects that reality: a SMALL, bounded
+// retry (engine-capped wait, few tries).
 //
-// backoffMs() implements bounded truncated exponential backoff WITH jitter for any code-driven Sheets
-// retry loop (and is the documented/tested policy), aligned with the existing backoff helpers in
-// provider_adapter.js and delivery_outbox.js.
+// THE ARCHITECTURAL DEFENSE (not the retry) is to keep each execution UNDER the 60-req/min/user budget and
+// to SERIALIZE executions (N8N_CONCURRENCY_PRODUCTION_LIMIT=1), so the per-minute quota is never exceeded
+// in the first place. READ_BUDGET documents that budget for callers/tests.
+//
+// backoffMs() implements bounded truncated exponential backoff WITH jitter for any CODE-driven retry loop
+// (a Code node CAN sleep longer than 5 s); it is the documented ideal policy and is aligned with the backoff
+// helpers in provider_adapter.js and delivery_outbox.js. Native googleSheets nodes cannot use it (5 s cap).
 
-var WINDOW_MS = 60000; // Google Sheets per-minute quota window
+var WINDOW_MS = 60000;            // Google Sheets per-minute quota window
+var ENGINE_WAIT_CAP_MS = 5000;    // n8n 2.23.3 hard cap on node waitBetweenTries (measured in the engine)
+var READ_BUDGET = 60;             // read_requests per minute per user — keep one execution well under this
 
 function num(v, d) { v = Number(v); return Number.isFinite(v) ? v : d; }
 
-// Bounded truncated exponential backoff with additive jitter. attempt is 1-based.
-// rng() in [0,1) makes the jitter deterministic in tests; defaults to 0.5 (mid jitter).
+// Bounded truncated exponential backoff with additive jitter, for CODE-driven Sheets retry loops only.
+// attempt is 1-based. rng() in [0,1) makes the jitter deterministic in tests (defaults to 0.5).
 function backoffMs(attempt, cfg, rng) {
   cfg = cfg || {};
   var base = num(cfg.base_ms, 1000);
@@ -33,14 +42,16 @@ function backoffMs(attempt, cfg, rng) {
   return Math.min(cap, Math.round(truncated + jitter));
 }
 
-// Native googleSheets node retry config guaranteed storm-free against the per-minute quota:
-// waitBetweenTries crosses a full window so a retry lands in a FRESH minute, and the try count is
-// bounded. An in-window wait is rejected (clamped up) because it would storm the throttled minute.
+// Native googleSheets node retry config — HONEST about the engine cap. The wait is the engine maximum
+// (anything larger is silently clamped, so promising more would be a lie); the try count is small so an
+// isolated transient 429 is ridden out without turning a sustained-quota miss into a long storm.
+// This is transient-isolation insurance ONLY; correctness comes from the read budget + serialization.
 function nativeSheetsRetry(cfg) {
   cfg = cfg || {};
-  var wait = num(cfg.wait_ms, WINDOW_MS + 5000); // 65s default = one full window + margin
-  if (wait < WINDOW_MS) wait = WINDOW_MS + 5000; // refuse a storming, in-window wait
-  var tries = Math.min(5, Math.max(2, num(cfg.max_tries, 3)));
+  var wait = num(cfg.wait_ms, ENGINE_WAIT_CAP_MS);
+  if (wait > ENGINE_WAIT_CAP_MS) wait = ENGINE_WAIT_CAP_MS;  // the engine would clamp it anyway — be honest
+  if (wait < 0) wait = 0;
+  var tries = Math.min(3, Math.max(2, num(cfg.max_tries, 3)));
   return { retryOnFail: true, maxTries: tries, waitBetweenTries: wait };
 }
 
@@ -53,4 +64,7 @@ function isRateLimited(e) {
     /too many requests/i.test(s);
 }
 
-module.exports = { WINDOW_MS: WINDOW_MS, backoffMs: backoffMs, nativeSheetsRetry: nativeSheetsRetry, isRateLimited: isRateLimited };
+module.exports = {
+  WINDOW_MS: WINDOW_MS, ENGINE_WAIT_CAP_MS: ENGINE_WAIT_CAP_MS, READ_BUDGET: READ_BUDGET,
+  backoffMs: backoffMs, nativeSheetsRetry: nativeSheetsRetry, isRateLimited: isRateLimited
+};
