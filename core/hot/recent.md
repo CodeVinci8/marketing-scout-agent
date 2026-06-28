@@ -4,6 +4,48 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-06-28 (session 32) — Stage 4–8 final closure: LIVE production repair + image pin (DEC-164)
+
+**Status (exact):** branch `fix/stage4-8-final-closure` off `main` @ `189c0ee` (PR #45). **3 repo commits, NOT
+pushed, no AI attribution:** `8d02032` deploy entrypoints + fail-closed dry-run · `8ac1600` (type,name) credential
+reconciliation + WF19 Claude name · `b60bb54` real shell-entrypoint + credential tests. **$0, 0 paid/external calls.**
+This session DID mutate production (operator-authorized Stage 4–8 closure): one **inactive** repair apply, an image
+pin, a concurrency env add, and one n8n-only restart. **sing-box / Amnezia / 3x-ui / port 443 / the production
+volume untouched; old conversational WF18 not deleted or activated; NOTHING activated (0 active workflows); no
+Telegram webhook registered; no paid connector enabled.**
+
+**BLOCKER A (fixed):** `credential_audit()`/`verify_production()` read `N8N_EXPECTED_VERSION` (in `detect_n8n_version`)
+before `load_manifest_arrays` → `set -u` crash. Added `ensure_expected_version()` (idempotent, called at the top of
+`detect_n8n_version`) + reordered. All modes now clean under a clean env.
+
+**BLOCKER B (fixed):** production dry-run said "reconciliation deferred to apply" + returned OK. It now stages what an
+apply would import against the LIVE workflow+credential export and AUDITS it (zero mutation, throwaway id map), emits
+PRODUCTION_*/WF18_* markers, fails closed on hard failures, returns non-zero with `PASS_WITH_DEFERRED_CREDENTIALS` on
+deferred-only. `release_plan.reconcile_credentials` fails closed for production when no export is supplied.
+
+**Credential model (CRED-003):** production legitimately holds 3 httpHeaderAuth creds (Claude/Firecrawl/Apify), so
+reconcile by **(type,name) → type-unique fallback → defer/abort**. `collectReferences` now captures the credential
+NAME. WF19 planner credential renamed generic→`Claude API - Marketing Scout` (regen: only WF19 changed). Derived vs
+LIVE prod: **92 = 84 googleApi + 6 httpHeaderAuth + 2 httpQueryAuth**; **90 resolve, 2 VK defer (no prod
+httpQueryAuth), WF18 14/14 clean.**
+
+**Pre-repair LIVE baseline:** 92 required, 56 missing-ref, 31 placeholder-leak, 87 failures, WF18 0/14 → AUDIT=FAIL.
+**Post inactive apply (`b60bb54`):** 0 missing, 0 placeholders, 90 resolved, 2 deferred, **0 failures**, 13/13
+bindings, 0 active, coverage 15/15, **WF18 14/14 → PASS**; evidence `result=PASS_WITH_DEFERRED_CREDENTIALS` (honest).
+**`make verify-production`=PASS.** Image pinned `n8nio/n8n:latest→:2.23.3` (same digest `c0c39b1ca69d`; localhost-only
+`127.0.0.1:5678` preserved); `N8N_CONCURRENCY_PRODUCTION_LIMIT=1` set + effective (IDEMP-001 serialization). Fresh
+read-only backup `/root/backups/n8n-stage48-closure-20260628-104515` (sha `19a8dcff…`) + compose/env backups.
+
+**Still BLOCKED on operator (genuine external prereq):** `PUBLIC_WEBHOOK_BASE_URL` / public HTTPS ingress for the
+Telegram webhook — port 443 = sing-box(tcp)/amnezia-awg2(udp), n8n localhost-only, no domain/tunnel creds. WF18
+activation gate stays PENDING (TELEGRAM-001 open; IDEMP-001 mitigated→live concurrent proof needs activation). VK
+httpQueryAuth credential also operator-pending (real token). `make test` ALL PASS incl new `deploy-entrypoints`.
+
+**Finding (non-blocking):** WF04/WF08 Claude nodes target `aiprimetech.io` (not `api.anthropic.com`) on the DISABLED
+paid-LLM path — operator should confirm that proxy host is intended.
+
+---
+
 ## Session: 2026-06-28 (session 31) — Production credential reconciliation (DEC-163)
 
 **Status (exact):** branch `fix/production-credential-reconciliation` off `main` @ `752c565`. **9 commits, NOT

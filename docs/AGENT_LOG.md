@@ -5,6 +5,36 @@ Most recent first.
 
 ---
 
+## 2026-06-28 (session 32) — Stage 4–8 final closure: LIVE production credential repair + image pin (DEC-164)
+
+**Branch:** `fix/stage4-8-final-closure` off `main` @ `189c0ee`. 3 commits (`8d02032`, `8ac1600`, `b60bb54`), not pushed, no AI attribution. **$0, 0 paid/external calls.**
+
+**Repository fixes (committed):**
+- `scripts/deploy_n8n.sh` — BLOCKER A: `ensure_expected_version()` so `N8N_EXPECTED_VERSION` is bound before
+  `detect_n8n_version` in every standalone mode (was a `set -u` crash in `--credential-audit`/`--verify-production`).
+  BLOCKER B: production dry-run now stages+audits live credentials (zero mutation) and fails closed.
+- `tools/reconcile_credentials.js` + `tools/prepare_staged_workflows.js` — CRED-003 (type,name)+type-unique
+  credential reconciliation (production holds 3 httpHeaderAuth credentials). `tools/release_plan.js` — reconcile step
+  fails closed for production without an export.
+- `tools/gen_stage4_workflows.js` + regenerated `n8n/workflows/19_request_planner.json` — WF19 Claude planner
+  credential renamed to `Claude API - Marketing Scout` (only WF19 changed).
+- `tests/test_deploy_entrypoints.js` (new) — real shell-entrypoint sweep + host-stub credential-audit/dry-run;
+  extended credential/staging/release tests; wired into `run_all.js` + `make test-js`. `make test` ALL PASS.
+
+**Live production (operator-authorized mutation; nothing activated):**
+- Fresh read-only backup + compose/env backups. Inactive repair apply (`b60bb54`): pre-repair 87 failures / 56
+  missing / 31 placeholders → **post-repair 0 failures, 0 missing, 0 placeholders, 90 resolved, 2 VK deferred,
+  13/13 bindings, 0 active, WF18 14/14**. Evidence `result=PASS_WITH_DEFERRED_CREDENTIALS`. `make verify-production`=PASS.
+- Image pinned `n8nio/n8n:latest→:2.23.3` (same digest), `N8N_CONCURRENCY_PRODUCTION_LIMIT=1` added, one n8n-only
+  restart; localhost-only `127.0.0.1:5678` preserved; data/22 workflows/0 active intact.
+
+**Blocked on operator:** public HTTPS ingress (`PUBLIC_WEBHOOK_BASE_URL`) for the Telegram webhook (port 443 taken by
+sing-box/Amnezia; no domain/tunnel); VK `httpQueryAuth` credential (real token). WF18 activation gate stays PENDING.
+
+**Untouched:** sing-box, Amnezia, 3x-ui, port 443, production volume, old conversational WF18.
+
+---
+
 ## 2026-06-28 (session 31) — Production credential reconciliation (DEC-163)
 
 **Branch** `fix/production-credential-reconciliation` off `main` @ `752c565` · **9 commits, NOT pushed.**

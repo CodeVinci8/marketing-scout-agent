@@ -5,6 +5,45 @@ Most recent first.
 
 ---
 
+## DEC-164 — Reconcile production credentials by (type,name); fail-closed dry-run; live inactive repair (fix/stage4-8-final-closure)
+
+**Context.** DEC-163 attached a reference to every credential-requiring node but reconciled credentials by TYPE only.
+A read-only audit of the real VPS showed production holds **three** `httpHeaderAuth` credentials (Claude, Firecrawl,
+Apify) and **zero** `httpQueryAuth` (VK). Type-only reconciliation therefore aborted the whole release as "ambiguous
+httpHeaderAuth", even though each node declares WHICH credential it wants by NAME. Separately, `make credential-audit`
+crashed (`N8N_EXPECTED_VERSION: unbound variable`) and the production dry-run claimed `RELEASE_PLAN=OK` while saying
+"reconciliation deferred to apply" — never actually reconciling live credentials.
+
+**Decision.**
+1. **Reconcile by `(type,name)` with a type-unique fallback** (CRED-003). `collectReferences` captures the credential
+   NAME; staging + audit resolve a reference to the credential whose `(type,name)` it declares, fall back to a
+   type-unique match (googleApi/httpQueryAuth, whose production name differs from the template), DEFER a type with no
+   production credential yet, and ABORT only a genuinely ambiguous reference (>1 of a type, no name match). This is the
+   only safe way to disambiguate three httpHeaderAuth credentials without auto-picking the wrong key.
+2. **WF19 planner credential** renamed from the generic `HTTP Header Auth - Marketing Scout` to `Claude API -
+   Marketing Scout` so all five Claude references reconcile to the one production Claude credential (it IS a Claude
+   API call). The generic name matched no production credential and collided with the ambiguous type.
+3. **Every deploy entrypoint initializes shared manifest/version context before strict-shell use** (BLOCKER A) via an
+   idempotent `ensure_expected_version()` — no mode may read `N8N_EXPECTED_VERSION` unbound.
+4. **A production dry-run reconciles LIVE credentials** (BLOCKER B): it stages exactly what an apply would import and
+   audits it against the live non-decrypted credential export (zero mutation, throwaway id map), fails closed on any
+   hard failure or missing export, and returns non-zero with `PASS_WITH_DEFERRED_CREDENTIALS` when only deferred.
+5. **Performed one INACTIVE production repair apply** (operator-authorized) after a fresh backup, plus an image pin
+   (`:latest`→`:2.23.3`) and `N8N_CONCURRENCY_PRODUCTION_LIMIT=1` (IDEMP-001 serialization), one n8n-only restart.
+
+**Derived/proven.** 92 references = 84 googleApi + 6 httpHeaderAuth + 2 httpQueryAuth. Live post-repair: 90 resolved,
+2 VK deferred, 0 failures, WF18 14/14 clean, 13/13 bindings, 0 active; `make verify-production`=PASS; evidence
+`result=PASS_WITH_DEFERRED_CREDENTIALS` (honest — never a bare PASS with unknown credentials).
+
+**Consequence / still open.** PASS_WITH_DEFERRED is the honest terminal state for credentials until the operator
+provisions the VK `httpQueryAuth` credential (real token, disabled path). WF18 activation remains gated on a public
+HTTPS ingress for the Telegram webhook (`PUBLIC_WEBHOOK_BASE_URL`) — port 443 is owned by sing-box/Amnezia and no
+domain/tunnel exists, so this is a genuine external prerequisite (TELEGRAM-001). IDEMP-001 is mitigated (serialization
+configured + effective); the live concurrent-duplicate proof requires WF18 activation. Non-blocking finding: WF04/WF08
+Claude nodes target `aiprimetech.io` (not `api.anthropic.com`) on the disabled paid-LLM path — operator to confirm.
+
+---
+
 ## DEC-163 — Production credential reconciliation: every credential-requiring node carries a reference (fix/production-credential-reconciliation)
 
 **Context.** The Stage-4 inactive deploy reported `credentials_resolved=0 credentials_deferred=36` yet logged
