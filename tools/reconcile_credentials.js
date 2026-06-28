@@ -25,7 +25,10 @@ function collectReferences(files, wfDir) {
       const creds = n.credentials || {};
       for (const type of Object.keys(creds)) {
         const c = creds[type] || {};
-        if (c.id != null && c.id !== '') refs.push({ file: f, node: n.name, type: type, id: String(c.id) });
+        // CRED-003: capture the credential NAME too. Production legitimately holds MULTIPLE credentials of one type
+        // (e.g. three httpHeaderAuth: Claude, Firecrawl, Apify), so (type,name) is what disambiguates which one a
+        // node means — type alone cannot. The name is never printed (fingerprints only); it is used to reconcile.
+        if (c.id != null && c.id !== '') refs.push({ file: f, node: n.name, type: type, id: String(c.id), name: String(c.name == null ? '' : c.name) });
       }
     }
   }
@@ -110,17 +113,25 @@ function collectRequirements(files, wfDir) {
 function audit(files, exportList, wfDir) {
   const reqs = collectRequirements(files, wfDir);
   const refs = collectReferences(files, wfDir);
-  const typesInExport = {}; const byId = {}; const idCount = {};
+  const typesInExport = {}; const byId = {}; const idCount = {}; const byTypeName = {};
   for (const c of (exportList || [])) {
     typesInExport[String(c.type)] = (typesInExport[String(c.type)] || 0) + 1;
     byId[String(c.id)] = c; idCount[String(c.id)] = (idCount[String(c.id)] || 0) + 1;
+    byTypeName[String(c.type) + '||' + String(c.name == null ? '' : c.name)] = (byTypeName[String(c.type) + '||' + String(c.name == null ? '' : c.name)] || 0) + 1;
   }
   let resolved = 0, placeholderLeak = 0, deferred = 0, missingInExport = 0, ambiguous = 0, typeMismatch = 0;
   const detail = [];
   for (const r of refs) {
     let status;
     if (looksPlaceholder(r.id)) {
-      if (typesInExport[r.type]) { status = 'placeholder'; placeholderLeak++; } else { status = 'deferred'; deferred++; }
+      // CRED-003: a placeholder is a hard LEAK only when production can UNAMBIGUOUSLY supply the credential — i.e.
+      // exactly one credential of the same (type,name), or (no name match but) exactly one of the type. Otherwise
+      // it is legitimately DEFERRED: no credential of that type yet, OR several of that type with no name match
+      // (the operator must attach the right one in the UI — never auto-pick). This mirrors prepareStaged exactly.
+      const sameTypeName = byTypeName[String(r.type) + '||' + String(r.name == null ? '' : r.name)] || 0;
+      const sameType = typesInExport[r.type] || 0;
+      if (sameTypeName === 1 || (sameTypeName === 0 && sameType === 1)) { status = 'placeholder'; placeholderLeak++; }
+      else { status = 'deferred'; deferred++; }
     } else if (!byId[r.id]) { status = 'missing'; missingInExport++; }
     else if (idCount[r.id] > 1) { status = 'ambiguous'; ambiguous++; }
     else if (String(byId[r.id].type) !== String(r.type)) { status = 'type_mismatch'; typeMismatch++; }

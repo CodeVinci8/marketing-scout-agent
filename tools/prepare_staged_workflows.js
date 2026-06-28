@@ -40,7 +40,7 @@ function idByKey(identity, localMap) {
 function keyByFile(identity) { const m = {}; for (const k of Object.keys(identity)) m[identity[k].file] = k; return m; }
 
 // Choose the unique compatible production credential per type from a NON-decrypted credential export
-// ([{id,name,type}]). Returns { byType:{type:id}, ambiguous:[type], single:{type:count} }.
+// ([{id,name,type}]). Returns { byType:{type:id}, ambiguous:[type], single:{type:count} }. (legacy; type-only.)
 function credentialsByType(credExport) {
   const byTypeIds = {};
   for (const c of (credExport || [])) { const t = String(c.type); (byTypeIds[t] = byTypeIds[t] || []).push(String(c.id)); }
@@ -53,6 +53,39 @@ function credentialsByType(credExport) {
   return { byType, ambiguous };
 }
 
+// CRED-003: index a NON-decrypted credential export by (type,name) AND by type, so a reference can be resolved by
+// the NAME the node declares first (the only way to disambiguate when production legitimately holds several
+// credentials of one type — Claude/Firecrawl/Apify are all httpHeaderAuth) and fall back to a type-unique match.
+function indexCredentials(credExport) {
+  const byTypeName = {}, byType = {};
+  for (const c of (credExport || [])) {
+    const t = String(c.type), n = String(c.name == null ? '' : c.name), id = String(c.id);
+    (byType[t] = byType[t] || []).push(id);
+    const k = t + '||' + n; (byTypeName[k] = byTypeName[k] || []).push(id);
+  }
+  for (const k of Object.keys(byType)) byType[k] = Array.from(new Set(byType[k]));
+  for (const k of Object.keys(byTypeName)) byTypeName[k] = Array.from(new Set(byTypeName[k]));
+  return { byTypeName, byType };
+}
+
+// Resolve ONE credential reference (type + declared name) against the indexed export. Decision order:
+//   1. exactly one credential of (type,name)            -> resolve to it (name disambiguates)
+//   2. several of (type,name)                           -> abort (duplicate named credential; never auto-pick)
+//   3. no name match but exactly one of the type        -> resolve (type-unique fallback; safe)
+//   4. no credential of the type at all                 -> defer (operator attaches once; not a failure)
+//   5. several of the type, none matching the name      -> abort (ambiguous; refuse to auto-select the wrong one)
+// Returns { action: 'resolve'|'defer'|'abort', id? }.
+function resolveCredentialRef(type, name, idx) {
+  const tn = String(type) + '||' + String(name == null ? '' : name);
+  const sameTypeName = idx.byTypeName[tn] || [];
+  const sameType = idx.byType[String(type)] || [];
+  if (sameTypeName.length === 1) return { action: 'resolve', id: sameTypeName[0] };
+  if (sameTypeName.length > 1) return { action: 'abort' };
+  if (sameType.length === 1) return { action: 'resolve', id: sameType[0] };
+  if (sameType.length === 0) return { action: 'defer' };
+  return { action: 'abort' };
+}
+
 // prepareStaged({ identity, localMap, credExport|null, outDir|null }) -> { ok, errors, staged, summary }
 // When outDir is null the files are staged in-memory only (the returned staged[].json carries the object).
 function prepareStaged(opts) {
@@ -62,9 +95,10 @@ function prepareStaged(opts) {
   const ids = idByKey(identity, localMap);
   const fkey = keyByFile(identity);
   const edges = L.bindingEdges();
-  const cred = credentialsByType(opts.credExport || null);
+  const credIdx = indexCredentials(opts.credExport || null);
   const errors = [];
   const staged = [];
+  const ambiguousTypes = new Set();
   let bindingsResolved = 0, bindingsUnresolved = 0, credsResolved = 0, credsDeferred = 0;
   let credAmbiguousHit = false;
 
@@ -91,14 +125,16 @@ function prepareStaged(opts) {
           else { bindingsUnresolved++; errors.push('unresolved binding in ' + file + ' :: ' + node.name); }
         }
       }
-      // credentials
+      // credentials — resolve by (type,name) with a type-unique fallback (CRED-003); defer types with no prod
+      // credential yet; abort fail-closed on a genuinely ambiguous reference (never auto-pick the wrong one).
       if (node.credentials) {
         for (const type of Object.keys(node.credentials)) {
           const c = node.credentials[type] || {};
           if (c.id == null || !CRED_PLACEHOLDER_RE.test(String(c.id))) { credsResolved++; continue; }
-          if (cred.ambiguous.indexOf(type) >= 0) { credAmbiguousHit = true; errors.push('ambiguous production credential for type ' + type + ' — refusing to auto-select (' + file + ' :: ' + node.name + ')'); continue; }
-          if (cred.byType[type]) { c.id = cred.byType[type]; credsResolved++; }
-          else { credsDeferred++; }
+          const res = resolveCredentialRef(type, c.name, credIdx);
+          if (res.action === 'resolve') { c.id = res.id; credsResolved++; }
+          else if (res.action === 'defer') { credsDeferred++; }
+          else { credAmbiguousHit = true; ambiguousTypes.add(type); errors.push('ambiguous production credential for type ' + type + ' "' + String(c.name == null ? '' : c.name) + '" — refusing to auto-select (' + file + ' :: ' + node.name + ')'); }
         }
       }
     }
@@ -115,13 +151,13 @@ function prepareStaged(opts) {
       staged_count: staged.length,
       bindings_resolved: bindingsResolved, bindings_unresolved: bindingsUnresolved,
       credentials_resolved: credsResolved, credentials_deferred: credsDeferred,
-      credential_types_ambiguous: cred.ambiguous,
+      credential_types_ambiguous: Array.from(ambiguousTypes),
       all_inactive: staged.every(s => s.active === false)
     }
   };
 }
 
-module.exports = { prepareStaged, credentialsByType, fp, WF_PLACEHOLDER };
+module.exports = { prepareStaged, credentialsByType, indexCredentials, resolveCredentialRef, fp, WF_PLACEHOLDER };
 
 if (require.main === module) {
   const args = process.argv.slice(2);
