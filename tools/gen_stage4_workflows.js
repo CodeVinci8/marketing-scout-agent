@@ -76,6 +76,9 @@ function httpTelegramAnswer(id, name, pos) {
 function sheetsAppend(id, name, pos, tab) {
   return {
     parameters: {
+      // SHEETS-AUTH-001: pin service-account auth; the node defaults to OAuth2 (googleSheetsOAuth2Api) when unset,
+      // which ignores the attached googleApi service-account credential and fails at runtime.
+      authentication: 'serviceAccount',
       operation: 'append',
       documentId: { __rl: true, value: '={{ $env.MS_SPREADSHEET_ID || "PASTE_SPREADSHEET_ID" }}', mode: 'id' },
       sheetName: { __rl: true, value: tab, mode: 'name' },
@@ -88,6 +91,7 @@ function sheetsAppend(id, name, pos, tab) {
 function sheetsRead(id, name, pos, tab) {
   return {
     parameters: {
+      authentication: 'serviceAccount',   // SHEETS-AUTH-001: see sheetsAppend()
       operation: 'read',
       documentId: { __rl: true, value: '={{ $env.MS_SPREADSHEET_ID || "PASTE_SPREADSHEET_ID" }}', mode: 'id' },
       sheetName: { __rl: true, value: tab, mode: 'name' }, options: {}
@@ -100,6 +104,7 @@ function sheetsRead(id, name, pos, tab) {
 function sheetsUpsert(id, name, pos, tab, matchCol) {
   return {
     parameters: {
+      authentication: 'serviceAccount',   // SHEETS-AUTH-001: see sheetsAppend()
       operation: 'appendOrUpdate',
       documentId: { __rl: true, value: '={{ $env.MS_SPREADSHEET_ID || "PASTE_SPREADSHEET_ID" }}', mode: 'id' },
       sheetName: { __rl: true, value: tab, mode: 'name' },

@@ -173,6 +173,7 @@
       "alwaysOutputData": true,
       "onError": "continueRegularOutput",
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "read",
         "documentId": {
           "__rl": true,
@@ -229,6 +230,7 @@
         520
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -278,6 +280,7 @@
         380
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -327,6 +330,7 @@
         660
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -389,6 +393,7 @@
         900
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,

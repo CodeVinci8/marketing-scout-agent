@@ -6,7 +6,10 @@
       "name": "Описание воркфлоу",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-200, -300],
+      "position": [
+        -200,
+        -300
+      ],
       "parameters": {
         "content": "Workflow 01 — тест записи в Google Sheets. Проверяет, что n8n может взять структурированные тестовые данные и добавить их строкой в таблицу. Claude API, Apify и Firecrawl пока не используются.",
         "height": 200,
@@ -19,7 +22,10 @@
       "name": "Manual Start",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [100, 100],
+      "position": [
+        100,
+        100
+      ],
       "parameters": {}
     },
     {
@@ -27,7 +33,10 @@
       "name": "Set Test Competitor Data",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [380, 100],
+      "position": [
+        380,
+        100
+      ],
       "parameters": {
         "mode": "manual",
         "assignments": {
@@ -90,7 +99,10 @@
       "name": "Mock Marketing Analysis",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [660, 100],
+      "position": [
+        660,
+        100
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const item = $input.first().json;\nconst now = new Date().toISOString();\n\nreturn [\n  {\n    json: {\n      created_at: now,\n      source_type: \"manual_test\",\n      platform: item.platform,\n      source_url: item.source_url,\n      parsed_at: item.parsed_at,\n      published_at: \"\",\n      freshness_status: \"unknown\",\n      entity_type: \"competitor\",\n      company_name: item.company_name,\n      profile_name: item.profile_name,\n      profile_url: item.profile_url,\n      region: item.region,\n      service_type: \"secured_auto_loan\",\n      offer_text: \"Кредит под залог автомобиля, решение за 1 день\",\n      terms: \"Тестовые условия, не реальные данные\",\n      contact_public: \"\",\n      text_context: item.text_context,\n      detected_need: \"Потребность в быстром займе под залог авто\",\n      competitor_strength: 60,\n      lead_signal_score: 40,\n      content_idea_score: 70,\n      quality_score: 75,\n      reason: \"Test Google Sheets row processed successfully\",\n      recommended_action: \"Use this as a baseline row format before connecting Claude API\",\n      status: \"analyzed\"\n    }\n  }\n];"
@@ -101,8 +113,12 @@
       "name": "Append Row to Google Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [940, 100],
+      "position": [
+        940,
+        100
+      ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -134,7 +150,10 @@
       "name": "Настройка перед запуском",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [940, 320],
+      "position": [
+        940,
+        320
+      ],
       "parameters": {
         "content": "Перед запуском выбери credential: Google Sheets - Marketing Scout Service Account. Затем укажи Spreadsheet ID своей таблицы Marketing Scout Results и лист results. Успешный результат — новая строка появляется в Google Sheet.",
         "height": 200,

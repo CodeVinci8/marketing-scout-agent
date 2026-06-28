@@ -69,6 +69,7 @@
       "alwaysOutputData": true,
       "onError": "continueRegularOutput",
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "read",
         "documentId": {
           "__rl": true,
@@ -101,6 +102,7 @@
       "alwaysOutputData": true,
       "onError": "continueRegularOutput",
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "read",
         "documentId": {
           "__rl": true,
@@ -133,6 +135,7 @@
       "alwaysOutputData": true,
       "onError": "continueRegularOutput",
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "read",
         "documentId": {
           "__rl": true,
@@ -165,6 +168,7 @@
       "alwaysOutputData": true,
       "onError": "continueRegularOutput",
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "read",
         "documentId": {
           "__rl": true,
@@ -221,6 +225,7 @@
         100
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -270,6 +275,7 @@
         280
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -319,6 +325,7 @@
         460
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -368,6 +375,7 @@
         640
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -417,6 +425,7 @@
         820
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -466,6 +475,7 @@
         1000
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -507,6 +517,7 @@
     },
     {
       "parameters": {
+        "authentication": "serviceAccount",
         "documentId": {
           "__rl": true,
           "value": "={{ $json.spreadsheet_id_placeholder || \"PASTE_SPREADSHEET_ID\" }}",
