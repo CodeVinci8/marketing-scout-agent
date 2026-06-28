@@ -79,7 +79,10 @@
         "options": {}
       },
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {
@@ -118,7 +121,10 @@
         "options": {}
       },
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {
@@ -157,7 +163,10 @@
         "options": {}
       },
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {
@@ -233,7 +242,10 @@
           "schema": []
         },
         "options": {}
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {
@@ -277,7 +289,10 @@
           "schema": []
         },
         "options": {}
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {

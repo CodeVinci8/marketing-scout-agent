@@ -115,7 +115,10 @@
       "position": [
         860,
         320
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {
@@ -146,7 +149,10 @@
       "position": [
         860,
         460
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {
@@ -177,7 +183,10 @@
       "position": [
         860,
         600
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {
@@ -266,7 +275,10 @@
       "position": [
         1780,
         120
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {

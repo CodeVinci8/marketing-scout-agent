@@ -280,7 +280,10 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {
@@ -311,7 +314,10 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {
@@ -369,7 +375,10 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {
@@ -414,7 +423,10 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {
@@ -489,7 +501,10 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {

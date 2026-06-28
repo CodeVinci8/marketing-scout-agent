@@ -143,7 +143,10 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "id": "c5d6e7f8-a9b0-4c1d-2e3f-4a5b6c7d8e16",

@@ -97,7 +97,10 @@
       "position": [
         240,
         460
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "parameters": {

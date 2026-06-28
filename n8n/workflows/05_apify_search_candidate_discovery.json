@@ -152,7 +152,10 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "id": "n05-classify-01",
@@ -216,7 +219,10 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "id": "n05-summary-01",
@@ -266,7 +272,10 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     },
     {
       "id": "wf05-build-runlog",
@@ -316,7 +325,10 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 65000
     }
   ],
   "connections": {

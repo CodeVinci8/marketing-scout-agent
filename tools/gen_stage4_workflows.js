@@ -6,6 +6,10 @@ const fs = require('fs');
 const path = require('path');
 const LIB = path.join(__dirname, '..', 'n8n', 'lib');
 const WF = path.join(__dirname, '..', 'n8n', 'workflows');
+// SHEETS-RATELIMIT-001: every googleSheets node carries a storm-free, window-crossing native retry so a
+// transient per-minute 429 (RATE_LIMIT_EXCEEDED) is ridden out in a FRESH quota window instead of storming
+// the throttled minute. Single source of truth for the policy + its regression test.
+const SHEETS_RETRY = require('../n8n/lib/sheets_retry_policy.js').nativeSheetsRetry();
 
 // Credential placeholders (CRED-001 / DEPLOY-008). A node REQUIRES an n8n credential reference ONLY because of its
 // own configuration — never to make an audit count green:
@@ -85,7 +89,7 @@ function sheetsAppend(id, name, pos, tab) {
       mappingMode: 'autoMapInputData', options: {}
     },
     type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name,
-    credentials: credGoogle()
+    credentials: credGoogle(), ...SHEETS_RETRY
   };
 }
 function sheetsRead(id, name, pos, tab) {
@@ -97,7 +101,7 @@ function sheetsRead(id, name, pos, tab) {
       sheetName: { __rl: true, value: tab, mode: 'name' }, options: {}
     },
     type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name,
-    credentials: credGoogle()
+    credentials: credGoogle(), ...SHEETS_RETRY
   };
 }
 // appendOrUpdate (upsert) keyed by matchCol — used for the single-latest-row conversation_state.
@@ -111,7 +115,7 @@ function sheetsUpsert(id, name, pos, tab, matchCol) {
       columns: { mappingMode: 'autoMapInputData', matchingColumns: [matchCol], schema: [] }, options: {}
     },
     type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name,
-    credentials: credGoogle()
+    credentials: credGoogle(), ...SHEETS_RETRY
   };
 }
 function ifNode(id, name, pos, expr) {

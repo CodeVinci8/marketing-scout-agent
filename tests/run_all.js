@@ -124,6 +124,8 @@ const JS_SUITES = [
   ['obs-report-entrypoints', 'test_obs_report_entrypoints.js'],
   // --- Ingress: loopback path-filter reverse proxy exposes ONLY POST <webhook>; editor/REST/API are 404 (TELEGRAM-001) ---
   ['ingress-proxy', 'test_ingress_proxy.js'],
+  // --- SHEETS-RATELIMIT-001: storm-free window-crossing Sheets retry + bounded exponential-jitter backoff ---
+  ['sheets-retry-policy', 'test_sheets_retry_policy.js'],
   // --- Stage 4 runtime acceptance: offline validation of the disposable runtime fixtures (RUNTIME-ACCEPTANCE-001) ---
   ['runtime-acceptance', 'test_runtime_acceptance.js'],
   // --- Stage 5/6/7 REAL committed-graph topology audit (adapters/sources, reporting, scheduled monitor/digest) ---
