@@ -120,6 +120,8 @@ const JS_SUITES = [
   ['status-discovery', 'test_status_discovery.js'],
   // --- Stage 8 REAL shell entrypoints: clean-env sweep (no unbound vars; BLOCKER A) + host-stub credential-audit/dry-run ---
   ['deploy-entrypoints', 'test_deploy_entrypoints.js'],
+  // --- OBS-001 / REPORT-001 REAL entrypoints: workflow-scoped WF18 credential metric + deferred-plan aggregate verdict ---
+  ['obs-report-entrypoints', 'test_obs_report_entrypoints.js'],
   // --- Stage 4 runtime acceptance: offline validation of the disposable runtime fixtures (RUNTIME-ACCEPTANCE-001) ---
   ['runtime-acceptance', 'test_runtime_acceptance.js'],
   // --- Stage 5/6/7 REAL committed-graph topology audit (adapters/sources, reporting, scheduled monitor/digest) ---
