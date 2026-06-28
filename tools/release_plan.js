@@ -163,14 +163,24 @@ function plan(input) {
     step(id, 'ok', 'creates=' + rw.summary.creates + ' updates=' + rw.summary.updates + ' aborts=0');
   });
 
-  // 12. reconcile compatible credentials (preserve; abort on ambiguous/mismatch)
+  // 12. reconcile compatible credentials (preserve; abort on ambiguous/mismatch). BLOCKER B: a PRODUCTION release
+  //     (dry-run OR apply) MUST reconcile live credentials — never defer the whole step to "apply". With no export
+  //     supplied it fails closed for production; with an export it reconciles the RESOLVED references and reports
+  //     any deferred ones (a credential TYPE with no production credential yet) as a warning, not a clean pass.
   decide('reconcile_credentials', (id) => {
-    if (input.credExport == null) return step(id, 'warn', 'no non-decrypted credential export supplied — reconciliation deferred to apply');
+    if (input.credExport == null) {
+      if (isProd) return fail(id, 'no non-decrypted credential export supplied — a production release must reconcile LIVE credentials (fail-closed; never deferred to apply)');
+      return step(id, 'warn', 'no credential export supplied (off-production planning only)');
+    }
     const refs = input.credRefs || [];
-    const rc = RC.reconcile(refs, input.credExport);
+    const PH = /paste|placeholder|changeme|change_me|<[^>]+>|your[-_]|todo|replace[-_]?me/i;
+    const resolvedRefs = refs.filter(r => !PH.test(String(r.id)));
+    const deferred = refs.length - resolvedRefs.length;
+    const rc = RC.reconcile(resolvedRefs, input.credExport);
     if (!rc.ok) return fail(id, 'credential reconciliation FAILED: ' + rc.summary.failures + ' issue(s) (' +
       rc.audit.filter(a => a.status !== 'ok').map(a => a.status).join(',') + ')');
-    step(id, 'ok', 'references=' + rc.summary.references + ' unique=' + rc.summary.unique_credentials + ' failures=0');
+    if (deferred > 0) return step(id, 'warn', 'references=' + refs.length + ' resolved=' + resolvedRefs.length + ' deferred=' + deferred + ' (type(s) with no production credential yet — operator attaches before activating that path)');
+    step(id, 'ok', 'references=' + refs.length + ' resolved=' + resolvedRefs.length + ' deferred=0 failures=0');
   });
 
   // 13. strict production-target preflight (effective env; stricter when activating)
@@ -265,9 +275,23 @@ if (require.main === module) {
   if (exportDir && fs.existsSync(exportDir)) { exportIdx = RID.indexExportDir(exportDir); exportProvided = true; }
   const envReport = ENV.discover({ source: val('--env-source'), envFile: val('--env-file'), container: val('--container') });
 
+  // BLOCKER B: a production dry-run reconciles LIVE credentials. The shell passes the captured non-decrypted
+  // credential export (--cred-export) and the STAGED workflow dir (--staged-dir) so the planner reconciles the
+  // exact references that would be imported, never a hard-coded null.
+  let credExport = null, credRefs = [];
+  const credExportFile = val('--cred-export');
+  if (credExportFile && fs.existsSync(credExportFile)) {
+    try { credExport = JSON.parse(fs.readFileSync(credExportFile, 'utf8')); } catch (e) { credExport = null; }
+  }
+  const stagedDir = val('--staged-dir');
+  if (stagedDir && fs.existsSync(stagedDir)) {
+    const files = fs.readdirSync(stagedDir).filter(f => f.endsWith('.json'));
+    credRefs = RC.collectReferences(files, stagedDir);
+  }
+
   const p = plan({
     identity, localMap, exportProvided, exportIdx, env: envReport.effective, envReport,
-    credExport: null, credRefs: [], n8nVersionActual: val('--n8n-version') || 'unknown',
+    credExport, credRefs, n8nVersionActual: val('--n8n-version') || 'unknown',
     options: {
       target, mode, activate: args.indexOf('--activate') >= 0,
       image: val('--image') || process.env.MS_N8N_IMAGE || 'n8nio/n8n:2.23.3',

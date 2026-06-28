@@ -198,7 +198,7 @@
       "credentials": {
         "httpHeaderAuth": {
           "id": "PASTE_CREDENTIAL_ID_HERE",
-          "name": "HTTP Header Auth - Marketing Scout"
+          "name": "Claude API - Marketing Scout"
         }
       }
     },

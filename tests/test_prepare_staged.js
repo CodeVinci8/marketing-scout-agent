@@ -67,6 +67,31 @@ A.section('DEPLOY-008 — ambiguous credential type ABORTS (never auto-selects)'
   A.ok('error explains refusal to auto-select', r.errors.some(e => /ambiguous/.test(e) && /refusing/.test(e)));
 }
 
+A.section('CRED-003 — multiple credentials of one type are disambiguated by NAME (Claude/Firecrawl/Apify httpHeaderAuth)');
+{
+  // Production legitimately holds THREE httpHeaderAuth credentials. Type-only reconciliation would abort as
+  // ambiguous; (type,name) resolution attaches each reference to the credential whose NAME it declares. The
+  // committed Claude nodes (WF04/08/19) declare "Claude API - Marketing Scout"; Firecrawl declares its own name.
+  const multiHeader = [
+    { id: 'prodGOOGLE', name: 'Google Sheets - Marketing Scout Service Account', type: 'googleApi' },
+    { id: 'prodCLAUDE', name: 'Claude API - Marketing Scout', type: 'httpHeaderAuth' },
+    { id: 'prodFIRE', name: 'Firecrawl API - Marketing Scout', type: 'httpHeaderAuth' },
+    { id: 'prodAPIFY', name: 'Apify token', type: 'httpHeaderAuth' },
+    { id: 'prodVK', name: 'HTTP Query Auth - VK Access Token', type: 'httpQueryAuth' }
+  ];
+  const r = PS.prepareStaged({ localMap: resolvedMap(), credExport: multiHeader });
+  A.ok('staging ok despite 3 httpHeaderAuth credentials (name disambiguates)', r.ok);
+  A.ok('no ambiguous types reported', r.summary.credential_types_ambiguous.length === 0);
+  A.eq('every reference reconciled, none deferred', r.summary.credentials_deferred, 0);
+  // direct resolver semantics
+  const idx = PS.indexCredentials(multiHeader);
+  A.eq('Claude name resolves to the Claude credential', PS.resolveCredentialRef('httpHeaderAuth', 'Claude API - Marketing Scout', idx).id, 'prodCLAUDE');
+  A.eq('Firecrawl name resolves to the Firecrawl credential', PS.resolveCredentialRef('httpHeaderAuth', 'Firecrawl API - Marketing Scout', idx).id, 'prodFIRE');
+  A.eq('googleApi resolves by type-uniqueness even when the name differs', PS.resolveCredentialRef('googleApi', 'some other name', idx).action, 'resolve');
+  A.eq('an httpHeaderAuth name matching none, with >1 of the type, is ABORTED (never auto-picked)', PS.resolveCredentialRef('httpHeaderAuth', 'no such name', idx).action, 'abort');
+  A.eq('a type with no production credential is DEFERRED', PS.resolveCredentialRef('telegramApi', 'x', idx).action, 'defer');
+}
+
 A.section('§8 — a credential TYPE with no production match stays a DEFERRED placeholder (not a hard abort)');
 {
   // only googleApi exists in production; httpHeaderAuth has no match -> deferred placeholders, still ok

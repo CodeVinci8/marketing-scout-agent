@@ -181,6 +181,7 @@ test-js:
 	node tests/test_release_integration.js
 	node tests/test_prepare_staged.js
 	node tests/test_status_discovery.js
+	node tests/test_deploy_entrypoints.js
 	node tests/test_runtime_acceptance.js
 	node tests/test_stage567_topology.js
 

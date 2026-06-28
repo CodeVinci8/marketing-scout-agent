@@ -118,6 +118,8 @@ const JS_SUITES = [
   ['prepare-staged', 'test_prepare_staged.js'],
   // --- Stage 8 production discovery: status/inventory/check-config/binding-count (STATUS-001/CHECKCONFIG-001/etc) ---
   ['status-discovery', 'test_status_discovery.js'],
+  // --- Stage 8 REAL shell entrypoints: clean-env sweep (no unbound vars; BLOCKER A) + host-stub credential-audit/dry-run ---
+  ['deploy-entrypoints', 'test_deploy_entrypoints.js'],
   // --- Stage 4 runtime acceptance: offline validation of the disposable runtime fixtures (RUNTIME-ACCEPTANCE-001) ---
   ['runtime-acceptance', 'test_runtime_acceptance.js'],
   // --- Stage 5/6/7 REAL committed-graph topology audit (adapters/sources, reporting, scheduled monitor/digest) ---

@@ -20,7 +20,12 @@ const WF = path.join(__dirname, '..', 'n8n', 'workflows');
 // or DEFERS it when no production credential of that type exists yet. The googleApi shape/name mirrors the legacy
 // WF04/08/10/12 references so every Sheets node reconciles identically.
 function credGoogle() { return { googleApi: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'Google Sheets - Marketing Scout Service Account' } }; }
-function credHttpHeader() { return { httpHeaderAuth: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'HTTP Header Auth - Marketing Scout' } }; }
+// CRED-003: the ONLY httpHeaderAuth node generated here is the WF19 Claude planner (api.anthropic.com). Its
+// credential name MUST mirror the legacy WF04/08 Claude reference ("Claude API - Marketing Scout") so all five
+// Claude httpHeaderAuth references reconcile to the SAME single production credential by (type,name). The old
+// generic name "HTTP Header Auth - Marketing Scout" matched no production credential and, with >1 httpHeaderAuth
+// credential present (Claude + Firecrawl + Apify), made the WF19 reference unresolvable/ambiguous on a real VPS.
+function credClaude() { return { httpHeaderAuth: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'Claude API - Marketing Scout' } }; }
 function credHttpQuery() { return { httpQueryAuth: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'HTTP Query Auth - VK Access Token' } }; }
 
 // Extract a lib's embeddable core: strip the leading 'use strict'; and the trailing module.exports, and drop
@@ -134,7 +139,7 @@ function httpClaude(id, name, pos) {
       jsonBody: '={{ $json.claude_request_body }}', options: {}
     },
     type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name,
-    credentials: credHttpHeader()
+    credentials: credClaude()
   };
 }
 function httpTelegram(id, name, pos) {
