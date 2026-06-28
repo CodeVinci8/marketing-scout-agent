@@ -191,7 +191,13 @@
         -140
       ],
       "id": "wf26-resolve",
-      "name": "VK groups.getById"
+      "name": "VK groups.getById",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "HTTP Query Auth - VK Access Token"
+        }
+      }
     },
     {
       "parameters": {
@@ -237,7 +243,13 @@
         -140
       ],
       "id": "wf26-wall",
-      "name": "VK wall.get"
+      "name": "VK wall.get",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "HTTP Query Auth - VK Access Token"
+        }
+      }
     },
     {
       "parameters": {
@@ -261,7 +273,13 @@
         40
       ],
       "id": "wf26-readstate",
-      "name": "Read vk_post_state"
+      "name": "Read vk_post_state",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -285,7 +303,13 @@
         200
       ],
       "id": "wf26-readchg",
-      "name": "Read source_change_events"
+      "name": "Read source_change_events",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -336,7 +360,13 @@
         -240
       ],
       "id": "wf26-aprecs",
-      "name": "Append vk_posts"
+      "name": "Append vk_posts",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -374,7 +404,13 @@
         -100
       ],
       "id": "wf26-apstate",
-      "name": "Append vk_post_state"
+      "name": "Append vk_post_state",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -442,7 +478,13 @@
         60
       ],
       "id": "wf26-apchg",
-      "name": "Append source_change_events"
+      "name": "Append source_change_events",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {

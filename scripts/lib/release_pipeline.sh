@@ -58,10 +58,17 @@ rp_write_evidence() {
   local result="$1" coverage="${2:-unknown}" checksum="${3:-unknown}" active="${4:-null}"
   mkdir -p "$RP_EVIDENCE_DIR" 2>/dev/null || true
   local out="${RP_EVIDENCE_DIR}/release-$(date -u +%Y%m%d-%H%M%S)-$$.json"
-  printf '{"result":"%s","runtime_id_coverage":"%s","runtime_id_map_checksum":"%s","active_workflows":%s,"backup_path":"%s","backup_sha256":"%s","n8n_version_expected":"%s","rollback_command":"%s"}' \
-    "$result" "$coverage" "$checksum" "${active:-null}" "$RP_BACKUP_PATH" "$RP_BACKUP_SHA" "${N8N_EXPECTED_VERSION:-2.23.3}" "$RP_ROLLBACK_CMD" \
+  # The verified credential + count fields (set by the apply spine via RP_* globals) are passed through so
+  # release_report.js can DERIVE the authoritative result; release_report NEVER claims PASS on unknown/deferred
+  # credentials (RELEASE-003 / Phase 5). The `result` we pass is a CLAIM — the tool re-derives the truth.
+  printf '{"result":"%s","credential_audit":"%s","credential_references":%s,"credential_failures":%s,"credential_deferred":%s,"runtime_workflows_found":%s,"bindings_resolved":%s,"placeholders_remaining":%s,"runtime_id_coverage":"%s","runtime_id_map_checksum":"%s","active_workflows":%s,"backup_path":"%s","backup_sha256":"%s","n8n_version_expected":"%s","rollback_command":"%s"}' \
+    "$result" "${RP_CRED_AUDIT:-unknown}" "${RP_CRED_REFS:-null}" "${RP_CRED_FAILURES:-null}" "${RP_CRED_DEFERRED:-null}" \
+    "${RP_WF_FOUND:-null}" "${RP_BIND_RESOLVED:-null}" "${RP_PLACEHOLDERS:-null}" \
+    "$coverage" "$checksum" "${active:-null}" "$RP_BACKUP_PATH" "$RP_BACKUP_SHA" "${N8N_EXPECTED_VERSION:-2.23.3}" "$RP_ROLLBACK_CMD" \
     | node "$RP_REPORT_JS" --out "$out" >/dev/null 2>&1 || true
-  rp_say "RELEASE_EVIDENCE=$out result=$result"
+  # Echo the DERIVED result back from the written evidence (not just the claim) so logs never overstate the outcome.
+  local derived; derived="$(node -e 'try{const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(String(r.result||"unknown"));}catch(e){process.stdout.write("unknown");}' "$out" 2>/dev/null || echo unknown)"
+  rp_say "RELEASE_EVIDENCE=$out result=${derived}"
   RP_EVIDENCE_FILE="$out"
 }
 

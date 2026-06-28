@@ -21,10 +21,21 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const L = require('./manifest_lib.js');
 
 const EXECUTE_WORKFLOW = 'n8n-nodes-base.executeWorkflow';
 const PLACEHOLDER = 'PASTE_WORKFLOW_ID';
+
+// Fingerprint a raw n8n id for SAFE logging (DEPLOY-003 / SECURITY-005): the report and --verify output must NEVER
+// carry a raw installation workflow id. A PASTE_WORKFLOW_ID placeholder is not an id, so it is shown verbatim so an
+// unbound edge is still diagnosable; everything else becomes fp_<sha10>.
+function fp(v) {
+  const s = v == null ? '' : String(v);
+  if (s === '' ) return 'fp_none';
+  if (s === PLACEHOLDER) return PLACEHOLDER;
+  return 'fp_' + crypto.createHash('sha256').update(s).digest('hex').slice(0, 10);
+}
 
 // Read every *.json workflow in an exported directory; index by exact workflow name. Detects duplicate/empty names.
 function loadExportedDir(dir) {
@@ -112,7 +123,7 @@ function bindDir(dir, opts) {
     const already = before === op.targetId;
     if (verify) {
       if (already) resolved++;
-      else plan.errors.push('binding not resolved to target id: ' + op.callerEntry.json.name + ' :: ' + op.edge.caller_node + ' = ' + before);
+      else plan.errors.push('binding not resolved to target id: ' + op.callerEntry.json.name + ' :: ' + op.edge.caller_node + ' = ' + fp(before));
     } else {
       if (!already) {
         w.value = op.targetId;
@@ -124,8 +135,8 @@ function bindDir(dir, opts) {
     }
     edgeReport.push({
       caller_wf: op.edge.caller_wf, caller_node: op.edge.caller_node, target_wf: op.edge.target_wf,
-      target_workflow: op.edge.target_workflow, target_id: op.targetId,
-      previous_value: before, action: already ? 'noop' : (verify ? 'verify' : 'bound')
+      target_workflow: op.edge.target_workflow, target_id_fp: fp(op.targetId),
+      previous_value_fp: fp(before), action: already ? 'noop' : (verify ? 'verify' : 'bound')
     });
   }
 

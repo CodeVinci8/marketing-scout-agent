@@ -129,7 +129,13 @@
         -240
       ],
       "id": "wf25-readrep",
-      "name": "Read report_bundles"
+      "name": "Read report_bundles",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -153,7 +159,13 @@
         -80
       ],
       "id": "wf25-readchg",
-      "name": "Read source_change_events"
+      "name": "Read source_change_events",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -177,7 +189,13 @@
         80
       ],
       "id": "wf25-readsrc",
-      "name": "Read tracked_sources"
+      "name": "Read tracked_sources",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -201,7 +219,13 @@
         240
       ],
       "id": "wf25-readsum",
-      "name": "Read execution_summaries"
+      "name": "Read execution_summaries",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -225,7 +249,13 @@
         400
       ],
       "id": "wf25-readdig",
-      "name": "Read weekly_digests"
+      "name": "Read weekly_digests",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -383,7 +413,13 @@
         -40
       ],
       "id": "wf25-apdig",
-      "name": "Append weekly_digests"
+      "name": "Append weekly_digests",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {

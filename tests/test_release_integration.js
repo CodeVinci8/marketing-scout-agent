@@ -200,10 +200,17 @@ A.section('§13.7/8 + ROLLBACK-001 — apply acquires the lock, backs up BEFORE 
   const backupIdx = deploy.indexOf('rp_backup_production || die');
   const importIdx = deploy.indexOf('import:workflow --input="${import_src}/${f}"');
   A.ok('backup is invoked BEFORE the first staged import', backupIdx >= 0 && importIdx >= 0 && backupIdx < importIdx);
-  A.ok('apply writes sanitized PASS evidence + emits rollback + marks RP_DONE', /rp_write_evidence PASS/.test(deploy) && /rp_emit_rollback/.test(deploy) && /RP_DONE="yes"/.test(deploy));
-  // the shared library writes evidence via the sanitizing release_report.js (fingerprints only)
+  // Apply runs the POST-IMPORT credential audit and writes evidence with the HONEST credential status (never a bare
+  // PASS when credentials are unknown/deferred), emits rollback, marks RP_DONE.
+  A.ok('apply runs the post-import credential audit before evidence', /--audit --wf-dir "\$tmp\/runtime_audit"/.test(deploy));
+  A.ok('apply writes evidence with the derived credential status + emits rollback + marks RP_DONE',
+    /rp_write_evidence "\$CRED_STATUS"/.test(deploy) && /rp_emit_rollback/.test(deploy) && /RP_DONE="yes"/.test(deploy));
+  A.ok('apply refuses to claim "preserved automatically" unless CREDENTIAL_AUDIT=PASS', /if \[ "\$CRED_STATUS" = "PASS" \]/.test(deploy));
+  A.ok('a hard credential FAILURE blocks the clean release (return 1)', /CREDENTIAL_AUDIT=FAIL — do NOT activate/.test(deploy));
+  // the shared library writes evidence via the sanitizing release_report.js (fingerprints only) and passes creds
   const lib = fs.readFileSync(path.join(ROOT, 'scripts', 'lib', 'release_pipeline.sh'), 'utf8');
   A.ok('evidence goes through the sanitizing release_report.js', /release_report\.js/.test(lib));
+  A.ok('evidence carries the credential audit + counts for honest derivation', /"credential_audit":"%s"/.test(lib) && /RP_CRED_AUDIT/.test(lib));
   A.ok('abort path preserves diagnostics + rollback (RP_DONE!=yes)', /RP_DONE" != "yes"/.test(lib) && /RELEASE_ABORTED/.test(lib));
 }
 

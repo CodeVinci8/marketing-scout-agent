@@ -101,6 +101,12 @@
         },
         "options": {}
       },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
       "id": "read_live_source_runs",
       "name": "Read live_source_runs",
       "type": "n8n-nodes-base.googleSheets",
@@ -125,6 +131,12 @@
         },
         "options": {}
       },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
       "id": "read_raw_market_records",
       "name": "Read raw_market_records",
       "type": "n8n-nodes-base.googleSheets",
@@ -148,6 +160,12 @@
           "mode": "name"
         },
         "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
       },
       "id": "read_market_record_registry",
       "name": "Read market_record_registry",
@@ -230,6 +248,12 @@
           "mode": "name"
         },
         "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
       },
       "id": "append_source_health",
       "name": "Append source_health",

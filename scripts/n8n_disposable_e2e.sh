@@ -99,7 +99,10 @@ else fail "runtime id resolution did not reach ${EXPECTED}/${EXPECTED}"; M[RUNTI
 
 # release lock acquired+released, sanitized evidence written, backup taken
 grep -q "RELEASE_LOCK=ACQUIRED" "${WORK}/apply1.log" && [ ! -d "$MS_RELEASE_LOCK" ] && M[RELEASE_LOCK]="PASS" || { fail "release lock not acquired/released cleanly"; M[RELEASE_LOCK]="FAIL"; }
-if ls "${MS_RELEASE_EVIDENCE_DIR}"/release-*.json >/dev/null 2>&1 && grep -q '"result": "PASS"' "${MS_RELEASE_EVIDENCE_DIR}"/release-*.json; then M[RELEASE_EVIDENCE]="PASS"; else fail "no PASS release evidence written"; M[RELEASE_EVIDENCE]="FAIL"; fi
+# A disposable container has NO real credentials, so every reference is legitimately DEFERRED -> the honest derived
+# result is PASS_WITH_DEFERRED_CREDENTIALS (a bare "PASS" would require resolved credentials, which a throwaway n8n
+# does not have). Accept either; a plain unknown/FAIL/BLOCKED is a real failure.
+if ls "${MS_RELEASE_EVIDENCE_DIR}"/release-*.json >/dev/null 2>&1 && grep -qE '"result": "(PASS|PASS_WITH_DEFERRED_CREDENTIALS)"' "${MS_RELEASE_EVIDENCE_DIR}"/release-*.json; then M[RELEASE_EVIDENCE]="PASS"; else fail "no PASS/PASS_WITH_DEFERRED_CREDENTIALS release evidence written"; M[RELEASE_EVIDENCE]="FAIL"; fi
 
 # ---- (2) post-deploy verification against the live disposable export -----------------------------------------
 LIST_1="$(docker exec "$DISP_C" n8n list:workflow 2>/dev/null | grep -c "|" || true)"

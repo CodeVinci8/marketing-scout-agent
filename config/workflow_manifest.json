@@ -534,14 +534,7 @@
   "trigger_workflows_when_weekly_digest": [
     "25_weekly_digest.json"
   ],
-  "archive_safe_candidates": [
-    "02_claude_api_single_record_analysis.json",
-    "02_claude_api_single_record_v2_baseline_raw_json.json",
-    "02_claude_api_single_record_v2_extended_tests.json",
-    "02_claude_api_single_record_v2_resilient_router_production.json",
-    "02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json",
-    "03_firecrawl_single_url_resilient.json"
-  ],
+  "archive_safe_candidates": [],
   "workflows": [
     {
       "file": "00_healthcheck_manual_test.json",
@@ -628,10 +621,10 @@
       "trigger_always": false,
       "trigger_when_monitoring": false,
       "trigger_when_weekly_digest": false,
-      "referenced_by_test": false,
-      "archive_safe_candidate": true,
-      "retain_reason": "",
-      "action": "review_for_archive"
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
     },
     {
       "file": "02_claude_api_single_record_v2_baseline_raw_json.json",
@@ -658,10 +651,10 @@
       "trigger_always": false,
       "trigger_when_monitoring": false,
       "trigger_when_weekly_digest": false,
-      "referenced_by_test": false,
-      "archive_safe_candidate": true,
-      "retain_reason": "",
-      "action": "review_for_archive"
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
     },
     {
       "file": "02_claude_api_single_record_v2_extended_tests.json",
@@ -688,10 +681,10 @@
       "trigger_always": false,
       "trigger_when_monitoring": false,
       "trigger_when_weekly_digest": false,
-      "referenced_by_test": false,
-      "archive_safe_candidate": true,
-      "retain_reason": "",
-      "action": "review_for_archive"
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
     },
     {
       "file": "02_claude_api_single_record_v2_resilient_router_production.json",
@@ -718,10 +711,10 @@
       "trigger_always": false,
       "trigger_when_monitoring": false,
       "trigger_when_weekly_digest": false,
-      "referenced_by_test": false,
-      "archive_safe_candidate": true,
-      "retain_reason": "",
-      "action": "review_for_archive"
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
     },
     {
       "file": "02_claude_api_single_record_v2_resilient_router_test_dynamic_sheet.json",
@@ -748,10 +741,10 @@
       "trigger_always": false,
       "trigger_when_monitoring": false,
       "trigger_when_weekly_digest": false,
-      "referenced_by_test": false,
-      "archive_safe_candidate": true,
-      "retain_reason": "",
-      "action": "review_for_archive"
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
     },
     {
       "file": "03_firecrawl_single_url_resilient.json",
@@ -778,10 +771,10 @@
       "trigger_always": false,
       "trigger_when_monitoring": false,
       "trigger_when_weekly_digest": false,
-      "referenced_by_test": false,
-      "archive_safe_candidate": true,
-      "retain_reason": "",
-      "action": "review_for_archive"
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
+      "action": "retain"
     },
     {
       "file": "04_firecrawl_url_list_resilient.json",

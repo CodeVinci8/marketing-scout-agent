@@ -129,7 +129,13 @@
         -120
       ],
       "id": "wf24-readrep",
-      "name": "Read report_bundles"
+      "name": "Read report_bundles",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -153,7 +159,13 @@
         120
       ],
       "id": "wf24-readout",
-      "name": "Read attachment_outbox"
+      "name": "Read attachment_outbox",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -342,7 +354,13 @@
         280
       ],
       "id": "wf24-apout",
-      "name": "Append attachment_outbox"
+      "name": "Append attachment_outbox",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {

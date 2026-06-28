@@ -194,7 +194,13 @@
         -120
       ],
       "id": "wf19-claude",
-      "name": "Claude Planner API Request"
+      "name": "Claude Planner API Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "HTTP Header Auth - Marketing Scout"
+        }
+      }
     },
     {
       "parameters": {

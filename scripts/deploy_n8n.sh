@@ -77,6 +77,8 @@ for arg in "$@"; do
     --activate-telegram) MODE="activate-telegram" ;;
     --deactivate-triggers) MODE="deactivate-triggers" ;;
     --status) MODE="status" ;;
+    --credential-audit) MODE="credential-audit" ;;
+    --verify-production) MODE="verify-production" ;;
     --discover) MODE="discover" ;;
     --yes|-y) ASSUME_YES="yes" ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -333,6 +335,39 @@ export_all() {
   fi
 }
 
+# Export NON-decrypted credential METADATA (ids/names/types only — NEVER --decrypted, never a plaintext secret)
+# into the HOST file $1, Docker-safely (CRED-002). The previous code ran
+#     n8n_cli export:credentials --all --output="$tmp/creds.json"
+# then tested `[ -f "$tmp/creds.json" ]` — but in docker mode the CLI runs INSIDE the container, so the file landed
+# on the container layer while the test checked the HOST path. It was therefore ALWAYS absent in production: credflag
+# stayed empty, staging ran with no export, and every placeholder credential was DEFERRED — which is exactly how 31
+# googleApi references imported into production as unresolved placeholders while the log claimed "compatible
+# credentials preserved automatically". This mirrors export_all's host/docker split EXACTLY (write to a container
+# temp dir, copy OUT via n8n_get, clean the container temp), then verifies the host copy is non-empty and a parseable
+# JSON array. Fails closed (returns non-zero, leaves no file) on any error. Used by EVERY path that needs the export
+# (apply, dry-run, discover, verify-production, credential-audit) so there is ONE implementation, not several.
+export_credentials() {
+  local out="$1"
+  n8n_available || return 1
+  if [ "$(n8n_resolve_mode)" = "host" ]; then
+    n8n_cli export:credentials --all --output="$out" >/dev/null 2>&1 || return 1
+  else
+    local cdir="/tmp/ms-creds-$$" hdir; hdir="$(mktemp -d)"
+    n8n_sh "mkdir -p $cdir" >/dev/null 2>&1 || true
+    if ! n8n_cli export:credentials --all --output="$cdir/creds.json" >/dev/null 2>&1; then
+      n8n_sh "rm -rf $cdir" >/dev/null 2>&1 || true; rm -rf "$hdir"; return 1
+    fi
+    n8n_get "$cdir" "$hdir" >/dev/null 2>&1 || { n8n_sh "rm -rf $cdir" >/dev/null 2>&1 || true; rm -rf "$hdir"; return 1; }
+    n8n_sh "rm -rf $cdir" >/dev/null 2>&1 || true   # clean the in-container temp (ephemeral layer; never the volume)
+    if [ -f "$hdir/creds.json" ]; then mv -f "$hdir/creds.json" "$out"; else rm -rf "$hdir"; return 1; fi
+    rm -rf "$hdir"
+  fi
+  # verify: non-empty + a parseable JSON array of credential metadata objects. NEVER print the contents.
+  [ -s "$out" ] || return 1
+  node -e 'const a=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(!Array.isArray(a)){process.exit(1);}' "$out" 2>/dev/null || return 1
+  return 0
+}
+
 do_import() {
   require_n8n || exit 1
   detect_n8n_version
@@ -356,11 +391,11 @@ do_import() {
   # record coverage + map checksum for the release evidence (sanitized: counts/checksum only)
   RP_COVERAGE="$(node "$RUNTIME_IDS_TOOL" status --local "$RUNTIME_IDS_LOCAL" 2>/dev/null | sed -n 's/^coverage=\([^ ]*\).*/\1/p' | head -1)"
   RP_CHECKSUM="$(node "$RUNTIME_IDS_TOOL" status --local "$RUNTIME_IDS_LOCAL" 2>/dev/null | sed -n 's/.*checksum=\([^ ]*\).*/\1/p' | head -1)"
-  # --- (2) non-decrypted credential metadata for automatic reconciliation (NEVER --decrypted) ------------------
+  # --- (2) non-decrypted credential metadata for automatic reconciliation (NEVER --decrypted; Docker-safe) ------
   local credflag=()
-  if n8n_cli export:credentials --all --output="$tmp/creds.json" >/dev/null 2>&1 && [ -f "$tmp/creds.json" ]; then
+  if export_credentials "$tmp/creds.json"; then
     credflag=( --cred-export "$tmp/creds.json" )
-    say "  [ok] credential metadata exported (encrypted; ids/types only used for reconciliation)"
+    say "  [ok] credential metadata exported (encrypted at rest; ids/types only used for reconciliation)"
   else
     say "  [info] no credential export available — compatible credentials cannot be auto-reconciled (placeholders stay deferred for the n8n UI)"
   fi
@@ -422,10 +457,50 @@ do_import() {
     esac
   done
   hr
-  say "Imported ${#IMPORT_ORDER[@]} runtime workflows from STAGED JSON. They are INACTIVE, with resolved ids, the ${BINDING_COUNT}"
-  say "sub-workflow ids bound, and compatible production credentials preserved automatically (no manual UI step)."
-  # --- (20/21) sanitized release evidence (fingerprints only) + the exact rollback command ----------------------
-  rp_write_evidence PASS "${RP_COVERAGE:-unknown}" "${RP_CHECKSUM:-unknown}" 0
+  # --- POST-IMPORT credential audit (CRED-002): bindings being bound is NOT proof the credentials resolved. Run the
+  #     honest requirement+reconciliation audit over what n8n actually stored, so evidence reflects REALITY, never an
+  #     optimistic "preserved automatically" claim. Emits PRODUCTION_*/WF18_* markers; sets the result honestly. -----
+  say "Auditing post-import credential references (non-decrypted; fingerprints only)..."
+  mkdir -p "$tmp/runtime_audit"
+  node -e '
+    const fs=require("fs"),path=require("path");
+    const L=require(process.argv[1]); const src=process.argv[2], dst=process.argv[3];
+    const want=new Set(Object.values(L.runtimeIdentity()).map(v=>v.name));
+    for(const f of fs.readdirSync(src).filter(x=>x.endsWith(".json"))){
+      let wf; try{ wf=JSON.parse(fs.readFileSync(path.join(src,f),"utf8")); }catch(e){ continue; }
+      if(want.has(wf.name)){ fs.writeFileSync(path.join(dst, wf.name.replace(/[^0-9A-Za-z]+/g,"_")+".json"), JSON.stringify(wf)); }
+    }
+  ' "$MANIFEST_LIB" "$tmp/exported" "$tmp/runtime_audit" 2>/dev/null || true
+  local credaudit_arg=()
+  [ -f "$tmp/creds.json" ] && credaudit_arg=( --export "$tmp/creds.json" )
+  local AUDIT_OUT
+  AUDIT_OUT="$(node "$RECONCILE_CREDS" --audit --wf-dir "$tmp/runtime_audit" "${credaudit_arg[@]}" --prefix PRODUCTION --focus "18_" 2>/dev/null || true)"
+  printf '%s\n' "$AUDIT_OUT"
+  local CRED_PASS CRED_FAIL CRED_DEFER CRED_REFS
+  CRED_PASS="$(printf '%s\n' "$AUDIT_OUT"  | sed -n 's/^PRODUCTION_CREDENTIAL_AUDIT=//p'       | head -1)"
+  CRED_FAIL="$(printf '%s\n' "$AUDIT_OUT"  | sed -n 's/^PRODUCTION_CREDENTIAL_FAILURES=//p'    | head -1)"
+  CRED_DEFER="$(printf '%s\n' "$AUDIT_OUT" | sed -n 's/^PRODUCTION_CREDENTIAL_DEFERRED=//p'    | head -1)"
+  CRED_REFS="$(printf '%s\n' "$AUDIT_OUT"  | sed -n 's/^PRODUCTION_CREDENTIAL_REFERENCES=//p'  | head -1)"
+  # Honest credential status: FAIL on any hard failure; DEFERRED when only deferred (a type with no prod credential
+  # yet — operator attaches before activation); PASS only when every reference resolved with zero deferred.
+  local CRED_STATUS
+  if [ "${CRED_PASS:-FAIL}" != "PASS" ] || [ "${CRED_FAIL:-1}" != "0" ]; then CRED_STATUS="FAIL"
+  elif [ "${CRED_DEFER:-0}" != "0" ]; then CRED_STATUS="PASS_WITH_DEFERRED_CREDENTIALS"
+  else CRED_STATUS="PASS"; fi
+  hr
+  if [ "$CRED_STATUS" = "PASS" ]; then
+    say "Imported ${#IMPORT_ORDER[@]} runtime workflows (INACTIVE), ${BINDING_COUNT} sub-workflow edges bound, and ALL"
+    say "${CRED_REFS:-?} credential references reconciled to existing production credentials (CREDENTIAL_AUDIT=PASS)."
+  else
+    say "Imported ${#IMPORT_ORDER[@]} runtime workflows (INACTIVE), ${BINDING_COUNT} sub-workflow edges bound."
+    say "CREDENTIAL_AUDIT=${CRED_STATUS} — NOT claiming credentials were preserved. See the PRODUCTION_CREDENTIAL_* markers above."
+  fi
+  # --- (20/21) sanitized release evidence (fingerprints only) + the exact rollback command. The release_report tool
+  #     re-DERIVES `result` from these verified fields, so passing CRED_STATUS yields PASS / PASS_WITH_DEFERRED /
+  #     FAIL honestly — a bare "PASS" can never be claimed when the audit did not earn it. ------------------------
+  RP_CRED_AUDIT="$CRED_STATUS"; RP_CRED_REFS="${CRED_REFS:-null}"; RP_CRED_FAILURES="${CRED_FAIL:-null}"; RP_CRED_DEFERRED="${CRED_DEFER:-null}"
+  RP_WF_FOUND="${#IMPORT_ORDER[@]}"; RP_BIND_RESOLVED="$BINDING_COUNT"; RP_PLACEHOLDERS=0; RP_ACTIVE=0
+  rp_write_evidence "$CRED_STATUS" "${RP_COVERAGE:-unknown}" "${RP_CHECKSUM:-unknown}" 0
   rp_emit_rollback
   RP_DONE="yes"   # tells the EXIT-trap finisher this was a clean release (no ABORT diagnostics)
   say "Rollback: scripts/rollback.sh --apply  (or: make rollback) — restores publication/webhook/id-map state."
@@ -433,8 +508,53 @@ do_import() {
   say "  1. Any credential TYPE with no compatible production credential yet stays a deferred placeholder — attach"
   say "     it once in the n8n UI, then re-run --apply to reconcile it (compatible types are preserved automatically)."
   say "  2. Verify central config env vars: scripts/deploy_n8n.sh --check-config"
-  say "  3. Verify the release end-to-end:  scripts/deploy_n8n.sh --verify-bindings (and make verify-production)"
+  say "  3. Verify the release end-to-end:  make verify-production (status + bindings + credential audit + image pin)"
   say "  4. Activate the Telegram gateway (separate explicit step): make telegram-activate (WF18 only; gate-protected)."
+  # A hard credential FAILURE must block activation — refuse to report a clean release (the import is INACTIVE and
+  # safe; the operator fixes credentials and re-applies). DEFERRED is acceptable for an inactive deploy.
+  if [ "$CRED_STATUS" = "FAIL" ]; then
+    say ""
+    say "CREDENTIAL_AUDIT=FAIL — do NOT activate. Fix the flagged references and re-run scripts/deploy_n8n.sh --apply."
+    return 1
+  fi
+}
+
+# Read-only production CREDENTIAL audit (CRED-002): export the live workflows + NON-decrypted credential metadata
+# Docker-safely, restrict to the 15 runtime workflows by EXACT name, and run the honest requirement+reconciliation
+# audit (reconcile_credentials.js --audit). Emits PRODUCTION_* and WF18_* markers — counts/types/fingerprints only,
+# never a raw id/name/secret. NEVER mutates, NEVER --decrypted, NEVER mounts the volume into a disposable container.
+credential_audit() {
+  require_n8n || exit 1
+  detect_n8n_version
+  load_manifest_arrays
+  local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
+  say "Capturing production workflow export (read-only)..."
+  export_all "$tmp/exported"
+  mkdir -p "$tmp/runtime"
+  # Restrict the export to the runtime closure by EXACT workflow name (the same identity the manifest tracks); the
+  # old conversational WF18 and other legacy objects are NOT in the runtime identity, so they are never audited here.
+  local matched
+  matched="$(node -e '
+    const fs=require("fs"),path=require("path");
+    const L=require(process.argv[1]); const src=process.argv[2], dst=process.argv[3];
+    const want=new Set(Object.values(L.runtimeIdentity()).map(v=>v.name));
+    let n=0;
+    for(const f of fs.readdirSync(src).filter(x=>x.endsWith(".json"))){
+      let wf; try{ wf=JSON.parse(fs.readFileSync(path.join(src,f),"utf8")); }catch(e){ continue; }
+      if(want.has(wf.name)){ fs.writeFileSync(path.join(dst, wf.name.replace(/[^0-9A-Za-z]+/g,"_")+".json"), JSON.stringify(wf)); n++; }
+    }
+    process.stdout.write(String(n));
+  ' "$MANIFEST_LIB" "$tmp/exported" "$tmp/runtime" 2>/dev/null || printf 0)"
+  say "PRODUCTION_RUNTIME_WORKFLOWS=${matched}/${RUNTIME_COUNT}"
+  local credarg=()
+  if export_credentials "$tmp/creds.json"; then
+    credarg=( --export "$tmp/creds.json" )
+    say "  [ok] credential metadata exported (encrypted at rest; ids/types only used for reconciliation)"
+  else
+    say "  [warn] no credential export available — every reference will show as DEFERRED (cannot prove resolution)."
+  fi
+  # WF18 secure dispatcher filename in $tmp/runtime starts with the sanitized "18 — …(secure dispatcher)" name.
+  node "$RECONCILE_CREDS" --audit --wf-dir "$tmp/runtime" "${credarg[@]}" --prefix PRODUCTION --focus "18_"
 }
 
 # Export current workflows and confirm every sub-workflow edge is bound (zero PASTE_WORKFLOW_ID placeholders).
@@ -444,6 +564,40 @@ verify_bindings() {
   local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
   export_all "$tmp/exported"
   node "$BIND_TOOL" --dir "$tmp/exported" --verify
+}
+
+# Aggregate production verification (Phase 6): exact-name inventory + bindings + CREDENTIALS + running version, with
+# a single honest VERIFY_PRODUCTION marker emitted PASS only when EVERY sub-check verifiably passes — never on an
+# unknown/deferred/failed credential audit, a missing/extra/active workflow, an unbound edge, or a version mismatch.
+# Read-only; never mutates. The compose-file IMAGE pin (outside the repo, /opt/n8n) is verified separately in §8.
+verify_production() {
+  require_n8n || exit 1
+  detect_n8n_version
+  load_manifest_arrays
+  local fails=0 out rc
+  hr; say "VERIFY-PRODUCTION — inventory + bindings + credentials + version (read-only; aggregate marker below):"
+
+  # 1) workflow inventory: 15/15 exact-name, 0 duplicates, 0 active (WORKFLOW_INVENTORY=PASS is the closure marker).
+  out="$(show_status 2>&1)"; printf '%s\n' "$out"
+  printf '%s\n' "$out" | grep -q 'WORKFLOW_INVENTORY=PASS' || { fails=$((fails+1)); say "  [verify] FAIL: workflow inventory (matches/duplicates/active)"; }
+
+  # 2) bindings: every Execute Sub-workflow edge bound, zero placeholders (the tool's exit code is authoritative).
+  out="$(verify_bindings 2>&1)"; rc=$?; printf '%s\n' "$out" | grep -E 'bindings_|placeholders_|"ok"' | sed 's/^/  /' || true
+  if [ "$rc" -eq 0 ]; then say "  BINDINGS=PASS"; else fails=$((fails+1)); say "  BINDINGS=FAIL"; fi
+
+  # 3) credentials: every reference resolves (0 placeholders, 0 failures) + WF18 readiness.
+  out="$(credential_audit 2>&1)"; printf '%s\n' "$out"
+  printf '%s\n' "$out" | grep -q 'PRODUCTION_CREDENTIAL_AUDIT=PASS'      || { fails=$((fails+1)); say "  [verify] FAIL: PRODUCTION_CREDENTIAL_AUDIT != PASS"; }
+  printf '%s\n' "$out" | grep -q 'PRODUCTION_CREDENTIAL_PLACEHOLDERS=0'  || { fails=$((fails+1)); say "  [verify] FAIL: credential placeholders remain"; }
+  printf '%s\n' "$out" | grep -q 'PRODUCTION_NODES_MISSING_REFERENCE=0'  || { fails=$((fails+1)); say "  [verify] FAIL: a credential-requiring node has no reference"; }
+  printf '%s\n' "$out" | grep -q 'WF18_CREDENTIAL_AUDIT=PASS'            || { fails=$((fails+1)); say "  [verify] FAIL: WF18 credential readiness"; }
+
+  # 4) running version must equal the tested/pinned version.
+  if [ "$N8N_VERSION" = "$N8N_EXPECTED_VERSION" ]; then say "  N8N_VERSION_MATCH=PASS (running ${N8N_VERSION} == ${N8N_EXPECTED_VERSION})";
+  else fails=$((fails+1)); say "  N8N_VERSION_MATCH=FAIL (running ${N8N_VERSION} != expected ${N8N_EXPECTED_VERSION})"; fi
+
+  hr
+  if [ "$fails" -eq 0 ]; then say "VERIFY_PRODUCTION=PASS"; return 0; else say "VERIFY_PRODUCTION=FAIL (${fails} check(s) failed)"; return 1; fi
 }
 
 # Build the activation set from the literal arrays, gated by the feature flags, cross-checked against the manifest.
@@ -647,6 +801,10 @@ show_discovery() {
 
 say "Marketing Scout — n8n deploy (mode: ${MODE})"
 hr
+# Testability hook (CRED-002): allow the offline test suite to SOURCE this file to exercise the Docker-safe export
+# helpers (export_credentials/export_all) in MS_N8N_EXEC_DRY / host-stub mode WITHOUT running the real dispatch.
+if [ "${MS_DEPLOY_SOURCE_ONLY:-0}" = "1" ]; then return 0 2>/dev/null || exit 0; fi
+
 case "$MODE" in
   check-config)
     check_config || die "config preflight failed — fix the [missing]/[invalid] values above."
@@ -706,6 +864,12 @@ case "$MODE" in
     ;;
   status)
     show_status
+    ;;
+  credential-audit)
+    credential_audit
+    ;;
+  verify-production)
+    verify_production
     ;;
   discover)
     show_discovery

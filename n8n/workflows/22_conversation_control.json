@@ -149,7 +149,13 @@
         -160
       ],
       "id": "wf22-readmem",
-      "name": "Read durable_memories"
+      "name": "Read durable_memories",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -173,7 +179,13 @@
         0
       ],
       "id": "wf22-readsrc",
-      "name": "Read tracked_sources"
+      "name": "Read tracked_sources",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -197,7 +209,13 @@
         160
       ],
       "id": "wf22-readplans",
-      "name": "Read execution_plans"
+      "name": "Read execution_plans",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -254,7 +272,13 @@
         -200
       ],
       "id": "wf22-upmem",
-      "name": "Upsert durable_memories"
+      "name": "Upsert durable_memories",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -292,7 +316,13 @@
         -200
       ],
       "id": "wf22-apmem",
-      "name": "Append memory_audit_events"
+      "name": "Append memory_audit_events",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -336,7 +366,13 @@
         -60
       ],
       "id": "wf22-upsrc",
-      "name": "Upsert tracked_sources"
+      "name": "Upsert tracked_sources",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -374,7 +410,13 @@
         -60
       ],
       "id": "wf22-apsrc",
-      "name": "Append source_audit_events"
+      "name": "Append source_audit_events",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -418,7 +460,13 @@
         100
       ],
       "id": "wf22-upplan",
-      "name": "Upsert execution_plans"
+      "name": "Upsert execution_plans",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -456,7 +504,13 @@
         240
       ],
       "id": "wf22-apev",
-      "name": "Append agent_request_events"
+      "name": "Append agent_request_events",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {

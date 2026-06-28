@@ -163,7 +163,13 @@
         180
       ],
       "id": "wf20-apdec",
-      "name": "Append orchestration_decisions"
+      "name": "Append orchestration_decisions",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -629,7 +635,13 @@
         -160
       ],
       "id": "wf20-apout",
-      "name": "Append telegram_outbox"
+      "name": "Append telegram_outbox",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
@@ -685,7 +697,13 @@
         60
       ],
       "id": "wf20-apsum",
-      "name": "Append execution_summaries"
+      "name": "Append execution_summaries",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
     },
     {
       "parameters": {
