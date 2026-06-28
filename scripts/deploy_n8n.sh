@@ -61,6 +61,11 @@ RP_ROOT="${ROOT}"
 MODE="dry-run"
 ASSUME_YES="no"
 N8N_VERSION="unknown"
+# ENTRYPOINT-001: the manifest-derived expected version is shared context used by detect_n8n_version (in the
+# "tested against …" log) BEFORE some standalone modes call load_manifest_arrays. Declare it bound up-front so the
+# strict shell (`set -u`) never crashes on an uninitialized read, and let ensure_expected_version() populate it
+# lazily/idempotently. (Was: credential-audit / verify-production read it unbound and died — BLOCKER A.)
+N8N_EXPECTED_VERSION=""
 # Release target for the planner: production (fail-closed; default for dry-run/apply) vs offline (explicit,
 # soft planning only — DEPLOY-004: an offline plan must never claim production readiness).
 RELEASE_TARGET="production"
@@ -103,6 +108,15 @@ require_manifest() {
   command -v node >/dev/null 2>&1 || die "node is required to read the workflow manifest."
   [ -f "$MANIFEST_LIB" ] || die "missing ${MANIFEST_LIB}"
   node "$MANIFEST_LIB" runtime-count >/dev/null 2>&1 || die "workflow manifest is invalid — run: node tools/gen_workflow_manifest.js"
+}
+
+# ENTRYPOINT-001: idempotently load JUST the manifest-derived expected n8n version. detect_n8n_version() can run
+# in standalone modes (credential-audit, verify-production, verify-bindings) BEFORE the full load_manifest_arrays,
+# so it must guarantee this one shared value itself. Cheap, safe under `set -u`, never re-derives if already set.
+ensure_expected_version() {
+  [ -n "${N8N_EXPECTED_VERSION:-}" ] && return 0
+  require_manifest
+  N8N_EXPECTED_VERSION="$(node "$MANIFEST_LIB" n8n-version)"
 }
 
 load_manifest_arrays() {
@@ -171,9 +185,13 @@ capture_export() {
 # Run the ORDERED, fail-closed release planner (tools/release_plan.js) against the captured export + discovered
 # env + detected version. Production target fails closed; offline target is soft. Echoes the sanitized plan.
 run_release_plan() {
-  local mode="$1" export_dir="$2" extra=()
+  local mode="$1" export_dir="$2" cred_export="${3:-}" staged_dir="${4:-}" extra=()
   [ "$RELEASE_TARGET" = "offline" ] && extra+=( --target offline ) || extra+=( --target production )
   [ -n "$export_dir" ] && [ "$EXPORT_PROVIDED" = "yes" ] && extra+=( --export-dir "$export_dir" )
+  # BLOCKER B: hand the planner the LIVE non-decrypted credential export + the STAGED workflow set so its
+  # reconcile_credentials step reconciles the EXACT references that would be imported — never a hard-coded null.
+  [ -n "$cred_export" ] && [ -f "$cred_export" ] && extra+=( --cred-export "$cred_export" )
+  [ -n "$staged_dir" ] && [ -d "$staged_dir" ] && extra+=( --staged-dir "$staged_dir" )
   command -v node >/dev/null 2>&1 || die "node is required for the release planner."
   node "$RELEASE_PLAN" --mode "$mode" --n8n-version "$N8N_VERSION" --image "${MS_N8N_IMAGE:-n8nio/n8n:2.23.3}" \
     --local "$RUNTIME_IDS_LOCAL" "${extra[@]}"
@@ -291,6 +309,7 @@ require_n8n() {
 }
 
 detect_n8n_version() {
+  ensure_expected_version   # ENTRYPOINT-001: guarantee N8N_EXPECTED_VERSION is bound regardless of call order
   local v; v="$(n8n_version_string)"
   N8N_VERSION="${v:-unknown}"
   say "n8n CLI detected: version ${N8N_VERSION} (repository is tested against ${N8N_EXPECTED_VERSION})"
@@ -524,9 +543,9 @@ do_import() {
 # audit (reconcile_credentials.js --audit). Emits PRODUCTION_* and WF18_* markers — counts/types/fingerprints only,
 # never a raw id/name/secret. NEVER mutates, NEVER --decrypted, NEVER mounts the volume into a disposable container.
 credential_audit() {
+  load_manifest_arrays
   require_n8n || exit 1
   detect_n8n_version
-  load_manifest_arrays
   local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
   say "Capturing production workflow export (read-only)..."
   export_all "$tmp/exported"
@@ -557,6 +576,60 @@ credential_audit() {
   node "$RECONCILE_CREDS" --audit --wf-dir "$tmp/runtime" "${credarg[@]}" --prefix PRODUCTION --focus "18_"
 }
 
+# PRODUCTION DRY-RUN credential reconciliation (BLOCKER B): stage EXACTLY what an --apply would import (resolved
+# installation-local ids + bindings + reconciled credentials, active=false) against the LIVE workflow export + the
+# LIVE non-decrypted credential export, then AUDIT the staged set — the SAME proof apply produces, minus the import.
+# ZERO production mutation; NEVER writes config/runtime_ids.local.json (uses a throwaway id map under $1). Sets
+# DRY_CREDS (export file), DRY_STAGED (staged dir), DRY_CRED_VERDICT (PASS|PASS_WITH_DEFERRED_CREDENTIALS|FAIL).
+# Fail-closed: missing/unknown export or any HARD failure (missing-reference/placeholder/ambiguous/type-mismatch) or
+# a non-PASS WF18 audit => non-zero. Deferred-only (a credential TYPE with no production credential yet) => 0 but a
+# distinct PASS_WITH_DEFERRED_CREDENTIALS verdict so the caller never reports a clean OK while a credential is unproven.
+DRY_CREDS=""; DRY_STAGED=""; DRY_CRED_VERDICT="FAIL"
+stage_and_audit_for_dryrun() {
+  local work="$1" export_dir="$2"
+  DRY_CREDS=""; DRY_STAGED=""; DRY_CRED_VERDICT="FAIL"
+  hr; say "Production credential reconciliation (DRY — same discovery + reconciliation as apply; ZERO mutation):"
+  if ! export_credentials "$work/creds.json"; then
+    say "PRODUCTION_CREDENTIAL_AUDIT=FAIL"
+    say "PRODUCTION_DRY_RUN_CREDENTIALS=FAIL — no verified non-decrypted credential export (cannot prove reconciliation)."
+    return 1
+  fi
+  DRY_CREDS="$work/creds.json"
+  say "  [ok] non-decrypted credential metadata exported (encrypted at rest; ids/types only used for reconciliation)"
+  if ! node "$RUNTIME_IDS_TOOL" resolve --export-dir "$export_dir" --local "$work/idmap.json" --apply >/dev/null 2>&1; then
+    node "$RUNTIME_IDS_TOOL" resolve --export-dir "$export_dir" --local "$work/idmap.json" 2>&1 | grep -E 'RUNTIME_IDS_RESOLVE|abort|ABORT|coverage' | sed 's/^/  /' || true
+    say "PRODUCTION_DRY_RUN_CREDENTIALS=FAIL — installation-local id resolution aborted (exact-name/id mismatch)."
+    return 1
+  fi
+  if ! node "$STAGE_TOOL" --out "$work/staged" --local "$work/idmap.json" --cred-export "$work/creds.json" >/dev/null 2>&1; then
+    node "$STAGE_TOOL" --out "$work/staged" --local "$work/idmap.json" --cred-export "$work/creds.json" 2>&1 | sed 's/^/  /' || true
+    say "PRODUCTION_DRY_RUN_CREDENTIALS=FAIL — staging aborted (unresolved id or ambiguous production credential)."
+    return 1
+  fi
+  DRY_STAGED="$work/staged"
+  local AUDIT_OUT
+  AUDIT_OUT="$(node "$RECONCILE_CREDS" --audit --wf-dir "$work/staged" --export "$work/creds.json" --prefix PRODUCTION --focus "18_" 2>/dev/null || true)"
+  printf '%s\n' "$AUDIT_OUT"
+  local C_AUDIT C_FAIL C_DEFER WF_AUDIT
+  C_AUDIT="$(printf '%s\n' "$AUDIT_OUT" | sed -n 's/^PRODUCTION_CREDENTIAL_AUDIT=//p' | head -1)"
+  C_FAIL="$(printf '%s\n'  "$AUDIT_OUT" | sed -n 's/^PRODUCTION_CREDENTIAL_FAILURES=//p' | head -1)"
+  C_DEFER="$(printf '%s\n' "$AUDIT_OUT" | sed -n 's/^PRODUCTION_CREDENTIAL_DEFERRED=//p' | head -1)"
+  WF_AUDIT="$(printf '%s\n' "$AUDIT_OUT" | sed -n 's/^WF18_CREDENTIAL_AUDIT=//p' | head -1)"
+  if [ "${C_AUDIT:-FAIL}" != "PASS" ] || [ "${C_FAIL:-1}" != "0" ] || [ "${WF_AUDIT:-FAIL}" != "PASS" ]; then
+    DRY_CRED_VERDICT="FAIL"
+    say "PRODUCTION_DRY_RUN_CREDENTIALS=FAIL — hard credential failure(s) in the staged set (see PRODUCTION_*/WF18_* above)."
+    return 1
+  fi
+  if [ "${C_DEFER:-0}" != "0" ]; then
+    DRY_CRED_VERDICT="PASS_WITH_DEFERRED_CREDENTIALS"
+    say "PRODUCTION_DRY_RUN_CREDENTIALS=PASS_WITH_DEFERRED_CREDENTIALS — ${C_DEFER} reference(s) on a credential TYPE with no production credential yet (WF18=${WF_AUDIT}; activation-critical path is clean)."
+    return 0
+  fi
+  DRY_CRED_VERDICT="PASS"
+  say "PRODUCTION_DRY_RUN_CREDENTIALS=PASS — every reference reconciled to a production credential, 0 deferred (WF18=${WF_AUDIT})."
+  return 0
+}
+
 # Export current workflows and confirm every sub-workflow edge is bound (zero PASTE_WORKFLOW_ID placeholders).
 verify_bindings() {
   require_n8n || exit 1
@@ -571,9 +644,9 @@ verify_bindings() {
 # unknown/deferred/failed credential audit, a missing/extra/active workflow, an unbound edge, or a version mismatch.
 # Read-only; never mutates. The compose-file IMAGE pin (outside the repo, /opt/n8n) is verified separately in §8.
 verify_production() {
+  load_manifest_arrays
   require_n8n || exit 1
   detect_n8n_version
-  load_manifest_arrays
   local fails=0 out rc
   hr; say "VERIFY-PRODUCTION — inventory + bindings + credentials + version (read-only; aggregate marker below):"
 
@@ -814,18 +887,37 @@ case "$MODE" in
     validate_json
     discover_environment
     # Capture a live export (production target) so id resolution + reconciliation run against reality.
-    PLAN_EXPORT=""
+    PLAN_EXPORT=""; DRY_WORK=""; DRY_CRED_VERDICT="SKIPPED"
     if [ "$RELEASE_TARGET" = "production" ]; then
-      if n8n_available; then detect_n8n_version; PLAN_EXPORT="$(mktemp -d)"; trap 'rm -rf "$PLAN_EXPORT"' EXIT; capture_export "$PLAN_EXPORT"; fi
+      # A production-target dry-run MUST run against the real install (DEPLOY-004 / BLOCKER B). No reachable n8n is a
+      # fail-closed condition — use --offline-plan for a soft rehearsal that never claims production readiness.
+      require_n8n || die "production-target dry-run requires a reachable n8n (MS_N8N_MODE=docker MS_N8N_CONTAINER=n8n-n8n-1). For a soft rehearsal use: scripts/deploy_n8n.sh --offline-plan"
+      detect_n8n_version
+      DRY_WORK="$(mktemp -d)"; trap 'rm -rf "$DRY_WORK"' EXIT
+      PLAN_EXPORT="$DRY_WORK/export"; capture_export "$PLAN_EXPORT"
+      [ "$EXPORT_PROVIDED" = "yes" ] || die "production-target dry-run: no parseable workflow export captured — cannot resolve ids/credentials (run scripts/deploy_n8n.sh --discover to diagnose)."
     fi
     print_plan
+    # BLOCKER B: real credential reconciliation against the LIVE credential export (production target) — staged + audited
+    # with ZERO mutation; fail-closed on any hard failure. Replaces the old "reconciliation deferred to apply" claim.
+    if [ "$RELEASE_TARGET" = "production" ]; then
+      stage_and_audit_for_dryrun "$DRY_WORK" "$PLAN_EXPORT" \
+        || die "production-target dry-run FAILED CLOSED on credentials (see PRODUCTION_*/WF18_* markers above). No changes made."
+    fi
     hr; say "Ordered fail-closed release plan (target=${RELEASE_TARGET}):"
-    if run_release_plan dry-run "$PLAN_EXPORT"; then
+    if run_release_plan dry-run "$PLAN_EXPORT" "${DRY_CREDS:-}" "${DRY_STAGED:-}"; then
       if [ "$RELEASE_TARGET" = "offline" ]; then
         say "OFFLINE-PLAN complete (SOFT). This is a planning rehearsal only and does NOT assert production readiness."
         say "Run a real production dry-run on the VPS: MS_N8N_MODE=docker MS_N8N_CONTAINER=n8n-n8n-1 scripts/deploy_n8n.sh --dry-run"
+      elif [ "$DRY_CRED_VERDICT" = "PASS_WITH_DEFERRED_CREDENTIALS" ]; then
+        # Honest non-clean state: the resolvable references reconcile and WF18 is clean, but ≥1 credential TYPE has no
+        # production credential yet (e.g. VK httpQueryAuth). Return NON-ZERO so this never reads as production-ready.
+        say "DRY-RUN complete (PRODUCTION target) — PRODUCTION_DRY_RUN_CREDENTIALS=PASS_WITH_DEFERRED_CREDENTIALS."
+        say "Deferred references are on a credential TYPE with NO production credential yet; attach it before activating that path."
+        say "RELEASE_PLAN=DEFERRED_CREDENTIALS (not a clean OK; WF18 activation path is credential-clean)."
+        exit 3
       else
-        say "DRY-RUN complete (PRODUCTION target, fail-closed). No changes made. Re-run with --apply to stage+import+bind (inactive)."
+        say "DRY-RUN complete (PRODUCTION target, fail-closed) — PRODUCTION_DRY_RUN_CREDENTIALS=PASS. No changes made. Re-run with --apply to stage+import+bind (inactive)."
       fi
     else
       # DEPLOY-004: a production-target dry-run MUST fail closed when ids/env/export are unresolved.
