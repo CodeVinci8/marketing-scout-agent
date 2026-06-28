@@ -1,0 +1,26 @@
+[Unit]
+# Dedicated ngrok agent for Marketing Scout. OUTBOUND connection only — it opens NO public listening port on the
+# VPS and does NOT touch port 443 or the VPN/proxy stack. It tunnels the assigned free Dev Domain to the loopback
+# path-filter proxy (127.0.0.1:8769), which forwards only POST /webhook/ms-telegram-agent to n8n.
+Description=ngrok agent (Marketing Scout Telegram ingress, outbound only)
+After=network-online.target marketing-scout-webhook-proxy.service
+Wants=network-online.target
+Requires=marketing-scout-webhook-proxy.service
+
+[Service]
+Type=simple
+# Runs as root solely to read the root-only /etc/ngrok/marketing-scout.yml (holds the authtoken, mode 600).
+# The authtoken is NEVER passed on the command line (it lives only in the config file).
+ExecStart=/usr/local/bin/ngrok start --all --config /etc/ngrok/marketing-scout.yml --log stdout --log-format logfmt --log-level info
+Restart=on-failure
+RestartSec=5
+# do not auto-update the binary in production (no unreviewed drift)
+Environment=NGROK_UPDATE_CHECK=false
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadOnlyPaths=/etc/ngrok
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
