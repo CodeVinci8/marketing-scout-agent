@@ -48,7 +48,7 @@ A.section('§13.1-3 — the planner runs discovery -> exact-name reconciliation 
   const idx = fullIdx();
   const localMap = RID.scaffold(identity); KEYS.forEach(k => { localMap.workflows[k].id = 'pid_' + k; });
   const envReport = ENV.buildReport({ container: { MS_SPREADSHEET_ID: 's', MS_TELEGRAM_ALLOWED_USER_IDS: '1' } });
-  const p = PLAN.plan({ identity, localMap, exportProvided: true, exportIdx: idx, env: { MS_SPREADSHEET_ID: 's', MS_TELEGRAM_ALLOWED_USER_IDS: '1' }, envReport, options: { target: 'production', mode: 'dry-run' } });
+  const p = PLAN.plan({ identity, localMap, exportProvided: true, exportIdx: idx, env: { MS_SPREADSHEET_ID: 's', MS_TELEGRAM_ALLOWED_USER_IDS: '1' }, envReport, credExport: [], credRefs: [], options: { target: 'production', mode: 'dry-run' } });
   A.ok('plan ok with a clean production export', p.ok);
   // the canonical order is enforced
   A.ok('discover_config precedes verify_uniqueness', idxOf(p, 'discover_config') >= 0 && idxOf(p, 'discover_config') < idxOf(p, 'verify_uniqueness'));
@@ -113,6 +113,26 @@ A.section('§13.6 — apply REFUSES ambiguous / mismatched credentials');
   // compatible: type matches, single entry -> reconciliation passes (preserve production credential)
   const okPlan = PLAN.plan(Object.assign({}, base, { credRefs: refs, credExport: [{ id: 'DUP', name: 'a', type: 'googleApi' }], options: { target: 'production', mode: 'apply' } }));
   A.ok('compatible credential reconciliation passes (preserved)', okPlan.ok && stepStatus(okPlan, 'reconcile_credentials') === 'ok');
+}
+
+// ------------------------------------------------------------------------------------------------------------
+A.section('BLOCKER B — a PRODUCTION release must reconcile LIVE credentials (no export => fail-closed; never deferred-to-apply)');
+{
+  const idx = fullIdx(); const local = RID.scaffold(identity); KEYS.forEach(k => { local.workflows[k].id = 'pid_' + k; });
+  const base = { identity, localMap: local, exportProvided: true, exportIdx: idx, env: { MS_SPREADSHEET_ID: 's', MS_TELEGRAM_ALLOWED_USER_IDS: '1' } };
+  // production dry-run with NO credential export -> fail-closed at reconcile_credentials (the BLOCKER B defect)
+  const noCred = PLAN.plan(Object.assign({}, base, { credExport: null, credRefs: [], options: { target: 'production', mode: 'dry-run' } }));
+  A.ok('production dry-run without a credential export fails closed at reconcile_credentials', noCred.ok === false && noCred.abort_step === 'reconcile_credentials');
+  A.ok('the abort reason is about reconciling LIVE credentials (fail-closed)', /reconcile LIVE credentials/i.test(noCred.abort_reason || '') && /fail-closed/i.test(noCred.abort_reason || ''));
+  A.ok('reconcile_credentials is a hard FAIL, never a deferred-to-apply WARN', stepStatus(noCred, 'reconcile_credentials') === 'fail');
+  // off-production planning with no export -> soft warn (does not abort)
+  const offline = PLAN.plan(Object.assign({}, base, { credExport: null, credRefs: [], options: { target: 'offline', mode: 'dry-run' } }));
+  A.ok('off-production with no export warns (soft), does not abort at credentials', stepStatus(offline, 'reconcile_credentials') === 'warn');
+  // production with an export where one TYPE has no production credential yet -> deferred WARN, plan still ok
+  const refs = [{ file: '08.json', node: 'G', type: 'googleApi', id: 'pid_g' }, { file: '26.json', node: 'VK', type: 'httpQueryAuth', id: 'PASTE_CREDENTIAL_ID_HERE' }];
+  const deferred = PLAN.plan(Object.assign({}, base, { credRefs: refs, credExport: [{ id: 'pid_g', name: 'g', type: 'googleApi' }], options: { target: 'production', mode: 'dry-run' } }));
+  A.ok('a deferred credential type is a WARN (not a hard failure)', deferred.ok && stepStatus(deferred, 'reconcile_credentials') === 'warn');
+  A.ok('deferred warn detail names the deferred count', /deferred=1/.test((deferred.steps.find(s => s.id === 'reconcile_credentials') || {}).detail || ''));
 }
 
 // ------------------------------------------------------------------------------------------------------------

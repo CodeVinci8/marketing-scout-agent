@@ -210,6 +210,20 @@ A.section('CRED-001 — node-level credential REQUIREMENT model (closes the zero
   A.eq('placeholder + no matching cred type -> deferred (not failure)', defer.summary.deferred, 1);
   A.ok('deferred-only -> audit PASS for inactive deploy', defer.ok === true);
 
+  // CRED-003: with SEVERAL credentials of a type and NO name match, a placeholder is DEFERRED (cannot auto-pick),
+  // not a leak — the operator attaches the right one. A named httpHeaderAuth node demonstrates this.
+  fs.writeFileSync(path.join(dir, 'named.json'), JSON.stringify({ name: 'named', nodes: [
+    { name: 'Claude', type: 'n8n-nodes-base.httpRequest', parameters: { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' }, credentials: { httpHeaderAuth: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'Claude API - Marketing Scout' } } }
+  ] }));
+  const twoNoMatch = RC.audit(['named.json'], [{ id: 'h1', name: 'Other A', type: 'httpHeaderAuth' }, { id: 'h2', name: 'Other B', type: 'httpHeaderAuth' }], dir);
+  A.eq('placeholder, >1 of type, no name match -> deferred (not leaked)', twoNoMatch.summary.deferred, 1);
+  A.eq('placeholder, >1 of type, no name match -> 0 leaked', twoNoMatch.summary.placeholder_leaked, 0);
+  A.ok('ambiguous-no-name placeholder -> audit PASS (operator attaches; not a hard fail)', twoNoMatch.ok === true);
+  // but a placeholder whose (type,name) DOES uniquely match a production credential is a LEAK (should have resolved)
+  const nameLeak = RC.audit(['named.json'], [{ id: 'h1', name: 'Claude API - Marketing Scout', type: 'httpHeaderAuth' }, { id: 'h2', name: 'Other', type: 'httpHeaderAuth' }], dir);
+  A.eq('placeholder whose (type,name) uniquely matches -> leaked', nameLeak.summary.placeholder_leaked, 1);
+  A.ok('name-matched placeholder leak -> audit FAIL', nameLeak.ok === false);
+
   // resolved real ids of the right type -> clean PASS.
   fs.writeFileSync(path.join(dir, 'ok.json'), JSON.stringify({ name: 'ok', nodes: [
     { name: 'Read X', type: 'n8n-nodes-base.googleSheets', parameters: { operation: 'read' }, credentials: { googleApi: { id: 'realG', name: 'g' } } }
