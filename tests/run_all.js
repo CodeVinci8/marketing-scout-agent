@@ -122,6 +122,8 @@ const JS_SUITES = [
   ['deploy-entrypoints', 'test_deploy_entrypoints.js'],
   // --- OBS-001 / REPORT-001 REAL entrypoints: workflow-scoped WF18 credential metric + deferred-plan aggregate verdict ---
   ['obs-report-entrypoints', 'test_obs_report_entrypoints.js'],
+  // --- Ingress: loopback path-filter reverse proxy exposes ONLY POST <webhook>; editor/REST/API are 404 (TELEGRAM-001) ---
+  ['ingress-proxy', 'test_ingress_proxy.js'],
   // --- Stage 4 runtime acceptance: offline validation of the disposable runtime fixtures (RUNTIME-ACCEPTANCE-001) ---
   ['runtime-acceptance', 'test_runtime_acceptance.js'],
   // --- Stage 5/6/7 REAL committed-graph topology audit (adapters/sources, reporting, scheduled monitor/digest) ---
