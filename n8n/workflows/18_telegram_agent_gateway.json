@@ -447,10 +447,13 @@
         },
         "columns": {
           "mappingMode": "autoMapInputData",
+          "value": null,
           "matchingColumns": [
             "conversation_id"
           ],
-          "schema": []
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {}
       },
@@ -879,10 +882,13 @@
         },
         "columns": {
           "mappingMode": "autoMapInputData",
+          "value": null,
           "matchingColumns": [
             "conversation_id"
           ],
-          "schema": []
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {}
       },

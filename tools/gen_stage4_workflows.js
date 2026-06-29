@@ -137,7 +137,10 @@ function sheetsUpsert(id, name, pos, tab, matchCol) {
       operation: 'appendOrUpdate',
       documentId: { __rl: true, value: '={{ $env.MS_SPREADSHEET_ID || "PASTE_SPREADSHEET_ID" }}', mode: 'id' },
       sheetName: { __rl: true, value: tab, mode: 'name' },
-      columns: { mappingMode: 'autoMapInputData', matchingColumns: [matchCol], schema: [] }, options: {}
+      // SHEETS-UPSERT-001: appendOrUpdate's `columns` is a resourceMapper — n8n reads columns.schema/value/
+      // matchingColumns at runtime. A partial object (no `value`) throws "Could not get parameter columns.schema".
+      // Send the FULL resourceMapper (autoMapInputData -> value:null; matchingColumns is the key column).
+      columns: { mappingMode: 'autoMapInputData', value: null, matchingColumns: [matchCol], schema: [], attemptToConvertTypes: false, convertFieldsToString: false }, options: {}
     },
     type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name,
     credentials: credGoogle(), ...SHEETS_RETRY

@@ -271,10 +271,13 @@
         },
         "columns": {
           "mappingMode": "autoMapInputData",
+          "value": null,
           "matchingColumns": [
             "memory_id"
           ],
-          "schema": []
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {}
       },
@@ -373,10 +376,13 @@
         },
         "columns": {
           "mappingMode": "autoMapInputData",
+          "value": null,
           "matchingColumns": [
             "source_id"
           ],
-          "schema": []
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {}
       },
@@ -475,10 +481,13 @@
         },
         "columns": {
           "mappingMode": "autoMapInputData",
+          "value": null,
           "matchingColumns": [
             "plan_id"
           ],
-          "schema": []
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {}
       },
