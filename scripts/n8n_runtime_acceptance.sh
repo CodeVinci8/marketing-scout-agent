@@ -21,6 +21,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/lib/disposable_n8n.sh
 . "${ROOT}/scripts/lib/disposable_n8n.sh"
+# shellcheck source=scripts/lib/n8n_exec.sh
+. "${ROOT}/scripts/lib/n8n_exec.sh"   # n8n_make_runtime_readable (DOCKER-COPY-PERM-001)
 
 N8N_VERSION="$(node "${ROOT}/tools/manifest_lib.js" n8n-version)"
 SECRET="rt_secret_value_1234567890"
@@ -88,8 +90,11 @@ docker run -d --rm --name "$DISP_C" --network none \
 VER_IN="$(docker exec "$DISP_C" n8n --version 2>/dev/null | head -1 || true)"
 if [ "$VER_IN" = "$N8N_VERSION" ]; then M[RUNTIME_ENGINE]="PASS"; else echo "  [WARN] disposable n8n ${VER_IN:-unknown} != ${N8N_VERSION}"; M[RUNTIME_ENGINE]="FAIL"; fi
 
-# import all fixtures (id preserved on import in 2.23.3)
+# import all fixtures (id preserved on import in 2.23.3). DOCKER-COPY-PERM-001: docker cp preserves the host umask
+# mode (0600 under `umask 077`) + host owner (root), which the container's `node` user cannot read -> EACCES. Make
+# the copied tree node-owned + least-privilege-readable (NOT world-readable) before the CLI imports it (fail-closed).
 docker cp "${WORK}/fx/." "$DISP_C":/tmp/fx >/dev/null 2>&1
+n8n_make_runtime_readable "$DISP_C" /tmp/fx || { echo "RUNTIME_ACCEPTANCE=FAIL (fixtures not readable by the n8n runtime user)"; exit 1; }
 for f in "${WORK}/fx"/*.json; do
   bn="$(basename "$f")"
   docker exec "$DISP_C" n8n import:workflow --input="/tmp/fx/${bn}" --activeState=false >/dev/null 2>&1 || echo "  [WARN] import ${bn} failed"

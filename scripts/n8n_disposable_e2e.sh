@@ -17,6 +17,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/lib/disposable_n8n.sh
 . "${ROOT}/scripts/lib/disposable_n8n.sh"
+# shellcheck source=scripts/lib/n8n_exec.sh
+. "${ROOT}/scripts/lib/n8n_exec.sh"   # n8n_make_runtime_readable (DOCKER-COPY-PERM-001)
 
 EXPECTED="$(node "${ROOT}/tools/manifest_lib.js" runtime-count)"
 EDGES="$(node "${ROOT}/tools/manifest_lib.js" binding-count)"
@@ -149,8 +151,11 @@ if "${ROOT}/scripts/rollback.sh" >/dev/null 2>&1; then M[ROLLBACK_READINESS]="PA
 cp "${ROOT}/tests/fixtures/n8n/child.json" "${WORK}/child.json"
 cp "${ROOT}/tests/fixtures/n8n/parent.json" "${WORK}/parent.json"
 sed -i "s/PASTE_CHILD_ID/fixturechildwf/" "${WORK}/parent.json"
+# DOCKER-COPY-PERM-001: make the copied-in fixtures node-readable (least privilege) before the CLI imports them.
 docker cp "${WORK}/child.json" "$DISP_C":/tmp/child.json >/dev/null 2>&1 || true
 docker cp "${WORK}/parent.json" "$DISP_C":/tmp/parent.json >/dev/null 2>&1 || true
+n8n_make_runtime_readable "$DISP_C" /tmp/child.json >/dev/null 2>&1 || true
+n8n_make_runtime_readable "$DISP_C" /tmp/parent.json >/dev/null 2>&1 || true
 docker exec "$DISP_C" n8n import:workflow --input=/tmp/child.json --activeState=false >/dev/null 2>&1 || true
 docker exec "$DISP_C" n8n import:workflow --input=/tmp/parent.json --activeState=false >/dev/null 2>&1 || true
 docker exec "$DISP_C" n8n export:workflow --id=fixturechildwf --output=/tmp/pc_child.json >/dev/null 2>&1 || true
@@ -169,6 +174,7 @@ if node -e '
 
 # ---- (7) zlib NEGATIVE control (no builtin) + POSITIVE control (builtin allowed) -----------------------------
 docker cp "${ROOT}/tests/fixtures/n8n/zlib_roundtrip.json" "$DISP_C":/tmp/zlib.json >/dev/null 2>&1 || true
+n8n_make_runtime_readable "$DISP_C" /tmp/zlib.json >/dev/null 2>&1 || true   # DOCKER-COPY-PERM-001
 docker exec "$DISP_C" n8n import:workflow --input=/tmp/zlib.json --activeState=false >/dev/null 2>&1 || true
 if docker exec "$DISP_C" sh -c 'timeout 180 n8n execute --id=fixturezlibroundtrip --rawOutput' >"${WORK}/zneg.out" 2>&1; then ZNEG_RC=0; else ZNEG_RC=$?; fi
 if [ "$ZNEG_RC" -ne 0 ] && grep -qi "disallowed" "${WORK}/zneg.out"; then M[ZLIB_NEGATIVE_CONTROL]="PASS"; else fail "zlib negative control (rc=$ZNEG_RC)"; M[ZLIB_NEGATIVE_CONTROL]="FAIL"; fi

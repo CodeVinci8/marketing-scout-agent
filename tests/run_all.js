@@ -120,10 +120,22 @@ const JS_SUITES = [
   ['status-discovery', 'test_status_discovery.js'],
   // --- Stage 8 REAL shell entrypoints: clean-env sweep (no unbound vars; BLOCKER A) + host-stub credential-audit/dry-run ---
   ['deploy-entrypoints', 'test_deploy_entrypoints.js'],
+  // --- OBS-001 / REPORT-001 REAL entrypoints: workflow-scoped WF18 credential metric + deferred-plan aggregate verdict ---
+  ['obs-report-entrypoints', 'test_obs_report_entrypoints.js'],
+  // --- Ingress: loopback path-filter reverse proxy exposes ONLY POST <webhook>; editor/REST/API are 404 (TELEGRAM-001) ---
+  ['ingress-proxy', 'test_ingress_proxy.js'],
+  // --- SHEETS-RATELIMIT-001: storm-free window-crossing Sheets retry + bounded exponential-jitter backoff ---
+  ['sheets-retry-policy', 'test_sheets_retry_policy.js'],
   // --- Stage 4 runtime acceptance: offline validation of the disposable runtime fixtures (RUNTIME-ACCEPTANCE-001) ---
   ['runtime-acceptance', 'test_runtime_acceptance.js'],
+  // --- DOCKER-COPY-PERM-001: copy-IN stays readable by the n8n runtime user under a restrictive umask (077) ---
+  ['docker-copy-perms', 'test_docker_copy_perms.js'],
   // --- Stage 5/6/7 REAL committed-graph topology audit (adapters/sources, reporting, scheduled monitor/digest) ---
   ['stage567-topology', 'test_stage567_topology.js'],
+  // --- CLAUDE-ENDPOINT-001: every runtime Claude node targets the aiprimetech gateway (never api.anthropic.com) ---
+  ['claude-endpoint', 'test_claude_endpoint.js'],
+  // --- RELEASE-SOURCE-PARITY-001: the content-parity verifier (prod export vs staged canonical) ---
+  ['source-parity', 'test_source_parity.js'],
 ];
 
 let failed = 0;

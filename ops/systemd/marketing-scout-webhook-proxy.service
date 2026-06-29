@@ -1,0 +1,33 @@
+[Unit]
+# Loopback-only path-filter reverse proxy in front of n8n. ngrok points here, NOT directly at n8n, so the editor
+# and REST/API are structurally unreachable from the public tunnel. See ops/ingress/telegram_webhook_proxy.js.
+Description=Marketing Scout Telegram webhook path-filter proxy (loopback only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Isolated, unprivileged, ephemeral user — needs nothing but loopback networking.
+DynamicUser=yes
+ExecStart=/usr/bin/node /opt/marketing-scout-agent/ops/ingress/telegram_webhook_proxy.js
+Environment=MS_PROXY_LISTEN_PORT=8769
+Environment=MS_PROXY_UPSTREAM=http://127.0.0.1:5678
+Environment=MS_PROXY_WEBHOOK_PATH=/webhook/ms-telegram-agent
+Environment=MS_PROXY_MAX_BODY=1048576
+Environment=MS_PROXY_TIMEOUT_MS=15000
+Restart=on-failure
+RestartSec=2
+# hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+# bind only to loopback at the kernel level (defence in depth on top of the app's 127.0.0.1 bind)
+IPAddressAllow=localhost
+IPAddressDeny=any
+
+[Install]
+WantedBy=multi-user.target

@@ -76,6 +76,7 @@ function plan(input) {
   let resolved = null;          // runtime_ids.resolveAll result
   let coverage = null;
   let idMapChecksum = null;
+  let deferredCreds = 0;        // REPORT-001: credential references on a TYPE with no production credential yet
 
   // 1. acquire lock (side effect; planned)
   step('acquire_lock', 'planned', 'host release lock prevents concurrent deploys');
@@ -179,7 +180,9 @@ function plan(input) {
     const rc = RC.reconcile(resolvedRefs, input.credExport);
     if (!rc.ok) return fail(id, 'credential reconciliation FAILED: ' + rc.summary.failures + ' issue(s) (' +
       rc.audit.filter(a => a.status !== 'ok').map(a => a.status).join(',') + ')');
-    if (deferred > 0) return step(id, 'warn', 'references=' + refs.length + ' resolved=' + resolvedRefs.length + ' deferred=' + deferred + ' (type(s) with no production credential yet — operator attaches before activating that path)');
+    // REPORT-001: a deferred reference is NOT a clean pass. Record the count so the aggregate plan verdict renders
+    // DEFERRED_CREDENTIALS (never a clean RELEASE_PLAN=OK) while the per-step status stays a non-aborting 'warn'.
+    if (deferred > 0) { deferredCreds = deferred; return step(id, 'warn', 'references=' + refs.length + ' resolved=' + resolvedRefs.length + ' deferred=' + deferred + ' (type(s) with no production credential yet — operator attaches before activating that path)'); }
     step(id, 'ok', 'references=' + refs.length + ' resolved=' + resolvedRefs.length + ' deferred=0 failures=0');
   });
 
@@ -234,6 +237,7 @@ function plan(input) {
   return {
     ok: !aborted,
     mode: mode, target: target, activate: activate,
+    deferred_credentials: deferredCreds,
     steps: steps,
     abort_step: abortStep, abort_reason: abortReason,
     coverage: coverage, id_map_checksum: idMapChecksum,
@@ -242,19 +246,32 @@ function plan(input) {
   };
 }
 
+// REPORT-001: ONE truthful aggregate verdict for the whole plan. A plan that aborted is ABORT; a plan that is
+// otherwise OK but carries deferred credential references is DEFERRED_CREDENTIALS (never a clean OK); only a plan
+// with zero aborts AND zero deferred references is OK. The shell pipeline and tests both read this single word.
+function aggregateVerdict(p) {
+  if (!p.ok) return 'ABORT@' + p.abort_step;
+  if ((p.deferred_credentials || 0) > 0) return 'DEFERRED_CREDENTIALS';
+  return 'OK';
+}
+
 // Pretty, sanitized one-line-per-step rendering for the shell pipeline / CLI.
 function render(p) {
+  const verdict = aggregateVerdict(p);            // OK | DEFERRED_CREDENTIALS | ABORT@<step>
+  const marker = p.ok ? ((p.deferred_credentials || 0) > 0 ? 'DEFERRED_CREDENTIALS' : 'OK') : 'ABORT';
   const lines = [];
-  lines.push('Release plan (target=' + p.target + ' mode=' + p.mode + ' activate=' + p.activate + ') => ' + (p.ok ? 'OK' : 'ABORT@' + p.abort_step));
+  lines.push('Release plan (target=' + p.target + ' mode=' + p.mode + ' activate=' + p.activate + ') => ' + verdict);
   for (const s of p.steps) lines.push('  ' + String(s.n).padStart(2) + '. [' + s.status.padEnd(7) + '] ' + s.id + (s.detail ? '  — ' + s.detail : ''));
   if (!p.ok) lines.push('ABORT_REASON: ' + p.abort_reason);
+  if (marker === 'DEFERRED_CREDENTIALS') lines.push('RELEASE_PLAN_DEFERRED_CREDENTIALS=' + p.deferred_credentials);
   lines.push('RUNTIME_ID_COVERAGE=' + (p.coverage || 'n/a'));
   lines.push('ROLLBACK_COMMAND=' + p.rollback_command);
-  lines.push('RELEASE_PLAN=' + (p.ok ? 'OK' : 'ABORT'));
+  // REPORT-001: the SINGLE aggregate marker. Never a clean OK while a credential reference is deferred.
+  lines.push('RELEASE_PLAN=' + marker);
   return lines.join('\n');
 }
 
-module.exports = { plan, render, STEP_ORDER, DEFAULT_ROLLBACK };
+module.exports = { plan, render, aggregateVerdict, STEP_ORDER, DEFAULT_ROLLBACK };
 
 // CLI: build an effective env + export index from real inputs and print the sanitized ordered plan.
 if (require.main === module) {

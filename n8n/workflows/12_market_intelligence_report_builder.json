@@ -65,6 +65,7 @@
         320
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "read",
         "documentId": {
           "__rl": true,
@@ -85,7 +86,10 @@
         }
       },
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000r2",
@@ -97,6 +101,7 @@
         320
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "read",
         "documentId": {
           "__rl": true,
@@ -117,7 +122,10 @@
         }
       },
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000r3",
@@ -129,6 +137,7 @@
         320
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "read",
         "documentId": {
           "__rl": true,
@@ -149,7 +158,10 @@
         }
       },
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000r4",
@@ -161,6 +173,7 @@
         320
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "read",
         "documentId": {
           "__rl": true,
@@ -181,7 +194,10 @@
         }
       },
       "alwaysOutputData": true,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000b1",
@@ -251,6 +267,7 @@
         440
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -274,7 +291,10 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000q1",
@@ -299,6 +319,7 @@
         440
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -322,7 +343,10 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000s1",
@@ -353,7 +377,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
+        "url": "https://aiprimetech.io/v1/messages",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -412,6 +436,7 @@
         320
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "read",
         "documentId": {
           "__rl": true,
@@ -433,7 +458,10 @@
       },
       "alwaysOutputData": true,
       "onError": "continueRegularOutput",
-      "notes": "v0.3 (DEC-128): tab may not exist yet — onError continue keeps the deterministic report working without it."
+      "notes": "v0.3 (DEC-128): tab may not exist yet — onError continue keeps the deterministic report working without it.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "id": "cc120000-0000-0000-0000-0000000000r6",
@@ -445,6 +473,7 @@
         200
       ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "read",
         "documentId": {
           "__rl": true,
@@ -466,7 +495,10 @@
       },
       "alwaysOutputData": true,
       "onError": "continueRegularOutput",
-      "notes": "v0.3 (DEC-128): tab may not exist yet — onError continue keeps the deterministic report working without it."
+      "notes": "v0.3 (DEC-128): tab may not exist yet — onError continue keeps the deterministic report working without it.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
@@ -483,6 +515,7 @@
     },
     {
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -515,10 +548,14 @@
       "position": [
         2200,
         560
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
+        "authentication": "serviceAccount",
         "documentId": {
           "__rl": true,
           "value": "={{ $json.spreadsheet_id_placeholder || \"PASTE_SPREADSHEET_ID\" }}",
@@ -545,7 +582,10 @@
         880,
         80
       ],
-      "alwaysOutputData": true
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {

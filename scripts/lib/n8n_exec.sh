@@ -92,6 +92,54 @@ n8n_put() {
     _n8n_emit_or_run docker cp "$src/." "$c:$dest"
   fi
 }
+
+# The OS user the n8n runtime (and thus the n8n CLI inside the container) executes as. `docker cp` preserves the
+# HOST file owner (root) and the HOST umask mode (0600 under `umask 077`), so a non-root container user cannot read
+# the copied file — the DOCKER-COPY-PERM-001 EACCES. Verified on the production image: `id node` -> uid=1000(node).
+# Overridable for other images via MS_N8N_RUNTIME_USER, but the existence of the user is VERIFIED before use.
+n8n_runtime_user() { printf '%s\n' "${MS_N8N_RUNTIME_USER:-node}"; }
+
+# DOCKER-COPY-PERM-001: make an ALREADY-copied-in container path readable by the n8n runtime user WITHOUT making it
+# world-readable. As ROOT inside the container: verify the runtime user exists (never assume), chown the whole tree
+# to it, set LEAST-PRIVILEGE modes (directories 0700, files 0600 — never a+r / 0644 / 0777), then VERIFY the runtime
+# user can actually read every regular file and FAIL CLOSED (removing the path) if not. No file contents are printed.
+#   n8n_make_runtime_readable <container> <container_path>
+n8n_make_runtime_readable() {
+  c="$1"; p="$2"; u="$(n8n_runtime_user)"
+  [ -n "$c" ] && [ -n "$p" ] || { n8n_exec_log "n8n_make_runtime_readable: container and path are required"; return 2; }
+  if [ "${MS_N8N_EXEC_DRY:-0}" = "1" ]; then printf 'DRYEXEC: make-runtime-readable %s %s as %s\n' "$c" "$p" "$u"; return 0; fi
+  # the runtime user MUST exist in the container — do not assume the username (DOCKER-COPY-PERM-001 requirement)
+  docker exec -u 0 "$c" id "$u" >/dev/null 2>&1 || { n8n_exec_log "n8n_make_runtime_readable: runtime user '$u' not present in container"; return 1; }
+  docker exec -u 0 "$c" chown -R "$u":"$u" "$p" \
+    && docker exec -u 0 "$c" find "$p" -type d -exec chmod 0700 {} + \
+    && docker exec -u 0 "$c" find "$p" -type f -exec chmod 0600 {} + \
+    && docker exec -u "$u" "$c" /bin/sh -c 'p="$1"; find "$p" -type f | while IFS= read -r f; do [ -r "$f" ] || { echo "RUNTIME_USER_CANNOT_READ" >&2; exit 1; }; done' sh "$p"
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    n8n_exec_log "n8n_make_runtime_readable: FAIL-CLOSED (rc=$rc) — removing $p"
+    docker exec -u 0 "$c" rm -rf "$p" >/dev/null 2>&1 || true
+    return 1
+  fi
+  return 0
+}
+
+# DOCKER-COPY-PERM-001-safe copy-IN. Stage a host file/dir tree INTO the n8n container so the CLI (running as the
+# runtime user) can read it EVEN when the host source is private (mode 0600 under `umask 077`). The host source is
+# never modified and never made world-readable; inside the container the copy is owned by the runtime user with
+# least-privilege modes (see n8n_make_runtime_readable). Host mode keeps a private cp -a (the CLI is the caller).
+# Prefer this over n8n_put for ANYTHING the n8n CLI must read after copy-in. n8n_put_for_runtime <host_src_dir> <container_dest_dir>
+n8n_put_for_runtime() {
+  src="$1"; dest="$2"
+  if [ "$(n8n_resolve_mode)" = "host" ]; then
+    _n8n_emit_or_run /bin/sh -c "mkdir -p \"$dest\" && cp -a \"$src/.\" \"$dest/\""
+    return $?
+  fi
+  c="$(n8n_resolve_container)"
+  _n8n_emit_or_run docker exec "$c" mkdir -p "$dest" || return 1
+  _n8n_emit_or_run docker cp "$src/." "$c:$dest" || { [ "${MS_N8N_EXEC_DRY:-0}" = "1" ] || docker exec -u 0 "$c" rm -rf "$dest" >/dev/null 2>&1 || true; return 1; }
+  n8n_make_runtime_readable "$c" "$dest"
+}
+
 # Copy a DIRECTORY's contents OUT of the n8n environment to the host (e.g. an export so a host-side tool can read
 # it). Host mode is a plain cp. n8n_get <env_src_dir> <host_dest_dir>.
 n8n_get() {

@@ -110,12 +110,13 @@ A.section('DEPLOY-008 — committed workflows ship a credential PLACEHOLDER; rec
 A.section('WF18 activation gate — BLOCKS while P0/P1 blockers are open (current state)');
 {
   const g = GATE.gate(GATE.load());
-  // DEC-161: rearchitecture blockers resolved with named tests. Two items keep the gate PENDING:
-  //  TELEGRAM-001 (operator HTTPS ingress) and IDEMP-001 (concurrent dedupe is MITIGATED, not resolved — honest).
-  A.ok('gate is currently PENDING (HTTPS ingress + concurrency)', g.allow === false && g.marker === 'WF18_REARCHITECTURE=PENDING');
-  A.ok('at least 2 P0/P1 open', g.blocking_open >= 2);
-  A.ok('TELEGRAM-001 (public HTTPS ingress) is open', g.open_ids.indexOf('TELEGRAM-001') >= 0);
-  A.ok('IDEMP-001 (mitigated, not resolved) is open', g.open_ids.indexOf('IDEMP-001') >= 0);
+  // DEC-161 rearchitecture blockers resolved with named tests; cea8409 resolved TELEGRAM-001 (outbound-only ngrok
+  // agent + loopback path-filter ingress, regression tests/test_ingress_proxy.js). The gate now blocks on exactly
+  // ONE item — IDEMP-001 (concurrent dedupe is MITIGATED, not resolved; a real concurrent proof flips it).
+  A.ok('gate is currently PENDING (concurrency only)', g.allow === false && g.marker === 'WF18_REARCHITECTURE=PENDING');
+  A.ok('exactly 1 P0/P1 open (IDEMP-001 only)', g.blocking_open === 1);
+  A.ok('TELEGRAM-001 (public HTTPS ingress) is RESOLVED (not open)', g.open_ids.indexOf('TELEGRAM-001') < 0);
+  A.ok('IDEMP-001 (mitigated, not resolved) is the sole open blocker', g.open_ids.indexOf('IDEMP-001') >= 0);
   const idempReason = (g.open_reasons || []).find(r => r.id === 'IDEMP-001');
   A.ok('IDEMP-001 open reason is its mitigated status', !!idempReason && idempReason.reason === 'status_mitigated');
   A.ok('RUNTIME-001 and SECURITY-001 are resolved (not open)', g.open_ids.indexOf('RUNTIME-001') < 0 && g.open_ids.indexOf('SECURITY-001') < 0);
@@ -167,7 +168,11 @@ A.section('CRED-001 — node-level credential REQUIREMENT model (closes the zero
 {
   const fs = require('fs'); const os = require('os'); const path = require('path');
   // requiredCredentialType is derived from each node's OWN config, never to make a count green.
-  A.eq('googleSheets requires googleApi', RC.requiredCredentialType({ type: 'n8n-nodes-base.googleSheets', parameters: {} }), 'googleApi');
+  // SHEETS-AUTH-001: the required Sheets credential follows the node's authentication. serviceAccount => googleApi;
+  // unset/oAuth2 => googleSheetsOAuth2Api (the node's runtime default is OAuth2 — a googleApi-only node is a defect).
+  A.eq('googleSheets serviceAccount requires googleApi', RC.requiredCredentialType({ type: 'n8n-nodes-base.googleSheets', parameters: { authentication: 'serviceAccount' } }), 'googleApi');
+  A.eq('googleSheets with UNSET authentication defaults to OAuth2 (googleSheetsOAuth2Api)', RC.requiredCredentialType({ type: 'n8n-nodes-base.googleSheets', parameters: {} }), 'googleSheetsOAuth2Api');
+  A.eq('googleSheets oAuth2 requires googleSheetsOAuth2Api', RC.requiredCredentialType({ type: 'n8n-nodes-base.googleSheets', parameters: { authentication: 'oAuth2' } }), 'googleSheetsOAuth2Api');
   A.eq('http genericCredentialType/httpHeaderAuth requires httpHeaderAuth',
     RC.requiredCredentialType({ type: 'n8n-nodes-base.httpRequest', parameters: { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' } }), 'httpHeaderAuth');
   A.eq('http predefinedCredentialType requires the declared type',
@@ -192,7 +197,7 @@ A.section('CRED-001 — node-level credential REQUIREMENT model (closes the zero
   // A workflow whose only Sheets node has NO credentials block must FAIL the audit (the WF18 false-PASS defect).
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'credaudit-'));
   fs.writeFileSync(path.join(dir, 'bad.json'), JSON.stringify({ name: 'bad', nodes: [
-    { name: 'Read X', type: 'n8n-nodes-base.googleSheets', parameters: { operation: 'read' } }
+    { name: 'Read X', type: 'n8n-nodes-base.googleSheets', parameters: { authentication: 'serviceAccount', operation: 'read' } }
   ] }));
   const bad = RC.audit(['bad.json'], [], dir);
   A.eq('credential-less Sheets node -> 1 missing reference', bad.summary.nodes_missing_reference, 1);
@@ -201,7 +206,7 @@ A.section('CRED-001 — node-level credential REQUIREMENT model (closes the zero
   // A leaked placeholder (a credential of that TYPE exists in the export, yet the ref is still a template) FAILS;
   // a placeholder for a type with NO production credential is DEFERRED (operator attaches), not a hard failure.
   fs.writeFileSync(path.join(dir, 'ph.json'), JSON.stringify({ name: 'ph', nodes: [
-    { name: 'Read X', type: 'n8n-nodes-base.googleSheets', parameters: { operation: 'read' }, credentials: { googleApi: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'g' } } }
+    { name: 'Read X', type: 'n8n-nodes-base.googleSheets', parameters: { authentication: 'serviceAccount', operation: 'read' }, credentials: { googleApi: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'g' } } }
   ] }));
   const leak = RC.audit(['ph.json'], [{ id: 'realG', name: 'g', type: 'googleApi' }], dir);
   A.eq('placeholder + matching cred type -> leaked (failure)', leak.summary.placeholder_leaked, 1);
@@ -226,7 +231,7 @@ A.section('CRED-001 — node-level credential REQUIREMENT model (closes the zero
 
   // resolved real ids of the right type -> clean PASS.
   fs.writeFileSync(path.join(dir, 'ok.json'), JSON.stringify({ name: 'ok', nodes: [
-    { name: 'Read X', type: 'n8n-nodes-base.googleSheets', parameters: { operation: 'read' }, credentials: { googleApi: { id: 'realG', name: 'g' } } }
+    { name: 'Read X', type: 'n8n-nodes-base.googleSheets', parameters: { authentication: 'serviceAccount', operation: 'read' }, credentials: { googleApi: { id: 'realG', name: 'g' } } }
   ] }));
   const good = RC.audit(['ok.json'], [{ id: 'realG', name: 'g', type: 'googleApi' }], dir);
   A.eq('resolved real id -> 1 resolved, 0 failures', good.summary.failures, 0);

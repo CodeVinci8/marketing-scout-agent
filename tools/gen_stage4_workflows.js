@@ -6,6 +6,10 @@ const fs = require('fs');
 const path = require('path');
 const LIB = path.join(__dirname, '..', 'n8n', 'lib');
 const WF = path.join(__dirname, '..', 'n8n', 'workflows');
+// SHEETS-RATELIMIT-001: every googleSheets node carries a storm-free, window-crossing native retry so a
+// transient per-minute 429 (RATE_LIMIT_EXCEEDED) is ridden out in a FRESH quota window instead of storming
+// the throttled minute. Single source of truth for the policy + its regression test.
+const SHEETS_RETRY = require('../n8n/lib/sheets_retry_policy.js').nativeSheetsRetry();
 
 // Credential placeholders (CRED-001 / DEPLOY-008). A node REQUIRES an n8n credential reference ONLY because of its
 // own configuration — never to make an audit count green:
@@ -20,7 +24,8 @@ const WF = path.join(__dirname, '..', 'n8n', 'workflows');
 // or DEFERS it when no production credential of that type exists yet. The googleApi shape/name mirrors the legacy
 // WF04/08/10/12 references so every Sheets node reconciles identically.
 function credGoogle() { return { googleApi: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'Google Sheets - Marketing Scout Service Account' } }; }
-// CRED-003: the ONLY httpHeaderAuth node generated here is the WF19 Claude planner (api.anthropic.com). Its
+// CRED-003: the ONLY httpHeaderAuth node generated here is the WF19 Claude planner (aiprimetech.io gateway —
+// CLAUDE-ENDPOINT-001: the project-approved Claude-compatible endpoint, never api.anthropic.com). Its
 // credential name MUST mirror the legacy WF04/08 Claude reference ("Claude API - Marketing Scout") so all five
 // Claude httpHeaderAuth references reconcile to the SAME single production credential by (type,name). The old
 // generic name "HTTP Header Auth - Marketing Scout" matched no production credential and, with >1 httpHeaderAuth
@@ -76,37 +81,42 @@ function httpTelegramAnswer(id, name, pos) {
 function sheetsAppend(id, name, pos, tab) {
   return {
     parameters: {
+      // SHEETS-AUTH-001: pin service-account auth; the node defaults to OAuth2 (googleSheetsOAuth2Api) when unset,
+      // which ignores the attached googleApi service-account credential and fails at runtime.
+      authentication: 'serviceAccount',
       operation: 'append',
       documentId: { __rl: true, value: '={{ $env.MS_SPREADSHEET_ID || "PASTE_SPREADSHEET_ID" }}', mode: 'id' },
       sheetName: { __rl: true, value: tab, mode: 'name' },
       mappingMode: 'autoMapInputData', options: {}
     },
     type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name,
-    credentials: credGoogle()
+    credentials: credGoogle(), ...SHEETS_RETRY
   };
 }
 function sheetsRead(id, name, pos, tab) {
   return {
     parameters: {
+      authentication: 'serviceAccount',   // SHEETS-AUTH-001: see sheetsAppend()
       operation: 'read',
       documentId: { __rl: true, value: '={{ $env.MS_SPREADSHEET_ID || "PASTE_SPREADSHEET_ID" }}', mode: 'id' },
       sheetName: { __rl: true, value: tab, mode: 'name' }, options: {}
     },
     type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name,
-    credentials: credGoogle()
+    credentials: credGoogle(), ...SHEETS_RETRY
   };
 }
 // appendOrUpdate (upsert) keyed by matchCol — used for the single-latest-row conversation_state.
 function sheetsUpsert(id, name, pos, tab, matchCol) {
   return {
     parameters: {
+      authentication: 'serviceAccount',   // SHEETS-AUTH-001: see sheetsAppend()
       operation: 'appendOrUpdate',
       documentId: { __rl: true, value: '={{ $env.MS_SPREADSHEET_ID || "PASTE_SPREADSHEET_ID" }}', mode: 'id' },
       sheetName: { __rl: true, value: tab, mode: 'name' },
       columns: { mappingMode: 'autoMapInputData', matchingColumns: [matchCol], schema: [] }, options: {}
     },
     type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name,
-    credentials: credGoogle()
+    credentials: credGoogle(), ...SHEETS_RETRY
   };
 }
 function ifNode(id, name, pos, expr) {
@@ -134,7 +144,7 @@ function execWf(id, name, pos, note, inputs) {
 function httpClaude(id, name, pos) {
   return {
     parameters: {
-      method: 'POST', url: 'https://api.anthropic.com/v1/messages', authentication: 'genericCredentialType',
+      method: 'POST', url: 'https://aiprimetech.io/v1/messages', authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth', sendBody: true, specifyBody: 'json',
       jsonBody: '={{ $json.claude_request_body }}', options: {}
     },

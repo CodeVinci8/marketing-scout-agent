@@ -1,8 +1,8 @@
 # Marketing Scout Agent — offline regression ($0, no network, no paid APIs).
 .PHONY: test test-js test-wf test-taxonomy help \
 	release-help release-discovery release-setup-check release-preflight release-preflight-activate \
-	release-core-acceptance release-backup release-restore-validate release-smoke runtime-acceptance \
-	deploy-dry-run deploy-inactive verify-production credential-audit wf18-gate \
+	release-core-acceptance release-backup release-restore-validate release-smoke runtime-acceptance umask-permission-smoke \
+	deploy-dry-run deploy-inactive verify-production credential-audit source-parity wf18-gate \
 	telegram-prelive telegram-activate telegram-deactivate rollback rollback-dry-run \
 	release-lock-status release-clean
 
@@ -29,6 +29,7 @@ release-help:
 	@echo "  make deploy-inactive          # import the 15 runtime workflows INACTIVE + auto-bind (operator)"
 	@echo "  make verify-production        # aggregate: inventory + bindings + CREDENTIAL audit + version (one VERIFY_PRODUCTION marker)"
 	@echo "  make credential-audit         # read-only production credential audit (PRODUCTION_*/WF18_* markers; non-decrypted)"
+	@echo "  make source-parity            # read-only CONTENT parity: live prod export vs staged canonical (PRODUCTION_SOURCE_PARITY)"
 	@echo "  make wf18-gate                # check the hard WF18 pre-live blocker gate"
 	@echo "  make telegram-prelive         # read-only Telegram pre-live checks (getWebhookInfo; activation preflight)"
 	@echo "  make telegram-activate        # GATED: publish WF18 + register webhook (separate explicit step)"
@@ -64,6 +65,9 @@ release-smoke:
 runtime-acceptance:
 	scripts/n8n_runtime_acceptance.sh
 
+umask-permission-smoke:
+	scripts/n8n_umask_permission_smoke.sh
+
 deploy-dry-run:
 	scripts/deploy_n8n.sh --dry-run
 
@@ -75,6 +79,9 @@ verify-production:
 
 credential-audit:
 	scripts/deploy_n8n.sh --credential-audit
+
+source-parity:
+	scripts/verify_source_parity.sh
 
 wf18-gate:
 	node tools/wf18_activation_gate.js
@@ -184,6 +191,8 @@ test-js:
 	node tests/test_deploy_entrypoints.js
 	node tests/test_runtime_acceptance.js
 	node tests/test_stage567_topology.js
+	node tests/test_claude_endpoint.js
+	node tests/test_source_parity.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

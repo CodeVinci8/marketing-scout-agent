@@ -76,7 +76,15 @@ function reconcile(refs, exportList) {
 function requiredCredentialType(node) {
   const t = (node && node.type) || '';
   const p = (node && node.parameters) || {};
-  if (t === 'n8n-nodes-base.googleSheets') return 'googleApi';
+  if (t === 'n8n-nodes-base.googleSheets') {
+    // SHEETS-AUTH-001: a googleSheets node uses the service-account (googleApi) credential ONLY when
+    // authentication=serviceAccount. It DEFAULTS to OAuth2 (googleSheetsOAuth2Api) when authentication is unset,
+    // which ignores an attached googleApi and fails at runtime. The required type follows the node's authentication,
+    // so a node that still defaults to OAuth2 but only carries a googleApi is correctly flagged as a missing ref.
+    if (p.authentication === 'serviceAccount') return 'googleApi';
+    if (p.authentication === 'oAuth2') return 'googleSheetsOAuth2Api';
+    return 'googleSheetsOAuth2Api'; // unset => node default is OAuth2
+  }
   if (t === 'n8n-nodes-base.httpRequest') {
     if (p.authentication === 'genericCredentialType') return p.genericAuthType || null;
     if (p.authentication === 'predefinedCredentialType') return p.nodeCredentialType || null;
@@ -185,7 +193,12 @@ if (require.main === module) {
       console.log(pfx + '_CREDENTIAL_DEFERRED=' + s.deferred);
       console.log(pfx + '_CREDENTIAL_AMBIGUOUS=' + s.ambiguous);
       console.log(pfx + '_CREDENTIAL_TYPE_MISMATCH=' + s.type_mismatch);
-      console.log(pfx + '_UNIQUE_CREDENTIALS=' + s.unique_credentials_in_export);
+      // OBS-001: <PREFIX>_UNIQUE_CREDENTIALS is WORKFLOW-SCOPED — the count of distinct credentials actually
+      // referenced by THIS workflow set (e.g. the secure WF18's 14 Sheets nodes all share one googleApi → 1).
+      // It is DERIVED from the resolved references, never hard-coded and never the size of the global export.
+      // The global figure is reported separately and truthfully as <PREFIX>_UNIQUE_CREDENTIALS_IN_EXPORT.
+      console.log(pfx + '_UNIQUE_CREDENTIALS=' + s.unique_credentials_referenced);
+      console.log(pfx + '_UNIQUE_CREDENTIALS_IN_EXPORT=' + s.unique_credentials_in_export);
       console.log(pfx + '_CREDENTIAL_FAILURES=' + s.failures);
       console.log(pfx + '_CREDENTIAL_AUDIT=' + (r.ok ? 'PASS' : 'FAIL'));
       for (const m of r.missing_reference) console.log('  [missing_reference] ' + m.file + ' :: ' + m.node + ' (' + m.type + ')');

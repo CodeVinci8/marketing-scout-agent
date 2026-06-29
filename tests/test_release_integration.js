@@ -339,7 +339,13 @@ A.section('§13.20 + TEST-002/003 + MARKER-001 — disposable acceptance drives 
   // n8n_exec gained container copy primitives so a docker-exec import can read its input (DEPLOY-001 reality)
   const exec = fs.readFileSync(path.join(ROOT, 'scripts', 'lib', 'n8n_exec.sh'), 'utf8');
   A.ok('n8n_exec provides n8n_put/n8n_get for docker-mode file transfer', /n8n_put\(\)/.test(exec) && /n8n_get\(\)/.test(exec) && /docker cp/.test(exec));
-  A.ok('deploy copies staged files into the container before a docker-mode import', /n8n_put "\$\{tmp\}\/staged"/.test(deployText()));
+  // DOCKER-COPY-PERM-001: copy-IN that the n8n CLI must read uses the runtime-readable helper (least-privilege,
+  // never world-readable), so it survives a restrictive caller umask (0077 host files -> 0600 in-container, node-owned)
+  A.ok('n8n_exec provides n8n_put_for_runtime + n8n_make_runtime_readable (DOCKER-COPY-PERM-001)', /n8n_put_for_runtime\(\)/.test(exec) && /n8n_make_runtime_readable\(\)/.test(exec));
+  A.ok('runtime-readable helper sets least-privilege node-owned modes, never world-readable', /chown -R "\$u":"\$u"/.test(exec) && /chmod 0700/.test(exec) && /chmod 0600/.test(exec) && !/chmod -R a\+r|chmod 0644|chmod 0?777/.test(exec));
+  A.ok('runtime-readable helper verifies readability as the runtime user and fails closed', /RUNTIME_USER_CANNOT_READ/.test(exec) && /FAIL-CLOSED/.test(exec));
+  A.ok('deploy stages files into the container via n8n_put_for_runtime before a docker-mode import', /n8n_put_for_runtime "\$\{tmp\}\/staged"/.test(deployText()));
+  A.ok('deploy removes the in-container staging temp after import (CONTAINER_TEMP_CLEANUP)', /rm -rf \\"\$import_src\\"/.test(deployText()));
 }
 function deployText() { return fs.readFileSync(path.join(ROOT, 'scripts', 'deploy_n8n.sh'), 'utf8'); }
 

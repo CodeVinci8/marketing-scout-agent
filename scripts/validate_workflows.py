@@ -85,6 +85,15 @@ def validate_workflows():
                     if c.get("node") not in nameset:
                         ok_conn = False
         check(f + " connections reference existing nodes", ok_conn)
+        # SHEETS-AUTH-001: a googleSheets node defaults to OAuth2 (googleSheetsOAuth2Api) when authentication is
+        # unset, which ignores the attached service-account (googleApi) credential and FAILS at runtime with
+        # "Node does not have any credentials set for googleSheetsOAuth2Api". Every Sheets node must pin
+        # authentication=serviceAccount so the googleApi credential is actually used.
+        bad_auth = [n.get("name") for n in wf.get("nodes", [])
+                    if n.get("type") == "n8n-nodes-base.googleSheets"
+                    and (n.get("parameters") or {}).get("authentication") != "serviceAccount"]
+        check(f + " googleSheets nodes pin authentication=serviceAccount", not bad_auth,
+              "missing on: " + ", ".join(str(x) for x in bad_auth))
         scan_secrets(p, raw)
     notes.append("  ..%d workflow JSON files parsed" % parsed)
     return parsed

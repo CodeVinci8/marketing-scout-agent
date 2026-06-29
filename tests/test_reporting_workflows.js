@@ -57,7 +57,7 @@ A.ok('WF24 sendDocument uploads binary multipart', senders.some(n => n.parameter
 A.ok('WF24 appends attachment_outbox', WF24.nodes.some(n => n.type === 'n8n-nodes-base.googleSheets' && n.parameters.operation === 'append' && n.parameters.sheetName.value === 'attachment_outbox'));
 // No external collector NODE in WF24 — matched by real API HOST (not substrings, which now collide with the
 // fail-closed config flag names enable_firecrawl/enable_apify embedded by agent_config in the config node).
-A.ok('WF24 no Claude/external collector node', !WF24.nodes.some(n => /api\.anthropic\.com|firecrawl\.dev|\bapify\.com|api\.vk\.com/.test(JSON.stringify(n.parameters || {}))));
+A.ok('WF24 no Claude/external collector node', !WF24.nodes.some(n => /api\.anthropic\.com|aiprimetech\.io|firecrawl\.dev|\bapify\.com|api\.vk\.com/.test(JSON.stringify(n.parameters || {}))));
 
 A.section('scope_preview wired into WF19 approval message; progress wired into WF20');
 A.ok('WF19 Build Approval Message embeds scope_preview', !!extract(nodeCode(WF19, 'Build Approval Message'), 'scope_preview'));

@@ -39,8 +39,12 @@ crashed (`N8N_EXPECTED_VERSION: unbound variable`) and the production dry-run cl
 provisions the VK `httpQueryAuth` credential (real token, disabled path). WF18 activation remains gated on a public
 HTTPS ingress for the Telegram webhook (`PUBLIC_WEBHOOK_BASE_URL`) — port 443 is owned by sing-box/Amnezia and no
 domain/tunnel exists, so this is a genuine external prerequisite (TELEGRAM-001). IDEMP-001 is mitigated (serialization
-configured + effective); the live concurrent-duplicate proof requires WF18 activation. Non-blocking finding: WF04/WF08
-Claude nodes target `aiprimetech.io` (not `api.anthropic.com`) on the disabled paid-LLM path — operator to confirm.
+configured + effective); the live concurrent-duplicate proof requires WF18 activation. **CLAUDE-ENDPOINT-001
+(RESOLVED).** The operator has confirmed `aiprimetech.io` as the project-approved Claude-compatible gateway. Every
+runtime Claude node now targets `https://aiprimetech.io/v1/messages` and none target `api.anthropic.com`: WF04/WF08
+already did; WF19 (generator `httpClaude()` + regenerated JSON) and WF12 (inert DEC-122 inline placeholder, auth
+preserved) were migrated. Regression `tests/test_claude_endpoint.js` asserts CLAUDE_ENDPOINT_CANONICAL /
+NO_RUNTIME_ANTHROPIC_ENDPOINT / AIPRIMETECH_ALLOWLIST / CLAUDE_CREDENTIAL_RECONCILIATION / GENERATOR_OUTPUT_ENDPOINT_PARITY.
 
 ---
 

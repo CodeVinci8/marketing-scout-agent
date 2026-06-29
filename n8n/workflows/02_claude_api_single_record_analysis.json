@@ -6,7 +6,10 @@
       "name": "Описание воркфлоу",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-240, -340],
+      "position": [
+        -240,
+        -340
+      ],
       "parameters": {
         "content": "Workflow 02 — первый настоящий AI-анализ. n8n отправляет тестовую запись конкурентного оффера в Claude API, Claude работает как Marketing Scout Agent и возвращает строгий JSON. Затем результат проходит фильтр качества и записывается в Google Sheets.",
         "height": 180,
@@ -19,7 +22,10 @@
       "name": "Manual Start",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [100, 60],
+      "position": [
+        100,
+        60
+      ],
       "parameters": {}
     },
     {
@@ -27,7 +33,10 @@
       "name": "Set Test Competitor Data",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [380, 60],
+      "position": [
+        380,
+        60
+      ],
       "parameters": {
         "mode": "manual",
         "assignments": {
@@ -102,7 +111,10 @@
       "name": "Build Claude Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [660, 60],
+      "position": [
+        660,
+        60
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const item = $input.first().json;\nconst now = new Date().toISOString();\n\nconst systemPrompt = `You are Marketing Scout Agent v1 — a market intelligence analyst specialized in the Russian secured lending market.\n\nYour role is to analyze a single public market record and extract structured competitive intelligence.\n\nINDUSTRY CONTEXT: The secured lending market in Russia includes loans secured by car titles (займ под залог ПТС/автомобиля), real estate (займ под залог недвижимости), refinancing, mortgage-adjacent services, and pawn-style auto lending (автоломбарды).\n\nOUTPUT FORMAT — CRITICAL RULES:\nYou MUST respond with ONLY a valid JSON object.\nNo explanation, no markdown, no code fences, no backticks.\nThe first character must be { and the last must be }.\nAll string values in the same language as the source text.\nAll field names exactly as specified — no aliases, no additions.\n\nSKIP CONDITIONS — return status=\"skipped\" with quality_score=1 if ANY is true:\n- text_context has fewer than 40 meaningful characters\n- text_context is navigation boilerplate (e.g. \"Главная | О нас | Контакты | Цены\")\n- text_context is empty, whitespace-only, or placeholder\n- content is unrelated to financial services, lending, or business\n- published_at is more than 180 days old with no freshness signals\nNEVER invent company names, contacts, prices, regions, or dates not present in the text.\nUse empty string \"\" for any field that cannot be determined.\n\nFRESHNESS (compare published_at to parsed_at):\n\"fresh\" = within 7 days | \"recent\" = 8-30 days | \"old\" = over 30 days | \"unknown\" = no date\n\nENTITY TYPES:\n\"competitor\" — actively offering secured lending products\n\"lead_signal\" — actively seeking a secured loan\n\"market_signal\" — news, regulation, or industry trend\n\"content_idea\" — topic revealing client pain points\n\"irrelevant\" — no connection to secured lending\n\nSERVICE TYPES (use exactly one):\n\"secured_auto_loan\" | \"secured_real_estate_loan\" | \"pts_loan\" | \"refinancing\" | \"mortgage_adjacent\" | \"generic_lending\" | \"unknown\"\n\nSCORING — integers 1-100:\nquality_score: 80-100 rich/actionable; 60-79 good with gaps; 40-59 partial; 20-39 sparse; 1-19 skip\nlead_signal_score: 80-100 explicit need+urgency; 60-79 clear need; 40-59 ambiguous; 20-39 weak; 1-19 none\ncontent_idea_score: 80-100 specific pain point for content; 60-79 clear angle; 40-59 usable; 20-39 generic; 1-19 none\ncompetitor_strength: 80-100 strong brand+pricing; 60-79 established; 40-59 moderate; 20-39 weak; 1-19 not a competitor\nBe conservative. Most records score 35-70 on quality_score. A score of 80+ must be exceptional.\n\nRECOMMENDED ACTION (use exactly one):\n\"monitor\" | \"contact\" | \"create_content\" | \"ignore\" | \"investigate\"\n\nREQUIRED JSON OUTPUT — all fields required, empty string for unknown strings:\n{\n  \"created_at\": \"<ISO 8601 datetime>\",\n  \"source_type\": \"<manual_test|scraped_web|apify|firecrawl|social|classified|unknown>\",\n  \"platform\": \"<from input>\",\n  \"source_url\": \"<from input>\",\n  \"parsed_at\": \"<from input>\",\n  \"published_at\": \"<from input or empty string>\",\n  \"freshness_status\": \"<fresh|recent|old|unknown>\",\n  \"entity_type\": \"<competitor|lead_signal|market_signal|content_idea|irrelevant>\",\n  \"company_name\": \"<string or empty>\",\n  \"profile_name\": \"<string or empty>\",\n  \"profile_url\": \"<from input or empty>\",\n  \"region\": \"<string or empty>\",\n  \"service_type\": \"<secured_auto_loan|secured_real_estate_loan|pts_loan|refinancing|mortgage_adjacent|generic_lending|unknown>\",\n  \"offer_text\": \"<1 sentence>\",\n  \"terms\": \"<string or empty>\",\n  \"contact_public\": \"<only from text, or empty>\",\n  \"text_context\": \"<cleaned summary max 300 chars>\",\n  \"detected_need\": \"<1 sentence or empty>\",\n  \"competitor_strength\": <integer 1-100>,\n  \"lead_signal_score\": <integer 1-100>,\n  \"content_idea_score\": <integer 1-100>,\n  \"quality_score\": <integer 1-100>,\n  \"reason\": \"<2-3 sentences explaining scores>\",\n  \"recommended_action\": \"<monitor|contact|create_content|ignore|investigate>\",\n  \"status\": \"<analyzed|skipped>\"\n}`;\n\nconst inputRecord = {\n  source_url: item.source_url || '',\n  platform: item.platform || 'unknown',\n  source_type: item.source_type || 'manual_test',\n  company_name: item.company_name || '',\n  profile_name: item.profile_name || '',\n  profile_url: item.profile_url || '',\n  region: item.region || '',\n  published_at: item.published_at || '',\n  parsed_at: item.parsed_at || now.substring(0, 10),\n  text_context: item.text_context || ''\n};\n\nconst userMessage = 'Analyze this market record. Return JSON only. No explanation, no markdown, no code fences.\\n\\n' + JSON.stringify(inputRecord, null, 2);\n\nreturn [{\n  json: {\n    model: 'claude-sonnet-4-6',\n    max_tokens: 1200,\n    temperature: 0.2,\n    system: systemPrompt,\n    messages: [\n      {\n        role: 'user',\n        content: userMessage\n      }\n    ]\n  }\n}];"
@@ -113,7 +125,10 @@
       "name": "Claude API Request",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [940, 60],
+      "position": [
+        940,
+        60
+      ],
       "parameters": {
         "method": "POST",
         "url": "https://aiprimetech.io/v1/messages",
@@ -146,7 +161,10 @@
       "name": "Parse Claude JSON Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1220, 60],
+      "position": [
+        1220,
+        60
+      ],
       "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "try {\n  const contentItems = $json.content;\n  if (!Array.isArray(contentItems)) {\n    throw new Error('Response has no content array');\n  }\n  const textItem = contentItems.find(c => c.type === 'text');\n  if (!textItem || !textItem.text) {\n    throw new Error('No text content item found in response');\n  }\n  let raw = textItem.text.trim();\n  raw = raw.replace(/^```json\\s*/i, '').replace(/\\s*```\\s*$/, '').trim();\n  raw = raw.replace(/^```\\s*/, '').replace(/\\s*```\\s*$/, '').trim();\n  const parsed = JSON.parse(raw);\n  if (!parsed.status) parsed.status = 'analyzed';\n  if (typeof parsed.quality_score !== 'number') parsed.quality_score = 1;\n  if (!parsed.entity_type) parsed.entity_type = 'irrelevant';\n  parsed.created_at = new Date().toISOString();\n  return [{ json: { ...parsed } }];\n} catch (err) {\n  return [{\n    json: {\n      created_at: new Date().toISOString(),\n      status: 'skipped',\n      quality_score: 1,\n      entity_type: 'irrelevant',\n      source_type: 'manual_test',\n      platform: '',\n      source_url: '',\n      parsed_at: '',\n      published_at: '',\n      freshness_status: 'unknown',\n      company_name: '',\n      profile_name: '',\n      profile_url: '',\n      region: '',\n      service_type: 'unknown',\n      offer_text: '',\n      terms: '',\n      contact_public: '',\n      text_context: '',\n      detected_need: '',\n      competitor_strength: 1,\n      lead_signal_score: 1,\n      content_idea_score: 1,\n      reason: 'Failed to parse Claude response: ' + err.message,\n      recommended_action: 'ignore',\n      raw_response_preview: JSON.stringify($json.content || '').substring(0, 500)\n    }\n  }];\n}"
@@ -157,7 +175,10 @@
       "name": "Quality Gate",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1500, 60],
+      "position": [
+        1500,
+        60
+      ],
       "parameters": {
         "conditions": {
           "options": {
@@ -195,8 +216,12 @@
       "name": "Append Row to Google Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [1780, 0],
+      "position": [
+        1780,
+        0
+      ],
       "parameters": {
+        "authentication": "serviceAccount",
         "operation": "append",
         "documentId": {
           "__rl": true,
@@ -221,14 +246,20 @@
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "id": "d6e7f8a9-b0c1-4d2e-3f4a-5b6c7d8e9f19",
       "name": "Настройка и результат",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1500, 300],
+      "position": [
+        1500,
+        300
+      ],
       "parameters": {
         "content": "Перед запуском выбери credential Claude API - Marketing Scout в HTTP Request node и Google Sheets credential в Append Row node. Укажи Spreadsheet ID таблицы Marketing Scout Results. Успешный результат — новая строка с AI-анализом появляется в листе results.",
         "height": 200,
