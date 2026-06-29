@@ -141,37 +141,39 @@
     },
     {
       "parameters": {
-        "authentication": "serviceAccount",
-        "operation": "read",
-        "documentId": {
-          "__rl": true,
-          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "agent_request_events",
-          "mode": "name"
-        },
+        "method": "GET",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}/values:batchGet?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING&ranges=agent_request_events%21A%3AZZ&ranges=conversation_state%21A%3AZZ&ranges=conversation_messages%21A%3AZZ&ranges=conversation_summaries%21A%3AZZ&ranges=durable_memories%21A%3AZZ&ranges=execution_plans%21A%3AZZ",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
         "options": {}
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
-        -520,
+        -740,
         -60
       ],
-      "id": "wf18-readev",
-      "name": "Read agent_request_events",
+      "id": "wf18-batchread",
+      "name": "Batch Read Sheets",
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",
           "name": "Google Sheets - Marketing Scout Service Account"
         }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/sheets_access.js (drift-proof; test asserts equality)\n// sheets_access.js — bounded Google Sheets read access for the WF18 hot path (SHEETS-READ-AMPLIFICATION-001).\n//\n// The standard n8n \"Get Row(s)\" read runs ONCE PER INPUT ITEM (read.operation: length=items.length for\n// typeVersion>4.1). Chaining whole-sheet reads (each emitting ~1000 row-items) makes the next read execute ~1000\n// times -> request explosion -> 429. We replace the chained reads with ONE values:batchGet HTTP request (predefined\n// googleApi credential, httpNode+scopes) and parse each tab out with this pure extractor. Code nodes run once for\n// all items, so there is no per-item amplification.\n//\n// extractTab() reproduces the legacy read projection EXACTLY (proven by the shadow parity gate), matching n8n's\n// prepareSheetData under the default `detectAutomatically` range:\n//   * valueRenderOption=UNFORMATTED_VALUE, dateTimeRenderOption=FORMATTED_STRING (the caller MUST request these);\n//   * removeEmptyColumns: a column whose HEADER cell is empty is dropped;\n//   * removeEmptyRows: a data row whose kept cells are all empty is dropped;\n//   * row_number = the cell's ORIGINAL sheet row (header is row 1 -> first data row_number = 2), preserved across\n//     removed rows (addRowNumber happens before removeEmptyRows);\n//   * each surviving row -> { row_number, <header>:value, ... } keyed by the header row, values left UNFORMATTED\n//     (numbers/booleans keep their type; missing trailing cells become '').\n\nfunction tabName(rangeStr) {\n  // \"conversation_state!A2:G7\" or \"'my sheet'!A:Z\" -> \"conversation_state\"\n  const s = String(rangeStr == null ? '' : rangeStr);\n  const bang = s.lastIndexOf('!');\n  const name = bang >= 0 ? s.slice(0, bang) : s;\n  return name.replace(/^'(.*)'$/, '$1');\n}\n\n// Find the valueRange object for `tab` in a values:batchGet response. batchGet preserves request order, so a\n// caller may also pass the expected index; we match by name first, then fall back to index.\nfunction findRange(batchResponse, tab, index) {\n  const ranges = (batchResponse && batchResponse.valueRanges) || [];\n  for (let i = 0; i < ranges.length; i++) {\n    if (tabName(ranges[i].range) === tab) return ranges[i];\n  }\n  if (typeof index === 'number' && ranges[index]) return ranges[index];\n  return null;\n}\n\nfunction isEmptyCell(v) { return v === undefined || v === null || String(v) === ''; }\n\n// Replicate n8n prepareSheetData(detectAutomatically) + the row->object structuring used by the read operation.\nfunction projectValues(values) {\n  const rows = Array.isArray(values) ? values : [];\n  if (!rows.length) return [];\n  const header = (rows[0] || []).map(h => (h == null ? '' : String(h)));\n  // removeEmptyColumns: keep only columns whose header is non-empty.\n  const cols = [];\n  for (let c = 0; c < header.length; c++) if (header[c] !== '') cols.push(c);\n  if (!cols.length) return [];\n  const out = [];\n  for (let r = 1; r < rows.length; r++) {\n    const row = rows[r] || [];\n    // removeEmptyRows: drop rows whose kept cells are all empty.\n    let allEmpty = true;\n    for (let k = 0; k < cols.length; k++) { if (!isEmptyCell(row[cols[k]])) { allEmpty = false; break; } }\n    if (allEmpty) continue;\n    const obj = { row_number: r + 1 }; // header is sheet row 1 -> data row index r maps to sheet row r+1\n    for (let k = 0; k < cols.length; k++) {\n      const c = cols[k];\n      const v = row[c];\n      obj[header[c]] = (v === undefined || v === null) ? '' : v;\n    }\n    out.push({ json: obj });\n  }\n  return out;\n}\n\n// Public: extract one tab's rows (legacy-read-shaped items) from a values:batchGet response.\nfunction extractTab(batchResponse, tab, index) {\n  const vr = findRange(batchResponse, tab, index);\n  return projectValues(vr && vr.values);\n}\n\n// Build the bounded A1 range list for a set of tabs. Default column bound A:ZZ (the extractor drops empty-header\n// columns, so over-wide bounds are harmless); a per-tab override map may pin tighter ranges.\nfunction buildRanges(tabs, lastColByTab) {\n  const m = lastColByTab || {};\n  return (tabs || []).map(t => t + '!A:' + (m[t] || 'ZZ'));\n}\n\n// Build the full values:batchGet URL (the spreadsheet id stays an $env expression supplied by the caller).\nfunction encodeRange(r) {\n  // encodeURIComponent leaves '!' and \"'\" untouched; encode the A1 separators explicitly so the query is byte-stable\n  // and matches the proven-working probe (Sheets accepts %21/%3A).\n  return encodeURIComponent(String(r)).replace(/!/g, '%21').replace(/'/g, '%27');\n}\nfunction batchGetUrl(spreadsheetIdExpr, ranges) {\n  const q = ['majorDimension=ROWS', 'valueRenderOption=UNFORMATTED_VALUE', 'dateTimeRenderOption=FORMATTED_STRING']\n    .concat((ranges || []).map(r => 'ranges=' + encodeRange(r)));\n  return 'https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetIdExpr + '/values:batchGet?' + q.join('&');\n}\n// --- end embedded sheets_access ---\n\n// --- node driver ---\nvar b=$('Batch Read Sheets').first().json;return extractTab(b, \"agent_request_events\");"
       },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 5000
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        -60
+      ],
+      "id": "wf18-readev",
+      "name": "Read agent_request_events"
     },
     {
       "parameters": {
@@ -218,173 +220,68 @@
     },
     {
       "parameters": {
-        "authentication": "serviceAccount",
-        "operation": "read",
-        "documentId": {
-          "__rl": true,
-          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "conversation_state",
-          "mode": "name"
-        },
-        "options": {}
+        "jsCode": "// embedded n8n/lib/sheets_access.js (drift-proof; test asserts equality)\n// sheets_access.js — bounded Google Sheets read access for the WF18 hot path (SHEETS-READ-AMPLIFICATION-001).\n//\n// The standard n8n \"Get Row(s)\" read runs ONCE PER INPUT ITEM (read.operation: length=items.length for\n// typeVersion>4.1). Chaining whole-sheet reads (each emitting ~1000 row-items) makes the next read execute ~1000\n// times -> request explosion -> 429. We replace the chained reads with ONE values:batchGet HTTP request (predefined\n// googleApi credential, httpNode+scopes) and parse each tab out with this pure extractor. Code nodes run once for\n// all items, so there is no per-item amplification.\n//\n// extractTab() reproduces the legacy read projection EXACTLY (proven by the shadow parity gate), matching n8n's\n// prepareSheetData under the default `detectAutomatically` range:\n//   * valueRenderOption=UNFORMATTED_VALUE, dateTimeRenderOption=FORMATTED_STRING (the caller MUST request these);\n//   * removeEmptyColumns: a column whose HEADER cell is empty is dropped;\n//   * removeEmptyRows: a data row whose kept cells are all empty is dropped;\n//   * row_number = the cell's ORIGINAL sheet row (header is row 1 -> first data row_number = 2), preserved across\n//     removed rows (addRowNumber happens before removeEmptyRows);\n//   * each surviving row -> { row_number, <header>:value, ... } keyed by the header row, values left UNFORMATTED\n//     (numbers/booleans keep their type; missing trailing cells become '').\n\nfunction tabName(rangeStr) {\n  // \"conversation_state!A2:G7\" or \"'my sheet'!A:Z\" -> \"conversation_state\"\n  const s = String(rangeStr == null ? '' : rangeStr);\n  const bang = s.lastIndexOf('!');\n  const name = bang >= 0 ? s.slice(0, bang) : s;\n  return name.replace(/^'(.*)'$/, '$1');\n}\n\n// Find the valueRange object for `tab` in a values:batchGet response. batchGet preserves request order, so a\n// caller may also pass the expected index; we match by name first, then fall back to index.\nfunction findRange(batchResponse, tab, index) {\n  const ranges = (batchResponse && batchResponse.valueRanges) || [];\n  for (let i = 0; i < ranges.length; i++) {\n    if (tabName(ranges[i].range) === tab) return ranges[i];\n  }\n  if (typeof index === 'number' && ranges[index]) return ranges[index];\n  return null;\n}\n\nfunction isEmptyCell(v) { return v === undefined || v === null || String(v) === ''; }\n\n// Replicate n8n prepareSheetData(detectAutomatically) + the row->object structuring used by the read operation.\nfunction projectValues(values) {\n  const rows = Array.isArray(values) ? values : [];\n  if (!rows.length) return [];\n  const header = (rows[0] || []).map(h => (h == null ? '' : String(h)));\n  // removeEmptyColumns: keep only columns whose header is non-empty.\n  const cols = [];\n  for (let c = 0; c < header.length; c++) if (header[c] !== '') cols.push(c);\n  if (!cols.length) return [];\n  const out = [];\n  for (let r = 1; r < rows.length; r++) {\n    const row = rows[r] || [];\n    // removeEmptyRows: drop rows whose kept cells are all empty.\n    let allEmpty = true;\n    for (let k = 0; k < cols.length; k++) { if (!isEmptyCell(row[cols[k]])) { allEmpty = false; break; } }\n    if (allEmpty) continue;\n    const obj = { row_number: r + 1 }; // header is sheet row 1 -> data row index r maps to sheet row r+1\n    for (let k = 0; k < cols.length; k++) {\n      const c = cols[k];\n      const v = row[c];\n      obj[header[c]] = (v === undefined || v === null) ? '' : v;\n    }\n    out.push({ json: obj });\n  }\n  return out;\n}\n\n// Public: extract one tab's rows (legacy-read-shaped items) from a values:batchGet response.\nfunction extractTab(batchResponse, tab, index) {\n  const vr = findRange(batchResponse, tab, index);\n  return projectValues(vr && vr.values);\n}\n\n// Build the bounded A1 range list for a set of tabs. Default column bound A:ZZ (the extractor drops empty-header\n// columns, so over-wide bounds are harmless); a per-tab override map may pin tighter ranges.\nfunction buildRanges(tabs, lastColByTab) {\n  const m = lastColByTab || {};\n  return (tabs || []).map(t => t + '!A:' + (m[t] || 'ZZ'));\n}\n\n// Build the full values:batchGet URL (the spreadsheet id stays an $env expression supplied by the caller).\nfunction encodeRange(r) {\n  // encodeURIComponent leaves '!' and \"'\" untouched; encode the A1 separators explicitly so the query is byte-stable\n  // and matches the proven-working probe (Sheets accepts %21/%3A).\n  return encodeURIComponent(String(r)).replace(/!/g, '%21').replace(/'/g, '%27');\n}\nfunction batchGetUrl(spreadsheetIdExpr, ranges) {\n  const q = ['majorDimension=ROWS', 'valueRenderOption=UNFORMATTED_VALUE', 'dateTimeRenderOption=FORMATTED_STRING']\n    .concat((ranges || []).map(r => 'ranges=' + encodeRange(r)));\n  return 'https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetIdExpr + '/values:batchGet?' + q.join('&');\n}\n// --- end embedded sheets_access ---\n\n// --- node driver ---\nvar b=$('Batch Read Sheets').first().json;return extractTab(b, \"conversation_state\");"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         140,
         -60
       ],
       "id": "wf18-readstate",
-      "name": "Read conversation_state",
-      "credentials": {
-        "googleApi": {
-          "id": "PASTE_CREDENTIAL_ID_HERE",
-          "name": "Google Sheets - Marketing Scout Service Account"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 5000
+      "name": "Read conversation_state"
     },
     {
       "parameters": {
-        "authentication": "serviceAccount",
-        "operation": "read",
-        "documentId": {
-          "__rl": true,
-          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "conversation_messages",
-          "mode": "name"
-        },
-        "options": {}
+        "jsCode": "// embedded n8n/lib/sheets_access.js (drift-proof; test asserts equality)\n// sheets_access.js — bounded Google Sheets read access for the WF18 hot path (SHEETS-READ-AMPLIFICATION-001).\n//\n// The standard n8n \"Get Row(s)\" read runs ONCE PER INPUT ITEM (read.operation: length=items.length for\n// typeVersion>4.1). Chaining whole-sheet reads (each emitting ~1000 row-items) makes the next read execute ~1000\n// times -> request explosion -> 429. We replace the chained reads with ONE values:batchGet HTTP request (predefined\n// googleApi credential, httpNode+scopes) and parse each tab out with this pure extractor. Code nodes run once for\n// all items, so there is no per-item amplification.\n//\n// extractTab() reproduces the legacy read projection EXACTLY (proven by the shadow parity gate), matching n8n's\n// prepareSheetData under the default `detectAutomatically` range:\n//   * valueRenderOption=UNFORMATTED_VALUE, dateTimeRenderOption=FORMATTED_STRING (the caller MUST request these);\n//   * removeEmptyColumns: a column whose HEADER cell is empty is dropped;\n//   * removeEmptyRows: a data row whose kept cells are all empty is dropped;\n//   * row_number = the cell's ORIGINAL sheet row (header is row 1 -> first data row_number = 2), preserved across\n//     removed rows (addRowNumber happens before removeEmptyRows);\n//   * each surviving row -> { row_number, <header>:value, ... } keyed by the header row, values left UNFORMATTED\n//     (numbers/booleans keep their type; missing trailing cells become '').\n\nfunction tabName(rangeStr) {\n  // \"conversation_state!A2:G7\" or \"'my sheet'!A:Z\" -> \"conversation_state\"\n  const s = String(rangeStr == null ? '' : rangeStr);\n  const bang = s.lastIndexOf('!');\n  const name = bang >= 0 ? s.slice(0, bang) : s;\n  return name.replace(/^'(.*)'$/, '$1');\n}\n\n// Find the valueRange object for `tab` in a values:batchGet response. batchGet preserves request order, so a\n// caller may also pass the expected index; we match by name first, then fall back to index.\nfunction findRange(batchResponse, tab, index) {\n  const ranges = (batchResponse && batchResponse.valueRanges) || [];\n  for (let i = 0; i < ranges.length; i++) {\n    if (tabName(ranges[i].range) === tab) return ranges[i];\n  }\n  if (typeof index === 'number' && ranges[index]) return ranges[index];\n  return null;\n}\n\nfunction isEmptyCell(v) { return v === undefined || v === null || String(v) === ''; }\n\n// Replicate n8n prepareSheetData(detectAutomatically) + the row->object structuring used by the read operation.\nfunction projectValues(values) {\n  const rows = Array.isArray(values) ? values : [];\n  if (!rows.length) return [];\n  const header = (rows[0] || []).map(h => (h == null ? '' : String(h)));\n  // removeEmptyColumns: keep only columns whose header is non-empty.\n  const cols = [];\n  for (let c = 0; c < header.length; c++) if (header[c] !== '') cols.push(c);\n  if (!cols.length) return [];\n  const out = [];\n  for (let r = 1; r < rows.length; r++) {\n    const row = rows[r] || [];\n    // removeEmptyRows: drop rows whose kept cells are all empty.\n    let allEmpty = true;\n    for (let k = 0; k < cols.length; k++) { if (!isEmptyCell(row[cols[k]])) { allEmpty = false; break; } }\n    if (allEmpty) continue;\n    const obj = { row_number: r + 1 }; // header is sheet row 1 -> data row index r maps to sheet row r+1\n    for (let k = 0; k < cols.length; k++) {\n      const c = cols[k];\n      const v = row[c];\n      obj[header[c]] = (v === undefined || v === null) ? '' : v;\n    }\n    out.push({ json: obj });\n  }\n  return out;\n}\n\n// Public: extract one tab's rows (legacy-read-shaped items) from a values:batchGet response.\nfunction extractTab(batchResponse, tab, index) {\n  const vr = findRange(batchResponse, tab, index);\n  return projectValues(vr && vr.values);\n}\n\n// Build the bounded A1 range list for a set of tabs. Default column bound A:ZZ (the extractor drops empty-header\n// columns, so over-wide bounds are harmless); a per-tab override map may pin tighter ranges.\nfunction buildRanges(tabs, lastColByTab) {\n  const m = lastColByTab || {};\n  return (tabs || []).map(t => t + '!A:' + (m[t] || 'ZZ'));\n}\n\n// Build the full values:batchGet URL (the spreadsheet id stays an $env expression supplied by the caller).\nfunction encodeRange(r) {\n  // encodeURIComponent leaves '!' and \"'\" untouched; encode the A1 separators explicitly so the query is byte-stable\n  // and matches the proven-working probe (Sheets accepts %21/%3A).\n  return encodeURIComponent(String(r)).replace(/!/g, '%21').replace(/'/g, '%27');\n}\nfunction batchGetUrl(spreadsheetIdExpr, ranges) {\n  const q = ['majorDimension=ROWS', 'valueRenderOption=UNFORMATTED_VALUE', 'dateTimeRenderOption=FORMATTED_STRING']\n    .concat((ranges || []).map(r => 'ranges=' + encodeRange(r)));\n  return 'https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetIdExpr + '/values:batchGet?' + q.join('&');\n}\n// --- end embedded sheets_access ---\n\n// --- node driver ---\nvar b=$('Batch Read Sheets').first().json;return extractTab(b, \"conversation_messages\");"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         360,
         -60
       ],
       "id": "wf18-readmsg",
-      "name": "Read conversation_messages",
-      "credentials": {
-        "googleApi": {
-          "id": "PASTE_CREDENTIAL_ID_HERE",
-          "name": "Google Sheets - Marketing Scout Service Account"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 5000
+      "name": "Read conversation_messages"
     },
     {
       "parameters": {
-        "authentication": "serviceAccount",
-        "operation": "read",
-        "documentId": {
-          "__rl": true,
-          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "conversation_summaries",
-          "mode": "name"
-        },
-        "options": {}
+        "jsCode": "// embedded n8n/lib/sheets_access.js (drift-proof; test asserts equality)\n// sheets_access.js — bounded Google Sheets read access for the WF18 hot path (SHEETS-READ-AMPLIFICATION-001).\n//\n// The standard n8n \"Get Row(s)\" read runs ONCE PER INPUT ITEM (read.operation: length=items.length for\n// typeVersion>4.1). Chaining whole-sheet reads (each emitting ~1000 row-items) makes the next read execute ~1000\n// times -> request explosion -> 429. We replace the chained reads with ONE values:batchGet HTTP request (predefined\n// googleApi credential, httpNode+scopes) and parse each tab out with this pure extractor. Code nodes run once for\n// all items, so there is no per-item amplification.\n//\n// extractTab() reproduces the legacy read projection EXACTLY (proven by the shadow parity gate), matching n8n's\n// prepareSheetData under the default `detectAutomatically` range:\n//   * valueRenderOption=UNFORMATTED_VALUE, dateTimeRenderOption=FORMATTED_STRING (the caller MUST request these);\n//   * removeEmptyColumns: a column whose HEADER cell is empty is dropped;\n//   * removeEmptyRows: a data row whose kept cells are all empty is dropped;\n//   * row_number = the cell's ORIGINAL sheet row (header is row 1 -> first data row_number = 2), preserved across\n//     removed rows (addRowNumber happens before removeEmptyRows);\n//   * each surviving row -> { row_number, <header>:value, ... } keyed by the header row, values left UNFORMATTED\n//     (numbers/booleans keep their type; missing trailing cells become '').\n\nfunction tabName(rangeStr) {\n  // \"conversation_state!A2:G7\" or \"'my sheet'!A:Z\" -> \"conversation_state\"\n  const s = String(rangeStr == null ? '' : rangeStr);\n  const bang = s.lastIndexOf('!');\n  const name = bang >= 0 ? s.slice(0, bang) : s;\n  return name.replace(/^'(.*)'$/, '$1');\n}\n\n// Find the valueRange object for `tab` in a values:batchGet response. batchGet preserves request order, so a\n// caller may also pass the expected index; we match by name first, then fall back to index.\nfunction findRange(batchResponse, tab, index) {\n  const ranges = (batchResponse && batchResponse.valueRanges) || [];\n  for (let i = 0; i < ranges.length; i++) {\n    if (tabName(ranges[i].range) === tab) return ranges[i];\n  }\n  if (typeof index === 'number' && ranges[index]) return ranges[index];\n  return null;\n}\n\nfunction isEmptyCell(v) { return v === undefined || v === null || String(v) === ''; }\n\n// Replicate n8n prepareSheetData(detectAutomatically) + the row->object structuring used by the read operation.\nfunction projectValues(values) {\n  const rows = Array.isArray(values) ? values : [];\n  if (!rows.length) return [];\n  const header = (rows[0] || []).map(h => (h == null ? '' : String(h)));\n  // removeEmptyColumns: keep only columns whose header is non-empty.\n  const cols = [];\n  for (let c = 0; c < header.length; c++) if (header[c] !== '') cols.push(c);\n  if (!cols.length) return [];\n  const out = [];\n  for (let r = 1; r < rows.length; r++) {\n    const row = rows[r] || [];\n    // removeEmptyRows: drop rows whose kept cells are all empty.\n    let allEmpty = true;\n    for (let k = 0; k < cols.length; k++) { if (!isEmptyCell(row[cols[k]])) { allEmpty = false; break; } }\n    if (allEmpty) continue;\n    const obj = { row_number: r + 1 }; // header is sheet row 1 -> data row index r maps to sheet row r+1\n    for (let k = 0; k < cols.length; k++) {\n      const c = cols[k];\n      const v = row[c];\n      obj[header[c]] = (v === undefined || v === null) ? '' : v;\n    }\n    out.push({ json: obj });\n  }\n  return out;\n}\n\n// Public: extract one tab's rows (legacy-read-shaped items) from a values:batchGet response.\nfunction extractTab(batchResponse, tab, index) {\n  const vr = findRange(batchResponse, tab, index);\n  return projectValues(vr && vr.values);\n}\n\n// Build the bounded A1 range list for a set of tabs. Default column bound A:ZZ (the extractor drops empty-header\n// columns, so over-wide bounds are harmless); a per-tab override map may pin tighter ranges.\nfunction buildRanges(tabs, lastColByTab) {\n  const m = lastColByTab || {};\n  return (tabs || []).map(t => t + '!A:' + (m[t] || 'ZZ'));\n}\n\n// Build the full values:batchGet URL (the spreadsheet id stays an $env expression supplied by the caller).\nfunction encodeRange(r) {\n  // encodeURIComponent leaves '!' and \"'\" untouched; encode the A1 separators explicitly so the query is byte-stable\n  // and matches the proven-working probe (Sheets accepts %21/%3A).\n  return encodeURIComponent(String(r)).replace(/!/g, '%21').replace(/'/g, '%27');\n}\nfunction batchGetUrl(spreadsheetIdExpr, ranges) {\n  const q = ['majorDimension=ROWS', 'valueRenderOption=UNFORMATTED_VALUE', 'dateTimeRenderOption=FORMATTED_STRING']\n    .concat((ranges || []).map(r => 'ranges=' + encodeRange(r)));\n  return 'https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetIdExpr + '/values:batchGet?' + q.join('&');\n}\n// --- end embedded sheets_access ---\n\n// --- node driver ---\nvar b=$('Batch Read Sheets').first().json;return extractTab(b, \"conversation_summaries\");"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         580,
         -60
       ],
       "id": "wf18-readsum",
-      "name": "Read conversation_summaries",
-      "credentials": {
-        "googleApi": {
-          "id": "PASTE_CREDENTIAL_ID_HERE",
-          "name": "Google Sheets - Marketing Scout Service Account"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 5000
+      "name": "Read conversation_summaries"
     },
     {
       "parameters": {
-        "authentication": "serviceAccount",
-        "operation": "read",
-        "documentId": {
-          "__rl": true,
-          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "durable_memories",
-          "mode": "name"
-        },
-        "options": {}
+        "jsCode": "// embedded n8n/lib/sheets_access.js (drift-proof; test asserts equality)\n// sheets_access.js — bounded Google Sheets read access for the WF18 hot path (SHEETS-READ-AMPLIFICATION-001).\n//\n// The standard n8n \"Get Row(s)\" read runs ONCE PER INPUT ITEM (read.operation: length=items.length for\n// typeVersion>4.1). Chaining whole-sheet reads (each emitting ~1000 row-items) makes the next read execute ~1000\n// times -> request explosion -> 429. We replace the chained reads with ONE values:batchGet HTTP request (predefined\n// googleApi credential, httpNode+scopes) and parse each tab out with this pure extractor. Code nodes run once for\n// all items, so there is no per-item amplification.\n//\n// extractTab() reproduces the legacy read projection EXACTLY (proven by the shadow parity gate), matching n8n's\n// prepareSheetData under the default `detectAutomatically` range:\n//   * valueRenderOption=UNFORMATTED_VALUE, dateTimeRenderOption=FORMATTED_STRING (the caller MUST request these);\n//   * removeEmptyColumns: a column whose HEADER cell is empty is dropped;\n//   * removeEmptyRows: a data row whose kept cells are all empty is dropped;\n//   * row_number = the cell's ORIGINAL sheet row (header is row 1 -> first data row_number = 2), preserved across\n//     removed rows (addRowNumber happens before removeEmptyRows);\n//   * each surviving row -> { row_number, <header>:value, ... } keyed by the header row, values left UNFORMATTED\n//     (numbers/booleans keep their type; missing trailing cells become '').\n\nfunction tabName(rangeStr) {\n  // \"conversation_state!A2:G7\" or \"'my sheet'!A:Z\" -> \"conversation_state\"\n  const s = String(rangeStr == null ? '' : rangeStr);\n  const bang = s.lastIndexOf('!');\n  const name = bang >= 0 ? s.slice(0, bang) : s;\n  return name.replace(/^'(.*)'$/, '$1');\n}\n\n// Find the valueRange object for `tab` in a values:batchGet response. batchGet preserves request order, so a\n// caller may also pass the expected index; we match by name first, then fall back to index.\nfunction findRange(batchResponse, tab, index) {\n  const ranges = (batchResponse && batchResponse.valueRanges) || [];\n  for (let i = 0; i < ranges.length; i++) {\n    if (tabName(ranges[i].range) === tab) return ranges[i];\n  }\n  if (typeof index === 'number' && ranges[index]) return ranges[index];\n  return null;\n}\n\nfunction isEmptyCell(v) { return v === undefined || v === null || String(v) === ''; }\n\n// Replicate n8n prepareSheetData(detectAutomatically) + the row->object structuring used by the read operation.\nfunction projectValues(values) {\n  const rows = Array.isArray(values) ? values : [];\n  if (!rows.length) return [];\n  const header = (rows[0] || []).map(h => (h == null ? '' : String(h)));\n  // removeEmptyColumns: keep only columns whose header is non-empty.\n  const cols = [];\n  for (let c = 0; c < header.length; c++) if (header[c] !== '') cols.push(c);\n  if (!cols.length) return [];\n  const out = [];\n  for (let r = 1; r < rows.length; r++) {\n    const row = rows[r] || [];\n    // removeEmptyRows: drop rows whose kept cells are all empty.\n    let allEmpty = true;\n    for (let k = 0; k < cols.length; k++) { if (!isEmptyCell(row[cols[k]])) { allEmpty = false; break; } }\n    if (allEmpty) continue;\n    const obj = { row_number: r + 1 }; // header is sheet row 1 -> data row index r maps to sheet row r+1\n    for (let k = 0; k < cols.length; k++) {\n      const c = cols[k];\n      const v = row[c];\n      obj[header[c]] = (v === undefined || v === null) ? '' : v;\n    }\n    out.push({ json: obj });\n  }\n  return out;\n}\n\n// Public: extract one tab's rows (legacy-read-shaped items) from a values:batchGet response.\nfunction extractTab(batchResponse, tab, index) {\n  const vr = findRange(batchResponse, tab, index);\n  return projectValues(vr && vr.values);\n}\n\n// Build the bounded A1 range list for a set of tabs. Default column bound A:ZZ (the extractor drops empty-header\n// columns, so over-wide bounds are harmless); a per-tab override map may pin tighter ranges.\nfunction buildRanges(tabs, lastColByTab) {\n  const m = lastColByTab || {};\n  return (tabs || []).map(t => t + '!A:' + (m[t] || 'ZZ'));\n}\n\n// Build the full values:batchGet URL (the spreadsheet id stays an $env expression supplied by the caller).\nfunction encodeRange(r) {\n  // encodeURIComponent leaves '!' and \"'\" untouched; encode the A1 separators explicitly so the query is byte-stable\n  // and matches the proven-working probe (Sheets accepts %21/%3A).\n  return encodeURIComponent(String(r)).replace(/!/g, '%21').replace(/'/g, '%27');\n}\nfunction batchGetUrl(spreadsheetIdExpr, ranges) {\n  const q = ['majorDimension=ROWS', 'valueRenderOption=UNFORMATTED_VALUE', 'dateTimeRenderOption=FORMATTED_STRING']\n    .concat((ranges || []).map(r => 'ranges=' + encodeRange(r)));\n  return 'https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetIdExpr + '/values:batchGet?' + q.join('&');\n}\n// --- end embedded sheets_access ---\n\n// --- node driver ---\nvar b=$('Batch Read Sheets').first().json;return extractTab(b, \"durable_memories\");"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         800,
         -60
       ],
       "id": "wf18-readmem",
-      "name": "Read durable_memories",
-      "credentials": {
-        "googleApi": {
-          "id": "PASTE_CREDENTIAL_ID_HERE",
-          "name": "Google Sheets - Marketing Scout Service Account"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 5000
+      "name": "Read durable_memories"
     },
     {
       "parameters": {
-        "authentication": "serviceAccount",
-        "operation": "read",
-        "documentId": {
-          "__rl": true,
-          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "execution_plans",
-          "mode": "name"
-        },
-        "options": {}
+        "jsCode": "// embedded n8n/lib/sheets_access.js (drift-proof; test asserts equality)\n// sheets_access.js — bounded Google Sheets read access for the WF18 hot path (SHEETS-READ-AMPLIFICATION-001).\n//\n// The standard n8n \"Get Row(s)\" read runs ONCE PER INPUT ITEM (read.operation: length=items.length for\n// typeVersion>4.1). Chaining whole-sheet reads (each emitting ~1000 row-items) makes the next read execute ~1000\n// times -> request explosion -> 429. We replace the chained reads with ONE values:batchGet HTTP request (predefined\n// googleApi credential, httpNode+scopes) and parse each tab out with this pure extractor. Code nodes run once for\n// all items, so there is no per-item amplification.\n//\n// extractTab() reproduces the legacy read projection EXACTLY (proven by the shadow parity gate), matching n8n's\n// prepareSheetData under the default `detectAutomatically` range:\n//   * valueRenderOption=UNFORMATTED_VALUE, dateTimeRenderOption=FORMATTED_STRING (the caller MUST request these);\n//   * removeEmptyColumns: a column whose HEADER cell is empty is dropped;\n//   * removeEmptyRows: a data row whose kept cells are all empty is dropped;\n//   * row_number = the cell's ORIGINAL sheet row (header is row 1 -> first data row_number = 2), preserved across\n//     removed rows (addRowNumber happens before removeEmptyRows);\n//   * each surviving row -> { row_number, <header>:value, ... } keyed by the header row, values left UNFORMATTED\n//     (numbers/booleans keep their type; missing trailing cells become '').\n\nfunction tabName(rangeStr) {\n  // \"conversation_state!A2:G7\" or \"'my sheet'!A:Z\" -> \"conversation_state\"\n  const s = String(rangeStr == null ? '' : rangeStr);\n  const bang = s.lastIndexOf('!');\n  const name = bang >= 0 ? s.slice(0, bang) : s;\n  return name.replace(/^'(.*)'$/, '$1');\n}\n\n// Find the valueRange object for `tab` in a values:batchGet response. batchGet preserves request order, so a\n// caller may also pass the expected index; we match by name first, then fall back to index.\nfunction findRange(batchResponse, tab, index) {\n  const ranges = (batchResponse && batchResponse.valueRanges) || [];\n  for (let i = 0; i < ranges.length; i++) {\n    if (tabName(ranges[i].range) === tab) return ranges[i];\n  }\n  if (typeof index === 'number' && ranges[index]) return ranges[index];\n  return null;\n}\n\nfunction isEmptyCell(v) { return v === undefined || v === null || String(v) === ''; }\n\n// Replicate n8n prepareSheetData(detectAutomatically) + the row->object structuring used by the read operation.\nfunction projectValues(values) {\n  const rows = Array.isArray(values) ? values : [];\n  if (!rows.length) return [];\n  const header = (rows[0] || []).map(h => (h == null ? '' : String(h)));\n  // removeEmptyColumns: keep only columns whose header is non-empty.\n  const cols = [];\n  for (let c = 0; c < header.length; c++) if (header[c] !== '') cols.push(c);\n  if (!cols.length) return [];\n  const out = [];\n  for (let r = 1; r < rows.length; r++) {\n    const row = rows[r] || [];\n    // removeEmptyRows: drop rows whose kept cells are all empty.\n    let allEmpty = true;\n    for (let k = 0; k < cols.length; k++) { if (!isEmptyCell(row[cols[k]])) { allEmpty = false; break; } }\n    if (allEmpty) continue;\n    const obj = { row_number: r + 1 }; // header is sheet row 1 -> data row index r maps to sheet row r+1\n    for (let k = 0; k < cols.length; k++) {\n      const c = cols[k];\n      const v = row[c];\n      obj[header[c]] = (v === undefined || v === null) ? '' : v;\n    }\n    out.push({ json: obj });\n  }\n  return out;\n}\n\n// Public: extract one tab's rows (legacy-read-shaped items) from a values:batchGet response.\nfunction extractTab(batchResponse, tab, index) {\n  const vr = findRange(batchResponse, tab, index);\n  return projectValues(vr && vr.values);\n}\n\n// Build the bounded A1 range list for a set of tabs. Default column bound A:ZZ (the extractor drops empty-header\n// columns, so over-wide bounds are harmless); a per-tab override map may pin tighter ranges.\nfunction buildRanges(tabs, lastColByTab) {\n  const m = lastColByTab || {};\n  return (tabs || []).map(t => t + '!A:' + (m[t] || 'ZZ'));\n}\n\n// Build the full values:batchGet URL (the spreadsheet id stays an $env expression supplied by the caller).\nfunction encodeRange(r) {\n  // encodeURIComponent leaves '!' and \"'\" untouched; encode the A1 separators explicitly so the query is byte-stable\n  // and matches the proven-working probe (Sheets accepts %21/%3A).\n  return encodeURIComponent(String(r)).replace(/!/g, '%21').replace(/'/g, '%27');\n}\nfunction batchGetUrl(spreadsheetIdExpr, ranges) {\n  const q = ['majorDimension=ROWS', 'valueRenderOption=UNFORMATTED_VALUE', 'dateTimeRenderOption=FORMATTED_STRING']\n    .concat((ranges || []).map(r => 'ranges=' + encodeRange(r)));\n  return 'https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetIdExpr + '/values:batchGet?' + q.join('&');\n}\n// --- end embedded sheets_access ---\n\n// --- node driver ---\nvar b=$('Batch Read Sheets').first().json;return extractTab(b, \"execution_plans\");"
       },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.5,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1020,
         -60
       ],
       "id": "wf18-readplans",
-      "name": "Read execution_plans",
-      "credentials": {
-        "googleApi": {
-          "id": "PASTE_CREDENTIAL_ID_HERE",
-          "name": "Google Sheets - Marketing Scout Service Account"
-        }
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 5000
+      "name": "Read execution_plans"
     },
     {
       "parameters": {
@@ -1605,7 +1502,7 @@
       "main": [
         [
           {
-            "node": "Read agent_request_events",
+            "node": "Batch Read Sheets",
             "type": "main",
             "index": 0
           }
@@ -1613,6 +1510,17 @@
         [
           {
             "node": "Terminate Safely",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Read Sheets": {
+      "main": [
+        [
+          {
+            "node": "Read agent_request_events",
             "type": "main",
             "index": 0
           }

@@ -105,6 +105,26 @@ function sheetsRead(id, name, pos, tab) {
     credentials: credGoogle(), ...SHEETS_RETRY
   };
 }
+// SHEETS-READ-AMPLIFICATION-001: ONE values:batchGet for the whole WF18 read phase (predefined googleApi credential
+// with httpNode+scopes). Replaces the chained Get-Rows reads whose per-input-item re-execution (read.operation runs
+// once per INPUT item for typeVersion>4.1) exploded a 6-read chain into ~1000 requests -> 429. The spreadsheet id
+// stays an $env expression; ranges are bounded A1 (the extractor drops empty-header columns).
+function httpSheetsBatchGet(id, name, pos, tabs) {
+  var rq = tabs.map(function (t) { return 'ranges=' + (t + '!A:ZZ').replace(/!/g, '%21').replace(/:/g, '%3A'); }).join('&');
+  var url = '=https://sheets.googleapis.com/v4/spreadsheets/{{ $env.MS_SPREADSHEET_ID || "PASTE_SPREADSHEET_ID" }}' +
+    '/values:batchGet?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING&' + rq;
+  return {
+    parameters: { method: 'GET', url: url, authentication: 'predefinedCredentialType', nodeCredentialType: 'googleApi', options: {} },
+    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name, credentials: credGoogle()
+  };
+}
+// A "Read <tab>" replacement: a Code node (runs ONCE for all items -> no per-item amplification) that projects the
+// batchGet response for `tab` into the EXACT legacy Get-Rows shape, so every downstream $('Read <tab>').all() is
+// unchanged. The projection lives in n8n/lib/sheets_access.js (drift-proof embed; parity test + live shadow gate).
+function sheetExtract(id, name, pos, tab) {
+  return code(id, name, pos, ['sheets_access'],
+    "var b=$('Batch Read Sheets').first().json;return extractTab(b, " + JSON.stringify(tab) + ");");
+}
 // appendOrUpdate (upsert) keyed by matchCol — used for the single-latest-row conversation_state.
 function sheetsUpsert(id, name, pos, tab, matchCol) {
   return {
@@ -289,8 +309,11 @@ return [{json:{terminated:true,reason:reason,ack:ack,answer_callback_body:body}}
   // WEBHOOK-001: respond 200 IMMEDIATELY (Telegram never retries on a slow downstream); the Respond node passes
   // its input through, so all fail-closed processing + dispatch continues afterwards.
   respond('wf18-respond', 'Respond 200', [-1180, 200]),
+  // ---- SHEETS-READ-AMPLIFICATION-001: ONE batchGet for the whole read phase; extractors project per tab ----
+  httpSheetsBatchGet('wf18-batchread', 'Batch Read Sheets', [-740, -60],
+    ['agent_request_events', 'conversation_state', 'conversation_messages', 'conversation_summaries', 'durable_memories', 'execution_plans']),
   // ---- durable idempotency claim BEFORE any persistence / dispatch (IDEMP-002) ----
-  sheetsRead('wf18-readev', 'Read agent_request_events', [-520, -60], 'agent_request_events'),
+  sheetExtract('wf18-readev', 'Read agent_request_events', [-520, -60], 'agent_request_events'),
   code('wf18-claim', 'Claim Idempotency', [-300, -60], [], `
 var g=$('Ingress Security Gate').first().json;var gate=g.gate;
 var seen={};try{($('Read agent_request_events').all()||[]).forEach(function(x){var k=(x.json&&x.json.idempotency_key)||'';if(k)seen[String(k)]=1;});}catch(e){}
@@ -298,11 +321,11 @@ var duplicate=!!seen[String(gate.idempotency_key)];
 return [{json:{duplicate:duplicate,gate:gate,parsed:g.parsed,cfg:g.cfg}}];`),
   ifNode('wf18-ifnew', 'New Update?', [-80, -60], '={{ !$json.duplicate }}'),
   // ---- owner-isolated reads (only after we know the update is accepted + new) ----
-  sheetsRead('wf18-readstate', 'Read conversation_state', [140, -60], 'conversation_state'),
-  sheetsRead('wf18-readmsg', 'Read conversation_messages', [360, -60], 'conversation_messages'),
-  sheetsRead('wf18-readsum', 'Read conversation_summaries', [580, -60], 'conversation_summaries'),
-  sheetsRead('wf18-readmem', 'Read durable_memories', [800, -60], 'durable_memories'),
-  sheetsRead('wf18-readplans', 'Read execution_plans', [1020, -60], 'execution_plans'),
+  sheetExtract('wf18-readstate', 'Read conversation_state', [140, -60], 'conversation_state'),
+  sheetExtract('wf18-readmsg', 'Read conversation_messages', [360, -60], 'conversation_messages'),
+  sheetExtract('wf18-readsum', 'Read conversation_summaries', [580, -60], 'conversation_summaries'),
+  sheetExtract('wf18-readmem', 'Read durable_memories', [800, -60], 'durable_memories'),
+  sheetExtract('wf18-readplans', 'Read execution_plans', [1020, -60], 'execution_plans'),
   code('wf18-route', 'Route Intent', [1240, -60], ['intent_router', 'agent_charter', 'telegram_io', 'request_planner'], `
 var g=$('Ingress Security Gate').first().json;var cfg=g.cfg;var p=g.parsed;
 function J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}
@@ -496,8 +519,9 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),inten
   ['Telegram Webhook', 'Respond 200'],
   ['Respond 200', 'Ingress Security Gate'],
   ['Ingress Security Gate', 'Ingress Accepted?'],
-  ['Ingress Accepted?', 'Read agent_request_events', 0],
+  ['Ingress Accepted?', 'Batch Read Sheets', 0],
   ['Ingress Accepted?', 'Terminate Safely', 1],
+  ['Batch Read Sheets', 'Read agent_request_events'],
   ['Read agent_request_events', 'Claim Idempotency'],
   ['Claim Idempotency', 'New Update?'],
   ['New Update?', 'Read conversation_state', 0],

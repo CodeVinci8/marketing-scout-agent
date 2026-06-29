@@ -143,7 +143,15 @@ try {
   A.ok('host-stub dry-run performs real reconciliation (PRODUCTION_DRY_RUN_CREDENTIALS=PASS)', /PRODUCTION_DRY_RUN_CREDENTIALS=PASS/.test(dr.out));
   A.ok('host-stub dry-run RELEASE_PLAN=OK', /RELEASE_PLAN=OK/.test(dr.out));
   A.ok('host-stub dry-run reconcile_credentials is reconciled (not "deferred to apply")', !/reconciliation deferred to apply/.test(dr.out));
-  A.ok('host-stub dry-run reconciles 92 references, 0 deferred', /PRODUCTION_CREDENTIAL_DEFERRED=0/.test(dr.out) && /PRODUCTION_CREDENTIAL_REFERENCES=92/.test(dr.out));
+  // derive the expected reference count from the canonical workflows so a legitimate node change (e.g. the WF18
+  // batchGet read refactor: 6 googleApi read refs -> 1) updates the expectation instead of silently breaking.
+  const expectedRefs = (() => {
+    const L = require('../tools/manifest_lib.js'); const fs = require('fs'); const path = require('path');
+    let n = 0;
+    for (const f of L.importOrder()) { const wf = JSON.parse(fs.readFileSync(path.join(L.WF_DIR, f), 'utf8')); (wf.nodes || []).forEach(nd => { if (nd.credentials) n += Object.keys(nd.credentials).length; }); }
+    return n;
+  })();
+  A.ok('host-stub dry-run reconciles ' + expectedRefs + ' canonical references, 0 deferred', /PRODUCTION_CREDENTIAL_DEFERRED=0/.test(dr.out) && new RegExp('PRODUCTION_CREDENTIAL_REFERENCES=' + expectedRefs + '\\b').test(dr.out));
   if (/PRODUCTION_DRY_RUN_CREDENTIALS=PASS/.test(dr.out) && dr.code === 0) console.log('PRODUCTION_DRY_RUN_ENTRYPOINT=PASS');
 
   fs.rmSync(work, { recursive: true, force: true });

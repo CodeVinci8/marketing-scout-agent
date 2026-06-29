@@ -14,6 +14,15 @@ function sheetsNodes(wf) {
   }));
 }
 function hasSheet(wf, tab, op) { return sheetsNodes(wf).some(s => s.tab === tab && s.op === op); }
+// SHEETS-READ-AMPLIFICATION-001: WF18 now reads via ONE values:batchGet (predefined googleApi) + a per-tab Code
+// extractor instead of per-tab Get-Rows. "reads a tab" => a legacy googleSheets read OR the batchGet covers the tab
+// AND a "Read <tab>" extractor projects it.
+function readsTab(wf, tab) {
+  if (hasSheet(wf, tab, 'read')) return true;
+  const batch = (wf.nodes || []).some(n => n.type === 'n8n-nodes-base.httpRequest' && /\/values:batchGet/.test(String((n.parameters || {}).url || '')) && String((n.parameters || {}).url || '').indexOf(tab) >= 0);
+  const extractor = (wf.nodes || []).some(n => n.type === 'n8n-nodes-base.code' && /Batch Read Sheets/.test(String((n.parameters || {}).jsCode || '')) && String((n.parameters || {}).jsCode || '').indexOf(tab) >= 0);
+  return batch && extractor;
+}
 function edge(wf, from, to) {
   const c = wf.connections[from]; if (!c || !c.main) return false;
   return c.main.some(arr => (arr || []).some(e => e.node === to));
@@ -99,8 +108,8 @@ const WF20 = H.loadWorkflow('20_agent_orchestrator.json');
 const WF22 = H.loadWorkflow('22_conversation_control.json');
 const WF23 = H.loadWorkflow('23_scheduled_source_monitor.json');
 
-A.ok('WF18 reads conversation_state', hasSheet(WF18, 'conversation_state', 'read'));
-A.ok('WF18 reads conversation_messages', hasSheet(WF18, 'conversation_messages', 'read'));
+A.ok('WF18 reads conversation_state', readsTab(WF18, 'conversation_state'));
+A.ok('WF18 reads conversation_messages', readsTab(WF18, 'conversation_messages'));
 A.ok('WF18 appends conversation_messages', hasSheet(WF18, 'conversation_messages', 'append'));
 A.ok('WF18 upserts conversation_state (appendOrUpdate)', hasSheet(WF18, 'conversation_state', 'appendOrUpdate'));
 A.ok('WF18 conversation_state upsert matches on conversation_id', sheetsNodes(WF18).some(s => s.tab === 'conversation_state' && s.op === 'appendOrUpdate' && s.match.indexOf('conversation_id') >= 0));
@@ -120,8 +129,8 @@ A.ok('WF20 appends telegram_outbox', hasSheet(WF20, 'telegram_outbox', 'append')
 A.ok('WF20 appends execution_summaries', hasSheet(WF20, 'execution_summaries', 'append'));
 
 A.section('Part 5 — context is reconstructable from Sheets (write-then-read loop exists)');
-A.ok('WF18 both reads AND upserts conversation_state', hasSheet(WF18, 'conversation_state', 'read') && hasSheet(WF18, 'conversation_state', 'appendOrUpdate'));
-A.ok('WF18 both reads AND appends conversation_messages', hasSheet(WF18, 'conversation_messages', 'read') && hasSheet(WF18, 'conversation_messages', 'append'));
+A.ok('WF18 both reads AND upserts conversation_state', readsTab(WF18, 'conversation_state') && hasSheet(WF18, 'conversation_state', 'appendOrUpdate'));
+A.ok('WF18 both reads AND appends conversation_messages', readsTab(WF18, 'conversation_messages') && hasSheet(WF18, 'conversation_messages', 'append'));
 
 // ============================================================================================================
 A.section('Part 8 — Telegram delivery proof (outbox before send; dedup; persisted fields)');
