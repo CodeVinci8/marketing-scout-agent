@@ -450,12 +450,16 @@ do_import() {
     import_src="${tmp}/staged"
   else
     import_src="/tmp/ms-staged-$$"
-    n8n_put "${tmp}/staged" "$import_src" >/dev/null 2>&1 || die "could not copy staged workflows into the n8n container."
+    # DOCKER-COPY-PERM-001: copy-IN so the in-container CLI (user `node`) can read the staged JSON even when the host
+    # files are private (0600 under `umask 077`) — host source stays private, container copy is node-owned 0600.
+    n8n_put_for_runtime "${tmp}/staged" "$import_src" >/dev/null 2>&1 || die "could not copy staged workflows into the n8n container (readable by the n8n runtime user)."
   fi
   for f in "${IMPORT_ORDER[@]}"; do
     say ">> importing STAGED ${f} (--activeState=false → INACTIVE; resolved id; credentials preserved)"
     n8n_cli import:workflow --input="${import_src}/${f}" --activeState=false
   done
+  # remove the in-container staging temp (ephemeral layer; never the volume) once the import has read it
+  [ "$(n8n_resolve_mode)" = "host" ] || n8n_sh "rm -rf \"$import_src\"" >/dev/null 2>&1 || true
   hr
   # --- binding verification (QA-002/QA-009): the STAGED files already carry resolved binding ids (prepare_staged),
   #     and n8n preserves our resolved workflow ids on import, so the fresh export must show every edge bound with
