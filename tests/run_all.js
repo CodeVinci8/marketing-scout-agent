@@ -134,6 +134,8 @@ const JS_SUITES = [
   ['stage567-topology', 'test_stage567_topology.js'],
   // --- CLAUDE-ENDPOINT-001: every runtime Claude node targets the aiprimetech gateway (never api.anthropic.com) ---
   ['claude-endpoint', 'test_claude_endpoint.js'],
+  // --- RELEASE-SOURCE-PARITY-001: the content-parity verifier (prod export vs staged canonical) ---
+  ['source-parity', 'test_source_parity.js'],
 ];
 
 let failed = 0;
