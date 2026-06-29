@@ -110,12 +110,13 @@ A.section('DEPLOY-008 — committed workflows ship a credential PLACEHOLDER; rec
 A.section('WF18 activation gate — BLOCKS while P0/P1 blockers are open (current state)');
 {
   const g = GATE.gate(GATE.load());
-  // DEC-161: rearchitecture blockers resolved with named tests. Two items keep the gate PENDING:
-  //  TELEGRAM-001 (operator HTTPS ingress) and IDEMP-001 (concurrent dedupe is MITIGATED, not resolved — honest).
-  A.ok('gate is currently PENDING (HTTPS ingress + concurrency)', g.allow === false && g.marker === 'WF18_REARCHITECTURE=PENDING');
-  A.ok('at least 2 P0/P1 open', g.blocking_open >= 2);
-  A.ok('TELEGRAM-001 (public HTTPS ingress) is open', g.open_ids.indexOf('TELEGRAM-001') >= 0);
-  A.ok('IDEMP-001 (mitigated, not resolved) is open', g.open_ids.indexOf('IDEMP-001') >= 0);
+  // DEC-161 rearchitecture blockers resolved with named tests; cea8409 resolved TELEGRAM-001 (outbound-only ngrok
+  // agent + loopback path-filter ingress, regression tests/test_ingress_proxy.js). The gate now blocks on exactly
+  // ONE item — IDEMP-001 (concurrent dedupe is MITIGATED, not resolved; a real concurrent proof flips it).
+  A.ok('gate is currently PENDING (concurrency only)', g.allow === false && g.marker === 'WF18_REARCHITECTURE=PENDING');
+  A.ok('exactly 1 P0/P1 open (IDEMP-001 only)', g.blocking_open === 1);
+  A.ok('TELEGRAM-001 (public HTTPS ingress) is RESOLVED (not open)', g.open_ids.indexOf('TELEGRAM-001') < 0);
+  A.ok('IDEMP-001 (mitigated, not resolved) is the sole open blocker', g.open_ids.indexOf('IDEMP-001') >= 0);
   const idempReason = (g.open_reasons || []).find(r => r.id === 'IDEMP-001');
   A.ok('IDEMP-001 open reason is its mitigated status', !!idempReason && idempReason.reason === 'status_mitigated');
   A.ok('RUNTIME-001 and SECURITY-001 are resolved (not open)', g.open_ids.indexOf('RUNTIME-001') < 0 && g.open_ids.indexOf('SECURITY-001') < 0);
