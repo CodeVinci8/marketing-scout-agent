@@ -187,6 +187,7 @@ test-js:
 	node tests/test_deploy_entrypoints.js
 	node tests/test_runtime_acceptance.js
 	node tests/test_stage567_topology.js
+	node tests/test_claude_endpoint.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

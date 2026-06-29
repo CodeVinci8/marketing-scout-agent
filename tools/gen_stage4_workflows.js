@@ -24,7 +24,8 @@ const SHEETS_RETRY = require('../n8n/lib/sheets_retry_policy.js').nativeSheetsRe
 // or DEFERS it when no production credential of that type exists yet. The googleApi shape/name mirrors the legacy
 // WF04/08/10/12 references so every Sheets node reconciles identically.
 function credGoogle() { return { googleApi: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'Google Sheets - Marketing Scout Service Account' } }; }
-// CRED-003: the ONLY httpHeaderAuth node generated here is the WF19 Claude planner (api.anthropic.com). Its
+// CRED-003: the ONLY httpHeaderAuth node generated here is the WF19 Claude planner (aiprimetech.io gateway —
+// CLAUDE-ENDPOINT-001: the project-approved Claude-compatible endpoint, never api.anthropic.com). Its
 // credential name MUST mirror the legacy WF04/08 Claude reference ("Claude API - Marketing Scout") so all five
 // Claude httpHeaderAuth references reconcile to the SAME single production credential by (type,name). The old
 // generic name "HTTP Header Auth - Marketing Scout" matched no production credential and, with >1 httpHeaderAuth
@@ -143,7 +144,7 @@ function execWf(id, name, pos, note, inputs) {
 function httpClaude(id, name, pos) {
   return {
     parameters: {
-      method: 'POST', url: 'https://api.anthropic.com/v1/messages', authentication: 'genericCredentialType',
+      method: 'POST', url: 'https://aiprimetech.io/v1/messages', authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth', sendBody: true, specifyBody: 'json',
       jsonBody: '={{ $json.claude_request_body }}', options: {}
     },

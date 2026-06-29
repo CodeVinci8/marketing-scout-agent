@@ -132,6 +132,8 @@ const JS_SUITES = [
   ['docker-copy-perms', 'test_docker_copy_perms.js'],
   // --- Stage 5/6/7 REAL committed-graph topology audit (adapters/sources, reporting, scheduled monitor/digest) ---
   ['stage567-topology', 'test_stage567_topology.js'],
+  // --- CLAUDE-ENDPOINT-001: every runtime Claude node targets the aiprimetech gateway (never api.anthropic.com) ---
+  ['claude-endpoint', 'test_claude_endpoint.js'],
 ];
 
 let failed = 0;

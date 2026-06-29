@@ -106,7 +106,7 @@ A.ok('16. callback acknowledgement (answerCallbackQuery) node exists', (WF18.nod
 
 A.section('§19.17 — reject/cancel route to control (WF22) and make zero PAID external calls');
 const wf22 = load('22_conversation_control.json');
-const wf22Paid = (wf22.nodes || []).filter(n => /api\.anthropic\.com|api\.apify\.com|firecrawl|api\.vk\.com/.test(tgUrl(n)));
+const wf22Paid = (wf22.nodes || []).filter(n => /api\.anthropic\.com|aiprimetech\.io|api\.apify\.com|firecrawl|api\.vk\.com/.test(tgUrl(n)));
 A.eq('17. WF22 (reject/cancel/control) has ZERO paid external HTTP nodes', wf22Paid.length, 0);
 
 A.section('§19.18 — every Sheets write is fed by an explicit shape/code node (no nested auto-map guess)');
