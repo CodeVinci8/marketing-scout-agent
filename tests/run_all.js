@@ -128,6 +128,8 @@ const JS_SUITES = [
   ['sheets-retry-policy', 'test_sheets_retry_policy.js'],
   // --- Stage 4 runtime acceptance: offline validation of the disposable runtime fixtures (RUNTIME-ACCEPTANCE-001) ---
   ['runtime-acceptance', 'test_runtime_acceptance.js'],
+  // --- DOCKER-COPY-PERM-001: copy-IN stays readable by the n8n runtime user under a restrictive umask (077) ---
+  ['docker-copy-perms', 'test_docker_copy_perms.js'],
   // --- Stage 5/6/7 REAL committed-graph topology audit (adapters/sources, reporting, scheduled monitor/digest) ---
   ['stage567-topology', 'test_stage567_topology.js'],
 ];

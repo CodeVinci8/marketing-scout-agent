@@ -1,7 +1,7 @@
 # Marketing Scout Agent — offline regression ($0, no network, no paid APIs).
 .PHONY: test test-js test-wf test-taxonomy help \
 	release-help release-discovery release-setup-check release-preflight release-preflight-activate \
-	release-core-acceptance release-backup release-restore-validate release-smoke runtime-acceptance \
+	release-core-acceptance release-backup release-restore-validate release-smoke runtime-acceptance umask-permission-smoke \
 	deploy-dry-run deploy-inactive verify-production credential-audit wf18-gate \
 	telegram-prelive telegram-activate telegram-deactivate rollback rollback-dry-run \
 	release-lock-status release-clean
@@ -63,6 +63,9 @@ release-smoke:
 
 runtime-acceptance:
 	scripts/n8n_runtime_acceptance.sh
+
+umask-permission-smoke:
+	scripts/n8n_umask_permission_smoke.sh
 
 deploy-dry-run:
 	scripts/deploy_n8n.sh --dry-run
