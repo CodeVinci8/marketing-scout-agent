@@ -30,6 +30,21 @@ const STRIP_TOP = new Set([
 // per-node fields n8n assigns on import (not authored content).
 const STRIP_NODE = new Set(['webhookId']);
 
+// A node credential reference is { <type>: { id, name } }. The BINDING is (type, id) — that is the canonical
+// content we verify. The cached `name` is installation-local: the committed template ships the canonical
+// placeholder name ("Google Sheets - Marketing Scout Service Account"), but n8n resolves and re-emits the
+// operator's ACTUAL credential name from the id on export, so the names legitimately differ on a real VPS even
+// though the binding is identical. Normalise to (type -> id) so a name-only difference is NOT counted as drift,
+// while a wrong/absent credential id still drifts.
+function canonCreds(creds) {
+  const out = {};
+  for (const type of Object.keys(creds || {})) {
+    const ref = creds[type] || {};
+    out[type] = { id: ref.id == null ? null : String(ref.id) };
+  }
+  return out;
+}
+
 function sha(s) { return crypto.createHash('sha256').update(s).digest('hex'); }
 function fp10(s) { return 'fp_' + sha(String(s)).slice(0, 10); }
 // deterministic deep key-sort so JSON.stringify is canonical regardless of source key order.
@@ -45,6 +60,7 @@ function sortDeep(v) {
 function canonNode(n) {
   const c = {};
   for (const k of Object.keys(n)) if (!STRIP_NODE.has(k)) c[k] = n[k];
+  if (c.credentials) c.credentials = canonCreds(c.credentials);
   return sortDeep(c);
 }
 // Canonical projection: only authored content. Nodes are sorted by id so node ARRAY order never causes drift.
