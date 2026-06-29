@@ -122,8 +122,12 @@ function httpSheetsBatchGet(id, name, pos, tabs) {
 // batchGet response for `tab` into the EXACT legacy Get-Rows shape, so every downstream $('Read <tab>').all() is
 // unchanged. The projection lives in n8n/lib/sheets_access.js (drift-proof embed; parity test + live shadow gate).
 function sheetExtract(id, name, pos, tab) {
+  // n8n stops a branch when a node emits 0 items, so an EMPTY projected tab would otherwise halt the read chain
+  // before the dispatch/persist phase. extractTab stays pure (legacy-exact); the node emits a single content-less
+  // sentinel {} when the tab is empty to keep the chain alive. Every WF18 consumer filters reads by content
+  // (conversation_id/owner/agent_request_id/idempotency_key), so the sentinel is naturally ignored.
   return code(id, name, pos, ['sheets_access'],
-    "var b=$('Batch Read Sheets').first().json;return extractTab(b, " + JSON.stringify(tab) + ");");
+    "var b=$('Batch Read Sheets').first().json;var r=extractTab(b, " + JSON.stringify(tab) + ");return r.length?r:[{json:{}}];");
 }
 // appendOrUpdate (upsert) keyed by matchCol — used for the single-latest-row conversation_state.
 function sheetsUpsert(id, name, pos, tab, matchCol) {
