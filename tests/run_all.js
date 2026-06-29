@@ -136,6 +136,11 @@ const JS_SUITES = [
   ['claude-endpoint', 'test_claude_endpoint.js'],
   // --- RELEASE-SOURCE-PARITY-001: the content-parity verifier (prod export vs staged canonical) ---
   ['source-parity', 'test_source_parity.js'],
+  // --- SHEETS-READ-AMPLIFICATION-001: bounded batchGet read projection + WF18 request budget ---
+  ['sheets-access', 'test_sheets_access.js'],
+  ['wf18-sheets-budget', 'test_wf18_sheets_budget.js'],
+  // --- GOOGLE-HTTP-CREDENTIAL-001: batchGet predefined-cred durability (reconcile can't strip httpNode/scopes) ---
+  ['google-http-credential', 'test_google_http_credential.js'],
 ];
 
 let failed = 0;
