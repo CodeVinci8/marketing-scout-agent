@@ -349,7 +349,13 @@
           "value": "agent_requests",
           "mode": "name"
         },
-        "mappingMode": "autoMapInputData",
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": null,
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
         "options": {}
       },
       "type": "n8n-nodes-base.googleSheets",
@@ -397,7 +403,13 @@
           "value": "agent_request_events",
           "mode": "name"
         },
-        "mappingMode": "autoMapInputData",
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": null,
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
         "options": {}
       },
       "type": "n8n-nodes-base.googleSheets",
@@ -502,7 +514,13 @@
           "value": "conversation_messages",
           "mode": "name"
         },
-        "mappingMode": "autoMapInputData",
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": null,
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
         "options": {}
       },
       "type": "n8n-nodes-base.googleSheets",
@@ -550,7 +568,13 @@
           "value": "context_usage",
           "mode": "name"
         },
-        "mappingMode": "autoMapInputData",
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": null,
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
         "options": {}
       },
       "type": "n8n-nodes-base.googleSheets",
@@ -628,7 +652,13 @@
           "value": "conversation_summaries",
           "mode": "name"
         },
-        "mappingMode": "autoMapInputData",
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": null,
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
         "options": {}
       },
       "type": "n8n-nodes-base.googleSheets",
@@ -832,7 +862,13 @@
           "value": "execution_plans",
           "mode": "name"
         },
-        "mappingMode": "autoMapInputData",
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": null,
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
         "options": {}
       },
       "type": "n8n-nodes-base.googleSheets",

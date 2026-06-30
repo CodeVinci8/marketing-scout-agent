@@ -87,7 +87,10 @@ function sheetsAppend(id, name, pos, tab) {
       operation: 'append',
       documentId: { __rl: true, value: '={{ $env.MS_SPREADSHEET_ID || "PASTE_SPREADSHEET_ID" }}', mode: 'id' },
       sheetName: { __rl: true, value: tab, mode: 'name' },
-      mappingMode: 'autoMapInputData', options: {}
+      // SHEETS-UPSERT-001: append's `columns` is a resourceMapper too (v4.5 reads columns.mappingMode/schema/value);
+      // a top-level mappingMode throws "Could not get parameter columns.schema" at runtime. append is a plain insert
+      // -> NO matchingColumns.
+      columns: { mappingMode: 'autoMapInputData', value: null, schema: [], attemptToConvertTypes: false, convertFieldsToString: false }, options: {}
     },
     type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name,
     credentials: credGoogle(), ...SHEETS_RETRY
