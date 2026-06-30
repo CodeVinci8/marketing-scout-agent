@@ -128,6 +128,11 @@ function ingressDecision(args) {
   const not_bot = !parsed.from_is_bot;
   const authorized = isAuthorized(parsed, cfg.telegram_allowed_user_ids);
   const idempotency_key = updateIdempotencyKey(parsed);
+  // IDEMP-003: persist the idempotency key ON the parsed record so every downstream consumer that shapes the
+  // agent_requests row and the agent_request_events claim event (which read p.idempotency_key) writes the SAME
+  // stable key. Without this the claim event stored an EMPTY key, so a re-delivered update_id was never detected
+  // as a duplicate (the Claim Idempotency `seen` set was always empty).
+  parsed.idempotency_key = idempotency_key;
 
   let stop_reason = '';
   if (!secret_ok) stop_reason = 'bad_secret';

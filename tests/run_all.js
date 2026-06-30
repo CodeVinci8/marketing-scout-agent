@@ -141,6 +141,7 @@ const JS_SUITES = [
   ['wf18-sheets-budget', 'test_wf18_sheets_budget.js'],
   // --- GOOGLE-HTTP-CREDENTIAL-001: batchGet predefined-cred durability (reconcile can't strip httpNode/scopes) ---
   ['google-http-credential', 'test_google_http_credential.js'],
+  ['idempotency-persist', 'test_idempotency_persist.js'],
 ];
 
 let failed = 0;
