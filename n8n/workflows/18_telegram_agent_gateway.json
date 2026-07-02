@@ -169,7 +169,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
+        -740,
         -60
       ],
       "id": "wf18-readev",
@@ -177,16 +177,93 @@
     },
     {
       "parameters": {
-        "jsCode": "\n\n// --- node driver ---\n\nvar g=$('Ingress Security Gate').first().json;var gate=g.gate;\nvar seen={};try{($('Read agent_request_events').all()||[]).forEach(function(x){var k=(x.json&&x.json.idempotency_key)||'';if(k)seen[String(k)]=1;});}catch(e){}\nvar duplicate=!!seen[String(gate.idempotency_key)];\nreturn [{json:{duplicate:duplicate,gate:gate,parsed:g.parsed,cfg:g.cfg}}];"
+        "jsCode": "// embedded n8n/lib/idempotency_claim.js (drift-proof; test asserts equality)\n// idempotency_claim.js — atomic exactly-once claim for the WF18 accepted path (IDEMP-001).\n//\n// The original \"read existing claims -> if absent -> append\" is a read-then-write race: two genuinely concurrent\n// updates with the same idempotency_key both read \"absent\" and both proceed. This implements an append-then-verify\n// winner protocol that is correct WITHOUT relying on N8N_CONCURRENCY=1:\n//   1. every execution mints a unique claim_token;\n//   2. it APPENDS a claim_candidate row FIRST (into agent_request_events, reason='idempotency_claim'), so the row\n//      physically exists before the decision;\n//   3. it RE-READS agent_request_events and, among the claim rows for this idempotency_key, the one with the\n//      LOWEST physical row_number is the deterministic winner (append order is monotonic; a loser always appends a\n//      higher row and therefore always observes the winner's lower row on its post-append read);\n//   4. exactly one execution is the winner; every other terminates BEFORE WF19 / request creation / plan creation /\n//      state mutation / user-visible send.\n// A client timestamp is NOT the winner criterion (clocks can tie/skew); physical row order is. The claim rows live\n// in the existing agent_request_events sheet (reason='idempotency_claim'), so no schema migration or new sheet.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\n\n// reason marker that distinguishes a claim row from a normal state-transition event row. The claim row is NOT a\n// state transition, so from_state/to_state stay EMPTY — the agent_request_events to_state column carries a strict\n// canonical agent_state dropdown (config/sheets_ui_contracts.json) and a made-up state would violate it.\nvar CLAIM_REASON = 'idempotency_claim';\n\n// Mint a unique-enough claim token without crypto (n8n Code sandbox disallows require('crypto')). Two concurrent\n// executions in the same millisecond still differ via the two independent Math.random() draws.\nfunction newClaimToken() {\n  var r = function () { return Math.floor(Math.random() * 2176782336).toString(36); }; // 36^6\n  return 'clm_' + Date.now().toString(36) + '_' + r() + r();\n}\n\n// Build the claim_candidate row for agent_request_events. The claim_token is carried in agent_request_id (so the\n// winner is identified by row_number -> agent_request_id), the key in idempotency_key, the marker in reason.\nfunction claimEventRow(args) {\n  args = args || {};\n  return {\n    agent_request_id: str(args.claim_token),\n    from_state: '',\n    to_state: '',\n    accepted: '',\n    reason: CLAIM_REASON,\n    idempotency_key: str(args.idempotency_key),\n    ts: str(args.ts) || new Date().toISOString()\n  };\n}\n\n// Resolve the winner from the POST-APPEND read of agent_request_events. `rows` are the projected rows (each with a\n// numeric row_number, as extractTab produces). Only claim rows (reason=CLAIM_REASON) for THIS idempotency_key\n// compete; the winner is the lowest row_number; is_duplicate is true for every non-winner (sequential OR concurrent).\nfunction resolveClaimWinner(rows, idempotencyKey, myToken) {\n  var key = str(idempotencyKey);\n  var mine = str(myToken);\n  var candidates = (rows || [])\n    .filter(function (r) { return r && str(r.reason) === CLAIM_REASON && str(r.idempotency_key) === key; })\n    .map(function (r) { return { token: str(r.agent_request_id), row: Number(r.row_number) }; })\n    .filter(function (c) { return c.token && isFinite(c.row); });\n  candidates.sort(function (a, b) { return a.row - b.row; });\n  var winner = candidates.length ? candidates[0] : null;\n  var winner_token = winner ? winner.token : '';\n  var my_present = candidates.some(function (c) { return c.token === mine; });\n  var is_winner = !!winner && winner_token === mine;\n  return {\n    winner_token: winner_token,\n    is_winner: is_winner,\n    is_duplicate: !is_winner,\n    candidate_count: candidates.length,\n    my_claim_present: my_present,\n    // a fail-closed sanity flag: my own claim row MUST be visible on my post-append read; if it is not, treat as a\n    // duplicate (never proceed off an unverified claim).\n    claim_verified: my_present\n  };\n}\n// --- end embedded idempotency_claim ---\n\n// --- node driver ---\n\nvar g=$('Ingress Security Gate').first().json;var gate=g.gate;\nvar token=newClaimToken();\nreturn [{json:claimEventRow({claim_token:token,idempotency_key:gate.idempotency_key,ts:new Date().toISOString()})}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -300,
+        -560,
         -60
       ],
-      "id": "wf18-claim",
-      "name": "Claim Idempotency"
+      "id": "wf18-mintclaim",
+      "name": "Mint Claim"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "agent_request_events",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": null,
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -380,
+        -60
+      ],
+      "id": "wf18-appendclaim",
+      "name": "Append Claim",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/{{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}/values:batchGet?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING&ranges=agent_request_events%21A%3AZZ",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -200,
+        -60
+      ],
+      "id": "wf18-rereadclaims",
+      "name": "Re-read Claims",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/sheets_access.js (drift-proof; test asserts equality)\n// sheets_access.js — bounded Google Sheets read access for the WF18 hot path (SHEETS-READ-AMPLIFICATION-001).\n//\n// The standard n8n \"Get Row(s)\" read runs ONCE PER INPUT ITEM (read.operation: length=items.length for\n// typeVersion>4.1). Chaining whole-sheet reads (each emitting ~1000 row-items) makes the next read execute ~1000\n// times -> request explosion -> 429. We replace the chained reads with ONE values:batchGet HTTP request (predefined\n// googleApi credential, httpNode+scopes) and parse each tab out with this pure extractor. Code nodes run once for\n// all items, so there is no per-item amplification.\n//\n// extractTab() reproduces the legacy read projection EXACTLY (proven by the shadow parity gate), matching n8n's\n// prepareSheetData under the default `detectAutomatically` range:\n//   * valueRenderOption=UNFORMATTED_VALUE, dateTimeRenderOption=FORMATTED_STRING (the caller MUST request these);\n//   * removeEmptyColumns: a column whose HEADER cell is empty is dropped;\n//   * removeEmptyRows: a data row whose kept cells are all empty is dropped;\n//   * row_number = the cell's ORIGINAL sheet row (header is row 1 -> first data row_number = 2), preserved across\n//     removed rows (addRowNumber happens before removeEmptyRows);\n//   * each surviving row -> { row_number, <header>:value, ... } keyed by the header row, values left UNFORMATTED\n//     (numbers/booleans keep their type; missing trailing cells become '').\n\nfunction tabName(rangeStr) {\n  // \"conversation_state!A2:G7\" or \"'my sheet'!A:Z\" -> \"conversation_state\"\n  const s = String(rangeStr == null ? '' : rangeStr);\n  const bang = s.lastIndexOf('!');\n  const name = bang >= 0 ? s.slice(0, bang) : s;\n  return name.replace(/^'(.*)'$/, '$1');\n}\n\n// Find the valueRange object for `tab` in a values:batchGet response. batchGet preserves request order, so a\n// caller may also pass the expected index; we match by name first, then fall back to index.\nfunction findRange(batchResponse, tab, index) {\n  const ranges = (batchResponse && batchResponse.valueRanges) || [];\n  for (let i = 0; i < ranges.length; i++) {\n    if (tabName(ranges[i].range) === tab) return ranges[i];\n  }\n  if (typeof index === 'number' && ranges[index]) return ranges[index];\n  return null;\n}\n\nfunction isEmptyCell(v) { return v === undefined || v === null || String(v) === ''; }\n\n// Replicate n8n prepareSheetData(detectAutomatically) + the row->object structuring used by the read operation.\nfunction projectValues(values) {\n  const rows = Array.isArray(values) ? values : [];\n  if (!rows.length) return [];\n  const header = (rows[0] || []).map(h => (h == null ? '' : String(h)));\n  // removeEmptyColumns: keep only columns whose header is non-empty.\n  const cols = [];\n  for (let c = 0; c < header.length; c++) if (header[c] !== '') cols.push(c);\n  if (!cols.length) return [];\n  const out = [];\n  for (let r = 1; r < rows.length; r++) {\n    const row = rows[r] || [];\n    // removeEmptyRows: drop rows whose kept cells are all empty.\n    let allEmpty = true;\n    for (let k = 0; k < cols.length; k++) { if (!isEmptyCell(row[cols[k]])) { allEmpty = false; break; } }\n    if (allEmpty) continue;\n    const obj = { row_number: r + 1 }; // header is sheet row 1 -> data row index r maps to sheet row r+1\n    for (let k = 0; k < cols.length; k++) {\n      const c = cols[k];\n      const v = row[c];\n      obj[header[c]] = (v === undefined || v === null) ? '' : v;\n    }\n    out.push({ json: obj });\n  }\n  return out;\n}\n\n// Public: extract one tab's rows (legacy-read-shaped items) from a values:batchGet response.\nfunction extractTab(batchResponse, tab, index) {\n  const vr = findRange(batchResponse, tab, index);\n  return projectValues(vr && vr.values);\n}\n\n// Build the bounded A1 range list for a set of tabs. Default column bound A:ZZ (the extractor drops empty-header\n// columns, so over-wide bounds are harmless); a per-tab override map may pin tighter ranges.\nfunction buildRanges(tabs, lastColByTab) {\n  const m = lastColByTab || {};\n  return (tabs || []).map(t => t + '!A:' + (m[t] || 'ZZ'));\n}\n\n// Build the full values:batchGet URL (the spreadsheet id stays an $env expression supplied by the caller).\nfunction encodeRange(r) {\n  // encodeURIComponent leaves '!' and \"'\" untouched; encode the A1 separators explicitly so the query is byte-stable\n  // and matches the proven-working probe (Sheets accepts %21/%3A).\n  return encodeURIComponent(String(r)).replace(/!/g, '%21').replace(/'/g, '%27');\n}\nfunction batchGetUrl(spreadsheetIdExpr, ranges) {\n  const q = ['majorDimension=ROWS', 'valueRenderOption=UNFORMATTED_VALUE', 'dateTimeRenderOption=FORMATTED_STRING']\n    .concat((ranges || []).map(r => 'ranges=' + encodeRange(r)));\n  return 'https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetIdExpr + '/values:batchGet?' + q.join('&');\n}\n// --- end embedded sheets_access ---\n\n// embedded n8n/lib/idempotency_claim.js (drift-proof; test asserts equality)\n// idempotency_claim.js — atomic exactly-once claim for the WF18 accepted path (IDEMP-001).\n//\n// The original \"read existing claims -> if absent -> append\" is a read-then-write race: two genuinely concurrent\n// updates with the same idempotency_key both read \"absent\" and both proceed. This implements an append-then-verify\n// winner protocol that is correct WITHOUT relying on N8N_CONCURRENCY=1:\n//   1. every execution mints a unique claim_token;\n//   2. it APPENDS a claim_candidate row FIRST (into agent_request_events, reason='idempotency_claim'), so the row\n//      physically exists before the decision;\n//   3. it RE-READS agent_request_events and, among the claim rows for this idempotency_key, the one with the\n//      LOWEST physical row_number is the deterministic winner (append order is monotonic; a loser always appends a\n//      higher row and therefore always observes the winner's lower row on its post-append read);\n//   4. exactly one execution is the winner; every other terminates BEFORE WF19 / request creation / plan creation /\n//      state mutation / user-visible send.\n// A client timestamp is NOT the winner criterion (clocks can tie/skew); physical row order is. The claim rows live\n// in the existing agent_request_events sheet (reason='idempotency_claim'), so no schema migration or new sheet.\n\nfunction str(v) { return v == null ? '' : String(v).trim(); }\n\n// reason marker that distinguishes a claim row from a normal state-transition event row. The claim row is NOT a\n// state transition, so from_state/to_state stay EMPTY — the agent_request_events to_state column carries a strict\n// canonical agent_state dropdown (config/sheets_ui_contracts.json) and a made-up state would violate it.\nvar CLAIM_REASON = 'idempotency_claim';\n\n// Mint a unique-enough claim token without crypto (n8n Code sandbox disallows require('crypto')). Two concurrent\n// executions in the same millisecond still differ via the two independent Math.random() draws.\nfunction newClaimToken() {\n  var r = function () { return Math.floor(Math.random() * 2176782336).toString(36); }; // 36^6\n  return 'clm_' + Date.now().toString(36) + '_' + r() + r();\n}\n\n// Build the claim_candidate row for agent_request_events. The claim_token is carried in agent_request_id (so the\n// winner is identified by row_number -> agent_request_id), the key in idempotency_key, the marker in reason.\nfunction claimEventRow(args) {\n  args = args || {};\n  return {\n    agent_request_id: str(args.claim_token),\n    from_state: '',\n    to_state: '',\n    accepted: '',\n    reason: CLAIM_REASON,\n    idempotency_key: str(args.idempotency_key),\n    ts: str(args.ts) || new Date().toISOString()\n  };\n}\n\n// Resolve the winner from the POST-APPEND read of agent_request_events. `rows` are the projected rows (each with a\n// numeric row_number, as extractTab produces). Only claim rows (reason=CLAIM_REASON) for THIS idempotency_key\n// compete; the winner is the lowest row_number; is_duplicate is true for every non-winner (sequential OR concurrent).\nfunction resolveClaimWinner(rows, idempotencyKey, myToken) {\n  var key = str(idempotencyKey);\n  var mine = str(myToken);\n  var candidates = (rows || [])\n    .filter(function (r) { return r && str(r.reason) === CLAIM_REASON && str(r.idempotency_key) === key; })\n    .map(function (r) { return { token: str(r.agent_request_id), row: Number(r.row_number) }; })\n    .filter(function (c) { return c.token && isFinite(c.row); });\n  candidates.sort(function (a, b) { return a.row - b.row; });\n  var winner = candidates.length ? candidates[0] : null;\n  var winner_token = winner ? winner.token : '';\n  var my_present = candidates.some(function (c) { return c.token === mine; });\n  var is_winner = !!winner && winner_token === mine;\n  return {\n    winner_token: winner_token,\n    is_winner: is_winner,\n    is_duplicate: !is_winner,\n    candidate_count: candidates.length,\n    my_claim_present: my_present,\n    // a fail-closed sanity flag: my own claim row MUST be visible on my post-append read; if it is not, treat as a\n    // duplicate (never proceed off an unverified claim).\n    claim_verified: my_present\n  };\n}\n// --- end embedded idempotency_claim ---\n\n// --- node driver ---\n\nvar g=$('Ingress Security Gate').first().json;var gate=g.gate;\nvar myToken=$('Mint Claim').first().json.agent_request_id;\nvar rows=extractTab($('Re-read Claims').first().json,'agent_request_events').map(function(i){return i.json;});\nvar w=resolveClaimWinner(rows,gate.idempotency_key,myToken);\nreturn [{json:{duplicate:w.is_duplicate,winner_token:w.winner_token,claim_verified:w.claim_verified,candidate_count:w.candidate_count,gate:gate,parsed:g.parsed,cfg:g.cfg}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -20,
+        -60
+      ],
+      "id": "wf18-resolvewinner",
+      "name": "Resolve Winner"
     },
     {
       "parameters": {
@@ -212,7 +289,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        -80,
+        160,
         -60
       ],
       "id": "wf18-ifnew",
@@ -1573,14 +1650,47 @@
       "main": [
         [
           {
-            "node": "Claim Idempotency",
+            "node": "Mint Claim",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claim Idempotency": {
+    "Mint Claim": {
+      "main": [
+        [
+          {
+            "node": "Append Claim",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Claim": {
+      "main": [
+        [
+          {
+            "node": "Re-read Claims",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Re-read Claims": {
+      "main": [
+        [
+          {
+            "node": "Resolve Winner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Winner": {
       "main": [
         [
           {

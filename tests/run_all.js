@@ -142,6 +142,8 @@ const JS_SUITES = [
   // --- GOOGLE-HTTP-CREDENTIAL-001: batchGet predefined-cred durability (reconcile can't strip httpNode/scopes) ---
   ['google-http-credential', 'test_google_http_credential.js'],
   ['idempotency-persist', 'test_idempotency_persist.js'],
+  // --- IDEMP-001: atomic append-then-verify claim (concurrent-safe without N8N_CONCURRENCY=1) ---
+  ['idempotency-claim', 'test_idempotency_claim.js'],
 ];
 
 let failed = 0;

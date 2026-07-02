@@ -322,14 +322,24 @@ return [{json:{terminated:true,reason:reason,ack:ack,answer_callback_body:body}}
   // ---- SHEETS-READ-AMPLIFICATION-001: ONE batchGet for the whole read phase; extractors project per tab ----
   httpSheetsBatchGet('wf18-batchread', 'Batch Read Sheets', [-740, -60],
     ['agent_request_events', 'conversation_state', 'conversation_messages', 'conversation_summaries', 'durable_memories', 'execution_plans']),
-  // ---- durable idempotency claim BEFORE any persistence / dispatch (IDEMP-002) ----
-  sheetExtract('wf18-readev', 'Read agent_request_events', [-520, -60], 'agent_request_events'),
-  code('wf18-claim', 'Claim Idempotency', [-300, -60], [], `
+  // ---- ATOMIC idempotency claim BEFORE any persistence / dispatch (IDEMP-001): append-then-verify winner. A
+  //      read-then-write check races under genuine concurrency; here every execution APPENDS a claim_candidate row
+  //      first, then RE-READS, and the lowest physical row_number for the idempotency_key is the deterministic
+  //      winner. Every loser (sequential OR concurrent) terminates before WF19/request/plan/state/send. ----
+  sheetExtract('wf18-readev', 'Read agent_request_events', [-740, -60], 'agent_request_events'),
+  code('wf18-mintclaim', 'Mint Claim', [-560, -60], ['idempotency_claim'], `
 var g=$('Ingress Security Gate').first().json;var gate=g.gate;
-var seen={};try{($('Read agent_request_events').all()||[]).forEach(function(x){var k=(x.json&&x.json.idempotency_key)||'';if(k)seen[String(k)]=1;});}catch(e){}
-var duplicate=!!seen[String(gate.idempotency_key)];
-return [{json:{duplicate:duplicate,gate:gate,parsed:g.parsed,cfg:g.cfg}}];`),
-  ifNode('wf18-ifnew', 'New Update?', [-80, -60], '={{ !$json.duplicate }}'),
+var token=newClaimToken();
+return [{json:claimEventRow({claim_token:token,idempotency_key:gate.idempotency_key,ts:new Date().toISOString()})}];`),
+  sheetsAppend('wf18-appendclaim', 'Append Claim', [-380, -60], 'agent_request_events'),
+  httpSheetsBatchGet('wf18-rereadclaims', 'Re-read Claims', [-200, -60], ['agent_request_events']),
+  code('wf18-resolvewinner', 'Resolve Winner', [-20, -60], ['sheets_access', 'idempotency_claim'], `
+var g=$('Ingress Security Gate').first().json;var gate=g.gate;
+var myToken=$('Mint Claim').first().json.agent_request_id;
+var rows=extractTab($('Re-read Claims').first().json,'agent_request_events').map(function(i){return i.json;});
+var w=resolveClaimWinner(rows,gate.idempotency_key,myToken);
+return [{json:{duplicate:w.is_duplicate,winner_token:w.winner_token,claim_verified:w.claim_verified,candidate_count:w.candidate_count,gate:gate,parsed:g.parsed,cfg:g.cfg}}];`),
+  ifNode('wf18-ifnew', 'New Update?', [160, -60], '={{ !$json.duplicate }}'),
   // ---- owner-isolated reads (only after we know the update is accepted + new) ----
   sheetExtract('wf18-readstate', 'Read conversation_state', [140, -60], 'conversation_state'),
   sheetExtract('wf18-readmsg', 'Read conversation_messages', [360, -60], 'conversation_messages'),
@@ -532,8 +542,11 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),inten
   ['Ingress Accepted?', 'Batch Read Sheets', 0],
   ['Ingress Accepted?', 'Terminate Safely', 1],
   ['Batch Read Sheets', 'Read agent_request_events'],
-  ['Read agent_request_events', 'Claim Idempotency'],
-  ['Claim Idempotency', 'New Update?'],
+  ['Read agent_request_events', 'Mint Claim'],
+  ['Mint Claim', 'Append Claim'],
+  ['Append Claim', 'Re-read Claims'],
+  ['Re-read Claims', 'Resolve Winner'],
+  ['Resolve Winner', 'New Update?'],
   ['New Update?', 'Read conversation_state', 0],
   ['New Update?', 'Terminate Safely', 1],
   ['Terminate Safely', 'Terminate Ack Needed?'],

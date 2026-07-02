@@ -20,6 +20,8 @@ A.section('Stage 4 — workflow Code nodes embed n8n/lib/* with no drift');
 const EMBEDS = [
   ['17_agent_settings_config.json', 'Resolve Agent Config', ['agent_config']],
   ['18_telegram_agent_gateway.json', 'Ingress Security Gate', ['telegram_io', 'agent_config']],
+  ['18_telegram_agent_gateway.json', 'Mint Claim', ['idempotency_claim']],
+  ['18_telegram_agent_gateway.json', 'Resolve Winner', ['sheets_access', 'idempotency_claim']],
   ['18_telegram_agent_gateway.json', 'Build Intake Decision', ['agent_state', 'request_planner']],
   ['18_telegram_agent_gateway.json', 'Build Conversation Context', ['conversation_memory']],
   ['19_request_planner.json', 'Deterministic Plan', ['request_planner']],
@@ -66,6 +68,22 @@ A.section('WF18 — real dispatcher: intent => dispatch_target, duplicate claim,
 function gateOut(parsed) {
   return { accepted: true, stop_reason: '', secret_ok: true, telegram_enabled: true, supported: true, is_private: true, authorized: true, is_callback: parsed.kind === 'callback', ack_needed: false, callback_query_id: parsed.callback_query_id || '', idempotency_key: 'tg::' + (parsed.update_id || '') + '::' + (parsed.chat_id || '') };
 }
+// IDEMP-001 claim chain, exercised with the REAL node code: 'Mint Claim' runs for real; the Sheets append +
+// 'Re-read Claims' HTTP round-trip is simulated by injecting the values:batchGet response the sheet would return
+// AFTER the append (prior claims occupy lower physical rows; the freshly minted claim lands after them). This runs
+// the real extractTab projection through 'Resolve Winner', so a shape/order bug in the embedded chain fails here.
+const EV_HEADERS = ['agent_request_id', 'from_state', 'to_state', 'accepted', 'reason', 'idempotency_key', 'ts'];
+function batchGetResponse(tab, headers, rows) {
+  return {
+    valueRanges: [{
+      range: tab + '!A1:ZZ' + (rows.length + 1), majorDimension: 'ROWS',
+      values: [headers].concat(rows.map(r => headers.map(h => (r[h] == null ? '' : r[h]))))
+    }]
+  };
+}
+function priorClaim(token, key) {
+  return { agent_request_id: token, from_state: '', to_state: '', accepted: '', reason: 'idempotency_claim', idempotency_key: key, ts: '2026-07-01T00:00:00.000Z' };
+}
 function dispatch(parsed, opts) {
   opts = opts || {};
   const run = H.makeRun();
@@ -74,18 +92,34 @@ function dispatch(parsed, opts) {
   H.inject(run, 'Read agent_request_events', opts.events || []);
   H.inject(run, 'Read conversation_state', opts.state || []);
   H.inject(run, 'Read execution_plans', opts.plans || []);
-  const claim = H.runCodeNode(run, WF18, 'Claim Idempotency', [])[0].json;
+  const minted = H.runCodeNode(run, WF18, 'Mint Claim', [])[0].json;
+  const sheetRows = (opts.priorClaims || []).concat(opts.claimLost ? [] : [minted]);
+  H.inject(run, 'Re-read Claims', [batchGetResponse('agent_request_events', EV_HEADERS, sheetRows)]);
+  const claim = H.runCodeNode(run, WF18, 'Resolve Winner', [])[0].json;
   H.runCodeNode(run, WF18, 'Route Intent', []);
   const intake = H.runCodeNode(run, WF18, 'Build Intake Decision', [])[0].json;
-  return { claim, intake };
+  return { claim, intake, minted };
 }
 const reqParsed = { kind: 'request', update_type: 'message', update_id: '900', chat_id: '555', chat_type: 'private', user_id: '111', from_is_bot: false, message_id: '7', text: 'найди конкурентов по ПТС', callback_data: '', callback_query_id: '' };
 const d1 = dispatch(reqParsed);
 A.eq('search request => dispatch_target wf19', d1.intake.dispatch_target, 'wf19');
 A.ok('intake transitions received=>classified (state==event.to_state)', d1.intake.request.state === 'classified' && d1.intake.event.to_state === 'classified');
-A.eq('not a duplicate on empty events', d1.claim.duplicate, false);
-const d1dup = dispatch(reqParsed, { events: [{ idempotency_key: 'tg::900::555' }] });
-A.eq('duplicate idempotency_key => claim.duplicate true', d1dup.claim.duplicate, true);
+A.eq('no prior claim => this execution wins (not a duplicate)', d1.claim.duplicate, false);
+A.ok('winner verified its own claim row', d1.claim.claim_verified === true && d1.claim.winner_token === d1.minted.agent_request_id);
+// sequential duplicate: a re-delivered update appends a NEW claim but observes the earlier claim at a lower row
+const d1dup = dispatch(reqParsed, { priorClaims: [priorClaim('clm_first_run', 'tg::900::555')] });
+A.eq('sequential duplicate => claim.duplicate true', d1dup.claim.duplicate, true);
+A.eq('sequential duplicate resolves the FIRST claim as winner', d1dup.claim.winner_token, 'clm_first_run');
+// concurrent duplicate: both executions appended before either read; the later physical row loses deterministically
+const dConc = dispatch(reqParsed, { priorClaims: [priorClaim('clm_concurrent_rival', 'tg::900::555')] });
+A.eq('concurrent duplicate (rival appended first) => loser terminates', dConc.claim.duplicate, true);
+A.ok('exactly one winner between the two concurrent claims', dConc.claim.winner_token === 'clm_concurrent_rival' && dConc.claim.candidate_count === 2);
+// a normal state-transition event row with the same key is NOT a claim and must not affect the protocol
+const dEvt = dispatch(reqParsed, { priorClaims: [{ agent_request_id: 'req_900', from_state: 'received', to_state: 'classified', accepted: 'TRUE', reason: 'dispatch_wf19', idempotency_key: 'tg::900::555', ts: '2026-07-01T00:00:00.000Z' }] });
+A.eq('non-claim event rows do not compete', dEvt.claim.duplicate, false);
+// fail-closed: if the post-append read does NOT show my claim row, never proceed
+const dLost = dispatch(reqParsed, { claimLost: true });
+A.ok('unverified claim => treated as duplicate (fail closed)', dLost.claim.duplicate === true && dLost.claim.claim_verified === false);
 const cbParsed = { kind: 'callback', update_type: 'callback_query', update_id: '901', chat_id: '555', chat_type: 'private', user_id: '111', from_is_bot: false, message_id: '8', text: '', callback_data: 'approve:req_900', callback_query_id: 'cbq1' };
 const planRow = { plan_id: 'plan_req_900_h1', plan_hash: 'h1', agent_request_id: 'req_900', owner_user_id: '111', chat_id: '555', intent: 'competitor_search', status: 'awaiting_approval' };
 const dAppr = dispatch(cbParsed, { plans: [planRow] });

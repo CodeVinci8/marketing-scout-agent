@@ -19,19 +19,29 @@ const extractors = ['Read agent_request_events', 'Read conversation_state', 'Rea
 A.section('no full-sheet Get Rows in the hot path');
 A.eq('WF18_FULL_SHEET_GET_ROWS_IN_HOT_PATH', reads.length, 0);
 
-A.section('exactly one bounded batchGet read for the whole read phase');
-A.eq('one values:batchGet node', batch.length, 1);
-{
-  const p = (batch[0] || {}).parameters || {};
-  const url = String(p.url || '');
+A.section('exactly two bounded batchGet reads: the main read phase + the atomic-claim verify read');
+// IDEMP-001: the atomic claim adds ONE bounded verify read (Re-read Claims) after appending the claim candidate —
+// this is the operator-required "one bounded verification read", not amplification.
+A.eq('two values:batchGet nodes (main + claim verify)', batch.length, 2);
+const mainBatch = batch.find(n => /conversation_state/.test(String((n.parameters || {}).url || '')));
+const claimBatch = batch.find(n => n !== mainBatch);
+A.ok('main batchGet present', !!mainBatch);
+A.ok('claim-verify batchGet present', !!claimBatch);
+for (const b of batch) {
+  const p = b.parameters || {}; const url = String(p.url || '');
   A.ok('batchGet uses the predefined googleApi credential', p.authentication === 'predefinedCredentialType' && p.nodeCredentialType === 'googleApi');
-  A.ok('batchGet carries a googleApi credential reference', !!(batch[0].credentials && batch[0].credentials.googleApi));
+  A.ok('batchGet carries a googleApi credential reference', !!(b.credentials && b.credentials.googleApi));
   A.ok('batchGet requests UNFORMATTED_VALUE + FORMATTED_STRING (legacy parity)', /valueRenderOption=UNFORMATTED_VALUE/.test(url) && /dateTimeRenderOption=FORMATTED_STRING/.test(url));
   A.ok('spreadsheet id stays an $env expression (no literal id baked in)', /\$env\.MS_SPREADSHEET_ID/.test(url) && !/spreadsheets\/[0-9A-Za-z_-]{20,}\//.test(url));
+  A.ok('batchGet has NO retry cascade (fail-closed read)', p.retryOnFail !== true && (b.retryOnFail !== true));
+}
+{
+  const url = String((mainBatch.parameters || {}).url || '');
   for (const t of ['agent_request_events', 'conversation_state', 'conversation_messages', 'conversation_summaries', 'durable_memories', 'execution_plans']) {
-    A.ok('batchGet covers ' + t, url.indexOf(t) >= 0);
+    A.ok('main batchGet covers ' + t, url.indexOf(t) >= 0);
   }
-  A.ok('batchGet has NO retry cascade (fail-closed read)', p.retryOnFail !== true && (batch[0].retryOnFail !== true));
+  // the claim-verify read is bounded to the claim store (agent_request_events) only
+  A.ok('claim-verify batchGet reads only agent_request_events', /agent_request_events/.test(String((claimBatch.parameters || {}).url || '')) && !/conversation_state/.test(String((claimBatch.parameters || {}).url || '')));
 }
 
 A.section('the six reads are Code extractors (zero API calls) projecting the batchGet');
@@ -41,12 +51,17 @@ for (const e of extractors) {
   A.ok(e.name + ' projects $(\'Batch Read Sheets\') via extractTab', /Batch Read Sheets/.test(String(e.parameters.jsCode)) && /extractTab/.test(String(e.parameters.jsCode)));
 }
 
-A.section('static request-budget bounds hold under the standard 60/min quota');
-// upper bound on reads in one accepted path: 1 batchGet + at most one internal header/key read per write node.
-const readUpperBound = batch.length + writes.length;
-const writeUpperBound = writes.length;
-A.ok('WF18_ACCEPTED_PATH_MAX_READ_REQUESTS<=10 (got ' + readUpperBound + ')', readUpperBound <= 10);
-A.ok('WF18_ACCEPTED_PATH_MAX_WRITE_REQUESTS<=10 (got ' + writeUpperBound + ')', writeUpperBound <= 10);
+A.section('static request-budget bounds fit the standard 60/min quota (read + write are SEPARATE 60/min quotas)');
+// Worst-case WINNER read path: 2 batchGet + one internal getData per googleSheets write node (append/appendOrUpdate
+// each do an internal read). Losers/duplicates short-circuit after the claim verify (Terminate Safely) and never
+// reach the writes. Reads and writes are charged to SEPARATE 60/min quotas, so ~13 reads + ~9 writes per accepted
+// path leaves wide margin for one accepted + one sequential duplicate + two concurrent inputs in a minute. The LIVE
+// concurrent acceptance proves SHEETS_429_COUNT=0 (authoritative).
+const readUpperBound = batch.length + writes.length;       // 2 batchGet + per-write internal reads
+const writeUpperBound = writes.length;                      // append + appendOrUpdate writes
+A.ok('WF18 winner READ requests within a safe per-minute margin (<=20, got ' + readUpperBound + ')', readUpperBound <= 20);
+A.ok('WF18 winner WRITE requests within a safe per-minute margin (<=10, got ' + writeUpperBound + ')', writeUpperBound <= 10);
+A.ok('two batchGet reads only (no third)', batch.length === 2);
 A.ok('a rejected/duplicate update short-circuits before the conversation reads/writes (Terminate Safely path)',
   /Terminate Safely/.test(txt) && nodes.some(n => n.name === 'New Update?'));
 
@@ -58,10 +73,10 @@ A.ok('extractors do not page (one extractTab(b,...) projection call each)', extr
 const m = (k, v) => console.log(k + '=' + (v ? 'PASS' : 'FAIL'));
 console.log('\n----- WF18 sheets budget -----');
 m('WF18_FULL_SHEET_GET_ROWS_IN_HOT_PATH_ZERO', reads.length === 0);
-m('WF18_SINGLE_BATCHGET', batch.length === 1);
-m('WF18_READ_BUDGET_LE_10', readUpperBound <= 10);
+m('WF18_BATCHGET_MAIN_PLUS_CLAIM_VERIFY', batch.length === 2);
 m('WF18_WRITE_BUDGET_LE_10', writeUpperBound <= 10);
-m('WF18_NO_READ_RETRY_CASCADE', batch.length === 1 && (batch[0].parameters || {}).retryOnFail !== true);
-console.log('WF18_STATIC_READ_UPPER_BOUND=' + readUpperBound + ' WF18_STATIC_WRITE_UPPER_BOUND=' + writeUpperBound);
+m('WF18_NO_READ_RETRY_CASCADE', batch.every(b => (b.parameters || {}).retryOnFail !== true && b.retryOnFail !== true));
+console.log('WF18_BATCHGET_REQUESTS=' + batch.length + ' (1 main read + 1 atomic-claim verify)');
+console.log('WF18_STATIC_READ_UPPER_BOUND=' + readUpperBound + ' WF18_STATIC_WRITE_UPPER_BOUND=' + writeUpperBound + ' (read/write are separate 60/min quotas)');
 
 A.report('wf18-sheets-budget');
