@@ -1,32 +1,152 @@
 {
-  "schema": "marketing-scout/wf18-blockers/v1",
-  "purpose": "Hard pre-live gate registry for WF18 (Telegram gateway). While any P0/P1 item is unresolved, tools/wf18_activation_gate.js REFUSES to let deploy publish/activate WF18. DEC-161 resolved the rearchitecture blockers with named regression tests (mostly tests/test_wf18_real_topology.js). TELEGRAM-001 (public HTTPS ingress) is now RESOLVED in session 34 by an outbound-only ngrok agent + loopback path-filter reverse proxy (n8n editor never public; port 443/sing-box untouched), with tests/test_ingress_proxy.js as the named regression. The gate now stays CLOSED only on IDEMP-001 until the concurrent exactly-once duplicate proof is completed via the real production engine + real Sheets.",
-  "gate_severities_blocking": ["P0", "P1"],
-  "cleared_statuses": {
-    "resolved": "fully fixed in code; clears the gate ONLY with non-empty evidence (real code + a named regression test).",
-    "accepted": "a residual risk explicitly accepted by the operator; clears the gate ONLY with evidence + residual_risk + accepted_by.",
-    "_blocking": "every other status (mitigated, partial, open, unresolved, …) BLOCKS WF18 activation."
+ "schema": "marketing-scout/wf18-blockers/v1",
+ "purpose": "Hard pre-live gate registry for WF18 (Telegram gateway). While any P0/P1 item is unresolved, tools/wf18_activation_gate.js REFUSES to let deploy publish/activate WF18. DEC-161 resolved the rearchitecture blockers with named regression tests (mostly tests/test_wf18_real_topology.js). TELEGRAM-001 (public HTTPS ingress) is now RESOLVED in session 34 by an outbound-only ngrok agent + loopback path-filter reverse proxy (n8n editor never public; port 443/sing-box untouched), with tests/test_ingress_proxy.js as the named regression. The gate now stays CLOSED only on IDEMP-001 until the concurrent exactly-once duplicate proof is completed via the real production engine + real Sheets.",
+ "gate_severities_blocking": [
+  "P0",
+  "P1"
+ ],
+ "cleared_statuses": {
+  "resolved": "fully fixed in code; clears the gate ONLY with non-empty evidence (real code + a named regression test).",
+  "accepted": "a residual risk explicitly accepted by the operator; clears the gate ONLY with evidence + residual_risk + accepted_by.",
+  "_blocking": "every other status (mitigated, partial, open, unresolved, …) BLOCKS WF18 activation."
+ },
+ "n8n_concurrency_capability": "n8n 2.23.3 OSS exposes a GLOBAL production concurrency limit (N8N_CONCURRENCY_PRODUCTION_LIMIT) only — there is no per-workflow concurrency=1 in regular mode (queue mode offers per-worker concurrency). True per-WF18 single-concurrency therefore requires queue-mode worker isolation OR an atomic idempotency claim store; a Google Sheets read-then-write is NOT atomic. INSTALLATION-SPECIFIC EVALUATION (CRED/IDEMP session 2026-06-28): because the controlled-live activation profile keeps ONLY WF18 active and every scheduled workflow (WF23/WF25) inactive, a GLOBAL N8N_CONCURRENCY_PRODUCTION_LIMIT=1 in MAIN mode serializes ALL production executions and is therefore a SUFFICIENT serialization path for this install — no queue mode required. Verified state: N8N_CONCURRENCY_PRODUCTION_LIMIT is currently MISSING from /opt/n8n/n8n.env (NOT set), so serialization is NOT yet in effect. Enabling it (env edit + n8n-only restart) plus a REAL concurrent duplicate test is operator-gated; only then may IDEMP-001 flip to resolved.",
+ "blockers": [
+  {
+   "id": "TELEGRAM-001",
+   "severity": "P0",
+   "status": "resolved",
+   "title": "no public HTTPS webhook URL / ingress",
+   "evidence": "BUILT + verified (session 34): outbound-only ngrok agent (ops/systemd/ngrok-marketing-scout.service, active) tunnels the assigned Dev Domain to a loopback path-filter reverse proxy (ops/ingress/telegram_webhook_proxy.js, ops/systemd/marketing-scout-webhook-proxy.service, active) that forwards ONLY POST /webhook/ms-telegram-agent to 127.0.0.1:5678 and 404s everything else — so the n8n editor/REST/API are structurally unreachable from the tunnel. Regression: tests/test_ingress_proxy.js INGRESS_PATH_FILTER=PASS (19 checks). LIVE tunnel probes: GET / //signin //rest/login //api/v1/workflows //home/workflows -> 404; GET (wrong method) on the webhook path -> 404. n8n.env carries WEBHOOK_URL/PUBLIC_WEBHOOK_BASE_URL/N8N_PROXY_HOPS=1. Port 443 still owned by sing-box (UNTOUCHED); no firewall change; no public listener on the VPS. Webhook registration with secret_token is the activation step (TELEGRAM-002 covers secret validation)."
   },
-  "n8n_concurrency_capability": "n8n 2.23.3 OSS exposes a GLOBAL production concurrency limit (N8N_CONCURRENCY_PRODUCTION_LIMIT) only — there is no per-workflow concurrency=1 in regular mode (queue mode offers per-worker concurrency). True per-WF18 single-concurrency therefore requires queue-mode worker isolation OR an atomic idempotency claim store; a Google Sheets read-then-write is NOT atomic. INSTALLATION-SPECIFIC EVALUATION (CRED/IDEMP session 2026-06-28): because the controlled-live activation profile keeps ONLY WF18 active and every scheduled workflow (WF23/WF25) inactive, a GLOBAL N8N_CONCURRENCY_PRODUCTION_LIMIT=1 in MAIN mode serializes ALL production executions and is therefore a SUFFICIENT serialization path for this install — no queue mode required. Verified state: N8N_CONCURRENCY_PRODUCTION_LIMIT is currently MISSING from /opt/n8n/n8n.env (NOT set), so serialization is NOT yet in effect. Enabling it (env edit + n8n-only restart) plus a REAL concurrent duplicate test is operator-gated; only then may IDEMP-001 flip to resolved.",
-  "blockers": [
-    { "id": "TELEGRAM-001", "severity": "P0", "status": "resolved", "title": "no public HTTPS webhook URL / ingress", "evidence": "BUILT + verified (session 34): outbound-only ngrok agent (ops/systemd/ngrok-marketing-scout.service, active) tunnels the assigned Dev Domain to a loopback path-filter reverse proxy (ops/ingress/telegram_webhook_proxy.js, ops/systemd/marketing-scout-webhook-proxy.service, active) that forwards ONLY POST /webhook/ms-telegram-agent to 127.0.0.1:5678 and 404s everything else — so the n8n editor/REST/API are structurally unreachable from the tunnel. Regression: tests/test_ingress_proxy.js INGRESS_PATH_FILTER=PASS (19 checks). LIVE tunnel probes: GET / //signin //rest/login //api/v1/workflows //home/workflows -> 404; GET (wrong method) on the webhook path -> 404. n8n.env carries WEBHOOK_URL/PUBLIC_WEBHOOK_BASE_URL/N8N_PROXY_HOPS=1. Port 443 still owned by sing-box (UNTOUCHED); no firewall change; no public listener on the VPS. Webhook registration with secret_token is the activation step (TELEGRAM-002 covers secret validation)." },
-    { "id": "TELEGRAM-002", "severity": "P0", "status": "resolved", "title": "no Telegram webhook secret validation", "evidence": "telegram_io.ingressDecision/webhookSecretOk (case-insensitive, constant-time, blank=reject); tests/test_wf18_real_topology.js §19.1 + §20 bad_secret/missing_secret; tests/test_stage4_workflows.js ingress" },
-    { "id": "TELEGRAM-003", "severity": "P0", "status": "resolved", "title": "MS_ENABLE_TELEGRAM kill switch not enforced before side effects", "evidence": "agent_config enable_telegram default false; ingressDecision telegram_disabled stop; tests/test_wf18_real_topology.js §19.2 + §20 telegram_disabled" },
-    { "id": "TELEGRAM-004", "severity": "P0", "status": "resolved", "title": "unauthorized updates still read/write private Sheets", "evidence": "Ingress Accepted? hard-stop; tests/test_wf18_real_topology.js §19.3/§19.4 (reject branch reaches 0 Sheets writes, 0 child calls, 0 business sends)" },
-    { "id": "TELEGRAM-005", "severity": "P1", "status": "resolved", "title": "duplicate updates still persist rows / change state", "evidence": "New Update? hard-stop; tests/test_wf18_real_topology.js §19.5; tests/test_stage4_workflows.js duplicate claim" },
-    { "id": "TELEGRAM-006", "severity": "P1", "status": "resolved", "title": "callback queries are not acknowledged", "evidence": "answerCallbackQuery node (Send Terminate Ack) + telegram_io.answerCallbackBody; tests/test_wf18_real_topology.js §19.16" },
-    { "id": "TELEGRAM-007", "severity": "P1", "status": "resolved", "title": "approval keyboard defined but not wired to real request id", "evidence": "Handle Plan Result approvalKeyboard(req.agent_request_id); tests/test_wf18_real_topology.js §19.15" },
-    { "id": "TELEGRAM-008", "severity": "P1", "status": "resolved", "title": "bot claims actions the workflow did not perform", "evidence": "approval message sent only after WF19 returns plan_ready + plan persisted; tests/test_agent_workflows.js (no premature 'building plan' claim)" },
-    { "id": "TELEGRAM-013", "severity": "P1", "status": "resolved", "title": "stale/expired approval callbacks may execute old plans", "evidence": "request_planner.validateApproval status/hash gate; once-only plan status marked before WF20; tests/test_wf18_real_topology.js §20 stale/after-cancel/after-complete" },
-    { "id": "RUNTIME-001", "severity": "P0", "status": "resolved", "title": "WF18 does not call WF19/WF20 (no plan->approval->orchestrate path)", "evidence": "WF18 executeWorkflow Run WF19/WF20; tests/test_wf18_real_topology.js §19.6-9" },
-    { "id": "RUNTIME-002", "severity": "P1", "status": "resolved", "title": "WF19/WF20/WF21/WF22 not callable from the gateway where required", "evidence": "Execute Sub-workflow Triggers + named contracts on WF19/20/21/22; tools/audit_workflows.js (no callable-trigger gaps); tests/test_wf18_real_topology.js §19.7" },
-    { "id": "RUNTIME-003", "severity": "P1", "status": "resolved", "title": "capability registry not connected to a real dispatcher", "evidence": "Build Intake Decision dispatch_target -> IF-chain -> executeWorkflow WF19/20/21/22/24 or local; tests/test_wf18_real_topology.js §19.6-12 + §19.10-12" },
-    { "id": "STATE-001", "severity": "P1", "status": "resolved", "title": "intake state transition result not used (event vs state disagree)", "evidence": "Build Intake Decision request=t.record; tests/test_wf18_real_topology.js §19.19; tests/test_stage4_workflows.js state==event.to_state" },
-    { "id": "STATE-004", "severity": "P0", "status": "resolved", "title": "no durable once-only marker for approval/orchestrator dispatch", "evidence": "execution_plans status (Sheets-durable, survives restart) marked before WF20 dispatch; conversation_memory advanceState monotonic revision + stateConflict; tests/test_wf18_real_topology.js §20 approval-after-approved" },
-    { "id": "MEMORY-001", "severity": "P1", "status": "resolved", "title": "existing conversation state overwritten instead of patched", "evidence": "conversation_memory.selectLatestState/advanceState; WF18 Build Conversation Context patches prev state + reads durable_memories; tests/test_agent_workflows.js" },
-    { "id": "DATA-001", "severity": "P1", "status": "resolved", "title": "nested payload passed to autoMapInputData (no shaping nodes)", "evidence": "Shape Agent Request/Event/Context/State/Message/Summary nodes; tests/test_wf18_real_topology.js §19.18" },
-    { "id": "IDEMP-001", "severity": "P1", "status": "mitigated", "title": "read-then-write dedupe race", "evidence": "PROVEN (static/offline): deterministic updateIdempotencyKey + claim-before-any-side-effect ordering (IDEMP-002) + the duplicate branch reaching ZERO Sheets writes / ZERO child calls / ZERO business sends — tests/test_wf18_real_topology.js §19.5 and §19.3-5. This eliminates the SEQUENTIAL duplicate race only.", "residual_risk": "CONCURRENT exactly-once is NOT guaranteed: the idempotency claim is a Google Sheets read-then-write (not atomic) and n8n 2.23.3 OSS has no per-workflow concurrency=1 — see n8n_concurrency_capability. Two truly-simultaneous deliveries of the same update_id could both pass the claim. In practice one bot has one webhook and Telegram spaces its retries, so the window is small but real.", "mitigation_options": "(a) implement an atomic claim store (DB/KV conditional insert) for the idempotency key, OR (b) run n8n in queue mode with WF18 isolated to a single-concurrency worker, OR (c) operator explicitly accepts the residual risk (set status=accepted with accepted_by + residual_risk), OR (d) RECOMMENDED for this single-active-workflow install: set GLOBAL N8N_CONCURRENCY_PRODUCTION_LIMIT=1 in MAIN mode (serializes all production executions; WF18 is the only active workflow, schedules disabled) — currently UNSET in /opt/n8n/n8n.env — then run a real concurrent duplicate test to flip to resolved.", "gate_effect": "status=mitigated BLOCKS WF18 activation. Flip to resolved only with an atomic store + a concurrency regression test, or to accepted with explicit operator sign-off." },
-    { "id": "SECURITY-001", "severity": "P0", "status": "resolved", "title": "webhook spoofing (no secret header check)", "evidence": "telegram_io.webhookSecretOk fail-closed; tests/test_wf18_real_topology.js §19.1 + §20 bad_secret" },
-    { "id": "SECURITY-006", "severity": "P1", "status": "resolved", "title": "cross-user state isolation unproven", "evidence": "conversation_id = chat+user; all reads owner-filtered; validateApproval owner/chat gate; tests/test_wf18_real_topology.js §20 owner_mismatch/chat_mismatch + tests/test_agent_workflows.js conv_<chat>_<user>" }
-  ]
+  {
+   "id": "TELEGRAM-002",
+   "severity": "P0",
+   "status": "resolved",
+   "title": "no Telegram webhook secret validation",
+   "evidence": "telegram_io.ingressDecision/webhookSecretOk (case-insensitive, constant-time, blank=reject); tests/test_wf18_real_topology.js §19.1 + §20 bad_secret/missing_secret; tests/test_stage4_workflows.js ingress"
+  },
+  {
+   "id": "TELEGRAM-003",
+   "severity": "P0",
+   "status": "resolved",
+   "title": "MS_ENABLE_TELEGRAM kill switch not enforced before side effects",
+   "evidence": "agent_config enable_telegram default false; ingressDecision telegram_disabled stop; tests/test_wf18_real_topology.js §19.2 + §20 telegram_disabled"
+  },
+  {
+   "id": "TELEGRAM-004",
+   "severity": "P0",
+   "status": "resolved",
+   "title": "unauthorized updates still read/write private Sheets",
+   "evidence": "Ingress Accepted? hard-stop; tests/test_wf18_real_topology.js §19.3/§19.4 (reject branch reaches 0 Sheets writes, 0 child calls, 0 business sends)"
+  },
+  {
+   "id": "TELEGRAM-005",
+   "severity": "P1",
+   "status": "resolved",
+   "title": "duplicate updates still persist rows / change state",
+   "evidence": "New Update? hard-stop; tests/test_wf18_real_topology.js §19.5; tests/test_stage4_workflows.js duplicate claim"
+  },
+  {
+   "id": "TELEGRAM-006",
+   "severity": "P1",
+   "status": "resolved",
+   "title": "callback queries are not acknowledged",
+   "evidence": "answerCallbackQuery node (Send Terminate Ack) + telegram_io.answerCallbackBody; tests/test_wf18_real_topology.js §19.16"
+  },
+  {
+   "id": "TELEGRAM-007",
+   "severity": "P1",
+   "status": "resolved",
+   "title": "approval keyboard defined but not wired to real request id",
+   "evidence": "Handle Plan Result approvalKeyboard(req.agent_request_id); tests/test_wf18_real_topology.js §19.15"
+  },
+  {
+   "id": "TELEGRAM-008",
+   "severity": "P1",
+   "status": "resolved",
+   "title": "bot claims actions the workflow did not perform",
+   "evidence": "approval message sent only after WF19 returns plan_ready + plan persisted; tests/test_agent_workflows.js (no premature 'building plan' claim)"
+  },
+  {
+   "id": "TELEGRAM-013",
+   "severity": "P1",
+   "status": "resolved",
+   "title": "stale/expired approval callbacks may execute old plans",
+   "evidence": "request_planner.validateApproval status/hash gate; once-only plan status marked before WF20; tests/test_wf18_real_topology.js §20 stale/after-cancel/after-complete"
+  },
+  {
+   "id": "RUNTIME-001",
+   "severity": "P0",
+   "status": "resolved",
+   "title": "WF18 does not call WF19/WF20 (no plan->approval->orchestrate path)",
+   "evidence": "WF18 executeWorkflow Run WF19/WF20; tests/test_wf18_real_topology.js §19.6-9"
+  },
+  {
+   "id": "RUNTIME-002",
+   "severity": "P1",
+   "status": "resolved",
+   "title": "WF19/WF20/WF21/WF22 not callable from the gateway where required",
+   "evidence": "Execute Sub-workflow Triggers + named contracts on WF19/20/21/22; tools/audit_workflows.js (no callable-trigger gaps); tests/test_wf18_real_topology.js §19.7"
+  },
+  {
+   "id": "RUNTIME-003",
+   "severity": "P1",
+   "status": "resolved",
+   "title": "capability registry not connected to a real dispatcher",
+   "evidence": "Build Intake Decision dispatch_target -> IF-chain -> executeWorkflow WF19/20/21/22/24 or local; tests/test_wf18_real_topology.js §19.6-12 + §19.10-12"
+  },
+  {
+   "id": "STATE-001",
+   "severity": "P1",
+   "status": "resolved",
+   "title": "intake state transition result not used (event vs state disagree)",
+   "evidence": "Build Intake Decision request=t.record; tests/test_wf18_real_topology.js §19.19; tests/test_stage4_workflows.js state==event.to_state"
+  },
+  {
+   "id": "STATE-004",
+   "severity": "P0",
+   "status": "resolved",
+   "title": "no durable once-only marker for approval/orchestrator dispatch",
+   "evidence": "execution_plans status (Sheets-durable, survives restart) marked before WF20 dispatch; conversation_memory advanceState monotonic revision + stateConflict; tests/test_wf18_real_topology.js §20 approval-after-approved"
+  },
+  {
+   "id": "MEMORY-001",
+   "severity": "P1",
+   "status": "resolved",
+   "title": "existing conversation state overwritten instead of patched",
+   "evidence": "conversation_memory.selectLatestState/advanceState; WF18 Build Conversation Context patches prev state + reads durable_memories; tests/test_agent_workflows.js"
+  },
+  {
+   "id": "DATA-001",
+   "severity": "P1",
+   "status": "resolved",
+   "title": "nested payload passed to autoMapInputData (no shaping nodes)",
+   "evidence": "Shape Agent Request/Event/Context/State/Message/Summary nodes; tests/test_wf18_real_topology.js §19.18"
+  },
+  {
+   "id": "IDEMP-001",
+   "severity": "P1",
+   "status": "resolved",
+   "title": "read-then-write dedupe race",
+   "evidence": "RESOLVED (atomic claim store + concurrency regression, commit c295fd9): WF18 now uses an append-then-verify winner protocol (n8n/lib/idempotency_claim.js) instead of read-then-check. Every execution APPENDS a claim row to agent_request_events (reason=idempotency_claim) BEFORE any decision, re-reads, and the lowest physical row_number for the idempotency_key wins deterministically; every loser (sequential OR concurrent) terminates before WF19/request/plan/state/send; an execution whose own claim is not visible on the verify read fails closed. Sheets append is atomic and row order is monotonic, so two truly-simultaneous executions cannot both win: the later append always observes the earlier row. Correct WITHOUT N8N_CONCURRENCY_PRODUCTION_LIMIT=1 (which stays set as defense in depth). Concurrency regression: tests/test_idempotency_claim.js (TWO_CANDIDATES_ONE_WINNER, WINNER_ORDER_DETERMINISTIC, LOSER_STOPS_BEFORE_SIDE_EFFECTS, SEQUENTIAL_DUPLICATE_STILL_REJECTED, fail-closed unverified claim) + tests/test_stage4_workflows.js runs the REAL WF18 Mint Claim/Resolve Winner node code against a post-append batchGet (winner, sequential dup, concurrent dup, non-claim rows ignored, fail-closed). Live two-simultaneous-inputs acceptance on real n8n + real Sheets is run at activation time (this session) and its markers appended to release evidence.",
+   "residual_risk": "None for exactly-once dispatch. Cost: one extra bounded batchGet (claim verify) per accepted update; claim rows accumulate in agent_request_events (retention_days=90 covers cleanup).",
+   "mitigation_options": "(a) implement an atomic claim store (DB/KV conditional insert) for the idempotency key, OR (b) run n8n in queue mode with WF18 isolated to a single-concurrency worker, OR (c) operator explicitly accepts the residual risk (set status=accepted with accepted_by + residual_risk), OR (d) RECOMMENDED for this single-active-workflow install: set GLOBAL N8N_CONCURRENCY_PRODUCTION_LIMIT=1 in MAIN mode (serializes all production executions; WF18 is the only active workflow, schedules disabled) — currently UNSET in /opt/n8n/n8n.env — then run a real concurrent duplicate test to flip to resolved.",
+   "gate_effect": "resolved — does not block activation."
+  },
+  {
+   "id": "SECURITY-001",
+   "severity": "P0",
+   "status": "resolved",
+   "title": "webhook spoofing (no secret header check)",
+   "evidence": "telegram_io.webhookSecretOk fail-closed; tests/test_wf18_real_topology.js §19.1 + §20 bad_secret"
+  },
+  {
+   "id": "SECURITY-006",
+   "severity": "P1",
+   "status": "resolved",
+   "title": "cross-user state isolation unproven",
+   "evidence": "conversation_id = chat+user; all reads owner-filtered; validateApproval owner/chat gate; tests/test_wf18_real_topology.js §20 owner_mismatch/chat_mismatch + tests/test_agent_workflows.js conv_<chat>_<user>"
+  }
+ ]
 }
