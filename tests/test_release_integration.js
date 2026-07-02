@@ -349,4 +349,18 @@ A.section('§13.20 + TEST-002/003 + MARKER-001 — disposable acceptance drives 
 }
 function deployText() { return fs.readFileSync(path.join(ROOT, 'scripts', 'deploy_n8n.sh'), 'utf8'); }
 
+// ------------------------------------------------------------------------------------------------------------
+A.section('§7 shell-consumed CLI outputs are ANSI-free (COLOR-STDOUT-001)');
+{
+  // deploy_n8n.sh does `[ "${#IMPORT_ORDER[@]}" -eq "$RUNTIME_COUNT" ]` on this output. Under FORCE_COLOR
+  // (any colour-forcing terminal env) node colorizes console.log(<number>) — "\x1b[33m15\x1b[39m" — which is
+  // not an integer and killed activation. Numeric CLI outputs must be printed as plain strings.
+  const { execFileSync } = require('child_process');
+  const colorEnv = Object.assign({}, process.env, { FORCE_COLOR: '3' });
+  for (const cmd of ['runtime-count', 'binding-count', 'callable-count']) {
+    const out = execFileSync('node', [path.join(ROOT, 'tools', 'manifest_lib.js'), cmd], { encoding: 'utf8', env: colorEnv }).trim();
+    A.ok('manifest_lib ' + cmd + ' is a bare integer under FORCE_COLOR=3 (got ' + JSON.stringify(out) + ')', /^\d+$/.test(out));
+  }
+}
+
 A.report('release-integration');
