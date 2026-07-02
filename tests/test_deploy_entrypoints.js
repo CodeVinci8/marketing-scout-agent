@@ -157,4 +157,24 @@ try {
   fs.rmSync(work, { recursive: true, force: true });
 } catch (e) { stubOk = false; A.ok('host-stub entrypoint harness ran', false, String(e && e.message)); }
 
+// ------------------------------------------------------------------------------------------------------------
+A.section('DISPATCH-PUBLISH-001 — callable dispatch targets are publishable (n8n 2.x refuses unpublished sub-wf)');
+{
+  const fs2 = require('fs'); const path2 = require('path');
+  const deploy = fs2.readFileSync(path2.join(__dirname, '..', 'scripts', 'deploy_n8n.sh'), 'utf8');
+  A.ok('deploy exposes --publish-callables', /--publish-callables\) MODE="publish-callables"/.test(deploy) && /publish_callables\(\)/.test(deploy));
+  A.ok('deploy exposes --unpublish-callables (rollback)', /--unpublish-callables\) MODE="unpublish-callables"/.test(deploy) && /unpublish_callables\(\)/.test(deploy));
+  A.ok('publish-callables fail-closes on a public/scheduled trigger', /assert_callable_no_public_surface/.test(deploy) && /refusing to publish/.test(deploy));
+  A.ok('publish set comes from the manifest callable targets (no hand list)', /for f in "\$\{CALLABLE_TARGETS\[@\]\}"/.test(deploy));
+  // every manifest callable must indeed carry ONLY executeWorkflow/manual triggers — the runtime precondition
+  const L2 = require('../tools/manifest_lib.js');
+  for (const f of L2.callableTargets()) {
+    const wf = JSON.parse(fs2.readFileSync(path2.join(L2.WF_DIR, f), 'utf8'));
+    const bad = (wf.nodes || []).filter(n => /trigger|webhook|cron|interval/i.test(String(n.type)) && !/executeWorkflowTrigger|manualTrigger/.test(String(n.type)));
+    A.eq(f + ' has no public/scheduled trigger (safe to publish)', bad.map(n => n.type).join(','), '');
+  }
+  // WF23/WF25 are NOT callables — publishing callables must never touch the scheduled workflows
+  A.ok('WF23/WF25 are not in the callable publish set', L2.callableTargets().every(f => !/^2[35]_/.test(f)));
+}
+
 A.report('deploy-entrypoints');

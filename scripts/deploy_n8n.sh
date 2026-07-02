@@ -25,6 +25,10 @@
 #                                              #   WF25 if weekly digest). Fail-closed config preflight first.
 #   scripts/deploy_n8n.sh --activate-telegram  # TRANSACTIONAL: activate WF18 ONLY (never WF23/WF25) + register &
 #                                              #   verify webhook; auto-unpublish WF18 if the webhook step fails.
+#   scripts/deploy_n8n.sh --publish-callables  # publish the manifest callable dispatch targets (n8n 2.x refuses to
+#                                              #   execute an unpublished sub-workflow — DISPATCH-PUBLISH-001).
+#                                              #   Fail-closes if any callable carries a public/scheduled trigger.
+#   scripts/deploy_n8n.sh --unpublish-callables# unpublish those same callable targets (rollback)
 #   scripts/deploy_n8n.sh --deactivate-triggers# deactivate those same trigger workflows
 #   scripts/deploy_n8n.sh --status             # classify the live workflow listing vs the manifest (read-only)
 #   scripts/deploy_n8n.sh --discover           # LIVE read-only production discovery (inventory + env + id coverage)
@@ -79,6 +83,8 @@ for arg in "$@"; do
     --verify-bindings) MODE="verify-bindings" ;;
     --plan-triggers) MODE="plan-triggers" ;;
     --activate-triggers) MODE="activate-triggers" ;;
+    --publish-callables) MODE="publish-callables" ;;
+    --unpublish-callables) MODE="unpublish-callables" ;;
     --activate-telegram) MODE="activate-telegram" ;;
     --deactivate-triggers) MODE="deactivate-triggers" ;;
     --status) MODE="status" ;;
@@ -794,6 +800,77 @@ activate_telegram() {
 }
 
 # Deactivate the same trigger workflows (rollback of activation). Never touches callables (already inactive).
+# DISPATCH-PUBLISH-001 (n8n 2.23.3 semantics): an Execute Sub-workflow dispatch REFUSES an unpublished target —
+# "Workflow is not active and cannot be executed" (live-observed at WF18 -> Run WF19). In 2.x "publish" is what
+# makes a workflow executable; it does NOT expose anything by itself. Publishing a callable whose only triggers
+# are executeWorkflowTrigger/manualTrigger creates NO public surface (no webhook route, no schedule). This command
+# publishes exactly the manifest callable_targets and fail-closes if any of them carries a public trigger.
+# WF23/WF25 (scheduled) and the legacy WF18 are NOT callables and are never touched here.
+assert_callable_no_public_surface() {
+  # $1 = workflow file; exits non-zero if any trigger other than executeWorkflowTrigger/manualTrigger is present
+  node -e '
+    const wf = require(process.argv[1]);
+    const bad = (wf.nodes||[]).filter(n =>
+      /trigger|webhook|cron|interval/i.test(String(n.type)) &&
+      !/executeWorkflowTrigger|manualTrigger/.test(String(n.type)));
+    if (bad.length) { console.error("PUBLIC/SCHEDULED trigger in callable: " + bad.map(n=>n.type).join(",")); process.exit(1); }
+  ' "$1"
+}
+publish_callables() {
+  load_manifest_arrays
+  require_n8n || exit 1
+  detect_n8n_version
+  say "Callable sub-workflows to PUBLISH (dispatch targets; NO public surface — executeWorkflow/manual triggers only):"
+  for f in "${CALLABLE_TARGETS[@]}"; do say "  - ${f}"; done
+  for f in "${CALLABLE_TARGETS[@]}"; do
+    assert_callable_no_public_surface "${WF_DIR}/${f}" || die "refusing to publish ${f}: it carries a public/scheduled trigger (callables must be executeWorkflow/manual only)."
+  done
+  say "  [ok] all callables verified: no webhook, no schedule (publishing exposes nothing)"
+  if [ "$ASSUME_YES" != "yes" ]; then
+    printf 'Publish %d callable sub-workflow(s)? [y/N] ' "${#CALLABLE_TARGETS[@]}"
+    read -r reply
+    case "$reply" in y|Y|yes|YES) ;; *) say "Aborted. Nothing published."; exit 0 ;; esac
+  fi
+  local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
+  for f in "${CALLABLE_TARGETS[@]}"; do
+    local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
+    resolve_into "$nm" "$listing"; id="$RESOLVE_ID"
+    case "$RESOLVE_STATUS" in
+      ambiguous) die "ambiguous exact workflow name for ${f} (\"${nm}\") in n8n — refusing to publish (DEPLOY-002)." ;;
+      absent) say "  [skip] ${f}: not found in n8n (import it first with --apply)"; continue ;;
+    esac
+    say ">> publishing callable ${f} (id_fp=$(id_fingerprint "$id")) via publish:workflow"
+    n8n_activate_id "$id"
+  done
+  hr
+  say "Done. Callable dispatch targets are published (executable by Execute Sub-workflow); none has a public URL or schedule."
+  say "Rollback: scripts/deploy_n8n.sh --unpublish-callables"
+}
+unpublish_callables() {
+  load_manifest_arrays
+  require_n8n || exit 1
+  detect_n8n_version
+  say "Callable sub-workflows to UNPUBLISH:"
+  for f in "${CALLABLE_TARGETS[@]}"; do say "  - ${f}"; done
+  if [ "$ASSUME_YES" != "yes" ]; then
+    printf 'Unpublish %d callable sub-workflow(s)? [y/N] ' "${#CALLABLE_TARGETS[@]}"
+    read -r reply
+    case "$reply" in y|Y|yes|YES) ;; *) say "Aborted. Nothing changed."; exit 0 ;; esac
+  fi
+  local listing; listing="$(n8n_cli list:workflow 2>/dev/null || true)"
+  for f in "${CALLABLE_TARGETS[@]}"; do
+    local nm id; nm="$(node -e 'process.stdout.write(String(require(process.argv[1]).name||""))' "${WF_DIR}/${f}")"
+    resolve_into "$nm" "$listing"; id="$RESOLVE_ID"
+    case "$RESOLVE_STATUS" in
+      ambiguous) die "ambiguous exact workflow name for ${f} (\"${nm}\") — refusing (DEPLOY-002)." ;;
+      absent) say "  [skip] ${f}: not found"; continue ;;
+    esac
+    say ">> unpublishing callable ${f} (id_fp=$(id_fingerprint "$id"))"
+    n8n_deactivate_id "$id"
+  done
+  hr; say "Done. All callable sub-workflows unpublished."
+}
+
 deactivate_triggers() {
   load_manifest_arrays
   require_n8n || exit 1
@@ -954,6 +1031,13 @@ case "$MODE" in
   activate-telegram)
     validate_json
     activate_telegram
+    ;;
+  publish-callables)
+    validate_json
+    publish_callables
+    ;;
+  unpublish-callables)
+    unpublish_callables
     ;;
   deactivate-triggers)
     deactivate_triggers
