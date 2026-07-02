@@ -168,14 +168,23 @@ A.section('§13.14/15 — release evidence carries rollback data and NO secrets 
 }
 
 // ------------------------------------------------------------------------------------------------------------
-A.section('§13.16/17 — activation path: WF18 gate is consulted and currently fails closed');
+A.section('§13.16/17 — activation path: WF18 gate is consulted and enforces the blocker registry');
 {
   const idx = fullIdx(); const local = RID.scaffold(identity); KEYS.forEach(k => { local.workflows[k].id = 'pid_' + k; });
   // activation strict preflight needs token/webhook/secret; provide a full activation env so we reach the gate
   const actEnv = { MS_SPREADSHEET_ID: 's', MS_TELEGRAM_ALLOWED_USER_IDS: '1', MS_TELEGRAM_BOT_TOKEN: '123456789:AAAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', MS_TELEGRAM_WEBHOOK_SECRET: '0123456789abcdef0123', PUBLIC_WEBHOOK_BASE_URL: 'https://ops.example.com', N8N_BLOCK_ENV_ACCESS_IN_NODE: 'false', NODE_FUNCTION_ALLOW_BUILTIN: 'zlib' };
   const p = PLAN.plan({ identity, localMap: local, exportProvided: true, exportIdx: idx, env: actEnv, credExport: [], credRefs: [], options: { target: 'production', mode: 'apply', activate: true, requireZlib: true } });
   A.ok('activation plan includes a wf18_gate step', p.steps.some(s => s.id === 'wf18_gate'));
-  A.ok('WF18 gate currently fails closed (rearchitecture pending)', p.ok === false && p.abort_step === 'wf18_gate');
+  // The gate's verdict must MATCH config/wf18_blockers.json — not a hardcoded world-state. With any open P0/P1
+  // blocker the plan aborts at wf18_gate; with all resolved/accepted the plan proceeds past it.
+  const blockers = JSON.parse(fs.readFileSync(path.join(ROOT, 'config', 'wf18_blockers.json'), 'utf8'));
+  const list = Array.isArray(blockers) ? blockers : (blockers.blockers || []);
+  const open = list.filter(b => /^P[01]$/.test(String(b.severity)) && ['resolved', 'accepted'].indexOf(String(b.status)) < 0);
+  if (open.length) {
+    A.ok('open P0/P1 blockers (' + open.map(b => b.id).join(',') + ') => gate fails closed', p.ok === false && p.abort_step === 'wf18_gate');
+  } else {
+    A.ok('all P0/P1 blockers resolved/accepted => gate passes (no wf18_gate abort)', p.abort_step !== 'wf18_gate');
+  }
 }
 
 // ------------------------------------------------------------------------------------------------------------
