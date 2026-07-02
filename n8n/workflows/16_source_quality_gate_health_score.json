@@ -297,93 +297,40 @@
       "parameters": {
         "inputSource": "workflowInputs",
         "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "schema": [
+          "values": [
             {
-              "id": "agent_request_id",
-              "displayName": "agent_request_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "agent_request_id",
+              "type": "string"
             },
             {
-              "id": "source_run_id",
-              "displayName": "source_run_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "source_run_id",
+              "type": "string"
             },
             {
-              "id": "workflow_run_id",
-              "displayName": "workflow_run_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "workflow_run_id",
+              "type": "string"
             },
             {
-              "id": "data_mode",
-              "displayName": "data_mode",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "data_mode",
+              "type": "string"
             },
             {
-              "id": "platform_filter",
-              "displayName": "platform_filter",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "platform_filter",
+              "type": "string"
             },
             {
-              "id": "source_family_filter",
-              "displayName": "source_family_filter",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "source_family_filter",
+              "type": "string"
             },
             {
-              "id": "freshness_window_days",
-              "displayName": "freshness_window_days",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "freshness_window_days",
+              "type": "string"
             },
             {
-              "id": "fixture_self_test",
-              "displayName": "fixture_self_test",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "fixture_self_test",
+              "type": "string"
             }
-          ],
-          "matchingColumns": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
+          ]
         }
       },
       "type": "n8n-nodes-base.executeWorkflowTrigger",

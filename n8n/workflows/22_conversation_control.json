@@ -16,93 +16,40 @@
       "parameters": {
         "inputSource": "workflowInputs",
         "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "schema": [
+          "values": [
             {
-              "id": "domain",
-              "displayName": "domain",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "domain",
+              "type": "string"
             },
             {
-              "id": "op",
-              "displayName": "op",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "op",
+              "type": "string"
             },
             {
-              "id": "arg",
-              "displayName": "arg",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "arg",
+              "type": "string"
             },
             {
-              "id": "owner_user_id",
-              "displayName": "owner_user_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "owner_user_id",
+              "type": "string"
             },
             {
-              "id": "chat_id",
-              "displayName": "chat_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "chat_id",
+              "type": "string"
             },
             {
-              "id": "agent_request_id",
-              "displayName": "agent_request_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "agent_request_id",
+              "type": "string"
             },
             {
-              "id": "conversation_id",
-              "displayName": "conversation_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "conversation_id",
+              "type": "string"
             },
             {
-              "id": "confirmed",
-              "displayName": "confirmed",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "confirmed",
+              "type": "string"
             }
-          ],
-          "matchingColumns": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
+          ]
         }
       },
       "type": "n8n-nodes-base.executeWorkflowTrigger",

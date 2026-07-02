@@ -172,6 +172,13 @@ A.section('DISPATCH-PUBLISH-001 — callable dispatch targets are publishable (n
     const wf = JSON.parse(fs2.readFileSync(path2.join(L2.WF_DIR, f), 'utf8'));
     const bad = (wf.nodes || []).filter(n => /trigger|webhook|cron|interval/i.test(String(n.type)) && !/executeWorkflowTrigger|manualTrigger/.test(String(n.type)));
     A.eq(f + ' has no public/scheduled trigger (safe to publish)', bad.map(n => n.type).join(','), '');
+    // TRIGGER-INPUTS-001: the trigger's workflowInputs is a fixedCollection { values:[{name,type}] } with
+    // minRequiredFields=1. The caller-style resourceMapper ({mappingMode,value,schema}) counts as ZERO fields —
+    // checkForWorkflowIssues then kills every server-side dispatch with WorkflowHasIssuesError (live-observed).
+    const trg = (wf.nodes || []).find(n => /executeWorkflowTrigger/.test(String(n.type)));
+    const wi = (trg && trg.parameters && trg.parameters.workflowInputs) || {};
+    A.ok(f + ' trigger declares >=1 fixedCollection input field (no resourceMapper shape)',
+      Array.isArray(wi.values) && wi.values.length >= 1 && wi.values.every(v => v && v.name) && wi.mappingMode === undefined && wi.schema === undefined);
   }
   // WF23/WF25 are NOT callables — publishing callables must never touch the scheduled workflows
   A.ok('WF23/WF25 are not in the callable publish set', L2.callableTargets().every(f => !/^2[35]_/.test(f)));

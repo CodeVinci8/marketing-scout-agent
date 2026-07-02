@@ -237,17 +237,20 @@ function httpVk(id, name, pos) {
 }
 // Execute Sub-workflow Trigger ("When Called by Agent") declaring NAMED canonical input fields (mirrors WF04/08
 // callable contract so the parent passes named fields, not positional/.first()). Array fields use type 'array'.
+// TRIGGER-INPUTS-001: the TRIGGER's `workflowInputs` is a fixedCollection { values: [{name,type},...] } with
+// minRequiredFields=1 (n8n-nodes-base executeWorkflowTrigger tv1.1). The caller-style resourceMapper shape
+// ({mappingMode,value,schema}) counts as ZERO fields, so checkForWorkflowIssues flagged every callable with
+// "At least 1 field is required" and the live dispatch died with WorkflowHasIssuesError. The resourceMapper
+// shape belongs ONLY on the CALLER executeWorkflow node (execWf below).
 function subTrigger(id, name, pos, fields) {
   return {
     parameters: {
       inputSource: 'workflowInputs',
       workflowInputs: {
-        mappingMode: 'defineBelow', value: {},
-        schema: (fields || []).map(function (f) {
+        values: (fields || []).map(function (f) {
           var fld = (typeof f === 'string') ? { id: f, type: 'string' } : f;
-          return { id: fld.id, displayName: fld.id, required: false, type: fld.type || 'string', display: true, defaultMatch: false, canBeUsedToMatch: false, removed: false };
-        }),
-        matchingColumns: [], attemptToConvertTypes: false, convertFieldsToString: false
+          return { name: fld.id, type: fld.type === 'array' ? 'array' : (fld.type || 'string') };
+        })
       }
     },
     type: 'n8n-nodes-base.executeWorkflowTrigger', typeVersion: 1.1, position: pos, id: id, name: name

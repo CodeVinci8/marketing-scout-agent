@@ -591,113 +591,48 @@
       "parameters": {
         "inputSource": "workflowInputs",
         "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "schema": [
+          "values": [
             {
-              "id": "agent_request_id",
-              "displayName": "agent_request_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "agent_request_id",
+              "type": "string"
             },
             {
-              "id": "source_run_id",
-              "displayName": "source_run_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "source_run_id",
+              "type": "string"
             },
             {
-              "id": "workflow_run_id",
-              "displayName": "workflow_run_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "workflow_run_id",
+              "type": "string"
             },
             {
-              "id": "data_mode",
-              "displayName": "data_mode",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "data_mode",
+              "type": "string"
             },
             {
-              "id": "report_type",
-              "displayName": "report_type",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "report_type",
+              "type": "string"
             },
             {
-              "id": "niche_id",
-              "displayName": "niche_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "niche_id",
+              "type": "string"
             },
             {
-              "id": "region",
-              "displayName": "region",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "region",
+              "type": "string"
             },
             {
-              "id": "top_n",
-              "displayName": "top_n",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "top_n",
+              "type": "string"
             },
             {
-              "id": "enable_llm_summary",
-              "displayName": "enable_llm_summary",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "enable_llm_summary",
+              "type": "string"
             },
             {
-              "id": "llm_approval_token",
-              "displayName": "llm_approval_token",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "llm_approval_token",
+              "type": "string"
             }
-          ],
-          "matchingColumns": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
+          ]
         }
       },
       "type": "n8n-nodes-base.executeWorkflowTrigger",

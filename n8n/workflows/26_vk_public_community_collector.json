@@ -16,83 +16,36 @@
       "parameters": {
         "inputSource": "workflowInputs",
         "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "schema": [
+          "values": [
             {
-              "id": "owner_user_id",
-              "displayName": "owner_user_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "owner_user_id",
+              "type": "string"
             },
             {
-              "id": "agent_request_id",
-              "displayName": "agent_request_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "agent_request_id",
+              "type": "string"
             },
             {
-              "id": "source_run_id",
-              "displayName": "source_run_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "source_run_id",
+              "type": "string"
             },
             {
-              "id": "workflow_run_id",
-              "displayName": "workflow_run_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "workflow_run_id",
+              "type": "string"
             },
             {
-              "id": "community",
-              "displayName": "community",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "community",
+              "type": "string"
             },
             {
-              "id": "data_mode",
-              "displayName": "data_mode",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "data_mode",
+              "type": "string"
             },
             {
-              "id": "mode",
-              "displayName": "mode",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "mode",
+              "type": "string"
             }
-          ],
-          "matchingColumns": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
+          ]
         }
       },
       "type": "n8n-nodes-base.executeWorkflowTrigger",

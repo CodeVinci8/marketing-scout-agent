@@ -167,8 +167,16 @@ A.section('sheets contracts + schedule guards');
 A.section('WF18 gate + honestly-pending environment-bound markers');
 {
   const g = GATE.gate(GATE.load());
-  mark('WF18_REARCHITECTURE', g.marker.split('=')[1]); // PENDING now
-  A.ok('WF18 rearchitecture is honestly PENDING (gate blocks activation)', g.allow === false && M.WF18_REARCHITECTURE === 'PENDING');
+  mark('WF18_REARCHITECTURE', g.marker.split('=')[1]);
+  // The gate verdict must MATCH the blocker registry — never a hardcoded world-state. Open P0/P1 blockers =>
+  // honestly PENDING; all resolved/accepted (IDEMP-001 closed by the atomic claim, commit c295fd9) => READY.
+  const reg = GATE.load();
+  const regOpen = (Array.isArray(reg) ? reg : (reg.blockers || [])).filter(b => /^P[01]$/.test(String(b.severity)) && ['resolved', 'accepted'].indexOf(String(b.status)) < 0);
+  if (regOpen.length) {
+    A.ok('open P0/P1 blockers => gate honestly PENDING', g.allow === false && M.WF18_REARCHITECTURE === 'PENDING');
+  } else {
+    A.ok('all P0/P1 blockers closed => gate READY (activation allowed)', g.allow === true && M.WF18_REARCHITECTURE === 'READY');
+  }
   // These require a real disposable/production/live environment we DO NOT have here — never fake a PASS.
   for (const k of ['DISPOSABLE_IMPORT', 'DISPOSABLE_REIMPORT', 'WORKFLOW_VERSION_SEMANTICS', 'TELEGRAM_PRELIVE',
     'WF18_SECURITY', 'WF18_TOPOLOGY', 'WF18_STATE_MACHINE', 'WF18_IDEMPOTENCY', 'WF18_DISPATCH']) mark(k, 'OPERATOR_PENDING');

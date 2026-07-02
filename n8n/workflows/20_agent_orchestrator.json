@@ -16,93 +16,40 @@
       "parameters": {
         "inputSource": "workflowInputs",
         "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "schema": [
+          "values": [
             {
-              "id": "agent_request_id",
-              "displayName": "agent_request_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "agent_request_id",
+              "type": "string"
             },
             {
-              "id": "chat_id",
-              "displayName": "chat_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "chat_id",
+              "type": "string"
             },
             {
-              "id": "owner_user_id",
-              "displayName": "owner_user_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "owner_user_id",
+              "type": "string"
             },
             {
-              "id": "conversation_id",
-              "displayName": "conversation_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "conversation_id",
+              "type": "string"
             },
             {
-              "id": "plan_id",
-              "displayName": "plan_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "plan_id",
+              "type": "string"
             },
             {
-              "id": "plan_hash",
-              "displayName": "plan_hash",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "plan_hash",
+              "type": "string"
             },
             {
-              "id": "data_mode",
-              "displayName": "data_mode",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "data_mode",
+              "type": "string"
             },
             {
-              "id": "state",
-              "displayName": "state",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "state",
+              "type": "string"
             }
-          ],
-          "matchingColumns": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
+          ]
         }
       },
       "type": "n8n-nodes-base.executeWorkflowTrigger",

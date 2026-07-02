@@ -507,133 +507,56 @@
       "parameters": {
         "inputSource": "workflowInputs",
         "workflowInputs": {
-          "mappingMode": "defineBelow",
-          "value": {},
-          "schema": [
+          "values": [
             {
-              "id": "agent_request_id",
-              "displayName": "agent_request_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "agent_request_id",
+              "type": "string"
             },
             {
-              "id": "source_run_id",
-              "displayName": "source_run_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "source_run_id",
+              "type": "string"
             },
             {
-              "id": "workflow_run_id",
-              "displayName": "workflow_run_id",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "workflow_run_id",
+              "type": "string"
             },
             {
-              "id": "data_mode",
-              "displayName": "data_mode",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "data_mode",
+              "type": "string"
             },
             {
-              "id": "force_reprocess",
-              "displayName": "force_reprocess",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "force_reprocess",
+              "type": "string"
             },
             {
-              "id": "platform_filter",
-              "displayName": "platform_filter",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "platform_filter",
+              "type": "string"
             },
             {
-              "id": "source_type_filter",
-              "displayName": "source_type_filter",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "source_type_filter",
+              "type": "string"
             },
             {
-              "id": "llm_enabled",
-              "displayName": "llm_enabled",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "llm_enabled",
+              "type": "string"
             },
             {
-              "id": "llm_approval_token",
-              "displayName": "llm_approval_token",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "llm_approval_token",
+              "type": "string"
             },
             {
-              "id": "llm_budget_usd",
-              "displayName": "llm_budget_usd",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "llm_budget_usd",
+              "type": "string"
             },
             {
-              "id": "request_cancelled",
-              "displayName": "request_cancelled",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "request_cancelled",
+              "type": "string"
             },
             {
-              "id": "max_records",
-              "displayName": "max_records",
-              "required": false,
-              "type": "string",
-              "display": true,
-              "defaultMatch": false,
-              "canBeUsedToMatch": false,
-              "removed": false
+              "name": "max_records",
+              "type": "string"
             }
-          ],
-          "matchingColumns": [],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": true
+          ]
         }
       },
       "type": "n8n-nodes-base.executeWorkflowTrigger",
