@@ -15,7 +15,8 @@
         0
       ],
       "id": "wf18-hook",
-      "name": "Telegram Webhook"
+      "name": "Telegram Webhook",
+      "webhookId": "a3b40e18-6f1c-4c95-8e3a-77b1c92d4f01"
     },
     {
       "parameters": {

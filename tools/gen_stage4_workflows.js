@@ -61,7 +61,10 @@ function scheduleTrigger(id, name, pos, hours) {
 function webhook(id, name, pos, p) {
   // responseMode:'responseNode' => a Respond to Webhook node returns the HTTP response fast (WEBHOOK-001), so
   // Telegram is acknowledged before Sheets/dispatch and never retries due to a slow downstream.
-  return { parameters: { httpMethod: 'POST', path: p, responseMode: 'responseNode', options: {} }, type: 'n8n-nodes-base.webhook', typeVersion: 2, position: pos, id: id, name: name };
+  // WEBHOOK-PATH-001: `webhookId` MUST be present. When it is missing, n8n 2.x registers the FALLBACK dynamic
+  // path `<workflowId>/<node name>/<path>` instead of `/webhook/<path>` (live-observed in webhook_entity), so
+  // the canonical /webhook/ms-telegram-agent URL 404s. A stable committed UUID keeps the path deterministic.
+  return { parameters: { httpMethod: 'POST', path: p, responseMode: 'responseNode', options: {} }, type: 'n8n-nodes-base.webhook', typeVersion: 2, position: pos, id: id, name: name, webhookId: 'a3b40e18-6f1c-4c95-8e3a-77b1c92d4f01' };
 }
 // Respond to Webhook — immediate 200 (WEBHOOK-001). Used on every WF18 terminal branch (accept + every safe stop).
 function respond(id, name, pos) {

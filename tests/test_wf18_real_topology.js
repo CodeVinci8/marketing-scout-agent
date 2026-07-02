@@ -70,6 +70,10 @@ A.eq('5c. duplicate branch reaches ZERO Telegram business sends', nodeIn(WF18, n
 A.ok('webhook responds fast: Telegram Webhook -> Respond 200 -> Ingress Security Gate', edges(WF18).some(e => e.from === 'Telegram Webhook' && e.to === 'Respond 200') && edges(WF18).some(e => e.from === 'Respond 200' && e.to === 'Ingress Security Gate'));
 A.ok('webhook configured for responseNode (explicit Respond) ', (nodeByName(WF18, 'Telegram Webhook').parameters || {}).responseMode === 'responseNode');
 A.eq('Respond 200 is reachable before any Sheets write (fast ack)', nodeIn(WF18, reachable(WF18, 'Telegram Webhook')).filter(isSheetsWrite).length >= 0 && nodeByName(WF18, 'Respond 200').type, 'n8n-nodes-base.respondToWebhook');
+// WEBHOOK-PATH-001: without a node-level webhookId, n8n 2.x registers the FALLBACK dynamic path
+// "<workflowId>/<node name>/<path>" (live-observed in webhook_entity) and /webhook/ms-telegram-agent 404s.
+A.ok('webhook node carries a stable webhookId (canonical /webhook/ms-telegram-agent path)', /^[0-9a-f-]{36}$/.test(String(nodeByName(WF18, 'Telegram Webhook').webhookId || '')));
+A.eq('webhook path stays ms-telegram-agent', (nodeByName(WF18, 'Telegram Webhook').parameters || {}).path, 'ms-telegram-agent');
 
 A.section('§19.6-13 — real executeWorkflow dispatcher + callable children + resolvable bindings');
 const execNodes = (WF18.nodes || []).filter(isExecWf);
