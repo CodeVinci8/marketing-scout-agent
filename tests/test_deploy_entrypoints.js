@@ -93,6 +93,7 @@ try {
     { id: 'cg', name: 'Google Sheets - Marketing Scout Service Account', type: 'googleApi' },
     { id: 'cc', name: 'Claude API - Marketing Scout', type: 'httpHeaderAuth' },
     { id: 'cf', name: 'Firecrawl API - Marketing Scout', type: 'httpHeaderAuth' },
+    { id: 'ca', name: 'Apify API - Marketing Scout', type: 'httpHeaderAuth' },
     { id: 'cv', name: 'HTTP Query Auth - VK Access Token', type: 'httpQueryAuth' }
   ];
   const credsFile = path.join(work, 'creds.json'); fs.writeFileSync(credsFile, JSON.stringify(creds));

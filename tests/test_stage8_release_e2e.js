@@ -37,8 +37,8 @@ const d = L.deployment();
 mark('STAGE8_DISCOVERY', 'PASS');
 mark('N8N_VERSION_MATCH', d.n8n_version === '2.23.3' ? 'PASS' : 'FAIL');
 mark('RUNTIME_WORKFLOWS', String(d.runtime_workflow_count));
-A.eq('runtime workflow count == 15', d.runtime_workflow_count, 15);
-A.eq('binding edges == 13', d.binding_edge_count, 13);
+A.eq('runtime workflow count == 17', d.runtime_workflow_count, 17);
+A.eq('binding edges == 16', d.binding_edge_count, 16);
 A.eq('n8n version 2.23.3', d.n8n_version, '2.23.3');
 
 // every committed runtime workflow is inactive
@@ -50,16 +50,16 @@ A.eq('committed runtime workflows all inactive', active, 0);
 // ---------------------------------------------------------------------------------------------------------
 A.section('operator-local id resolution (canonical ids, exact-name uniqueness)');
 {
-  // exact-name uniqueness across the 15 runtime identities
+  // exact-name uniqueness across the 17 runtime identities
   const names = KEYS.map(k => identity[k].name);
-  mark('EXACT_NAME_UNIQUENESS', new Set(names).size === 15 ? 'PASS' : 'FAIL');
-  A.eq('15 unique runtime names', new Set(names).size, 15);
-  // fresh install -> generate all 15; then discovery -> verified; both fail-closed clean
+  mark('EXACT_NAME_UNIQUENESS', new Set(names).size === 17 ? 'PASS' : 'FAIL');
+  A.eq('17 unique runtime names', new Set(names).size, 17);
+  // fresh install -> generate all 17; then discovery -> verified; both fail-closed clean
   const fresh = RID.resolveAll(identity, RID.emptyMap(), { byName: {}, byId: {} });
   const exportIdx = { byName: {}, byId: {} }; KEYS.forEach(k => { exportIdx.byName[identity[k].name] = ['id_' + k]; exportIdx.byId['id_' + k] = identity[k].name; });
   const disc = RID.resolveAll(identity, RID.emptyMap(), exportIdx);
-  mark('CANONICAL_IDS', fresh.ok && disc.ok && disc.report.coverage === '15/15' ? 'PASS' : 'FAIL');
-  A.ok('fresh-install + discovery both resolve 15/15', fresh.ok && disc.ok && disc.report.coverage === '15/15');
+  mark('CANONICAL_IDS', fresh.ok && disc.ok && disc.report.coverage === '17/17' ? 'PASS' : 'FAIL');
+  A.ok('fresh-install + discovery both resolve 17/17', fresh.ok && disc.ok && disc.report.coverage === '17/17');
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -67,8 +67,8 @@ A.section('exact-name workflow reconciliation + credential reconciliation');
 {
   const idx = { byName: {}, byId: {} }; KEYS.forEach(k => { idx.byName[identity[k].name] = ['pid_' + k]; idx.byId['pid_' + k] = identity[k].name; });
   const rw = RW.reconcile(identity, idx, RID.emptyMap());
-  mark('WORKFLOW_RECONCILIATION', rw.ok && rw.summary.updates === 15 ? 'PASS' : 'FAIL');
-  A.ok('reconcile: 15 single-match updates, fail-closed clean', rw.ok && rw.summary.updates === 15);
+  mark('WORKFLOW_RECONCILIATION', rw.ok && rw.summary.updates === 17 ? 'PASS' : 'FAIL');
+  A.ok('reconcile: 17 single-match updates, fail-closed clean', rw.ok && rw.summary.updates === 17);
 
   // credential reconciliation against a synthetic ATTACHED export (real ids), all satisfied
   const refs = [{ file: '08.json', node: 'G', type: 'googleApi', id: 'RG' }, { file: '08.json', node: 'C', type: 'httpHeaderAuth', id: 'RH' }];
@@ -88,9 +88,9 @@ A.section('bindings (manifest edges + zero placeholders by construction)');
   const edges = L.bindingEdges();
   const closure = new Set(L.runtimeClosure());
   const allTargetsInClosure = edges.every(e => closure.has(e.target_workflow));
-  mark('BINDINGS', edges.length === 13 && allTargetsInClosure ? 'PASS' : 'FAIL');
+  mark('BINDINGS', edges.length === 16 && allTargetsInClosure ? 'PASS' : 'FAIL');
   mark('PLACEHOLDERS_REMAINING', '0');
-  A.ok('13 binding edges, all targets in runtime closure', edges.length === 13 && allTargetsInClosure);
+  A.ok('16 binding edges, all targets in runtime closure', edges.length === 16 && allTargetsInClosure);
 }
 
 // ---------------------------------------------------------------------------------------------------------

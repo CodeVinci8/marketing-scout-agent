@@ -19,7 +19,7 @@ A.section('DEPLOY-002 — exact-name count drives create/update/abort');
   // count==1 for all -> all UPDATE, preserve production id
   const r = RW.reconcile(identity, fullExport(), RID.emptyMap());
   A.ok('all single-match -> ok', r.ok);
-  A.eq('15 updates', r.summary.updates, 15);
+  A.eq('17 updates', r.summary.updates, 17);
   A.eq('0 creates', r.summary.creates, 0);
   A.ok('every plan item UPDATE', r.plan.every(p => p.action === RW.ACTIONS.UPDATE));
 }
@@ -29,7 +29,7 @@ A.section('DEPLOY-002 — exact-name count drives create/update/abort');
   const local = RID.scaffold(identity); local.workflows.WF18.id = 'localWF18';
   const r = RW.reconcile(identity, empty, local);
   A.ok('empty export still ok (creates)', r.ok);
-  A.eq('15 creates', r.summary.creates, 15);
+  A.eq('17 creates', r.summary.creates, 17);
   A.ok('WF18 create uses the local id fingerprint', r.plan.find(p => p.wf === 'WF18').id_fingerprint === RID.fingerprint('localWF18'));
 }
 {

@@ -31,7 +31,7 @@ const EMBEDS = [
   ['19_request_planner.json', 'Build Approval Message', ['request_planner', 'telegram_io', 'scope_preview', 'plan_render_ru']],
   ['22_conversation_control.json', 'Apply Control Command', ['conversation_memory', 'tracked_sources', 'plan_render_ru']],
   ['20_agent_orchestrator.json', 'Approval & Budget Gate', ['approval_gate', 'agent_state']],
-  ['20_agent_orchestrator.json', 'Normalize Adapter Result', ['source_adapter']],
+  ['20_agent_orchestrator.json', 'Normalize Website Result', ['source_adapter']],
   ['20_agent_orchestrator.json', 'Build Execution Summary', ['source_adapter', 'execution_summary']],
   ['20_agent_orchestrator.json', 'Build Delivery Outbox', ['telegram_io']]
 ];
@@ -172,7 +172,7 @@ A.eq('approved+in-budget => gate allowed', gOk.gate.gate_allowed, true);
 A.eq('cancelled => gate blocked', orchGate({ state: 'cancelled', approved: false }).gate.gate_allowed, false);
 A.eq('not approved => gate blocked', orchGate({ state: 'awaiting_approval', approved: false }).gate.gate_allowed, false);
 // healthy adapter normalize -> summary -> outbox dedupe
-H.runCodeNode(gOk.run, WF20, 'Normalize Adapter Result', [{ json: { live_source_run: { agent_request_id: 'req_1', source_run_id: 'firecrawl_X', items_received: 4, items_written: 4, items_relevant: 3, external_calls: 4, cost_status: 'unknown', platform: 'website', data_mode: 'live' } } }]);
+H.runCodeNode(gOk.run, WF20, 'Normalize Website Result', [{ json: { live_source_run: { agent_request_id: 'req_1', source_run_id: 'firecrawl_X', items_received: 4, items_written: 4, items_relevant: 3, external_calls: 4, cost_status: 'unknown', platform: 'website', data_mode: 'live' } } }]);
 const summ = H.runCodeNode(gOk.run, WF20, 'Build Execution Summary', [{ json: { report: { report_id: 'rep1', rows_after_filters: 3, records_unique: 4, records_eligible: 3, records_analyzed: 3, llm_primary_calls: 0, llm_repair_calls: 0 } } }])[0].json;
 A.eq('summary records reported', summ.summary.records_reported, 3);
 A.eq('summary source cost stays unknown', summ.summary.source_cost_status, 'unknown');

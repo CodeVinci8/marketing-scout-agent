@@ -144,21 +144,29 @@ function build() {
     return 'orchestration';
   }
 
-  // ---- deterministic import order: config -> callable deps -> orchestration -> entrypoints (numeric within) ----
+  // ---- deterministic import order: TOPOLOGICAL (every Execute Sub-workflow dependency imports before its
+  // caller — the only property the deploy actually needs), tie-broken by role (config -> callable deps ->
+  // orchestration -> entrypoints) then numerically. The old role-bucket order broke the moment an orchestrator
+  // gained a dependency with a higher number (Stage 5: WF20 -> WF26).
   const byNumKey = f => Number((f.match(/^(\d+)/) || [])[1] || 0);
   const numSort = (x, y) => byNumKey(x) - byNumKey(y);
-  const roleFiles = { entrypoint: [], orchestration: [], callable_dependency: [] };
-  for (const f of closure) {
+  const rolePrio = f => {
+    if (/^17_/.test(f)) return 0;
     const r = roleOf(f, a.classification[f] || []);
-    if (roleFiles[r]) roleFiles[r].push(f);
+    return r === 'callable_dependency' ? 1 : (r === 'orchestration' ? 2 : 3);
+  };
+  const closureFiles = Array.from(closure);
+  const depsOf = f => (calls[f] || []).filter(t => closure.has(t) && t !== f);
+  const importOrder = [];
+  const placed = new Set();
+  while (importOrder.length < closureFiles.length) {
+    const ready = closureFiles
+      .filter(f => !placed.has(f) && depsOf(f).every(t => placed.has(t)))
+      .sort((x, y) => (rolePrio(x) - rolePrio(y)) || (byNumKey(x) - byNumKey(y)));
+    if (!ready.length) throw new Error('import order: dependency cycle among ' + closureFiles.filter(f => !placed.has(f)).join(', '));
+    placed.add(ready[0]);
+    importOrder.push(ready[0]);
   }
-  const config = roleFiles.orchestration.filter(f => /^17_/.test(f));
-  const orchestration = roleFiles.orchestration.filter(f => !/^17_/.test(f)).sort(numSort);
-  const importOrder = []
-    .concat(config.sort(numSort))
-    .concat(roleFiles.callable_dependency.slice().sort(numSort))
-    .concat(orchestration)
-    .concat(roleFiles.entrypoint.slice().sort(numSort));
 
   // activation feature flag lookup per file
   const activationFlag = {};

@@ -35,7 +35,7 @@ function deliver(req, adapterRaw, report) {
   const run = H.makeRun();
   H.inject(run, 'Resolve Agent Config', [CFG]);
   H.runCodeNode(run, WF20, 'Approval & Budget Gate', [{ json: { request: req, plan: { sources: ['website'], source: 'website', est_items: 10, est_external_calls: 4, est_source_cost_usd: 0.05, est_llm_cost_usd: 0.1 } } }]);
-  H.runCodeNode(run, WF20, 'Normalize Adapter Result', [{ json: { live_source_run: adapterRaw } }]);
+  H.runCodeNode(run, WF20, 'Normalize Website Result', [{ json: { live_source_run: adapterRaw } }]);
   H.runCodeNode(run, WF20, 'Build Execution Summary', [{ json: { report: report } }]);
   return H.runCodeNode(run, WF20, 'Build Delivery Outbox', [])[0].json;
 }

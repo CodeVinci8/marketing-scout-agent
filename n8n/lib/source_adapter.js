@@ -13,6 +13,7 @@ function num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefi
 const FAMILIES = {
   website: { family: 'website', platform: 'website', first_class: true },
   avito: { family: 'classifieds', platform: 'avito', first_class: false, experimental: true },
+  telegram: { family: 'social', platform: 'telegram', first_class: false, optional: true },
   vk: { family: 'social', platform: 'vk', first_class: false, optional: true }
 };
 

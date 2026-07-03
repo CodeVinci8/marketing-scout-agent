@@ -25,6 +25,7 @@ const NICHE_HINTS = [
 const SOURCE_HINTS = [
   [/сайт|website|firecrawl|конкурент.{0,12}сайт/i, 'website'],
   [/avito|авито|объявлен/i, 'avito'],
+  [/telegram|телеграм|t\.me|канал/i, 'telegram'],
   [/vk|вконтакте|соцсет/i, 'vk']
 ];
 
@@ -37,11 +38,13 @@ function deterministicPlan(text, cfg) {
   for (const [rx, v] of NICHE_HINTS) { if (rx.test(t)) { niche = v; break; } }
   const sources = [];
   for (const [rx, v] of SOURCE_HINTS) { if (rx.test(t)) sources.push(v); }
-  // default to the first-class website path when nothing specific is asked, intersect with allowlist
-  let requested = sources.length ? sources : ['website'];
+  // a generic competitor scan collects from EVERY allowlisted source (Stage 5 multi-source); an explicit source
+  // mention narrows it. Always intersected with the allowlist and capped by max_sources_per_request.
   const allow = (cfg.source_allowlist || ['website']).map(low);
+  let requested = sources.length ? sources : allow.slice();
   requested = requested.filter(s => allow.indexOf(s) >= 0);
   if (!requested.length) requested = allow.slice(0, 1);
+  requested = requested.slice(0, Math.max(1, num(cfg.max_sources_per_request, 3)));
   const maxItems = num(cfg.max_items_per_source, 25);
   const maxCalls = num(cfg.max_external_calls, 40);
   return normalizePlan({
@@ -67,6 +70,7 @@ function normalizePlan(p, cfg) {
   let sources = (Array.isArray(p.sources) ? p.sources : str(p.sources).split(/[\s,;]+/)).map(low).filter(Boolean)
     .filter(s => allow.indexOf(s) >= 0);
   if (!sources.length) sources = allow.slice(0, 1);
+  sources = sources.slice(0, Math.max(1, num(cfg.max_sources_per_request, 3)));
   return {
     intent: str(p.intent) || 'competitor_market_scan',
     niche: str(p.niche) || str(p.service) || (cfg.default_niche || 'credit_brokerage'),

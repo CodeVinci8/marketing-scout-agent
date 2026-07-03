@@ -22,6 +22,8 @@ function bool(v, d) {
   return d;
 }
 function list(v) { return str(v).split(/[\s,;]+/).filter(Boolean); }
+// phrase list: split ONLY on ; or | (items may contain spaces, e.g. Avito search queries)
+function phraseList(v) { return str(v).split(/[;|]/).map(s => s.trim()).filter(Boolean); }
 
 // Production-safe defaults: fail-closed (approval + source-health required), website-only allowlist,
 // LLM features OFF, tight budgets. Everything is overridable by env or explicit override.
@@ -54,8 +56,17 @@ const DEFAULTS = {
   enable_apify: false,
   enable_firecrawl: false,
   enable_vk: false,
+  // Stage 5: Telegram PUBLIC channel preview collector (t.me/s/<channel>, no per-call fee but still an external
+  // fetch — gated like every collector). Distinct from enable_telegram (the bot ingress).
+  enable_telegram_collector: false,
   monitoring_enabled: false,
-  weekly_digest_enabled: false
+  weekly_digest_enabled: false,
+  // Stage 5 MVP source targets (overridable by env; NON-secret). Avito queries are phrases (split on ';').
+  avito_queries: ['кредитный брокер Москва', 'помощь в получении кредита Москва', 'кредит под ПТС Москва'],
+  telegram_channels: ['mfo_market', 'da_credit', 'broker_Aleksey'],
+  vk_communities: ['kredit874', 'da_credit', 'anna_findoctor'],
+  // real Moscow competitor sites for the website source (set via MS_WEBSITE_COMPETITOR_URLS; https only)
+  website_competitor_urls: []
 };
 
 // Map env var -> resolved config. Unknown/blank env falls back to DEFAULTS; explicit overrides win last.
@@ -87,8 +98,13 @@ function resolveConfig(env, overrides) {
     enable_apify: bool(env.MS_ENABLE_APIFY, DEFAULTS.enable_apify),
     enable_firecrawl: bool(env.MS_ENABLE_FIRECRAWL, DEFAULTS.enable_firecrawl),
     enable_vk: bool(env.MS_ENABLE_VK, DEFAULTS.enable_vk),
+    enable_telegram_collector: bool(env.MS_ENABLE_TELEGRAM_COLLECTOR, DEFAULTS.enable_telegram_collector),
     monitoring_enabled: bool(env.MS_MONITORING_ENABLED, DEFAULTS.monitoring_enabled),
-    weekly_digest_enabled: bool(env.MS_WEEKLY_DIGEST_ENABLED, DEFAULTS.weekly_digest_enabled)
+    weekly_digest_enabled: bool(env.MS_WEEKLY_DIGEST_ENABLED, DEFAULTS.weekly_digest_enabled),
+    avito_queries: (phraseList(env.MS_AVITO_QUERIES).length ? phraseList(env.MS_AVITO_QUERIES) : DEFAULTS.avito_queries.slice()).slice(0, 3),
+    telegram_channels: (list(env.MS_TELEGRAM_CHANNELS).length ? list(env.MS_TELEGRAM_CHANNELS) : DEFAULTS.telegram_channels.slice()).slice(0, 3),
+    vk_communities: (list(env.MS_VK_COMMUNITIES).length ? list(env.MS_VK_COMMUNITIES) : DEFAULTS.vk_communities.slice()).slice(0, 3),
+    website_competitor_urls: list(env.MS_WEBSITE_COMPETITOR_URLS).filter(u => /^https:\/\//i.test(u)).slice(0, 3)
   };
   for (const k in overrides) {
     if (Object.prototype.hasOwnProperty.call(overrides, k)) cfg[k] = overrides[k];
@@ -103,6 +119,8 @@ function resolveConfig(env, overrides) {
   cfg.enable_llm_intent = false;
   cfg.zero_paid_mode = (cfg.enable_external_actions !== true) || (Number(cfg.max_external_calls) <= 0);
   cfg.effective_max_external_calls = cfg.zero_paid_mode ? 0 : Number(cfg.max_external_calls);
+  // scope_preview/collector naming alias — one flag, two historical names
+  cfg.enable_vk_collector = cfg.enable_vk === true;
   // completeness check the orchestrator surfaces in the execution summary — never starts paid work blind
   cfg.missing = [];
   if (!cfg.spreadsheet_id) cfg.missing.push('MS_SPREADSHEET_ID');
@@ -126,7 +144,12 @@ function paidCallsAllowed(cfg) {
 function collectorEnabled(cfg, source) {
   if (!paidCallsAllowed(cfg)) return false;
   const s = String(source).toLowerCase();
-  const flag = { website: 'enable_firecrawl', firecrawl: 'enable_firecrawl', apify: 'enable_apify', avito: 'enable_apify', vk: 'enable_vk' }[s];
+  const flag = {
+    website: 'enable_firecrawl', firecrawl: 'enable_firecrawl',
+    apify: 'enable_apify', avito: 'enable_apify',
+    vk: 'enable_vk', vk_community: 'enable_vk',
+    telegram: 'enable_telegram_collector', telegram_channel: 'enable_telegram_collector'
+  }[s];
   return sourceAllowed(cfg, s) && (flag ? cfg[flag] === true : false);
 }
 function llmAllowed(cfg) { return !!(cfg && cfg.enable_claude === true && (cfg.enable_llm_planner === true || cfg.enable_llm_summary === true)); }
@@ -138,7 +161,10 @@ function freePathStatus(cfg) {
     paid_calls_allowed: paidCallsAllowed(cfg),
     llm_allowed: llmAllowed(cfg),
     effective_max_external_calls: cfg ? Number(cfg.effective_max_external_calls) : 0,
-    collectors: { firecrawl: collectorEnabled(cfg, 'website'), apify: collectorEnabled(cfg, 'apify'), vk: collectorEnabled(cfg, 'vk') }
+    collectors: {
+      firecrawl: collectorEnabled(cfg, 'website'), apify: collectorEnabled(cfg, 'apify'),
+      vk: collectorEnabled(cfg, 'vk'), avito: collectorEnabled(cfg, 'avito'), telegram: collectorEnabled(cfg, 'telegram')
+    }
   };
 }
 

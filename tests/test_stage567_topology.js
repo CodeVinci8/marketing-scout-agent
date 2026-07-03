@@ -103,7 +103,7 @@ A.section('Stage 7 — the 13 manifest binding edges include the scheduled-monit
   const edges = M.deployment.binding_edges.map(e => e.caller_wf + '->' + e.target_wf);
   A.ok('WF23 -> WF26 (VK) edge present', edges.indexOf('WF23->WF26') >= 0);
   A.ok('WF23 -> WF04 (website) edge present', edges.indexOf('WF23->WF04') >= 0);
-  A.eq('binding edge count is 13', M.deployment.binding_edges.length, 13);
+  A.eq('binding edge count is 16', M.deployment.binding_edges.length, 16);
 }
 
 A.report('stage567-topology');

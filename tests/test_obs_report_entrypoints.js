@@ -33,6 +33,7 @@ const CREDS_FULL = [
   { id: 'cg', name: 'Google Sheets - Marketing Scout Service Account', type: 'googleApi' },
   { id: 'cc', name: 'Claude API - Marketing Scout', type: 'httpHeaderAuth' },
   { id: 'cf', name: 'Firecrawl API - Marketing Scout', type: 'httpHeaderAuth' },
+  { id: 'ca', name: 'Apify API - Marketing Scout', type: 'httpHeaderAuth' },
   { id: 'cv', name: 'HTTP Query Auth - VK Access Token', type: 'httpQueryAuth' }
 ];
 // The real production state: the VK (httpQueryAuth) credential is intentionally DEFERRED (not yet attached).
