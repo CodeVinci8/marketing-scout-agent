@@ -116,8 +116,10 @@ function deliveryBody(report, summary, availableCaps) {
   report = report || {}; summary = summary || {};
   const state = str(summary.final_state).toLowerCase() || 'completed';
   const noData = num(summary.records_reported, 0) === 0 && state !== 'completed';
+  // UX-RU-002: final_state is an internal enum — the fallback line maps it to Russian, never prints it raw.
+  const stateRu = { completed: 'анализ завершён', partial: 'анализ завершён частично', no_data: 'данных не собрано', failed: 'анализ остановлен' };
   const facts = str(report.report_markdown) || str(report.summary_text) ||
-    ('Итог: ' + (str(summary.final_state) || 'completed') + '. Записей в отчёте: ' + num(summary.records_reported, 0) + '.');
+    ('Итог: ' + (stateRu[state] || 'анализ завершён') + '. Записей в отчёте: ' + num(summary.records_reported, 0) + '.');
   const lines = [facts];
   if (noData || state === 'no_data') lines.push('Подходящих данных не собрано.');
   else if (state === 'partial') lines.push('Отчёт частичный — часть источников не отработала.');

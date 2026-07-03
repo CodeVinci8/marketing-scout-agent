@@ -536,11 +536,18 @@ return [{json:{telegram_send_body:$('Handle Plan Result').first().json.telegram_
 var d=$('Build Intake Decision').first().json;var r=d.routed;var cfg=r.cfg;
 var chat=String((d.request&&d.request.chat_id)||(r.parsed&&r.parsed.chat_id)||'');
 var caps=availableCapabilities(cfg);var text;
+var utext=String((r.parsed&&r.parsed.text)||'');
+// UX-RU-002: every user-visible branch renders through the canonical Russian layer (plan_render_ru).
+// Internal reasons/enums (dispatch_reason, unavailable_reason, intent ids) stay in execution data only.
 if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_invalid')===0){text='Это подтверждение нельзя применить: '+approvalFailureRu(d.dispatch_reason.replace('approval_invalid:',''))+'.';}
-else if(d.dispatch_reason==='capability_unavailable'){text='Это действие сейчас недоступно: '+((r.capability&&r.capability.unavailable_reason)||'нужна настройка источников')+'.';}
+else if(d.dispatch_reason==='capability_unavailable'){text=ruCapabilityUnavailableMessage(r.capability);}
 else if(r.route==='clarify'){text=clarificationReply(r.clarification);}
-else if(d.intent&&d.intent.intent==='help'){text=capabilityCatalogText(cfg);}
-else{text=buildConversationalReply({understood:(r.capability&&r.capability.name)||(d.intent&&d.intent.intent),next:'готов помочь'});}
+else if(d.intent&&d.intent.intent==='help'){
+ if(d.intent.entities&&d.intent.entities.start){text=ruStartMessage();}
+ else if(ruIsWhoAmI(utext)){text=ruWhoAmIMessage();}
+ else{text=ruHelpMessage(caps);}
+}
+else{text=buildConversationalReply({understood:(r.capability&&r.capability.name)||ruIntentAny(d.intent&&d.intent.intent),next:'готов помочь'});}
 return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),intent:(d.intent&&d.intent.intent)||'clarify_request',dispatch_target:d.dispatch_target}}];`),
   httpTelegram('wf18-send', 'Send Telegram Reply', [2780, 620])
 ], [
@@ -626,17 +633,17 @@ var plans=[];try{plans=($('Read execution_plans').all()||[]).map(function(r){ret
 var out={domain:inp.domain,op:inp.op,owner_user_id:owner,chat_id:String(inp.chat_id||''),agent_request_id:String(inp.agent_request_id||''),reply:'',memory_audit:[],source_audit:[],changed_memories:[],changed_sources:[],changed_plans:[],request_event:null};
 function diff(before,after,key){var b={};before.forEach(function(x){b[x[key]]=JSON.stringify(x);});return after.filter(function(x){return b[x[key]]!==JSON.stringify(x);});}
 if(inp.domain==='memory'){
- if(inp.op==='memory'||inp.op==='view'){out.reply='Память: '+JSON.stringify(memoryView(memoriesForUser(memories,owner)));}
+ if(inp.op==='memory'||inp.op==='view'){var mv=memoryView(memoriesForUser(memories,owner));var mvl=(mv||[]).map(function(m){var v=String(m.value||'');try{var pv=JSON.parse(v);v=typeof pv==='string'?pv:v;}catch(e){}return '• '+(m.key?String(m.key)+': ':'')+v;}).filter(function(t){return t.length>2;});out.reply=mvl.length?('Что я помню:\\n'+mvl.join('\\n')):'Пока я ничего не запомнил. Напишите, что учитывать в работе.';out.memory_view=mv;}
  else if(inp.op==='forget'){var f=forgetMemory(memories,inp.arg,{owner_user_id:owner,ts:ts});out.changed_memories=diff(memories,f.memories,'memory_id');out.memory_audit=f.audit;out.reply=f.removed?('Удалено: '+f.removed):'Не нашёл.';}
  else if(inp.op==='forget_all'){var fa=forgetAll(memories,{owner_user_id:owner,confirmed:inp.confirmed===true,ts:ts});if(!fa.ok){out.reply='Подтвердите удаление (/forget_all confirm).';}else{out.changed_memories=diff(memories,fa.memories,'memory_id');out.memory_audit=fa.audit;out.reply='Память очищена ('+fa.removed+').';}}
  else if(inp.op==='new'){out.reply='Новый контекст. Предпочтения сохранены.';}
  else if(inp.op==='context'){out.reply='Контекст: '+(inp.arg||'(пусто)');}
  else{out.reply='Команда памяти не распознана.';}
 }else if(inp.domain==='source'){
- if(inp.op==='add'){var a=addSource(sources,inp.arg,{owner_user_id:owner,cfg:cfg,ts:ts});out.changed_sources=diff(sources,a.sources,'source_id');if(a.audit)out.source_audit=[a.audit];out.reply=a.added?('Источник добавлен: '+a.source.label):('Не добавлен: '+a.reason);}
- else if(inp.op==='list'){out.reply='Источники: '+JSON.stringify(listSources(sources,owner).map(function(s){return s.label+' ['+s.status+']';}));}
- else if(inp.op==='pause'||inp.op==='resume'||inp.op==='remove'){var st=inp.op==='pause'?'paused':(inp.op==='resume'?'active':'removed');var r2=setSourceStatus(sources,inp.arg,st,{owner_user_id:owner,ts:ts});out.changed_sources=diff(sources,r2.sources,'source_id');if(r2.audit)out.source_audit=[r2.audit];out.reply=r2.changed?('Источник: '+inp.op):('Не изменено: '+r2.reason);}
- else if(inp.op==='check'){out.reply='Статус: '+JSON.stringify(checkSource(sources,inp.arg,{owner_user_id:owner}));}
+ if(inp.op==='add'){var a=addSource(sources,inp.arg,{owner_user_id:owner,cfg:cfg,ts:ts});out.changed_sources=diff(sources,a.sources,'source_id');if(a.audit)out.source_audit=[a.audit];out.reply=a.added?('Источник добавлен: '+a.source.label+'. Буду проверять его на новые публикации.'):('Источник не добавлен: '+ruSourceOpFailure(a.reason)+'.');}
+ else if(inp.op==='list'){var ls=listSources(sources,owner);out.reply=ls.length?('Отслеживаемые источники:\\n'+ls.map(function(s){return '• '+String(s.label||s.ref)+' — '+ruSourceStatusLabel(s.status);}).join('\\n')):'Пока нет отслеживаемых источников. Пришлите ссылку на сайт, канал или сообщество — я добавлю его в мониторинг.';}
+ else if(inp.op==='pause'||inp.op==='resume'||inp.op==='remove'){var st=inp.op==='pause'?'paused':(inp.op==='resume'?'active':'removed');var r2=setSourceStatus(sources,inp.arg,st,{owner_user_id:owner,ts:ts});out.changed_sources=diff(sources,r2.sources,'source_id');if(r2.audit)out.source_audit=[r2.audit];var opRu={pause:'поставлен на паузу',resume:'снова активен',remove:'удалён из мониторинга'};out.reply=r2.changed?('Готово: источник '+(opRu[inp.op]||'обновлён')+'.'):('Не изменено: '+ruSourceOpFailure(r2.reason)+'.');}
+ else if(inp.op==='check'){var ck=checkSource(sources,inp.arg,{owner_user_id:owner});out.source_check=ck;out.reply=(ck&&ck.found)?('Источник «'+String(ck.ref||inp.arg)+'» — '+ruSourceStatusLabel(ck.status)+'.'):'Такой источник не найден среди отслеживаемых.';}
  else{out.reply='Команда источников не распознана.';}
 }else if(inp.domain==='request'){
  var arid=String(inp.agent_request_id||'');
@@ -651,7 +658,10 @@ if(inp.domain==='memory'){
   else{var t2=aw[0];out.changed_plans=[Object.assign({},t2,{status:'rejected',decided_at:ts,decided_by:owner})];out.request_event={agent_request_id:t2.agent_request_id,from_state:'awaiting_approval',to_state:'cancelled',accepted:true,reason:'user_reject',idempotency_key:'reject::'+t2.plan_id,ts:ts};out.reply='План отклонён. Запуск не выполнен.';}
  }else if(inp.op==='status'){
   var act=mine.filter(function(p){return ['awaiting_approval','approved','collecting'].indexOf(String(p.status))>=0;});
-  out.reply=act.length?('Текущий статус: '+act.map(planStatusLineRu).join('; ')):'Активных запросов нет.';
+  if(!act.length){out.reply='Активных запросов нет. Напишите, что нужно изучить, — я подготовлю план анализа.';}
+  else{var p0=act[0];var srcs=String(p0.sources||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+  out.reply=ruStatusReport({status:p0.status,sources:srcs});
+  if(act.length>1){out.reply+='\\n\\nЕщё в работе: '+act.slice(1).map(planStatusLineRu).join('; ')+'.';}}
  }else{out.reply='Команда не распознана.';}
 }else{out.reply='Неизвестный домен команды.';}
 return [{json:out}];`),
@@ -924,8 +934,8 @@ write('21_deep_competitor_analysis.json', wf('21 — Deep Competitor Analysis (b
   code('wf21-reply', 'Build Deep Reply', [1160, -160], ['conversation_response'],
     "var d=$('Assemble Deep Report').first().json;var rep=d.deep_report;\nvar chat=String((d.request&&d.request.chat_id)||'');\nvar text=postReportReply({summary_text:'\\u0413\\u043b\\u0443\\u0431\\u043e\\u043a\\u0438\\u0439 \\u0430\\u043d\\u0430\\u043b\\u0438\\u0437: '+rep.competitor+'. \\u0424\\u0430\\u043a\\u0442\\u043e\\u0432: '+rep.fact_count+', \\u0440\\u0435\\u043a\\u043e\\u043c\\u0435\\u043d\\u0434\\u0430\\u0446\\u0438\\u0439: '+rep.recommendation_count+'.',ideas:rep.recommendations.map(function(r){return r.text;}),limitations:(d.deep_plan.unavailable_sources||[]).map(function(u){return u.platform+': '+u.reason;})},[]);\nvar body={chat_id:chat,text:text};\nreturn [{json:{telegram_send_body:JSON.stringify(body),fact_count:rep.fact_count,recommendation_count:rep.recommendation_count}}];"),
   httpTelegram('wf21-send', 'Send Deep Report', [1380, -160]),
-  code('wf21-blocked', 'Build Deep Blocked Reply', [500, 160], ['conversation_response'],
-    "var g=$('Deep Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar body={chat_id:chat,text:clarificationReply('\\u0413\\u043b\\u0443\\u0431\\u043e\\u043a\\u0438\\u0439 \\u0430\\u043d\\u0430\\u043b\\u0438\\u0437 \\u043d\\u0435 \\u0437\\u0430\\u043f\\u0443\\u0449\\u0435\\u043d: '+g.gate_reason+'.')};\nreturn [{json:{telegram_send_body:JSON.stringify(body),gate_reason:g.gate_reason}}];"),
+  code('wf21-blocked', 'Build Deep Blocked Reply', [500, 160], ['conversation_response', 'plan_render_ru'],
+    "var g=$('Deep Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\n// UX-RU-002: gate_reason is an internal code (logs only); the user sees a Russian action-oriented message.\nvar human=(String(g.gate_reason)==='capability_unavailable')?'эта функция пока настраивается':'настройки источников или лимиты не позволяют начать сбор';\nvar body={chat_id:chat,text:clarificationReply('Глубокий анализ сейчас не запущен: '+human+'. Могу подготовить обычный план анализа — напишите, что изучить.')};\nreturn [{json:{telegram_send_body:JSON.stringify(body),gate_reason:g.gate_reason}}];"),
   httpTelegram('wf21-sendblock', 'Send Deep Blocked', [720, 160])
 ], [
   ['Manual Start', 'Resolve Agent Config'],
@@ -1065,7 +1075,7 @@ var xlsxSend=shouldSendAttachment(existing,xlsxDeliv);var chartSend=shouldSendAt
 var chartMime=chart.mime||'image/svg+xml';
 var docRoute=routeAttachment(pkg.mime);
 var chartRoute=routeAttachment(chartMime);
-var json={scope:scope,csv_filename:csv.filename,csv_row_count:csv.row_count,xlsx_filename:pkg.filename,xlsx_size:pkg.size_bytes,xlsx_sheets:pkg.sheet_names,chart_title:chart.title,chart_mime:chartMime,chart_insufficient:!!chart.insufficient_data,doc_api_method:docRoute.api_method,doc_form_field:docRoute.form_field,chart_api_method:chartRoute.api_method,chart_form_field:chartRoute.form_field,chat_id:String(scope.owner_user_id||''),caption:'Отчёт '+b.report_id,attachment_deliveries:[xlsxDeliv,csvDeliv,chartDeliv],xlsx_should_send:xlsxSend.send,chart_should_send:chartSend.send,external_calls:0};
+var json={scope:scope,csv_filename:csv.filename,csv_row_count:csv.row_count,xlsx_filename:pkg.filename,xlsx_size:pkg.size_bytes,xlsx_sheets:pkg.sheet_names,chart_title:chart.title,chart_mime:chartMime,chart_insufficient:!!chart.insufficient_data,doc_api_method:docRoute.api_method,doc_form_field:docRoute.form_field,chart_api_method:chartRoute.api_method,chart_form_field:chartRoute.form_field,chat_id:String(scope.owner_user_id||''),caption:'Отчёт по анализу конкурентов',attachment_deliveries:[xlsxDeliv,csvDeliv,chartDeliv],xlsx_should_send:xlsxSend.send,chart_should_send:chartSend.send,external_calls:0};
 return [{json:json,binary:{attachment:{data:Buffer.from(pkg.buffer).toString('base64'),fileName:pkg.filename,mimeType:pkg.mime},chart:{data:Buffer.from(String(chart.svg||''),'utf8').toString('base64'),fileName:'chart.svg',mimeType:chartMime}}}];`),
   httpTelegramFile('wf24-senddoc', 'Send Document', [440, -60], 'sendDocument', 'document', 'attachment'),
   httpTelegramFile('wf24-sendchart', 'Send Chart (SVG via sendDocument)', [440, 120], 'sendDocument', 'document', 'chart'),
@@ -1076,13 +1086,14 @@ return (e.attachment_deliveries||[]).map(function(d){return {json:d};});`),
   code('wf24-reply', 'Build Result Reply', [660, 40], [], `
 var s=$('Apply Action').first().json;var e=$('Build Exports & Outbox').first().json;var r=s.result||{};
 var chat=String(s.scope.owner_user_id||'');
-var lines=['Готово по отчёту '+s.bundle.report_id+':'];
-if(r.action==='filter'&&r.filtered){lines.push('Фильтр: '+(r.filtered.competitors||[]).length+' конкурентов, '+(r.filtered.offers||[]).length+' предложений.');}
-else if(r.action==='evidence'&&r.evidence){lines.push('Доказательств: '+(r.evidence.total||0)+'.');}
-else if(r.action==='compare'){lines.push(r.comparison?('Сравнение с '+(r.baseline&&r.baseline.report_id)+' готово.'):('Подходящий прошлый отчёт не найден: '+r.baseline_reason));}
-else if(r.action==='refresh'&&r.refresh_plan){lines.push('Обновление: к сбору '+((r.refresh_plan.refreshed||[]).length)+', переиспользовано '+((r.refresh_plan.reused||[]).length)+' (внешних вызовов пока 0).');}
-lines.push('Файлы: '+e.xlsx_filename+' (XLSX), '+e.csv_filename+' (CSV)'+(e.chart_insufficient?'':', график'));
-return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:lines.join('\\n')})}}];`),
+// UX-RU-002: report/baseline ids and reason codes stay in execution data; the user sees business wording.
+var lines=['Готово. Отчёт по анализу конкурентов:'];
+if(r.action==='filter'&&r.filtered){lines.push('После фильтра: '+(r.filtered.competitors||[]).length+' конкурентов, '+(r.filtered.offers||[]).length+' предложений.');}
+else if(r.action==='evidence'&&r.evidence){lines.push('Подтверждающих цитат и ссылок: '+(r.evidence.total||0)+'.');}
+else if(r.action==='compare'){lines.push(r.comparison?'Сравнение с прошлым отчётом готово.':'Подходящего прошлого отчёта для сравнения не нашлось — покажу текущие данные.');}
+else if(r.action==='refresh'&&r.refresh_plan){lines.push('Обновление: заново соберу '+((r.refresh_plan.refreshed||[]).length)+' источников, ещё '+((r.refresh_plan.reused||[]).length)+' актуальны и взяты из сохранённых данных.');}
+lines.push('Файлы: Excel-таблица и CSV'+(e.chart_insufficient?'':', график')+' — отправляю следом.');
+return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:lines.join('\\n')}),report_id:s.bundle.report_id,baseline_reason:r.baseline_reason||''}}];`),
   httpTelegram('wf24-sendreply', 'Send Result Reply', [880, 40])
 ], [
   ['Manual Start', 'Resolve Agent Config'],
@@ -1237,10 +1248,11 @@ var ev=(d.events||[])[0]||{};
 var text=clarificationReply('VK '+(d.community&&d.community.canonical_url||'')+': новых постов '+(d.new_count||0)+', изменённых '+(d.edited_count||0)+'. '+(ev.canonical_url?('Например: '+ev.canonical_url):''));
 return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),new_count:d.new_count,edited_count:d.edited_count}}];`),
   httpTelegram('wf26-send', 'Send VK Alert', [1660, 200]),
-  code('wf26-setup', 'Build Setup-Required Reply', [-320, 160], ['vk_collector', 'conversation_response'], `
+  code('wf26-setup', 'Build Setup-Required Reply', [-320, 160], ['vk_collector', 'conversation_response', 'plan_render_ru'], `
 var g=$('VK Credential Gate').first().json;var chat=String(g.owner_user_id||'');
+// UX-RU-002: the credential/config reason code stays in execution data; the user gets a plain Russian note.
 var reason=(g.credential&&g.credential.reason)||(g.identity&&g.identity.reason)||'vk_setup_required';
-var text=clarificationReply('VK источник пока не настроен ('+reason+'). Нужен токен VK в хранилище учётных данных n8n и включённый VK-сборщик. Сбор не выполнялся, средства не потрачены.');
+var text=clarificationReply(ruUnavailableSourceMessage('vk'));
 return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),status:'setup_required',reason:reason,external_calls:0}}];`),
   httpTelegram('wf26-sendsetup', 'Send Setup Required', [-100, 160])
 ], [

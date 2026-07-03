@@ -33,7 +33,9 @@ const EMBEDS = [
   ['20_agent_orchestrator.json', 'Approval & Budget Gate', ['approval_gate', 'agent_state']],
   ['20_agent_orchestrator.json', 'Normalize Website Result', ['source_adapter']],
   ['20_agent_orchestrator.json', 'Build Execution Summary', ['source_adapter', 'execution_summary']],
-  ['20_agent_orchestrator.json', 'Build Delivery Outbox', ['telegram_io']]
+  ['20_agent_orchestrator.json', 'Build Delivery Outbox', ['telegram_io']],
+  ['21_deep_competitor_analysis.json', 'Build Deep Blocked Reply', ['conversation_response', 'plan_render_ru']],
+  ['26_vk_public_community_collector.json', 'Build Setup-Required Reply', ['vk_collector', 'conversation_response', 'plan_render_ru']]
 ];
 const WFS = {};
 for (const [file] of EMBEDS) if (!WFS[file]) WFS[file] = H.loadWorkflow(file);

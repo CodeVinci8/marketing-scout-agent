@@ -133,8 +133,10 @@ const MONITOR_ACTIONS = [
   ['deep_competitor_analysis', 'глубокий анализ'],
   ['manage_sources', 'поставить источник на паузу']
 ];
+// UX-RU-002: the platform enum (telegram_channel/vk_community/…) is internal — the label/ref already
+// identifies the source for the user, so the raw platform value never enters the message.
 function changeNotificationText(source, changeEvent) {
-  return 'Изменение у отслеживаемого источника ' + (str(source.label) || str(source.ref)) + ' (' + str(source.platform) + '): ' +
+  return 'Изменение у отслеживаемого источника ' + (str(source.label) || str(source.ref)) + ': ' +
     (str(changeEvent.summary) || 'обновление контента') + '. Я могу ' +
     MONITOR_ACTIONS.map(a => a[1]).join(', ') + '. Просто напишите, что сделать.';
 }

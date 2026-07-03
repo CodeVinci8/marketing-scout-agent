@@ -168,7 +168,12 @@ H.inject(run, 'Resolve Agent Config', [{ enable_vk_collector: false }]);
 const gate = H.runCodeNode(run, WF26, 'VK Credential Gate', [{ json: { community: 'vk.com/example', owner_user_id: '100200300' } }])[0].json;
 A.ok('disabled collector -> not configured (HTTP branch skipped)', gate.configured === false && gate.credential.status === 'setup_required');
 const setupReply = H.runCodeNode(run, WF26, 'Build Setup-Required Reply', [])[0].json;
-A.ok('setup reply states no collection happened, no spend', setupReply.status === 'setup_required' && setupReply.external_calls === 0 && /средства не потрачены/.test(JSON.parse(setupReply.telegram_send_body).text));
+// UX-RU-002: the user-facing reply is the plain Russian settling message; the internal reason + $0 stay in
+// execution data (status/reason/external_calls), never in the Telegram text.
+A.ok('setup reply: no collection, no spend recorded internally; user text is the settling message',
+  setupReply.status === 'setup_required' && setupReply.external_calls === 0 &&
+  /пока настраивается/.test(JSON.parse(setupReply.telegram_send_body).text) &&
+  !/токен|credential|vk_setup_required/i.test(JSON.parse(setupReply.telegram_send_body).text));
 
 A.section('WF26 runtime — configured path parses wall + detects changes ($0)');
 run = H.makeRun();

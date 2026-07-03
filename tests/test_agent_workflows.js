@@ -67,11 +67,12 @@ const amb = gateway(P({ update_id: 3, message_id: 3, text: 'ну и что те�
 A.eq('ambiguous stays local', amb.intake.dispatch_target, 'local');
 A.ok('ambiguous reply is a clarification question', amb.send.text.length > 0 && /\?/.test(amb.send.text));
 
-A.section('WF18 — /help lists only configured capabilities (local)');
+A.section('WF18 — /help advertises only ready capabilities, in the goal-grouped Russian layout (UX-RU-002)');
 const help = gateway(P({ update_id: 4, message_id: 4, text: '/help', kind: 'command', user_id: '111', chat_id: '555' }));
 A.eq('help stays local', help.intake.dispatch_target, 'local');
-A.ok('help reply lists capabilities', /умею/i.test(help.send.text));
-A.ok('help reply is honest about unavailable platforms', /Недоступно/.test(help.send.text));
+A.ok('help reply lists capabilities by user goal', /Что можно сделать:/.test(help.send.text) && /\/status/.test(help.send.text));
+A.ok('honesty preserved: unready platforms are simply not advertised (no diagnostics leak)',
+  !/Недоступно|allowlist|adapter|not configured|MS_/.test(help.send.text));
 
 A.section('WF18 — context build is token-budgeted, owner-isolated, keeps critical sections');
 A.ok('charter always in context', req.ctx.context.sections_included.indexOf('charter') >= 0);
@@ -106,6 +107,7 @@ const addSrc = control({ domain: 'source', op: 'add', arg: 'https://cashmotor.ru
 A.ok('website source added', /добавлен/i.test(addSrc.reply));
 A.ok('source add audited', addSrc.source_audit.length >= 1);
 const addTg = control({ domain: 'source', op: 'add', arg: 'https://t.me/chan', owner_user_id: '111', chat_id: '5' }, { sources: [] });
-A.ok('telegram source honestly blocked on website-only allowlist', /Не добавлен/.test(addTg.reply));
+A.ok('telegram source honestly blocked on website-only allowlist', /не добавлен/i.test(addTg.reply));
+A.ok('blocked-source reply is humanized (no reason code)', addTg.reply.indexOf('platform_unavailable') < 0 && /настраивается/.test(addTg.reply));
 
 A.report('agent-workflows');
