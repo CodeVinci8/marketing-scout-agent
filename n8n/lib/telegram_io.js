@@ -201,9 +201,10 @@ function parseCallback(data) {
   return { action: m[1], agent_request_id: str(m[2]) };
 }
 function approvalKeyboard(agentRequestId) {
+  // UX-RU-001: plain-word buttons; the callback_data contract (approve:/reject:<id>) is load-bearing — keep it.
   return { inline_keyboard: [[
-    { text: '✅ Запустить', callback_data: 'approve:' + str(agentRequestId) },
-    { text: '✖ Отклонить', callback_data: 'reject:' + str(agentRequestId) }
+    { text: 'Запустить', callback_data: 'approve:' + str(agentRequestId) },
+    { text: 'Отклонить', callback_data: 'reject:' + str(agentRequestId) }
   ]] };
 }
 

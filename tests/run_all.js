@@ -144,6 +144,8 @@ const JS_SUITES = [
   ['idempotency-persist', 'test_idempotency_persist.js'],
   // --- IDEMP-001: atomic append-then-verify claim (concurrent-safe without N8N_CONCURRENCY=1) ---
   ['idempotency-claim', 'test_idempotency_claim.js'],
+  // --- UX-RU-001: single humanized Russian approval message, no internal enums, zero-source fail-closed ---
+  ['plan-render-ru', 'test_plan_render_ru.js'],
 ];
 
 let failed = 0;

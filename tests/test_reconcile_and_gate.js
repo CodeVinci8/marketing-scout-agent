@@ -107,28 +107,32 @@ A.section('DEPLOY-008 — committed workflows ship a credential PLACEHOLDER; rec
   A.ok('attached real ids reconcile PASS', RC.reconcile(refs, exp).ok);
 }
 
-A.section('WF18 activation gate — BLOCKS while P0/P1 blockers are open (current state)');
+A.section('WF18 activation gate — verdict FOLLOWS the registry (never a hardcoded world-state snapshot)');
 {
-  const g = GATE.gate(GATE.load());
-  // DEC-161 rearchitecture blockers resolved with named tests; cea8409 resolved TELEGRAM-001 (outbound-only ngrok
-  // agent + loopback path-filter ingress, regression tests/test_ingress_proxy.js). The gate now blocks on exactly
-  // ONE item — IDEMP-001 (concurrent dedupe is MITIGATED, not resolved; a real concurrent proof flips it).
-  A.ok('gate is currently PENDING (concurrency only)', g.allow === false && g.marker === 'WF18_REARCHITECTURE=PENDING');
-  A.ok('exactly 1 P0/P1 open (IDEMP-001 only)', g.blocking_open === 1);
-  A.ok('TELEGRAM-001 (public HTTPS ingress) is RESOLVED (not open)', g.open_ids.indexOf('TELEGRAM-001') < 0);
-  A.ok('IDEMP-001 (mitigated, not resolved) is the sole open blocker', g.open_ids.indexOf('IDEMP-001') >= 0);
-  const idempReason = (g.open_reasons || []).find(r => r.id === 'IDEMP-001');
-  A.ok('IDEMP-001 open reason is its mitigated status', !!idempReason && idempReason.reason === 'status_mitigated');
-  A.ok('RUNTIME-001 and SECURITY-001 are resolved (not open)', g.open_ids.indexOf('RUNTIME-001') < 0 && g.open_ids.indexOf('SECURITY-001') < 0);
+  // a97bfe7 semantics: compute the expected open set from the registry with the gate's own clearance rules,
+  // then require the gate verdict to match it exactly. The test stays true as blockers get resolved.
+  const reg = GATE.load();
+  const g = GATE.gate(reg);
+  const blocking = (reg.gate_severities_blocking || ['P0', 'P1']);
+  const expectedOpen = reg.blockers
+    .filter(b => blocking.indexOf(b.severity) >= 0)
+    .filter(b => !GATE.clearance(b).cleared)
+    .map(b => b.id).sort();
+  A.eq('gate open set == registry-derived open set', (g.open_ids || []).slice().sort(), expectedOpen);
+  A.eq('blocking_open count matches', g.blocking_open, expectedOpen.length);
+  A.eq('allow iff nothing open', g.allow, expectedOpen.length === 0);
+  A.eq('marker matches verdict', g.marker, expectedOpen.length === 0 ? 'WF18_REARCHITECTURE=READY' : 'WF18_REARCHITECTURE=PENDING');
 }
 
-A.section('IDEMP-001 — honest registry: mitigated with residual_risk + mitigation_options (no overstated resolved)');
+A.section('IDEMP-001 — resolved with LIVE evidence (atomic claim protocol; no residual correctness risk)');
 {
   const reg = GATE.load();
   const idemp = reg.blockers.find(b => b.id === 'IDEMP-001');
-  A.ok('IDEMP-001 status is mitigated (not resolved)', idemp.status === 'mitigated');
-  A.ok('IDEMP-001 documents residual concurrency risk', /concurrent/i.test(idemp.residual_risk || ''));
-  A.ok('IDEMP-001 lists mitigation options', /atomic|queue mode|accepted/i.test(idemp.mitigation_options || ''));
+  A.eq('IDEMP-001 status is resolved', idemp.status, 'resolved');
+  A.ok('evidence names the claim protocol + regression suites', /idempotency_claim\.js/.test(idemp.evidence) && /test_idempotency_claim\.js/.test(idemp.evidence));
+  A.ok('evidence records the LIVE two-simultaneous-inputs acceptance', /LIVE ACCEPTANCE PASSED/.test(idemp.evidence) && /CONCURRENT_IDEMPOTENCY=PASS/.test(idemp.evidence));
+  A.ok('residual risk documents cost only, not a correctness gap', /None for exactly-once/i.test(idemp.residual_risk || ''));
+  A.ok('gate clears it as resolved_with_evidence', GATE.clearance(idemp).cleared === true && GATE.clearance(idemp).reason === 'resolved_with_evidence');
   A.ok('registry documents n8n concurrency capability', /N8N_CONCURRENCY_PRODUCTION_LIMIT/.test(reg.n8n_concurrency_capability || ''));
   A.ok('registry documents cleared_statuses', !!(reg.cleared_statuses && reg.cleared_statuses.resolved && reg.cleared_statuses.accepted));
 }

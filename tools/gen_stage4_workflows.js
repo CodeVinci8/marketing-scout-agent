@@ -463,19 +463,21 @@ var c=$('Build Conversation Context').first().json;return [{json:c.summary_row||
     request_text: "={{ $('Build Intake Decision').first().json.request.request_text }}",
     data_mode: "={{ $('Build Intake Decision').first().json.request.data_mode }}"
   }),
-  code('wf18-planres', 'Handle Plan Result', [2780, -200], ['request_planner', 'telegram_io'], `
+  code('wf18-planres', 'Handle Plan Result', [2780, -200], ['request_planner', 'telegram_io', 'plan_render_ru'], `
 var d=$('Build Intake Decision').first().json;var req=d.request||{};
 var res=$json||{};
 var status=res.status||(res.plan?'plan_ready':'planning_failed');
 var p=(d.routed&&d.routed.parsed)||{};var chat=String(req.chat_id||p.chat_id||'');var owner=String(req.user_id||p.user_id||'');
 if(status!=='plan_ready'||!res.plan){
-  var ctext=status==='clarification_required'?(res.clarification||'Уточните запрос, пожалуйста.'):'Не удалось построить план. Уточните запрос, пожалуйста.';
+  // WF19 supplies the honest human message (clarification OR no_active_sources fail-closed text)
+  var ctext=res.user_message||res.clarification||'Не удалось построить план. Уточните запрос, пожалуйста.';
   return [{json:{plan_ready:false,status:status,telegram_send_body:JSON.stringify({chat_id:chat,text:ctext}),plan_row:null}}];
 }
 var plan=res.plan;var ident=planIdentity(plan,req.agent_request_id,1);
 var planRow=buildPlanRow(plan,ident,{agent_request_id:req.agent_request_id,owner_user_id:owner,chat_id:chat,ts:(new Date()).toISOString()});
 var kb=approvalKeyboard(req.agent_request_id);
-var text=(res.approval_text||planToApprovalText(plan))+'\\n\\nПодтвердите запуск кнопками ниже или ответьте «да»/«нет».';
+// UX-RU-001: exactly ONE plan block — WF19's humanized text verbatim (fallback renders the same format), no suffix.
+var text=res.approval_text||planApprovalMessageRu(plan,{data_mode:String(req.data_mode||'')}).text;
 return [{json:{plan_ready:true,status:'plan_ready',plan:plan,plan_id:ident.plan_id,plan_hash:ident.plan_hash,plan_row:planRow,agent_request_id:req.agent_request_id,telegram_send_body:JSON.stringify({chat_id:chat,text:text,reply_markup:kb})}}];`),
   ifNode('wf18-ifplan', 'Plan Ready?', [3000, -200], '={{ $json.plan_ready }}'),
   code('wf18-shapeplan', 'Shape Plan Row', [3220, -300], [], `
@@ -530,11 +532,11 @@ return [{json:{telegram_send_body:$('Handle Plan Result').first().json.telegram_
     data_mode: "={{ $('Build Intake Decision').first().json.request.data_mode }}"
   }),
   // local answer (help / clarify / answer-from-context / unavailable / invalid-approval) — WF18 owns this delivery
-  code('wf18-reply', 'Build Conversational Reply', [2560, 620], ['conversation_response', 'agent_charter'], `
+  code('wf18-reply', 'Build Conversational Reply', [2560, 620], ['conversation_response', 'agent_charter', 'plan_render_ru'], `
 var d=$('Build Intake Decision').first().json;var r=d.routed;var cfg=r.cfg;
 var chat=String((d.request&&d.request.chat_id)||(r.parsed&&r.parsed.chat_id)||'');
 var caps=availableCapabilities(cfg);var text;
-if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_invalid')===0){text='Это подтверждение нельзя применить ('+d.dispatch_reason.replace('approval_invalid:','')+'). Возможно, план устарел или уже обработан.';}
+if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_invalid')===0){text='Это подтверждение нельзя применить: '+approvalFailureRu(d.dispatch_reason.replace('approval_invalid:',''))+'.';}
 else if(d.dispatch_reason==='capability_unavailable'){text='Это действие сейчас недоступно: '+((r.capability&&r.capability.unavailable_reason)||'нужна настройка источников')+'.';}
 else if(r.route==='clarify'){text=clarificationReply(r.clarification);}
 else if(d.intent&&d.intent.intent==='help'){text=capabilityCatalogText(cfg);}
@@ -614,7 +616,7 @@ write('22_conversation_control.json', wf('22 — Conversation Control & Sources'
   sheetsRead('wf22-readmem', 'Read durable_memories', [-340, -160], 'durable_memories'),
   sheetsRead('wf22-readsrc', 'Read tracked_sources', [-340, 0], 'tracked_sources'),
   sheetsRead('wf22-readplans', 'Read execution_plans', [-340, 160], 'execution_plans'),
-  code('wf22-apply', 'Apply Control Command', [-120, 0], ['conversation_memory', 'tracked_sources'], CALLER + `
+  code('wf22-apply', 'Apply Control Command', [-120, 0], ['conversation_memory', 'tracked_sources', 'plan_render_ru'], CALLER + `
 var cfg=$('Resolve Agent Config').first().json;
 var inp=callerInput();var owner=String(inp.owner_user_id||'');
 var ts=(new Date()).toISOString();
@@ -649,7 +651,7 @@ if(inp.domain==='memory'){
   else{var t2=aw[0];out.changed_plans=[Object.assign({},t2,{status:'rejected',decided_at:ts,decided_by:owner})];out.request_event={agent_request_id:t2.agent_request_id,from_state:'awaiting_approval',to_state:'cancelled',accepted:true,reason:'user_reject',idempotency_key:'reject::'+t2.plan_id,ts:ts};out.reply='План отклонён. Запуск не выполнен.';}
  }else if(inp.op==='status'){
   var act=mine.filter(function(p){return ['awaiting_approval','approved','collecting'].indexOf(String(p.status))>=0;});
-  out.reply=act.length?('Текущий статус: '+act.map(function(p){return p.intent+' ['+p.status+']';}).join('; ')):'Активных запросов нет.';
+  out.reply=act.length?('Текущий статус: '+act.map(planStatusLineRu).join('; ')):'Активных запросов нет.';
  }else{out.reply='Команда не распознана.';}
 }else{out.reply='Неизвестный домен команды.';}
 return [{json:out}];`),
@@ -716,8 +718,8 @@ write('19_request_planner.json', wf('19 — Request Planner (deterministic + gua
     "var j=$('Build Planner Prompt').first().json;var cfg=j.cfg;\nvar text='';try{var c=($json&&$json.content)||[];for(var i=0;i<c.length;i++){if(c[i]&&c[i].type==='text')text+=String(c[i].text||'');}}catch(e){}\nvar v=validatePlanJSON(text,cfg);\nvar plan=v.valid?v.plan:deterministicPlan(j.request_text,cfg);\nreturn [{json:{plan:plan,plan_valid:v.valid,plan_reason:v.reason,plan_source:plan.plan_source,cfg:cfg}}];"),
   // Canonical planner RESULT (WF19-PLAN-002): one of plan_ready / clarification_required / planning_failed.
   // WF19 NEVER sends Telegram directly — WF18 owns the approval-message delivery and the durable plan persistence.
-  code('wf19-approval', 'Build Approval Message', [840, 120], ['request_planner', 'telegram_io', 'scope_preview'],
-    "var src;try{src=$('Validate Plan').first().json;}catch(e){src=$('Deterministic Plan').first().json;}\nvar dp=$('Deterministic Plan').first().json;\nvar plan=src.plan;var cfg=src.cfg||{};\nif(!plan||!(plan.sources&&plan.sources.length)){return [{json:{status:'clarification_required',clarification:'Уточните нишу/регион и источник для поиска конкурентов.',plan:null}}];}\nvar text=planToApprovalText(plan);\nvar arid=String(dp.agent_request_id||'req_pending');\nvar kb=approvalKeyboard(arid);\n// scope + cost preview shown BEFORE approval (honest budgets; never a fabricated price)\nvar preview=buildScopePreview({goal:plan.intent||plan.expected_output,niche:plan.niche,region:plan.region,competitors:plan.competitors||[],platforms:plan.sources||['website'],cfg:cfg,refresh_plan:{expected_calls:Number(plan.max_external_calls)||0},expected_llm_calls:0,max_items:Number(plan.max_items)||undefined,outputs:{telegram_summary:true,xlsx:true,charts:true,evidence:true}});\nvar combined=preview.text+'\\n\\n'+text;\nreturn [{json:{status:'plan_ready',plan:plan,plan_source:plan.plan_source,approval_text:combined,scope_preview:preview,scope_preview_text:preview.text,combined_approval_text:combined,approval_keyboard:kb,state_transition:'awaiting_approval',agent_request_id:arid,chat_id:String(dp.chat_id||''),owner_user_id:String(dp.owner_user_id||'')}}];")
+  code('wf19-approval', 'Build Approval Message', [840, 120], ['request_planner', 'telegram_io', 'scope_preview', 'plan_render_ru'],
+    "var src;try{src=$('Validate Plan').first().json;}catch(e){src=$('Deterministic Plan').first().json;}\nvar dp=$('Deterministic Plan').first().json;\nvar plan=src.plan;var cfg=src.cfg||{};\nif(!plan||!(plan.sources&&plan.sources.length)){return [{json:{status:'clarification_required',clarification:'Уточните нишу/регион и источник для поиска конкурентов.',user_message:'Уточните нишу/регион и источник для поиска конкурентов.',plan:null}}];}\nvar arid=String(dp.agent_request_id||'req_pending');\n// UX-RU-001: ONE humanized Russian approval block; internal enums/counters stay in plan rows + scope_preview (logs only).\nvar rend=planApprovalMessageRu(plan,{data_mode:String(dp.data_mode||'')});\nif(!rend.ok){return [{json:{status:rend.status,clarification:rend.text,user_message:rend.text,plan:null,agent_request_id:arid,chat_id:String(dp.chat_id||''),owner_user_id:String(dp.owner_user_id||'')}}];}\nvar kb=approvalKeyboard(arid);\n// structured scope+cost preview kept for logs/evidence — NEVER concatenated into the user message\nvar preview=buildScopePreview({goal:plan.intent||plan.expected_output,niche:plan.niche,region:plan.region,competitors:plan.competitors||[],platforms:plan.sources||['website'],cfg:cfg,refresh_plan:{expected_calls:Number(plan.max_external_calls)||0},expected_llm_calls:0,max_items:Number(plan.max_items)||undefined,outputs:{telegram_summary:true,xlsx:true,charts:true,evidence:true}});\nreturn [{json:{status:'plan_ready',plan:plan,plan_source:plan.plan_source,approval_text:rend.text,scope_preview:preview,scope_preview_text:preview.text,approval_keyboard:kb,state_transition:'awaiting_approval',agent_request_id:arid,chat_id:String(dp.chat_id||''),owner_user_id:String(dp.owner_user_id||'')}}];")
 ], [
   ['Manual Start', 'Resolve Agent Config'],
   ['When Called by Agent', 'Resolve Agent Config'],
