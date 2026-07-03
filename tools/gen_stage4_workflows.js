@@ -172,7 +172,10 @@ function execWf(id, name, pos, note, inputs) {
       matchingColumns: [], attemptToConvertTypes: false, convertFieldsToString: false
     };
   }
-  return { parameters: params, type: 'n8n-nodes-base.executeWorkflow', typeVersion: 1.1, position: pos, id: id, name: name };
+  // typeVersion MUST be >= 1.2: below 1.2 n8n hides the workflowInputs resourceMapper, so the defineBelow
+  // expressions are silently ignored and the child receives only accidentally same-named passthrough keys
+  // (live-observed on n8n 2.23.3: WF22 got domain/op/chat_id = null while agent_request_id passed by accident).
+  return { parameters: params, type: 'n8n-nodes-base.executeWorkflow', typeVersion: 1.2, position: pos, id: id, name: name };
 }
 function httpClaude(id, name, pos) {
   return {

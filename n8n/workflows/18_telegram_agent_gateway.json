@@ -862,7 +862,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         2560,
         -200
@@ -1178,7 +1178,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         2560,
         40
@@ -1309,7 +1309,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         2560,
         180
@@ -1431,7 +1431,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         2560,
         320
@@ -1544,7 +1544,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         2560,
         460

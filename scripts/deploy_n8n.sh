@@ -788,7 +788,11 @@ activate_telegram() {
     die "Telegram activation rolled back (WF18 unpublished). No active gateway."
   fi
   say ">> verifying the registered webhook matches the expected URL"
-  if ! "${ROOT}/scripts/telegram_webhook.sh" verify | grep -q 'WEBHOOK_MATCH=PASS'; then
+  local verify_out
+  verify_out="$("${ROOT}/scripts/telegram_webhook.sh" verify 2>&1)" || true
+  if ! printf '%s' "$verify_out" | grep -q 'WEBHOOK_MATCH=PASS'; then
+    say "  [verify output — redacted by telegram_webhook.sh]:"
+    printf '%s\n' "$verify_out" | sed 's/^/    /'
     say "  [rollback] webhook verification FAILED — deleting the webhook and unpublishing WF18"
     "${ROOT}/scripts/telegram_webhook.sh" delete --apply >/dev/null 2>&1 || true
     n8n_deactivate_id "$id" || say "  [warn] WF18 unpublish also failed — run: scripts/rollback.sh --apply"

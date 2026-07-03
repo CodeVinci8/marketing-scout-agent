@@ -32,6 +32,7 @@ function edge(wf, from, to) {
 A.section('Part 7 — static sub-workflow + trigger audit');
 const R = audit();
 A.eq('no hard import/resolution errors', R.errors.length, 0);
+A.eq('every executeWorkflow node with workflowInputs is typeVersion>=1.2 (below 1.2 n8n silently drops the named-input mapping)', (R.exec_wf_typeversion_violations || ['audit-field-missing']).length, 0);
 A.eq('all workflows inactive', R.active_violations.length, 0);
 A.eq('all node types recognized (n8n-nodes-base)', R.unrecognized_types.length, 0);
 A.eq('no unresolved sub-workflow references', R.unresolved_refs.length, 0);

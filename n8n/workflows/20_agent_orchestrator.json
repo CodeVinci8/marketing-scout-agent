@@ -445,7 +445,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         500,
         -260
@@ -589,7 +589,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         1160,
         -260
@@ -733,7 +733,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         1820,
         -260
@@ -881,7 +881,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         2700,
         -260
@@ -959,7 +959,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         3140,
         -160
@@ -1015,7 +1015,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         840,
         -160
@@ -1071,7 +1071,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         1060,
         -160
@@ -1118,7 +1118,7 @@
         }
       },
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         1280,
         -160
