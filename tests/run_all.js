@@ -147,6 +147,7 @@ const JS_SUITES = [
   // --- UX-RU-001: single humanized Russian approval message, no internal enums, zero-source fail-closed ---
   ['plan-render-ru', 'test_plan_render_ru.js'],
   ['ux-messages-ru', 'test_ux_messages_ru.js'],
+  ['llm-ru-guard', 'test_llm_ru_guard.js'],
 ];
 
 let failed = 0;

@@ -66,7 +66,9 @@ const DEFAULTS = {
   telegram_channels: ['mfo_market', 'da_credit', 'broker_Aleksey'],
   vk_communities: ['kredit874', 'da_credit', 'anna_findoctor'],
   // real Moscow competitor sites for the website source (set via MS_WEBSITE_COMPETITOR_URLS; https only)
-  website_competitor_urls: []
+  // MVP v1 verified Moscow credit-broker competitor sites (live-checked 2026-07-03: помощь в получении
+  // кредита / залог / ПТС / рефинансирование / ипотека, все https). MS_WEBSITE_COMPETITOR_URLS overrides.
+  website_competitor_urls: ['https://www.lioncredit.ru/', 'https://finardi.ru/', 'https://mkbkfin.ru/']
 };
 
 // Map env var -> resolved config. Unknown/blank env falls back to DEFAULTS; explicit overrides win last.
@@ -104,7 +106,7 @@ function resolveConfig(env, overrides) {
     avito_queries: (phraseList(env.MS_AVITO_QUERIES).length ? phraseList(env.MS_AVITO_QUERIES) : DEFAULTS.avito_queries.slice()).slice(0, 3),
     telegram_channels: (list(env.MS_TELEGRAM_CHANNELS).length ? list(env.MS_TELEGRAM_CHANNELS) : DEFAULTS.telegram_channels.slice()).slice(0, 3),
     vk_communities: (list(env.MS_VK_COMMUNITIES).length ? list(env.MS_VK_COMMUNITIES) : DEFAULTS.vk_communities.slice()).slice(0, 3),
-    website_competitor_urls: list(env.MS_WEBSITE_COMPETITOR_URLS).filter(u => /^https:\/\//i.test(u)).slice(0, 3)
+    website_competitor_urls: (list(env.MS_WEBSITE_COMPETITOR_URLS).length ? list(env.MS_WEBSITE_COMPETITOR_URLS) : DEFAULTS.website_competitor_urls.slice()).filter(u => /^https:\/\//i.test(u)).slice(0, 3)
   };
   for (const k in overrides) {
     if (Object.prototype.hasOwnProperty.call(overrides, k)) cfg[k] = overrides[k];
