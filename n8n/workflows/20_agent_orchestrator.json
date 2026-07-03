@@ -98,6 +98,8 @@
       ],
       "id": "wf20-readplans",
       "name": "Read execution_plans",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",

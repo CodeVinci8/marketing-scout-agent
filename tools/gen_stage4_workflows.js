@@ -108,6 +108,12 @@ function sheetsRead(id, name, pos, tab) {
       sheetName: { __rl: true, value: tab, mode: 'name' }, options: {}
     },
     type: 'n8n-nodes-base.googleSheets', typeVersion: 4.5, position: pos, id: id, name: name,
+    // SHEETS-CHAIN-001 (live-observed: WF22 exec ended after an EMPTY durable_memories read with no reply):
+    // n8n stops a branch when a node emits 0 items -> alwaysOutputData emits one {} sentinel item instead
+    // (consumers filter rows by content, matching WF08/10/12/16 convention). executeOnce prevents the
+    // documented read-amplification (read.operation re-runs per INPUT item at typeVersion>4.1), which in a
+    // read chain multiplies requests by the previous tab's row count (SHEETS-READ-AMPLIFICATION-001).
+    executeOnce: true, alwaysOutputData: true,
     credentials: credGoogle(), ...SHEETS_RETRY
   };
 }

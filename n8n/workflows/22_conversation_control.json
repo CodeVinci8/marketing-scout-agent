@@ -98,6 +98,8 @@
       ],
       "id": "wf22-readmem",
       "name": "Read durable_memories",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",
@@ -132,6 +134,8 @@
       ],
       "id": "wf22-readsrc",
       "name": "Read tracked_sources",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",
@@ -166,6 +170,8 @@
       ],
       "id": "wf22-readplans",
       "name": "Read execution_plans",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",

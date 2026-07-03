@@ -228,6 +228,8 @@
       ],
       "id": "wf26-readstate",
       "name": "Read vk_post_state",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",
@@ -262,6 +264,8 @@
       ],
       "id": "wf26-readchg",
       "name": "Read source_change_events",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",

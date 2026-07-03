@@ -182,4 +182,25 @@ const out1 = H.runCodeNode(gOk.run, WF20, 'Build Delivery Outbox', [{ json: {} }
 A.ok('outbox builds a deterministic delivery id', /^dlv_req_1_rep1_/.test(out1.delivery.delivery_id));
 A.ok('outbox emits a telegram send body', /chat_id/.test(out1.telegram_send_body));
 
+// ------------------------------------------------------------------------------------------------------------
+A.section('SHEETS-CHAIN-001 — every stage4/5 googleSheets READ survives an empty tab and cannot amplify per item');
+{
+  const stage4Files = ['17_agent_settings_config.json', '18_telegram_agent_gateway.json', '19_request_planner.json',
+    '20_agent_orchestrator.json', '21_deep_competitor_analysis.json', '22_conversation_control.json',
+    '23_scheduled_source_monitor.json', '24_report_export_delivery.json', '25_weekly_digest.json',
+    '26_vk_public_community_collector.json'];
+  let reads = 0;
+  for (const f of stage4Files) {
+    const wf = H.loadWorkflow(f);
+    for (const n of (wf.nodes || [])) {
+      if (n.type === 'n8n-nodes-base.googleSheets' && n.parameters && n.parameters.operation === 'read') {
+        reads++;
+        A.eq(f + ' :: ' + n.name + ' — alwaysOutputData (empty tab must not kill the chain)', n.alwaysOutputData, true);
+        A.eq(f + ' :: ' + n.name + ' — executeOnce (no per-input-item read amplification)', n.executeOnce, true);
+      }
+    }
+  }
+  A.ok('stage4/5 read nodes were actually checked', reads >= 16);
+}
+
 A.report('stage4-workflows');

@@ -95,6 +95,8 @@
       ],
       "id": "wf23-readsrc",
       "name": "Read tracked_sources",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",
@@ -129,6 +131,8 @@
       ],
       "id": "wf23-readchg",
       "name": "Read source_change_events",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",

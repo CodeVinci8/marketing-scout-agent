@@ -90,6 +90,8 @@
       ],
       "id": "wf24-readrep",
       "name": "Read report_bundles",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",
@@ -124,6 +126,8 @@
       ],
       "id": "wf24-readout",
       "name": "Read attachment_outbox",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",

@@ -102,6 +102,8 @@
       ],
       "id": "wf25-readrep",
       "name": "Read report_bundles",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",
@@ -136,6 +138,8 @@
       ],
       "id": "wf25-readchg",
       "name": "Read source_change_events",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",
@@ -170,6 +174,8 @@
       ],
       "id": "wf25-readsrc",
       "name": "Read tracked_sources",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",
@@ -204,6 +210,8 @@
       ],
       "id": "wf25-readsum",
       "name": "Read execution_summaries",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",
@@ -238,6 +246,8 @@
       ],
       "id": "wf25-readdig",
       "name": "Read weekly_digests",
+      "executeOnce": true,
+      "alwaysOutputData": true,
       "credentials": {
         "googleApi": {
           "id": "PASTE_CREDENTIAL_ID_HERE",
