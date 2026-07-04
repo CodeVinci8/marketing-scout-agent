@@ -375,7 +375,8 @@
         "owner_user_id"
       ],
       "writers": [
-        "18"
+        "18",
+        "20"
       ],
       "readers": [
         "18"
@@ -576,7 +577,9 @@
         "owner_user_id",
         "agent_request_id"
       ],
-      "writers": [],
+      "writers": [
+        "20"
+      ],
       "readers": [
         "24",
         "25"
