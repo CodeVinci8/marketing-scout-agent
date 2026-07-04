@@ -873,6 +873,26 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   code('wf20-shapesum', 'Shape Execution Summary Row', [1500, 60], [],
     "var s=$('Build Execution Summary').first().json;return [{json:s.summary}];"),
   sheetsAppend('wf20-apsum', 'Append execution_summaries', [1720, 60], 'execution_summaries'),
+  // EXPORT-BUNDLE-001: nothing wrote report_bundles, so WF24 export/XLSX had no report to select. WF20 is
+  // the producer: persist the WF12-built structured bundle (owner-stamped) after each run.
+  code('wf20-shapebundle', 'Shape Report Bundle', [1940, 60], [], `
+var s=$('Build Execution Summary').first().json;
+var rep=s.report||{};var req=s.request||{};
+var b={};try{b=JSON.parse(String(rep.report_bundle||'{}'));}catch(e){b={};}
+b.report_id=String(rep.report_id||b.report_id||'');
+b.agent_request_id=String(req.agent_request_id||b.agent_request_id||'');
+b.owner_user_id=String(req.owner_user_id||'');
+if(!b.created_at)b.created_at=(new Date()).toISOString();
+return [{json:{report_id:b.report_id,owner_user_id:b.owner_user_id,agent_request_id:b.agent_request_id,created_at:String(b.created_at),report_type:String(rep.report_type||''),bundle:JSON.stringify(b),notes:'wf20 run bundle (export/digest source)'}}];`),
+  sheetsAppend('wf20-apbundle', 'Append report_bundles', [2160, 60], 'report_bundles'),
+  // REPORT-CONTEXT-001: last_report_id was never persisted, so export/followup intents always failed the
+  // history gate. Persist it on the conversation state row (same conv_<chat>_<user> key WF18 derives).
+  code('wf20-shapectx2', 'Shape Report Context', [2380, 60], [], `
+var s=$('Build Execution Summary').first().json;
+var rep=s.report||{};var req=s.request||{};
+var convId='conv_'+String(req.chat_id||'')+'_'+String(req.owner_user_id||'');
+return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''),last_report_id:String(rep.report_id||''),active_agent_request_id:String(req.agent_request_id||''),updated_at:(new Date()).toISOString()}}];`),
+  sheetsUpsert('wf20-upctx2', 'Upsert Report Context', [2600, 60], 'conversation_state', 'conversation_id'),
   code('wf20-blocked', 'Build Blocked Response', [180, 160], ['telegram_io', 'plan_render_ru'],
     "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar human=approvalFailureRu(g.gate_reason);\nif(human==='подтверждение устарело или не может быть применено'&&!/no_plan|mismatch|not_awaiting/.test(String(g.gate_reason))){human='лимиты бюджета или настройки источников не позволяют запуск сейчас';}\nvar body={chat_id:chat,text:'Запрос не запущен: '+human+'.'};\nreturn [{json:{telegram_send_body:JSON.stringify(body),gate_reason:g.gate_reason}}];"),
   httpTelegram('wf20-sendblock', 'Send Blocked Reply', [400, 160]),
@@ -924,6 +944,10 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   ['Build Execution Summary', 'Build Delivery Outbox'],
   ['Build Execution Summary', 'Shape Execution Summary Row'],
   ['Shape Execution Summary Row', 'Append execution_summaries'],
+  ['Append execution_summaries', 'Shape Report Bundle'],
+  ['Shape Report Bundle', 'Append report_bundles'],
+  ['Append report_bundles', 'Shape Report Context'],
+  ['Shape Report Context', 'Upsert Report Context'],
   ['Build Delivery Outbox', 'Append telegram_outbox'],
   ['Append telegram_outbox', 'Send Telegram Report'],
   ['Build Blocked Response', 'Send Blocked Reply']
@@ -1055,10 +1079,16 @@ var action=String(inp.action||'export');var filter_text=String(inp.filter_text||
 function J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}
 var rows=[];try{rows=($('Read report_bundles').all()||[]).map(function(r){return r.json;});}catch(e){}
 var match=null;
-for(var i=0;i<rows.length;i++){var b=J(rows[i].bundle||rows[i].report_bundle||rows[i]);if(b&&String(b.report_id)===rid&&String(b.owner_user_id)===owner){match=b;break;}}
+// EXPORT-SCOPE-001: the OWNER is the isolation boundary. An explicit report_id selects exactly; without
+// one, export the caller's NEWEST bundle. The export request's own agent_request_id differs from the
+// report's — scope derives from the MATCHED bundle, never from the caller's request id.
+for(var i=0;i<rows.length;i++){var b=J(rows[i].bundle||rows[i].report_bundle||rows[i]);
+  if(!b||String(b.owner_user_id)!==owner||!String(b.report_id||''))continue;
+  if(rid){if(String(b.report_id)===rid){match=b;break;}continue;}
+  if(!match||String(b.created_at||'')>String(match.created_at||''))match=b;}
 if(!match&&inp.report_bundle)match=J(inp.report_bundle);
 if(!match)throw new Error('report not found / out of scope: '+owner+'/'+arid+'/'+rid);
-var scope={owner_user_id:owner||String(match.owner_user_id),agent_request_id:arid||String(match.agent_request_id),report_id:rid||String(match.report_id)};
+var scope={owner_user_id:owner||String(match.owner_user_id),agent_request_id:String(match.agent_request_id),report_id:String(match.report_id)};
 assertScope(match,scope);
 return [{json:{bundle:match,scope:scope,action:action,filter_text:filter_text,cfg:cfg}}];`),
   code('wf24-preview', 'Build Scope Preview', [-220, 0], ['scope_preview'], `

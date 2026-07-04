@@ -154,4 +154,30 @@ A.section('WF16 write_result is caller-controllable; WF20 passes the gating inpu
   A.ok('WF20 passes the WF12 Claude summary approval token', v12.indexOf('I_APPROVE_CLAUDE_REPORT_SUMMARY') >= 0);
 }
 
+A.section('EXPORT-BUNDLE-001 / REPORT-CONTEXT-001 / DELIVERY-CONTENT-001 — report reaches delivery & export');
+{
+  const fs = require('fs'); const path = require('path');
+  const WFD = path.join(__dirname, '..', 'n8n', 'workflows');
+  const wf20 = JSON.parse(fs.readFileSync(path.join(WFD, '20_agent_orchestrator.json'), 'utf8'));
+  const names = wf20.nodes.map(n => n.name);
+  A.ok('WF20 has Shape Report Bundle', names.indexOf('Shape Report Bundle') >= 0);
+  A.ok('WF20 appends report_bundles', names.indexOf('Append report_bundles') >= 0);
+  A.ok('WF20 persists last_report_id on conversation state', names.indexOf('Upsert Report Context') >= 0);
+  const chain = wf20.connections['Append execution_summaries'].main[0][0].node;
+  A.eq('bundle chain hangs off Append execution_summaries', chain, 'Shape Report Bundle');
+
+  const wf24 = JSON.parse(fs.readFileSync(path.join(WFD, '24_report_export_delivery.json'), 'utf8'));
+  const scopeNode = wf24.nodes.find(n => n.name === 'Select & Scope Report');
+  A.ok('WF24 scope: owner boundary + newest fallback (EXPORT-SCOPE-001)', scopeNode.parameters.jsCode.indexOf('EXPORT-SCOPE-001') >= 0);
+  A.ok('WF24 scope derives agent_request_id from the matched bundle', scopeNode.parameters.jsCode.indexOf('agent_request_id:String(match.agent_request_id)') >= 0);
+
+  const wf12 = JSON.parse(fs.readFileSync(path.join(WFD, '12_market_intelligence_report_builder.json'), 'utf8'));
+  const rep = wf12.nodes.find(n => n.name === 'Build Deterministic Report');
+  A.ok('WF12 report exposes redacted report_markdown', rep.parameters.jsCode.indexOf('report_markdown:redact(md)') >= 0);
+  A.ok('WF12 report builds a structured report_bundle', rep.parameters.jsCode.indexOf('report_bundle:JSON.stringify(') >= 0);
+  const fin = wf12.nodes.find(n => n.name === 'Final Summary Output');
+  A.ok('WF12 Final Summary passes report_markdown to WF20 delivery', fin.parameters.jsCode.indexOf('report_markdown:') >= 0);
+  A.ok('WF12 Final Summary passes report_bundle to WF20', fin.parameters.jsCode.indexOf('report_bundle:str(rep.report_bundle)') >= 0);
+}
+
 A.report('agent-summary-ledger');
