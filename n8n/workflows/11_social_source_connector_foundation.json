@@ -142,7 +142,7 @@
         "operation": "read",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -204,7 +204,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -257,7 +257,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -310,7 +310,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -403,7 +403,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {

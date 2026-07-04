@@ -33,6 +33,25 @@ A.section('Part 7 — static sub-workflow + trigger audit');
 const R = audit();
 A.eq('no hard import/resolution errors', R.errors.length, 0);
 A.eq('every executeWorkflow node with workflowInputs is typeVersion>=1.2 (below 1.2 n8n silently drops the named-input mapping)', (R.exec_wf_typeversion_violations || ['audit-field-missing']).length, 0);
+// SHEETS-DOCID-001 (live-observed: WF04 'Append to Dynamic Route Sheet' 404'd on the literal
+// PASTE_SPREADSHEET_ID_HERE placeholder): every googleSheets documentId and sheets.googleapis.com URL in a
+// RUNTIME workflow must resolve the spreadsheet id from $env.MS_SPREADSHEET_ID, never a literal placeholder.
+{
+  const fs0 = require('fs'); const path0 = require('path');
+  const manifest = JSON.parse(fs0.readFileSync(path0.join(__dirname, '..', 'config', 'workflow_manifest.json'), 'utf8'));
+  const runtimeFiles = Object.values(manifest.runtime_identity).map(v => v.file);
+  const bad = [];
+  for (const base of runtimeFiles) {
+    const wf = JSON.parse(fs0.readFileSync(path0.join(__dirname, '..', 'n8n', 'workflows', base), 'utf8'));
+    for (const n of (wf.nodes || [])) {
+      const p = n.parameters || {};
+      const d = p.documentId;
+      if (d && typeof d.value === 'string' && d.value.indexOf('$env.MS_SPREADSHEET_ID') < 0) bad.push(base + '::' + n.name + ' documentId=' + d.value.slice(0, 40));
+      if (typeof p.url === 'string' && p.url.indexOf('sheets.googleapis.com') >= 0 && p.url.indexOf('$env.MS_SPREADSHEET_ID') < 0) bad.push(base + '::' + n.name + ' url');
+    }
+  }
+  A.eq('runtime spreadsheet ids all resolve from $env.MS_SPREADSHEET_ID (' + bad.join('; ') + ')', bad.length, 0);
+}
 A.eq('all workflows inactive', R.active_violations.length, 0);
 A.eq('all node types recognized (n8n-nodes-base)', R.unrecognized_types.length, 0);
 A.eq('no unresolved sub-workflow references', R.unresolved_refs.length, 0);
