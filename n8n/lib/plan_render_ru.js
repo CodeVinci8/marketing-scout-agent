@@ -97,10 +97,14 @@ function planApprovalMessageRu(plan, opts) {
     '• таблица Excel;',
     '• сравнение и основные выводы.'
   ];
-  var cost = ruNum(plan.est_source_cost_usd, 0) + ruNum(plan.est_llm_cost_usd, 0);
-  if (cost > 0) {
+  // §7 COST-UX-001: est_source/est_llm carry the request's BUDGET CAPS (e.g. $5+$3) — presenting their sum as
+  // the expected price of one request was wrong. Show a dollar amount ONLY when the caller supplies a real
+  // projection computed from the planned provider calls (cost_model.projectRequestCost) and marks it reliable;
+  // otherwise omit the line. The technical hard cap is NEVER rendered here — it stays in rows/diagnostics.
+  var pc = ruNum(opts.projected_cost_usd, NaN);
+  if (isFinite(pc) && pc > 0 && opts.projected_reliable !== false) {
     lines.push('');
-    lines.push('⚠️ Запуск потратит до $' + (Math.round(cost * 100) / 100).toFixed(2) + ' на внешние сервисы.');
+    lines.push('💰 Ориентировочная стоимость: около $' + (Math.round(pc * 100) / 100).toFixed(2) + '.');
   }
   lines.push('');
   lines.push('Запустить анализ?');

@@ -37,6 +37,7 @@ const JS_SUITES = [
   ['website-pipeline', 'test_website_pipeline.js'],
   // --- Stage 3 closure: production analysis/aggregation/reporting gates (WF05/06/08/09/10/12) ---
   ['stage3-gates', 'test_stage3_gates.js'],
+  ['cost-model', 'test_cost_model.js'],
   // --- Stage 5: guarded provider adapter contract (real runAdapter path + parsers + cost + acceptance) ---
   ['stage5-adapters', 'test_stage5_adapters.js'],
   // --- Stage 4: single-user Telegram agent MVP (libs + generated WF17-20) ---

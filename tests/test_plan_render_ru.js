@@ -39,13 +39,22 @@ A.section('UX-RU-001 — approval message: humanized Russian, one block, no inte
   A.ok('no call counters', !/вызов/i.test(r.text));
 }
 
-A.section('UX-RU-001 — budget warning ONLY on a real non-zero cost decision');
+A.section('§7 COST-UX-001 — projection shown as an estimate; the hard cap is NEVER the expected price');
 {
   const free = R.planApprovalMessageRu(PLAN, {});
-  A.ok('zero-cost plan has NO cost warning', free.text.indexOf('⚠️') < 0);
-  const paid = R.planApprovalMessageRu(Object.assign({}, PLAN, { est_source_cost_usd: 0.8, est_llm_cost_usd: 0.45 }), {});
-  A.ok('non-zero cost plan warns with the ceiling', paid.text.indexOf('⚠️ Запуск потратит до $1.25 на внешние сервисы.') >= 0);
+  A.ok('no projection supplied => NO dollar amount at all', free.text.indexOf('$') < 0);
+  // est_* fields are BUDGET CAPS — their sum must never render (the $8.00 regression)
+  const capped = R.planApprovalMessageRu(Object.assign({}, PLAN, { est_source_cost_usd: 5, est_llm_cost_usd: 3 }), {});
+  A.ok('budget caps 5+3 never render as $8.00', capped.text.indexOf('8.00') < 0);
+  A.ok("'потратит до' phrasing is gone", capped.text.indexOf('потратит до') < 0);
+  A.ok('caps without projection => no dollar amount', capped.text.indexOf('$') < 0);
+  const paid = R.planApprovalMessageRu(Object.assign({}, PLAN, { est_source_cost_usd: 5, est_llm_cost_usd: 3 }),
+    { projected_cost_usd: 0.27, projected_reliable: true });
+  A.ok('reliable projection renders as an estimate', paid.text.indexOf('Ориентировочная стоимость: около $0.27') >= 0);
+  A.ok('projection message never shows the cap sum', paid.text.indexOf('8.00') < 0);
   A.eq('paid message still leaks nothing', leaks(paid.text), []);
+  const unrel = R.planApprovalMessageRu(PLAN, { projected_cost_usd: 0.27, projected_reliable: false });
+  A.ok('unreliable projection => amount omitted', unrel.text.indexOf('$') < 0);
 }
 
 A.section('UX-RU-001 — fresh scan with ZERO allowed source calls fails closed (no_active_sources)');

@@ -43,6 +43,11 @@ const DEFAULTS = {
   enable_llm_planner: false,
   enable_llm_summary: false,
   enable_llm_analysis: true,   // WF08 llm_primary in agent runs (still gated by enable_claude + token + budget)
+  // §7 provider unit prices (observed 2026-07: Firecrawl ~1 credit/page, Apify ~$0.01/search, small
+  // sonnet call ~$0.01-0.02). Overridable: MS_COST_FIRECRAWL_PAGE_USD / MS_COST_APIFY_SEARCH_USD / MS_COST_CLAUDE_CALL_USD.
+  cost_firecrawl_page_usd: 0.01,
+  cost_apify_search_usd: 0.01,
+  cost_claude_call_usd: 0.02,
   report_data_mode: 'live',
   // ---- Stage 4 free-path / zero-paid-call guards (all fail-closed) -------------------------------------------
   // Telegram conversation is allowed; every PAID external action is OFF by default. The free path runs the full
@@ -86,6 +91,10 @@ function resolveConfig(env, overrides) {
     max_external_calls: num(env.MS_MAX_EXTERNAL_CALLS, DEFAULTS.max_external_calls),
     source_budget_usd: num(env.MS_SOURCE_BUDGET_USD, DEFAULTS.source_budget_usd),
     llm_budget_usd: num(env.MS_LLM_BUDGET_USD, DEFAULTS.llm_budget_usd),
+    // §7 operator-controlled provider unit prices (cost_model.js) — the ONE place unit prices live.
+    cost_firecrawl_page_usd: num(env.MS_COST_FIRECRAWL_PAGE_USD, DEFAULTS.cost_firecrawl_page_usd),
+    cost_apify_search_usd: num(env.MS_COST_APIFY_SEARCH_USD, DEFAULTS.cost_apify_search_usd),
+    cost_claude_call_usd: num(env.MS_COST_CLAUDE_CALL_USD, DEFAULTS.cost_claude_call_usd),
     default_region: str(env.MS_DEFAULT_REGION) || DEFAULTS.default_region,
     default_niche: str(env.MS_DEFAULT_NICHE) || DEFAULTS.default_niche,
     source_allowlist: allowlist.length ? allowlist : DEFAULTS.source_allowlist.slice(),

@@ -118,7 +118,7 @@
       "sources_failed", "sources_quarantined", "records_received", "records_unique", "records_eligible",
       "records_analyzed", "records_reported", "external_calls", "llm_primary_calls", "llm_repair_calls",
       "source_cost_status", "llm_cost_status", "report_id", "delivery_status", "blocking_errors",
-      "next_operator_action"
+      "next_operator_action", "projected_cost_usd", "hard_cap_usd", "actual_cost_usd", "remaining_budget_usd"
     ],
     "telegram_outbox": [
       "delivery_id", "agent_request_id", "report_id", "chat_id", "payload_hash", "chunks", "send_status",
