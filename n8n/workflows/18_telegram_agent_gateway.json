@@ -868,7 +868,8 @@
         -200
       ],
       "id": "wf18-wf19",
-      "name": "Run WF19 (Planner)"
+      "name": "Run WF19 (Planner)",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -1184,7 +1185,8 @@
         40
       ],
       "id": "wf18-wf20",
-      "name": "Run WF20 (Orchestrator)"
+      "name": "Run WF20 (Orchestrator)",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -1315,7 +1317,8 @@
         180
       ],
       "id": "wf18-wf21",
-      "name": "Run WF21 (Deep Analysis)"
+      "name": "Run WF21 (Deep Analysis)",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -1437,7 +1440,8 @@
         320
       ],
       "id": "wf18-wf22",
-      "name": "Run WF22 (Control)"
+      "name": "Run WF22 (Control)",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -1550,7 +1554,8 @@
         460
       ],
       "id": "wf18-wf24",
-      "name": "Run WF24 (Reporting)"
+      "name": "Run WF24 (Reporting)",
+      "alwaysOutputData": true
     },
     {
       "parameters": {

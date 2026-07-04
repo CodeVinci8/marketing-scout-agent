@@ -203,4 +203,28 @@ A.section('SHEETS-CHAIN-001 — every stage4/5 googleSheets READ survives an emp
   A.ok('stage4/5 read nodes were actually checked', reads >= 16);
 }
 
+// ------------------------------------------------------------------------------------------------------------
+A.section('SOURCE-EMPTY-001 — dispatch nodes survive empty/crashed children (partial results, never a silent halt)');
+{
+  let dispatches = 0;
+  for (const f of ['18_telegram_agent_gateway.json', '20_agent_orchestrator.json', '21_deep_competitor_analysis.json',
+                   '23_scheduled_source_monitor.json']) {
+    const wf = H.loadWorkflow(f);
+    for (const n of (wf.nodes || [])) {
+      if (n.type !== 'n8n-nodes-base.executeWorkflow') continue;
+      dispatches++;
+      A.eq(f + ' :: ' + n.name + ' — alwaysOutputData (empty child return must not kill the parent chain)', n.alwaysOutputData, true);
+      if (/Run (Website|Avito|Telegram|VK) (Source|Check)/.test(n.name) && f === '20_agent_orchestrator.json') {
+        A.eq(f + ' :: ' + n.name + ' — tolerant dispatch (crashed source degrades to partial result)', n.onError, 'continueRegularOutput');
+      }
+    }
+  }
+  A.ok('dispatch nodes were actually checked', dispatches >= 16);
+  // the adapter maps the {} sentinel to an EMPTY source outcome (this is what makes alwaysOutputData safe)
+  const sa = require('../n8n/lib/source_adapter.js');
+  const empty = sa.normalizeAdapterResult('avito', {}, { agent_request_id: 'req_e' });
+  A.eq('adapter maps {} sentinel to status=empty', empty.status, 'empty');
+  A.ok('empty source still advances the run', !!empty.next_state);
+}
+
 A.report('stage4-workflows');

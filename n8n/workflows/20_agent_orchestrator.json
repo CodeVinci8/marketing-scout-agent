@@ -453,7 +453,9 @@
         -260
       ],
       "id": "wf20-wf04",
-      "name": "Run Website Source (WF04)"
+      "name": "Run Website Source (WF04)",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -597,7 +599,9 @@
         -260
       ],
       "id": "wf20-wf09",
-      "name": "Run Avito Source (WF09)"
+      "name": "Run Avito Source (WF09)",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -741,7 +745,9 @@
         -260
       ],
       "id": "wf20-wf11",
-      "name": "Run Telegram Source (WF11)"
+      "name": "Run Telegram Source (WF11)",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -889,7 +895,9 @@
         -260
       ],
       "id": "wf20-wf26",
-      "name": "Run VK Source (WF26)"
+      "name": "Run VK Source (WF26)",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -967,7 +975,8 @@
         -160
       ],
       "id": "wf20-wf16",
-      "name": "Run WF16 Quality Gate"
+      "name": "Run WF16 Quality Gate",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -1023,7 +1032,8 @@
         -160
       ],
       "id": "wf20-wf08",
-      "name": "Run WF08 Analyzer"
+      "name": "Run WF08 Analyzer",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -1079,7 +1089,8 @@
         -160
       ],
       "id": "wf20-wf10",
-      "name": "Run WF10 Aggregator"
+      "name": "Run WF10 Aggregator",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -1126,7 +1137,8 @@
         -160
       ],
       "id": "wf20-wf12",
-      "name": "Run WF12 Report"
+      "name": "Run WF12 Report",
+      "alwaysOutputData": true
     },
     {
       "parameters": {

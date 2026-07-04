@@ -168,7 +168,7 @@ function ifNode(id, name, pos, expr) {
 // execWf: invoke a callable sub-workflow. `inputs` (optional) maps the callable's declared Execute Sub-workflow
 // Trigger fields -> value expressions, so the parent passes NAMED canonical fields (agent_request_id, source_run_id,
 // data_mode, ...) rather than relying on positional/`.first()` consumption inside the callable.
-function execWf(id, name, pos, note, inputs) {
+function execWf(id, name, pos, note, inputs, opts) {
   var params = { workflowId: { __rl: true, value: 'PASTE_WORKFLOW_ID', mode: 'id', cachedResultName: note }, options: {} };
   if (inputs && Object.keys(inputs).length) {
     var keys = Object.keys(inputs);
@@ -181,7 +181,14 @@ function execWf(id, name, pos, note, inputs) {
   // typeVersion MUST be >= 1.2: below 1.2 n8n hides the workflowInputs resourceMapper, so the defineBelow
   // expressions are silently ignored and the child receives only accidentally same-named passthrough keys
   // (live-observed on n8n 2.23.3: WF22 got domain/op/chat_id = null while agent_request_id passed by accident).
-  return { parameters: params, type: 'n8n-nodes-base.executeWorkflow', typeVersion: 1.2, position: pos, id: id, name: name };
+  // SOURCE-EMPTY-001 (live-observed: WF09 returned 0 items after an all-blocked Avito scrape and the parent
+  // chain halted silently): alwaysOutputData turns an empty child return into the {} sentinel item, which
+  // normalizeAdapterResult already maps to status='empty' -> the run continues with partial results.
+  var node = { parameters: params, type: 'n8n-nodes-base.executeWorkflow', typeVersion: 1.2, position: pos, id: id, name: name, alwaysOutputData: true };
+  // tolerant dispatch (source collectors only): a CRASHED child degrades to an error item instead of
+  // aborting the whole orchestration — the adapter contract turns it into a failed/empty source.
+  if (opts && opts.tolerant) node.onError = 'continueRegularOutput';
+  return node;
 }
 function httpClaude(id, name, pos) {
   return {
@@ -789,7 +796,7 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
     workflow_run_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
     data_mode: "={{ $('Resolve Collection Set').first().json.data_mode }}",
     urls: "={{ $('Resolve Collection Set').first().json.website_urls }}"
-  }),
+  }, { tolerant: true }),
   code('wf20-normweb', 'Normalize Website Result', [720, -260], ['source_adapter'],
     "var g=$('Approval & Budget Gate').first().json;\nvar raw=($json&&$json.live_source_run)?$json.live_source_run:($json||{});\nif(raw.source_cost_status&&!raw.cost_status)raw=Object.assign({},raw,{cost_status:raw.source_cost_status});\nif(raw.items_unique!=null&&raw.items_written==null)raw=Object.assign({},raw,{items_written:Number(raw.items_unique)||0});\nvar res=normalizeAdapterResult('website',raw,{agent_request_id:g.request.agent_request_id});\nreturn [{json:{adapter:res,plan:g.plan,request:g.request,cfg:g.cfg}}];"),
   ifNode('wf20-ifavito', 'Collect Avito?', [940, -160], "={{ $('Resolve Collection Set').first().json.set.avito }}"),
@@ -802,7 +809,7 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
     max_items: "={{ $('Resolve Collection Set').first().json.per_source_items }}",
     approval_token: 'AVITO_LIVE_APPROVED',
     max_budget_usd: "={{ $('Approval & Budget Gate').first().json.plan.est_source_cost_usd || 0.5 }}"
-  }),
+  }, { tolerant: true }),
   code('wf20-normavito', 'Normalize Avito Result', [1380, -260], ['source_adapter'],
     "var g=$('Approval & Budget Gate').first().json;\nvar raw=($json&&$json.live_source_run)?$json.live_source_run:($json||{});\nif(raw.source_cost_status&&!raw.cost_status)raw=Object.assign({},raw,{cost_status:raw.source_cost_status});\nif(raw.items_unique!=null&&raw.items_written==null)raw=Object.assign({},raw,{items_written:Number(raw.items_unique)||0});\nvar res=normalizeAdapterResult('avito',raw,{agent_request_id:g.request.agent_request_id});\nreturn [{json:{adapter:res,plan:g.plan,request:g.request,cfg:g.cfg}}];"),
   ifNode('wf20-iftg', 'Collect Telegram?', [1600, -160], "={{ $('Resolve Collection Set').first().json.set.telegram }}"),
@@ -815,7 +822,7 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
     max_posts: "={{ $('Resolve Collection Set').first().json.per_source_items }}",
     approval_token: 'I_APPROVE_LIVE_TELEGRAM_PREVIEW',
     transport: 'http_get'
-  }),
+  }, { tolerant: true }),
   code('wf20-normtg', 'Normalize Telegram Result', [2040, -260], ['source_adapter'],
     "var g=$('Approval & Budget Gate').first().json;\nvar raw=($json&&$json.live_source_run)?$json.live_source_run:($json||{});\nif(raw.source_cost_status&&!raw.cost_status)raw=Object.assign({},raw,{cost_status:raw.source_cost_status});\nif(raw.items_unique!=null&&raw.items_written==null)raw=Object.assign({},raw,{items_written:Number(raw.items_unique)||0});\nvar res=normalizeAdapterResult('telegram',raw,{agent_request_id:g.request.agent_request_id});\nreturn [{json:{adapter:res,plan:g.plan,request:g.request,cfg:g.cfg}}];"),
   ifNode('wf20-ifvk', 'Collect VK?', [2260, -160], "={{ $('Resolve Collection Set').first().json.set.vk }}"),
@@ -829,7 +836,7 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
     community: "={{ $json.community }}",
     data_mode: "={{ $('Resolve Collection Set').first().json.data_mode }}",
     mode: 'agent'
-  }),
+  }, { tolerant: true }),
   code('wf20-normvk', 'Normalize VK Result', [2920, -260], ['source_adapter'],
     "var g=$('Approval & Budget Gate').first().json;\nvar items=[];try{items=$input.all().map(function(i){return i.json;});}catch(e){items=[$json||{}];}\nvar recv=0,written=0,calls=0,errs=[];\nitems.forEach(function(it){var r=(it&&it.live_source_run)?it.live_source_run:(it||{});recv+=Number(r.items_received)||0;written+=Number(r.items_written!=null?r.items_written:(r.items_unique!=null?r.items_unique:r.items_received))||0;calls+=Number(r.external_calls)||0;[].concat(r.errors||[]).forEach(function(x){if(x)errs.push(String(x));});if(r.error)errs.push(String(r.error));});\nvar raw={agent_request_id:g.request.agent_request_id,items_received:recv,items_written:written,external_calls:calls,errors:errs,cost_status:'free_tier'};\nvar res=normalizeAdapterResult('vk',raw,{agent_request_id:g.request.agent_request_id});\nreturn [{json:{adapter:res,plan:g.plan,request:g.request,cfg:g.cfg}}];"),
   execWf('wf20-wf16', 'Run WF16 Quality Gate', [3140, -160], 'WF16 source quality gate', {

@@ -224,7 +224,8 @@
         -160
       ],
       "id": "wf21-wf04",
-      "name": "Collect Deep Evidence (WF04)"
+      "name": "Collect Deep Evidence (WF04)",
+      "alwaysOutputData": true
     },
     {
       "parameters": {

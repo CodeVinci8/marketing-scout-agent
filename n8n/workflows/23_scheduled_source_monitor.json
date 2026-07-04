@@ -219,7 +219,8 @@
         -160
       ],
       "id": "wf23-wf04",
-      "name": "Run Website Check (WF04)"
+      "name": "Run Website Check (WF04)",
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -471,7 +472,8 @@
         320
       ],
       "id": "wf23-wf26",
-      "name": "Run VK Check (WF26)"
+      "name": "Run VK Check (WF26)",
+      "alwaysOutputData": true
     }
   ],
   "connections": {
