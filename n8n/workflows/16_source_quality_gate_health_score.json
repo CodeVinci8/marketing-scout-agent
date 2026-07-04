@@ -260,7 +260,13 @@
           "value": "source_health",
           "mode": "name"
         },
-        "options": {}
+        "options": {},
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        }
       },
       "credentials": {
         "googleApi": {
@@ -271,7 +277,7 @@
       "id": "append_source_health",
       "name": "Append source_health",
       "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4,
+      "typeVersion": 4.5,
       "position": [
         1780,
         120

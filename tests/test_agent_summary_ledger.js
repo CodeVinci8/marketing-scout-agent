@@ -180,4 +180,22 @@ A.section('EXPORT-BUNDLE-001 / REPORT-CONTEXT-001 / DELIVERY-CONTENT-001 — rep
   A.ok('WF12 Final Summary passes report_bundle to WF20', fin.parameters.jsCode.indexOf('report_bundle:str(rep.report_bundle)') >= 0);
 }
 
+A.section('SHEETS-COLMAP-001 — every Sheets append/appendOrUpdate declares its columns resourceMapper');
+{
+  const fs = require('fs'); const path = require('path');
+  const WFD = path.join(__dirname, '..', 'n8n', 'workflows');
+  const missing = [];
+  for (const f of fs.readdirSync(WFD).filter(x => x.endsWith('.json'))) {
+    let wf; try { wf = JSON.parse(fs.readFileSync(path.join(WFD, f), 'utf8')); } catch (e) { continue; }
+    for (const n of (wf.nodes || [])) {
+      if (n.type !== 'n8n-nodes-base.googleSheets') continue;
+      const op = (n.parameters && n.parameters.operation) || '';
+      if ((op === 'append' || op === 'appendOrUpdate') && !(n.parameters && n.parameters.columns && n.parameters.columns.mappingMode)) {
+        missing.push(f + '::' + n.name);
+      }
+    }
+  }
+  A.eq('no append node without a columns mapper (tv4+ throws "Cannot convert undefined or null to object")', missing.join(','), '');
+}
+
 A.report('agent-summary-ledger');
