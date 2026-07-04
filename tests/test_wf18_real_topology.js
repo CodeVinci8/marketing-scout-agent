@@ -130,8 +130,9 @@ A.section('§19.20 — Telegram send ownership is unambiguous (children own thei
 for (const nm of ['Run WF20 (Orchestrator)', 'Run WF21 (Deep Analysis)', 'Run WF22 (Control)', 'Run WF24 (Reporting)']) {
   A.eq('20. ' + nm + ' branch has no WF18 Telegram send (child owns delivery)', nodeIn(WF18, reachable(WF18, nm)).filter(isTelegramSend).length, 0);
 }
-// WF18 only sends for: plan approval (WF19 result), and the local reply (help/clarify/answer-from-context)
-A.ok('20. WF18 owns exactly the plan-approval and local-reply sends', (WF18.nodes || []).filter(isTelegramSend).map(n => n.name).sort().join(',') === 'Send Plan Reply,Send Telegram Reply');
+// WF18 only sends for: plan approval (WF19 result), the local reply (help/clarify/answer-from-context), and the
+// §8 FAST-LANE-001 lanes (static /start,/help,who-am-I + /status render + /cancel ack) — all WF18-owned replies.
+A.ok('20. WF18 owns exactly the plan-approval, local-reply and §8 lane sends', (WF18.nodes || []).filter(isTelegramSend).map(n => n.name).sort().join(',') === 'Send Command Reply,Send Fast Reply,Send Plan Reply,Send Telegram Reply');
 
 // ============================================================================ §20 BEHAVIORAL / NEGATIVE PATHS
 A.section('§20 — fail-closed behavioral matrix (ingress decisions, every reject reveals nothing)');

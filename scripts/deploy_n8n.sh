@@ -798,6 +798,14 @@ activate_telegram() {
     n8n_deactivate_id "$id" || say "  [warn] WF18 unpublish also failed — run: scripts/rollback.sh --apply"
     die "Telegram activation rolled back (webhook verify failed; WF18 unpublished)."
   fi
+  # §8 TELEGRAM-MENU-001: native command menu from the canonical registry. SEPARATE check from the webhook —
+  # a menu failure never rolls back the (already verified) gateway; it is reported and re-runnable on its own.
+  say ">> registering the native Telegram command menu (setMyCommands + setChatMenuButton; canonical registry)"
+  if "${ROOT}/scripts/telegram_webhook.sh" menu-set --apply && "${ROOT}/scripts/telegram_webhook.sh" menu-verify; then
+    say "  [ok] TELEGRAM_MENU=PASS (commands + menu button verified via getMyCommands/getChatMenuButton)"
+  else
+    say "  [warn] TELEGRAM_MENU=FAIL — gateway stays ACTIVE; re-run: scripts/telegram_webhook.sh menu-set --apply && scripts/telegram_webhook.sh menu-verify"
+  fi
   hr
   say "WF18 (Telegram gateway) is ACTIVE; the webhook is registered AND verified. WF23/WF25 remain inactive."
   say "Rollback: scripts/rollback.sh --apply  (deletes the webhook + unpublishes WF18)."

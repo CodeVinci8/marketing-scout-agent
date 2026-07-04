@@ -328,6 +328,39 @@ var dec=ingressDecision({update:update,headers:headers,expectedSecret:__env.MS_T
 var gate={accepted:dec.accepted,stop_reason:dec.stop_reason,secret_ok:dec.secret_ok,telegram_enabled:dec.telegram_enabled,supported:dec.supported,is_private:dec.is_private,authorized:dec.authorized,is_callback:dec.is_callback,ack_needed:dec.ack_needed,callback_query_id:dec.callback_query_id,idempotency_key:dec.idempotency_key};
 return [{json:{gate:gate,parsed:dec.parsed,cfg:cfg}}];`),
   ifNode('wf18-ifacc', 'Ingress Accepted?', [-740, 0], '={{ $json.gate.accepted }}'),
+  // ---- §8 FAST-LANE-001: static commands (/start, /help, who-am-I) reply BEFORE any Sheets call. Pure render
+  //      from config; zero side effects; duplicate-safe by content; every stateful path stays claim-protected. ----
+  code('wf18-fastlane', 'Fast Static Lane', [-740, -220], ['fast_lane', 'plan_render_ru', 'agent_charter'], `
+var g=$('Ingress Security Gate').first().json;var cfg=g.cfg;var p=g.parsed||{};
+var d=fastLaneDecision(p);
+if(!d.fast){return [{json:{fast:false}}];}
+var text='';
+if(d.kind==='start'){text=ruStartMessage();}
+else if(d.kind==='whoami'){text=ruWhoAmIMessage();}
+else {text=ruHelpMessage(availableCapabilities(cfg));}
+return [{json:{fast:true,fast_kind:d.kind,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:text})}}];`),
+  ifNode('wf18-iffast', 'Fast Static Reply?', [-560, -220], '={{ $json.fast }}'),
+  httpTelegram('wf18-sendfast', 'Send Fast Reply', [-380, -300]),
+  // ---- §8 command lane: /status renders from the ALREADY-READ batch (no context assembly, no persistence
+  //      chain, no WF22 dispatch); /cancel gets an immediate ack and CONTINUES to the real WF22 cancel. Both
+  //      run AFTER the durable claim (Resolve Winner), so idempotency is intact. ----
+  code('wf18-cmdlane', 'Command Lane', [20, -220], ['plan_render_ru', 'sheets_access'], `
+var g=$('Resolve Winner').first().json;var p=g.parsed||{};
+var kind=String(p.kind||'');
+if(kind==='cancel'){
+  return [{json:{lane:'cancel_ack',continue_heavy:true,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:'⏳ Отменяю текущую операцию…'})}}];
+}
+if(kind!=='status'){return [{json:{lane:'none',continue_heavy:true,has_reply:false}}];}
+var plans=[];try{plans=extractTab($('Batch Read Sheets').first().json,'execution_plans').map(function(i){return i.json;});}catch(e){}
+var mine=plans.filter(function(r){return String(r.owner_user_id)===String(p.user_id);});
+var act=mine.filter(function(r){return ['awaiting_approval','approved','collecting'].indexOf(String(r.status))>=0;});
+var text;
+if(!act.length){text='Активных запросов нет. Напишите, что нужно изучить, — я подготовлю план анализа.';}
+else{var p0=act[0];var srcs=String(p0.sources||'').split(',').map(function(x){return x.trim();}).filter(Boolean);text=ruStatusReport({status:p0.status,sources:srcs});if(act.length>1){text+='\\n\\nЕщё в работе: '+act.slice(1).map(planStatusLineRu).join('; ')+'.';}}
+return [{json:{lane:'status',continue_heavy:false,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:text})}}];`),
+  ifNode('wf18-ifcmdreply', 'Command Reply?', [200, -220], '={{ $json.has_reply }}'),
+  httpTelegram('wf18-sendcmd', 'Send Command Reply', [380, -300]),
+  ifNode('wf18-ifcmdcont', 'Continue Heavy Path?', [380, -140], "={{ $('Command Lane').first().json.continue_heavy }}"),
   // ---- shared safe-stop path (used by ingress reject AND duplicate): no business, fast 200, optional ack ----
   code('wf18-term', 'Terminate Safely', [-520, 260], ['telegram_io'], `
 var inp=$json||{};var gate=inp.gate||{};
@@ -572,7 +605,10 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),inten
   ['Telegram Webhook', 'Respond 200'],
   ['Respond 200', 'Ingress Security Gate'],
   ['Ingress Security Gate', 'Ingress Accepted?'],
-  ['Ingress Accepted?', 'Batch Read Sheets', 0],
+  ['Ingress Accepted?', 'Fast Static Lane', 0],
+  ['Fast Static Lane', 'Fast Static Reply?'],
+  ['Fast Static Reply?', 'Send Fast Reply', 0],
+  ['Fast Static Reply?', 'Batch Read Sheets', 1],
   ['Ingress Accepted?', 'Terminate Safely', 1],
   ['Batch Read Sheets', 'Read agent_request_events'],
   ['Read agent_request_events', 'Mint Claim'],
@@ -580,7 +616,12 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),inten
   ['Append Claim', 'Re-read Claims'],
   ['Re-read Claims', 'Resolve Winner'],
   ['Resolve Winner', 'New Update?'],
-  ['New Update?', 'Read conversation_state', 0],
+  ['New Update?', 'Command Lane', 0],
+  ['Command Lane', 'Command Reply?'],
+  ['Command Reply?', 'Send Command Reply', 0],
+  ['Command Reply?', 'Continue Heavy Path?', 1],
+  ['Send Command Reply', 'Continue Heavy Path?'],
+  ['Continue Heavy Path?', 'Read conversation_state', 0],
   ['New Update?', 'Terminate Safely', 1],
   ['Terminate Safely', 'Terminate Ack Needed?'],
   ['Terminate Ack Needed?', 'Send Terminate Ack', 0],
