@@ -29,6 +29,8 @@ const JS_SUITES = [
   ['wf16-runtime-searchcards', 'test_wf16_runtime_searchcards.js'],
   // --- Stage C Runtime Patch 5: WF09 Apify actor-input regression (string startUrls, query origin) ---
   ['wf09-actor-input', 'test_wf09_actor_input.js'],
+  // --- AGENT-SUMMARY-001: connector ledger chain survives agent mode / empty collections ---
+  ['agent-summary-ledger', 'test_agent_summary_ledger.js'],
   // --- Stage 3 closure: canonical identity/lineage contract + WF16 boolean fidelity ---
   ['lineage-contract', 'test_lineage_contract.js'],
   // --- Stage 3 closure: WF04 -> WF16 -> WF08 website source quality & analysis pipeline ---

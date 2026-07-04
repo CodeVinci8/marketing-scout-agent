@@ -927,7 +927,8 @@
             "agent_request_id": "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
             "source_run_id": "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
             "data_mode": "={{ $('Resolve Collection Set').first().json.data_mode }}",
-            "platform_filter": ""
+            "platform_filter": "",
+            "write_result": "true"
           },
           "schema": [
             {
@@ -957,6 +958,14 @@
             {
               "id": "platform_filter",
               "displayName": "platform_filter",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "write_result",
+              "displayName": "write_result",
               "required": false,
               "type": "string",
               "display": true,
@@ -1105,7 +1114,9 @@
           "mappingMode": "defineBelow",
           "value": {
             "agent_request_id": "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
-            "data_mode": "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}"
+            "data_mode": "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}",
+            "enable_llm_summary": "={{ $('Approval & Budget Gate').first().json.cfg.enable_llm_summary === false ? 'false' : 'true' }}",
+            "llm_approval_token": "I_APPROVE_CLAUDE_REPORT_SUMMARY"
           },
           "schema": [
             {
@@ -1119,6 +1130,22 @@
             {
               "id": "data_mode",
               "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "enable_llm_summary",
+              "displayName": "enable_llm_summary",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "llm_approval_token",
+              "displayName": "llm_approval_token",
               "required": false,
               "type": "string",
               "display": true,

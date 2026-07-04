@@ -843,7 +843,9 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
     agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
     source_run_id: "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
     data_mode: "={{ $('Resolve Collection Set').first().json.data_mode }}",
-    platform_filter: ''
+    platform_filter: '',
+    // WF16-WRITE-001: agent runs must PERSIST source_health — WF10/WF12 gate on it fail-closed.
+    write_result: 'true'
   }),
   execWf('wf20-wf08', 'Run WF08 Analyzer', [840, -160], 'WF08 touchpoint analyzer', {
     agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
@@ -857,7 +859,10 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   }),
   execWf('wf20-wf12', 'Run WF12 Report', [1280, -160], 'WF12 report builder', {
     agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
-    data_mode: "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}"
+    data_mode: "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}",
+    // Plan approval covers the guarded Claude RU summary; WF12 still enforces its own budget/endpoint guards.
+    enable_llm_summary: "={{ $('Approval & Budget Gate').first().json.cfg.enable_llm_summary === false ? 'false' : 'true' }}",
+    llm_approval_token: 'I_APPROVE_CLAUDE_REPORT_SUMMARY'
   }),
   code('wf20-summary', 'Build Execution Summary', [1500, -160], ['source_adapter', 'execution_summary'],
     "var g=$('Approval & Budget Gate').first().json;\nvar adapters=[];\n['Normalize Website Result','Normalize Avito Result','Normalize Telegram Result','Normalize VK Result'].forEach(function(nm){try{var a=$(nm).first().json;if(a&&a.adapter)adapters.push(a.adapter);}catch(e){}});\nvar rs=null;try{rs=$('Resolve Collection Set').first().json;}catch(e){rs=null;}\n((rs&&rs.unavailable_sources)||[]).forEach(function(sk){adapters.push({agent_request_id:g.request.agent_request_id,source:sk,source_family:'unknown',platform:sk,status:'failed',errors:['collector_unavailable'],items_written:0,items_received:0,quarantined:false});});\nvar n={adapter:adapters[0]||null,plan:g.plan,request:g.request,cfg:g.cfg};\nvar roll=rollupCollection(adapters);\nvar rep=($json&&$json.report)?$json.report:($json||{});\nvar summary=buildExecutionSummary({config_complete:(n.cfg&&n.cfg.config_complete),request:Object.assign({},n.request,{state:roll.outcome==='no_data'?'partial':(roll.outcome==='complete'?'reporting':'partial')}),plan:n.plan,collection:roll,adapters:adapters,analysis:{records_unique:rep.records_unique,records_eligible:rep.records_eligible,records_analyzed:rep.records_analyzed,llm_primary_calls:rep.llm_primary_calls,llm_repair_calls:rep.llm_repair_calls,llm_cost_status:rep.llm_cost_status||'unknown'},aggregation:{rows_after_filters:rep.rows_after_filters},report:rep,delivery:{}});\nreturn [{json:{summary:summary,report:rep,request:n.request,cfg:n.cfg}}];"),
