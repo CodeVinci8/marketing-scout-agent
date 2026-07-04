@@ -152,6 +152,22 @@ A.section('WF16 write_result is caller-controllable; WF20 passes the gating inpu
   const v12 = JSON.stringify(d12.parameters.workflowInputs);
   A.ok('WF20 passes enable_llm_summary to WF12', v12.indexOf('enable_llm_summary') >= 0);
   A.ok('WF20 passes the WF12 Claude summary approval token', v12.indexOf('I_APPROVE_CLAUDE_REPORT_SUMMARY') >= 0);
+
+  // WF08-LLMAGENT-001: WF20 must ARM the WF08 llm_primary path (else every record degrades to
+  // review_queue/report_eligible=false and the report is no_data) — and WF08 must coerce the string inputs.
+  const d08 = wf20.nodes.find(x => x.name === 'Run WF08 Analyzer');
+  const v08 = JSON.stringify(d08.parameters.workflowInputs);
+  A.ok('WF20 passes llm_enabled to WF08', v08.indexOf('llm_enabled') >= 0);
+  A.ok('WF20 llm_enabled follows cfg.enable_llm_analysis (config-gated, default on)', v08.indexOf('enable_llm_analysis') >= 0);
+  A.ok('WF20 passes the WF08 LLM approval token', v08.indexOf('WF08_LLM_APPROVED') >= 0);
+  const wf08 = JSON.parse(fs.readFileSync(path.join(WFD, '08_touchpoint_analyzer.json'), 'utf8'));
+  const cfg08 = wf08.nodes.find(x => x.name === 'Set Analyzer Config');
+  A.ok("WF08 coerces string 'true' llm_enabled to boolean (strict guard compatibility)", cfg08.parameters.jsCode.indexOf('__boolish') >= 0);
+  const acfg = require('../n8n/lib/agent_config.js');
+  const rc = acfg.resolveConfig({ MS_ENABLE_CLAUDE: 'true' });
+  A.eq('agent_config enable_llm_analysis defaults true under enable_claude', rc.enable_llm_analysis, true);
+  const rcOff = acfg.resolveConfig({});
+  A.eq('enable_claude kill-switch also disables llm analysis', rcOff.enable_llm_analysis, false);
 }
 
 A.section('EXPORT-BUNDLE-001 / REPORT-CONTEXT-001 / DELIVERY-CONTENT-001 — report reaches delivery & export');

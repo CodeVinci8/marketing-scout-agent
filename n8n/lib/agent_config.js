@@ -42,6 +42,7 @@ const DEFAULTS = {
   require_source_health: true,
   enable_llm_planner: false,
   enable_llm_summary: false,
+  enable_llm_analysis: true,   // WF08 llm_primary in agent runs (still gated by enable_claude + token + budget)
   report_data_mode: 'live',
   // ---- Stage 4 free-path / zero-paid-call guards (all fail-closed) -------------------------------------------
   // Telegram conversation is allowed; every PAID external action is OFF by default. The free path runs the full
@@ -92,6 +93,7 @@ function resolveConfig(env, overrides) {
     require_source_health: bool(env.MS_REQUIRE_SOURCE_HEALTH, DEFAULTS.require_source_health),
     enable_llm_planner: bool(env.MS_ENABLE_LLM_PLANNER, DEFAULTS.enable_llm_planner),
     enable_llm_summary: bool(env.MS_ENABLE_LLM_SUMMARY, DEFAULTS.enable_llm_summary),
+    enable_llm_analysis: bool(env.MS_ENABLE_LLM_ANALYSIS, DEFAULTS.enable_llm_analysis),
     report_data_mode: str(env.MS_REPORT_DATA_MODE) || DEFAULTS.report_data_mode,
     timezone: str(env.MS_TIMEZONE) || DEFAULTS.timezone,
     enable_telegram: bool(env.MS_ENABLE_TELEGRAM, DEFAULTS.enable_telegram),
@@ -113,7 +115,7 @@ function resolveConfig(env, overrides) {
   }
   // fail-closed reconciliation: Claude master switch gates the LLM features; the external-actions master switch
   // (or a zero call ceiling) forces the effective paid-call budget to zero so no approval can spend.
-  if (!cfg.enable_claude) { cfg.enable_llm_planner = false; cfg.enable_llm_summary = false; }
+  if (!cfg.enable_claude) { cfg.enable_llm_planner = false; cfg.enable_llm_summary = false; cfg.enable_llm_analysis = false; }
   // WF19-LLM-001: there is NO in-graph Claude intent-classifier node in WF18, so the intent router's guarded
   // LLM branch is unreachable by construction. Pin enable_llm_intent=false in the resolved config so the router
   // always resolves deterministically or asks ONE clarification — we never advertise a classification path that

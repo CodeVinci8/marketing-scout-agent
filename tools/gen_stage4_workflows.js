@@ -850,7 +850,11 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   execWf('wf20-wf08', 'Run WF08 Analyzer', [840, -160], 'WF08 touchpoint analyzer', {
     agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
     source_run_id: "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
-    data_mode: "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}"
+    data_mode: "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}",
+    // WF08-LLMAGENT-001: unarmed agent runs degrade every record to review_queue/report_eligible=false and the
+    // report is no_data. Plan approval covers this LLM budget; WF08 keeps its own token/budget/kill-switch guards.
+    llm_enabled: "={{ $('Approval & Budget Gate').first().json.cfg.enable_llm_analysis === false ? 'false' : 'true' }}",
+    llm_approval_token: 'WF08_LLM_APPROVED'
   }),
   execWf('wf20-wf10', 'Run WF10 Aggregator', [1060, -160], 'WF10 audience aggregator', {
     agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",

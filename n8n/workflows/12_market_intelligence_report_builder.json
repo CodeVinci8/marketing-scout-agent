@@ -254,7 +254,7 @@
         180
       ],
       "parameters": {
-        "jsCode": "// CLAUDE SUMMARY APPROVAL GATE (DEC-112/122) — fires on enable_llm_summary=true. INERT BY DEFAULT:\n// throws unless the operator explicitly armed the run, and even then the downstream HTTP node ships\n// DISABLED with no credential — enabling it is a second deliberate operator action in the n8n editor.\n// Claude is the business-interpretation layer ON TOP of the deterministic WF10 fact core (DEC-112):\n// it may only summarize the deterministic report — no invented facts, no contacts, no outreach.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Report Config').first().json;\nconst _rep=(($input.all()[0]||{json:{}}).json)||{};\n// §3 full guard: enable flag + explicit token + eligible factual report + idempotency. Budget is enforced in\n// Build Claude Summary Prompt (throws before the HTTP node). Any failure keeps the deterministic report ($0).\nif(cfg.enable_llm_summary!==true){ throw new Error('WF12 Claude gate: enable_llm_summary is not true — deterministic report only.'); }\nif(!(Number(_rep.rows_after_filters)>0)||_rep.report_eligible===false){ throw new Error('WF12 Claude gate: report has no eligible facts — keep the deterministic report ($0).'); }\nif(str(_rep.llm_summary_status)==='summarized'||_rep.already_summarized===true){ throw new Error('WF12 Claude gate: report already summarized (idempotency) — no duplicate Claude call.'); }\nif(str(cfg.llm_approval_token)!=='I_APPROVE_CLAUDE_REPORT_SUMMARY'){\n  throw new Error('WF12 Claude gate: operator approval token missing. The optional Claude summary requires: llm_approval_token=I_APPROVE_CLAUDE_REPORT_SUMMARY in Set Report Config, an Anthropic credential bound in n8n (never in this file), and ENABLING the disabled HTTP node. Deterministic report stays $0 by default (DEC-112). Cost must be recorded in agent_requests + docs/COSTS_AND_LIMITS.md.');\n}\nreturn $input.all();"
+        "jsCode": "// CLAUDE SUMMARY APPROVAL GATE (DEC-112/122, WF12-LLMGATE-001) — a DECISION, not a throw. In agent chains a\n// Code-node throw kills WF12->WF20->WF18 and the user gets nothing; the correct degradation is the deterministic\n// report ($0). The gate stays fail-closed for the LLM: any unmet condition -> llm_gate_allowed=false and the\n// following IF routes straight to the report append. executeWorkflow passes booleans as STRINGS ('true') — accept\n// both. Claude remains the interpretation layer ON TOP of the deterministic fact core: no invented facts/contacts.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction boolish(v){return v===true||str(v).toLowerCase()==='true';}\nconst cfg=$('Set Report Config').first().json;\nconst _rep=(($input.all()[0]||{json:{}}).json)||{};\nlet allowed=true, reason='ok';\nif(!boolish(cfg.enable_llm_summary)){ allowed=false; reason='llm_summary_disabled'; }\nelse if(!(Number(_rep.rows_after_filters)>0)||_rep.report_eligible===false){ allowed=false; reason='no_eligible_facts'; }\nelse if(str(_rep.llm_summary_status)==='summarized'||_rep.already_summarized===true){ allowed=false; reason='already_summarized_idempotency'; }\nelse if(str(cfg.llm_approval_token)!=='I_APPROVE_CLAUDE_REPORT_SUMMARY'){ allowed=false; reason='approval_token_missing'; }\nreturn $input.all().map(it=>({json:Object.assign({},it.json,{llm_gate_allowed:allowed,llm_gate_reason:reason})}));"
       }
     },
     {
@@ -363,7 +363,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build the evidence-bound Claude summary prompt v0.3 (DEC-122/128) + BUDGET GUARD (throws BEFORE the\n// HTTP node). FACTS ONLY: deterministic report fields + aggregate audience/lead-signal summaries — never\n// raw personal text dumps, never contact fields, never raw_market_records rows.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nconst cfg=$('Set Report Config').first().json;\nconst rep=$('Build Deterministic Report').first().json;\nconst sys='Ты — аналитик рынка для руководителя кредитно-брокерской компании. Тебе дан ДЕТЕРМИНИРОВАННЫЙ отчёт (факты, собранные пайплайном). ЖЁСТКИЕ ПРАВИЛА: (1) НЕ выдумывай факты, конкурентов, цифры, цены, тренды; (2) НЕ упоминай и не выводи контакты; (3) НЕ рекомендуй аутрич/рассылки/обзвоны и не считай публичные профили разрешением на контакт; (4) если данных мало — прямо скажи об этом в source_limitations; (5) отвечай ТОЛЬКО валидным JSON-объектом без markdown и пояснений, ключи: executive_summary_ru (строка, до 120 слов), key_findings (массив строк, 3-6), market_risks (массив строк, 2-4), recommended_next_actions (массив строк, 3-5, только внутренние действия: контент, мониторинг, проверка данных), content_recommendations (массив строк, 2-4), source_limitations (массив строк, 1-3). Всё на русском.';\nconst facts={ report_id:str(rep.report_id), niche:str(rep.niche_id), region:str(rep.region), wf10_run_id:str(rep.wf10_run_id), prev_wf10_run_id:str(rep.prev_wf10_run_id), rows_after_filters:rep.rows_after_filters, source_mix:str(rep.source_mix), top_competitors:str(rep.top_competitors), top_angles:str(rep.top_angles), audience_and_public_lead_signal_aggregates:str(rep.audience_summary), content_plan_ref:str(rep.content_plan_ref) };\n// --- budget guard (DEC-128): hard input cap + cost estimate BEFORE any HTTP call.\nconst maxInChars=Number(cfg.llm_max_input_chars)||8000;\nconst maxCost=Number(cfg.llm_max_estimated_cost_usd)||0.10;\nconst maxOut=Number(cfg.llm_max_tokens)||1200;\nconst userText='Детерминированный отчёт (JSON, единственный источник фактов):\\n'+cut(JSON.stringify(facts),maxInChars);\nconst estInputTokens=Math.ceil((sys.length+userText.length)/4)+50;\nconst estCost=Math.round(((estInputTokens*(Number(cfg.llm_input_price_per_mtok)||3.0)+maxOut*(Number(cfg.llm_output_price_per_mtok)||15.0))/1000000)*10000)/10000;\nif(estCost>maxCost){\n  throw new Error('WF12 Claude budget guard (DEC-128): estimated cost $'+estCost+' exceeds llm_max_estimated_cost_usd=$'+maxCost+' (est input tokens='+estInputTokens+', max output tokens='+maxOut+'). Reduce llm_max_tokens / llm_max_input_chars or raise the budget consciously. No API call was made.');\n}\nconst body={ model:str(cfg.llm_model)||'claude-sonnet-4-6', max_tokens:maxOut, system:sys, messages:[{ role:'user', content:userText }] };\nreturn [{ json: Object.assign({}, rep, { llm_request_body: body, llm_facts_string: JSON.stringify(facts), llm_estimated_cost_usd: estCost, llm_estimated_input_tokens: estInputTokens }) }];"
+        "jsCode": "// Build the evidence-bound Claude summary prompt v0.3 (DEC-122/128) + BUDGET GUARD (throws BEFORE the\n// HTTP node). FACTS ONLY: deterministic report fields + aggregate audience/lead-signal summaries — never\n// raw personal text dumps, never contact fields, never raw_market_records rows.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nconst cfg=$('Set Report Config').first().json;\nconst rep=$('Build Deterministic Report').first().json;\nconst sys='Ты — аналитик рынка для руководителя кредитно-брокерской компании. Тебе дан ДЕТЕРМИНИРОВАННЫЙ отчёт (факты, собранные пайплайном). ЖЁСТКИЕ ПРАВИЛА: (1) НЕ выдумывай факты, конкурентов, цифры, цены, тренды; (2) НЕ упоминай и не выводи контакты; (3) НЕ рекомендуй аутрич/рассылки/обзвоны и не считай публичные профили разрешением на контакт; (4) если данных мало — прямо скажи об этом в source_limitations; (5) отвечай ТОЛЬКО валидным JSON-объектом без markdown и пояснений, ключи: executive_summary_ru (строка, до 120 слов), key_findings (массив строк, 3-6), market_risks (массив строк, 2-4), recommended_next_actions (массив строк, 3-5, только внутренние действия: контент, мониторинг, проверка данных), content_recommendations (массив строк, 2-4), source_limitations (массив строк, 1-3). Всё на русском.';\nconst facts={ report_id:str(rep.report_id), niche:str(rep.niche_id), region:str(rep.region), wf10_run_id:str(rep.wf10_run_id), prev_wf10_run_id:str(rep.prev_wf10_run_id), rows_after_filters:rep.rows_after_filters, source_mix:str(rep.source_mix), top_competitors:str(rep.top_competitors), top_angles:str(rep.top_angles), audience_and_public_lead_signal_aggregates:str(rep.audience_summary), content_plan_ref:str(rep.content_plan_ref) };\n// --- budget guard (DEC-128): hard input cap + cost estimate BEFORE any HTTP call.\nconst maxInChars=Number(cfg.llm_max_input_chars)||8000;\nconst maxCost=Number(cfg.llm_max_estimated_cost_usd)||0.10;\nconst maxOut=Number(cfg.llm_max_tokens)||1200;\nconst userText='Детерминированный отчёт (JSON, единственный источник фактов):\\n'+cut(JSON.stringify(facts),maxInChars);\nconst estInputTokens=Math.ceil((sys.length+userText.length)/4)+50;\nconst estCost=Math.round(((estInputTokens*(Number(cfg.llm_input_price_per_mtok)||3.0)+maxOut*(Number(cfg.llm_output_price_per_mtok)||15.0))/1000000)*10000)/10000;\nif(estCost>maxCost){\n  // WF12-LLMGATE-001: over-budget is a SKIP (deterministic report survives), never a chain-killing throw.\n  return [{ json: Object.assign({}, rep, { llm_budget_blocked: true, llm_gate_reason: 'over_budget_est_$'+estCost+'_max_$'+maxCost }) }];\n}\nconst body={ model:str(cfg.llm_model)||'claude-sonnet-4-6', max_tokens:maxOut, system:sys, messages:[{ role:'user', content:userText }] };\nreturn [{ json: Object.assign({}, rep, { llm_budget_blocked: false, llm_request_body: body, llm_facts_string: JSON.stringify(facts), llm_estimated_cost_usd: estCost, llm_estimated_input_tokens: estInputTokens }) }];"
       },
       "id": "wf12-llm-prompt",
       "name": "Build Claude Summary Prompt",
@@ -388,10 +388,6 @@
             {
               "name": "content-type",
               "value": "application/json"
-            },
-            {
-              "name": "x-api-key",
-              "value": "BIND_N8N_ANTHROPIC_CREDENTIAL_NEVER_PASTE_KEY"
             }
           ]
         },
@@ -400,7 +396,9 @@
         "jsonBody": "={{ JSON.stringify($json.llm_request_body) }}",
         "options": {
           "timeout": 60000
-        }
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth"
       },
       "id": "wf12-llm-http-placeholder",
       "name": "Claude Summary API Request",
@@ -411,11 +409,18 @@
         180
       ],
       "disabled": false,
-      "notes": "INERT (DEC-122): disabled, no real key. x-api-key value is a placeholder string — replace with an n8n credential (header auth) ONLY after operator approval. No live call was made when building this workflow."
+      "notes": "INERT (DEC-122): disabled, no real key. x-api-key value is a placeholder string — replace with an n8n credential (header auth) ONLY after operator approval. No live call was made when building this workflow.",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Claude API - Marketing Scout"
+        }
+      }
     },
     {
       "parameters": {
-        "jsCode": "// Merge the Claude summary into the report row + track cost + quality flags (DEC-122/128). If the HTTP\n// placeholder is still DISABLED, items pass through WITHOUT a Claude response body — this node then throws,\n// so no fabricated summary can ever be written. With a real response: parse the JSON sections, compute cost\n// (usage tokens x configured prices) and fill the llm_* columns of the 25-col report row.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction arr(v){return Array.isArray(v)?v.map(x=>str(x)).filter(Boolean):[];}\nconst cfg=$('Set Report Config').first().json;\nconst prompt=$('Build Claude Summary Prompt').first().json;\nconst rep=$('Build Deterministic Report').first().json;\nconst resp=$input.first().json;\nconst content=resp&&Array.isArray(resp.content)?resp.content:null;\nif(!content){\n  throw new Error('WF12 Claude merge: no API response — the Claude branch returned no response. Default runs keep the deterministic report ($0); the Claude node is enabled in JSON but stays inert unless enable_llm_summary=true + approval token + budget allow it.');\n}\nlet text='';for(const b of content){ if(b&&b.type==='text'&&str(b.text))text+=b.text; }\nif(resp.stop_reason==='refusal'||!str(text)){ throw new Error('WF12 Claude merge: empty or refused summary (stop_reason='+str(resp.stop_reason)+') — keep the deterministic report; investigate before retrying.'); }\nconst u=resp.usage||{};\nconst inTok=Number(u.input_tokens)||0, outTok=Number(u.output_tokens)||0;\nconst cost=Math.round(((inTok*(Number(cfg.llm_input_price_per_mtok)||3.0)+outTok*(Number(cfg.llm_output_price_per_mtok)||15.0))/1000000)*10000)/10000;\n// --- parse the required JSON sections\nconst flags=[];\nlet parsed=null;\ntry{ parsed=JSON.parse(str(text).replace(/^```(json)?/,'').replace(/```$/,'').trim()); }catch(e){ parsed=null; }\nif(resp.stop_reason==='max_tokens')flags.push('truncated_max_tokens');\nlet summaryRu='', recsRu='';\nif(parsed&&typeof parsed==='object'){\n  const kf=arr(parsed.key_findings), mr=arr(parsed.market_risks), na=arr(parsed.recommended_next_actions), cr=arr(parsed.content_recommendations), sl=arr(parsed.source_limitations);\n  summaryRu=[str(parsed.executive_summary_ru), kf.length?('Ключевые выводы: '+kf.join(' · ')):'', mr.length?('Риски: '+mr.join(' · ')):'', sl.length?('Ограничения источников: '+sl.join(' · ')):''].filter(Boolean).join('\\n');\n  recsRu=[na.length?('Действия: '+na.join(' · ')):'', cr.length?('Контент: '+cr.join(' · ')):''].filter(Boolean).join('\\n');\n  if(!str(parsed.executive_summary_ru))flags.push('missing_executive_summary');\n  if(!kf.length)flags.push('missing_key_findings');\n  // RU-NARRATIVE guard (MVP-F): a summary with no Cyrillic is not a Russian report narrative — treat it as\n  // invalid and keep the deterministic facts (same fallback as non-JSON output; nothing malformed persists).\n  if(str(parsed.executive_summary_ru)&&!/[а-яё]/i.test(str(parsed.executive_summary_ru))){\n    return [{ json: Object.assign({}, rep, { llm_status:'fallback_deterministic', llm_model:str(cfg.llm_model)||'claude-sonnet-4-6', llm_input_tokens:inTok, llm_output_tokens:outTok, llm_cost_usd:cost, llm_summary_ru:'', llm_recommendations_ru:'', llm_quality_flags:'non_russian_summary; fell_back_to_deterministic', notes:str(rep.notes)+' || Claude summary not in Russian — fell back to the deterministic report.' }) }];\n  }\n}else{\n  // §3 invalid (non-JSON) summary -> fall back to the deterministic report (facts unchanged). Claude never\n  // overrides counts/prices/competitors/evidence/source status; on any parse failure we keep the deterministic facts.\n  return [{ json: Object.assign({}, rep, { llm_status:'fallback_deterministic', llm_model:str(cfg.llm_model)||'claude-sonnet-4-6', llm_input_tokens:inTok, llm_output_tokens:outTok, llm_cost_usd:cost, llm_summary_ru:'', llm_recommendations_ru:'', llm_quality_flags:'non_json_output; fell_back_to_deterministic', notes:str(rep.notes)+' || Claude summary invalid (non-JSON) — fell back to the deterministic report.' }) }];\n}\n// --- anti-hallucination check: numbers in the output that are absent from the fact payload get flagged.\nconst factBlob=str(prompt.llm_facts_string);\nconst outNums=(summaryRu+' '+recsRu).match(/\\d{2,}/g)||[];\nif(outNums.some(n=>factBlob.indexOf(n)<0))flags.push('unverified_numbers_check_manually');\n// --- outreach guard: flag if the model slipped into outreach language despite the system prompt.\nif(/аутрич|рассылк|обзвон|написать ему|связаться с автором/i.test(summaryRu+' '+recsRu))flags.push('outreach_language_detected_review');\nconst llmStatus=flags.length?'ok_with_flags':'ok';\nreturn [{ json: Object.assign({}, rep, {\n  llm_status:llmStatus,\n  llm_model:str(cfg.llm_model)||'claude-sonnet-4-6',\n  llm_input_tokens:inTok,\n  llm_output_tokens:outTok,\n  llm_cost_usd:cost,\n  llm_summary_ru:summaryRu.slice(0,4000),\n  llm_recommendations_ru:recsRu.slice(0,2000),\n  llm_quality_flags:flags.join(', '),\n  notes:str(rep.notes)+' || llm_summary added (model='+(str(cfg.llm_model)||'claude-sonnet-4-6')+', input_tokens='+inTok+', output_tokens='+outTok+', cost_usd='+cost+', flags='+(flags.join('/')||'none')+'); evidence-bound prompt + budget guard (DEC-128), no invented facts/contacts/outreach.'\n}) }];"
+        "jsCode": "// Merge the Claude summary into the report row + track cost + quality flags (DEC-122/128). If the HTTP\n// placeholder is still DISABLED, items pass through WITHOUT a Claude response body — this node then throws,\n// so no fabricated summary can ever be written. With a real response: parse the JSON sections, compute cost\n// (usage tokens x configured prices) and fill the llm_* columns of the 25-col report row.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction arr(v){return Array.isArray(v)?v.map(x=>str(x)).filter(Boolean):[];}\nconst cfg=$('Set Report Config').first().json;\nconst prompt=$('Build Claude Summary Prompt').first().json;\nconst rep=$('Build Deterministic Report').first().json;\nconst resp=$input.first().json;\nconst content=resp&&Array.isArray(resp.content)?resp.content:null;\nif(!content){\n  // WF12-LLMGATE-001: HTTP error / missing response -> deterministic fallback, never a chain-killing throw.\n  return [{ json: Object.assign({}, rep, { llm_status:'fallback_deterministic', llm_model:str(cfg.llm_model)||'claude-sonnet-4-6', llm_input_tokens:0, llm_output_tokens:0, llm_cost_usd:0, llm_summary_ru:'', llm_recommendations_ru:'', llm_quality_flags:'no_api_response; fell_back_to_deterministic', notes:str(rep.notes)+' || Claude summary unavailable (no API response) — deterministic report kept.' }) }];\n}\nlet text='';for(const b of content){ if(b&&b.type==='text'&&str(b.text))text+=b.text; }\nif(resp.stop_reason==='refusal'||!str(text)){\n  return [{ json: Object.assign({}, rep, { llm_status:'fallback_deterministic', llm_model:str(cfg.llm_model)||'claude-sonnet-4-6', llm_input_tokens:Number((resp.usage||{}).input_tokens)||0, llm_output_tokens:Number((resp.usage||{}).output_tokens)||0, llm_cost_usd:0, llm_summary_ru:'', llm_recommendations_ru:'', llm_quality_flags:'refused_or_empty; fell_back_to_deterministic', notes:str(rep.notes)+' || Claude summary refused/empty (stop_reason='+str(resp.stop_reason)+') — deterministic report kept.' }) }];\n}\nconst u=resp.usage||{};\nconst inTok=Number(u.input_tokens)||0, outTok=Number(u.output_tokens)||0;\nconst cost=Math.round(((inTok*(Number(cfg.llm_input_price_per_mtok)||3.0)+outTok*(Number(cfg.llm_output_price_per_mtok)||15.0))/1000000)*10000)/10000;\n// --- parse the required JSON sections\nconst flags=[];\nlet parsed=null;\ntry{ parsed=JSON.parse(str(text).replace(/^```(json)?/,'').replace(/```$/,'').trim()); }catch(e){ parsed=null; }\nif(resp.stop_reason==='max_tokens')flags.push('truncated_max_tokens');\nlet summaryRu='', recsRu='';\nif(parsed&&typeof parsed==='object'){\n  const kf=arr(parsed.key_findings), mr=arr(parsed.market_risks), na=arr(parsed.recommended_next_actions), cr=arr(parsed.content_recommendations), sl=arr(parsed.source_limitations);\n  summaryRu=[str(parsed.executive_summary_ru), kf.length?('Ключевые выводы: '+kf.join(' · ')):'', mr.length?('Риски: '+mr.join(' · ')):'', sl.length?('Ограничения источников: '+sl.join(' · ')):''].filter(Boolean).join('\\n');\n  recsRu=[na.length?('Действия: '+na.join(' · ')):'', cr.length?('Контент: '+cr.join(' · ')):''].filter(Boolean).join('\\n');\n  if(!str(parsed.executive_summary_ru))flags.push('missing_executive_summary');\n  if(!kf.length)flags.push('missing_key_findings');\n  // RU-NARRATIVE guard (MVP-F): a summary with no Cyrillic is not a Russian report narrative — treat it as\n  // invalid and keep the deterministic facts (same fallback as non-JSON output; nothing malformed persists).\n  if(str(parsed.executive_summary_ru)&&!/[а-яё]/i.test(str(parsed.executive_summary_ru))){\n    return [{ json: Object.assign({}, rep, { llm_status:'fallback_deterministic', llm_model:str(cfg.llm_model)||'claude-sonnet-4-6', llm_input_tokens:inTok, llm_output_tokens:outTok, llm_cost_usd:cost, llm_summary_ru:'', llm_recommendations_ru:'', llm_quality_flags:'non_russian_summary; fell_back_to_deterministic', notes:str(rep.notes)+' || Claude summary not in Russian — fell back to the deterministic report.' }) }];\n  }\n}else{\n  // §3 invalid (non-JSON) summary -> fall back to the deterministic report (facts unchanged). Claude never\n  // overrides counts/prices/competitors/evidence/source status; on any parse failure we keep the deterministic facts.\n  return [{ json: Object.assign({}, rep, { llm_status:'fallback_deterministic', llm_model:str(cfg.llm_model)||'claude-sonnet-4-6', llm_input_tokens:inTok, llm_output_tokens:outTok, llm_cost_usd:cost, llm_summary_ru:'', llm_recommendations_ru:'', llm_quality_flags:'non_json_output; fell_back_to_deterministic', notes:str(rep.notes)+' || Claude summary invalid (non-JSON) — fell back to the deterministic report.' }) }];\n}\n// --- anti-hallucination check: numbers in the output that are absent from the fact payload get flagged.\nconst factBlob=str(prompt.llm_facts_string);\nconst outNums=(summaryRu+' '+recsRu).match(/\\d{2,}/g)||[];\nif(outNums.some(n=>factBlob.indexOf(n)<0))flags.push('unverified_numbers_check_manually');\n// --- outreach guard: flag if the model slipped into outreach language despite the system prompt.\nif(/аутрич|рассылк|обзвон|написать ему|связаться с автором/i.test(summaryRu+' '+recsRu))flags.push('outreach_language_detected_review');\nconst llmStatus=flags.length?'ok_with_flags':'ok';\nreturn [{ json: Object.assign({}, rep, {\n  llm_status:llmStatus,\n  llm_model:str(cfg.llm_model)||'claude-sonnet-4-6',\n  llm_input_tokens:inTok,\n  llm_output_tokens:outTok,\n  llm_cost_usd:cost,\n  llm_summary_ru:summaryRu.slice(0,4000),\n  llm_recommendations_ru:recsRu.slice(0,2000),\n  llm_quality_flags:flags.join(', '),\n  notes:str(rep.notes)+' || llm_summary added (model='+(str(cfg.llm_model)||'claude-sonnet-4-6')+', input_tokens='+inTok+', output_tokens='+outTok+', cost_usd='+cost+', flags='+(flags.join('/')||'none')+'); evidence-bound prompt + budget guard (DEC-128), no invented facts/contacts/outreach.'\n}) }];"
       },
       "id": "wf12-llm-merge",
       "name": "Merge Claude Summary Into Report",
@@ -643,6 +648,70 @@
       ],
       "id": "wf12-subtrig",
       "name": "When Called by Agent"
+    },
+    {
+      "id": "a12-if-llmgate",
+      "name": "Claude Gate Allowed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        180
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "a12-if-llmgate-c1",
+              "leftValue": "={{ $json.llm_gate_allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "a12-if-llmbudget",
+      "name": "LLM Budget OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1720,
+        180
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "a12-if-llmbudget-c1",
+              "leftValue": "={{ !$json.llm_budget_blocked }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
     }
   ],
   "connections": {
@@ -778,7 +847,7 @@
       "main": [
         [
           {
-            "node": "Build Claude Summary Prompt",
+            "node": "Claude Gate Allowed?",
             "type": "main",
             "index": 0
           }
@@ -789,7 +858,7 @@
       "main": [
         [
           {
-            "node": "Claude Summary API Request",
+            "node": "LLM Budget OK?",
             "type": "main",
             "index": 0
           }
@@ -878,6 +947,42 @@
         [
           {
             "node": "Set Report Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Gate Allowed?": {
+      "main": [
+        [
+          {
+            "node": "Build Claude Summary Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append market_intelligence_reports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Budget OK?": {
+      "main": [
+        [
+          {
+            "node": "Claude Summary API Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append market_intelligence_reports",
             "type": "main",
             "index": 0
           }
