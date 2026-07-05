@@ -49,9 +49,33 @@ kredit874/da_credit/anna_findoctor, posts+comments separately, tolerant-empty. T
 proof — all need canonical patch + regression + safe deploy + one controlled live proof), then Stage E
 (inspect the existing canonical scoring contract first — do NOT invent a second scoring system).
 
-**Exact next command:** trace Avito adapter/fixture (`tests/test_wf09_*`, `n8n/workflows/09_*`) to decide
-bounded-live-vs-fixture; OR (if operator green-lights spend) run one bounded Avito query set. Cross-cutting
-defects tracked as task #12 (progress lifecycle) — bot currently sends "⏳ Принял запрос…" and never edits it.
+**UPDATE (same session, fresh-live acceptance policy):** operator superseded "defer live replay to save cost"
+— every canonical fix now needs a FRESH bounded live run of the affected path + new-row inspection before close.
+New commits: **`70c90a6`** FORCE-REPROCESS-001 (WF04 `Set URL List` only honored boolean `force_reprocess`;
+callable passes strings → agent re-collection of a known domain was always dedup-skipped; fixed to accept
+`'true'`, test_wf04_force_reprocess.js 5) — deployed. **HEAD now `70c90a6`** (+ pending docs commit).
+**WEBSITE FRESH-LIVE CLOSURE DONE + PROVEN:** new request `req_web_sd_20260706`, WF04 **exec 427** (3 live
+Firecrawl + 4 Claude calls, 3 new raw_market_records rows: mkbkfin conf=90 healthy, finardi conf=90 healthy,
+lioncredit conf=75 degraded — all with relevance_reason + semantic_keywords; required-fields 0/27 missing;
+0 dups; 0 bad URLs; real offers/prices extracted). Downstream **WF16→WF10→WF12 exec 433/434/435** → WF12
+report rows_after_filters=2, competitors Финарди+МКБК, all 3 sites traceable w/ prices. RELEV_WEB_001_FRESH_
+LIVE_RUN/WEBSITE_NEW_ROWS_PERSISTED/RELEVANCE_SIGNAL_PERSISTED/REQUIRED_FIELDS_100/DUPS_0/BAD_URLS_0/REPORT_
+TRACEABILITY all PASS (see `docs/STAGE_D_SOURCE_QUALITY_ACCEPTANCE.md`). Gotcha: WF10 fail-closes without a
+source_health row → downstream driver MUST run WF16 first (real WF20 order); NOT a code bug. n8n exec via
+`docker exec -e N8N_RUNNERS_TASK_BROKER_PORT=5690 n8n execute --id=<driver>`; drivers msdrvweblv0001 (WF04),
+msdrvwebds002 (WF16→WF10→WF12), msdrvavitolv001 (Avito, imported, NOT yet run). Cost this cycle <$0.10, well
+under $10 ceiling. Follow-ups (NOT Website source-quality): WF10 competitor conf=45 vs raw 90 (Stage E);
+"Публичных лид-сигналов: 999" phantom legacy blank rows (Stage G hygiene); minor `](https://www` md artifact.
+
+**Exact next (operator-confirmed order):** (1) **Telegram Public fresh live** — WF11 for exactly mfo_market /
+da_credit / broker_Aleksey (check WF11 live-fetch capability vs fixture-only; t.me/s preview is free public
+web), inspect new rows + prove noise rejection (holiday/greeting/meme/vacancy — canonical regression fixtures
+allowed for negatives not present live, but the real collector path must run); (2) **Avito** run msdrvavitolv001
+(driver ready; approval_token=AVITO_LIVE_APPROVED, ≤3 queries×30); (3) **VK last** (token `pRZcJEyp7KExTReQ`
+`HTTP Query Auth - VK Access Token` exists in prod; WF26; kredit874/da_credit/anna_findoctor; posts+comments
+separate); (4) close Stage D; (5) `/status`→`/cancel`→progress lifecycle (each fresh Telegram live proof);
+(6) user-supplied URL end-to-end Telegram proof; (7) Stage E (existing canonical scoring contract).
+Apify cred `zPAwUY66Ae5ZcQW1`, Firecrawl `Dykz5MKZ5RoDmslr`, Claude `OEen8Vl1tdWtv7v4` all bound in prod.
 
 ---
 

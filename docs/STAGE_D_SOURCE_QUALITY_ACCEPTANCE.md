@@ -96,3 +96,50 @@ Stage F/G live run** (re-running WF04 now = paid Firecrawl recollection, disallo
 
 Website + Telegram Public **relevance precision / dedup / URL validity / placeholder / contact policy** all
 PASS on the persisted sample.
+
+---
+
+## Website FRESH-LIVE closure (RELEV-WEB-001 + FORCE-REPROCESS-001), 2026-07-06
+
+Per the operator's fresh-live acceptance policy, RELEV-WEB-001 was re-verified on NEW production data
+(not the historical req_90112771 rows). A second defect surfaced and was fixed first:
+
+**FORCE-REPROCESS-001 (commit `70c90a6`, deployed):** WF04 `Set URL List` only honored boolean
+`force_reprocess`, but the callable trigger types it as a string — so agent-driven re-collection of an
+already-registered domain was always dedup-skipped (no fresh rows possible). Fixed to accept `'true'`;
+regression `tests/test_wf04_force_reprocess.js` (5). Full `make test` PASS; deployed by surgical splice.
+
+**Fresh live run:** new request `req_web_sd_20260706`, URLs mkbkfin.ru / lioncredit.ru / finardi.ru,
+`force_reprocess=true`, `data_mode=live`. **WF04 exec 427** — 3 live Firecrawl `/v2/scrape` + 3 Claude
+primary (+1 repair) calls; **3 new rows appended to raw_market_records**. Downstream **WF16→WF10→WF12**
+(exec 433/434/435) — the real orchestrator order (WF16 first; WF10 correctly fail-closes without
+source_health, which is why an interim WF08→WF10→WF12 chain read NO DATA — not a code defect).
+
+**New persisted rows (all 3, exec 427):**
+| url | quality | confidence_score | offer/prices extracted | report_eligible |
+|---|---|---|---|---|
+| mkbkfin.ru | healthy | 90 | залог имущества, ипотека, рефинансирование, плохая КИ | true |
+| finardi.ru | healthy | 90 | залог недвижимости **от 9,5%**, залог авто, рефинанс, без предоплаты, комиссия 0–10% | true |
+| lioncredit.ru | degraded | 75 | **ставка от 4,99%, до 100 млн**, наличные, рефинанс, залог, ипотека | false (degraded) |
+
+All carry a specific Russian `relevance_reason` + content-derived `semantic_keywords`. Required-field
+check: **0/27 missing**. **WF12 exec 435** report `rows_after_filters=2`, competitors Финарди + МКБК finance,
+and "Сайты конкурентов" lists all 3 domains with real content + prices — traceable to the supplied URLs.
+
+```
+RELEV_WEB_001_FRESH_LIVE_RUN=PASS        # WF04 exec 427
+WEBSITE_NEW_ROWS_PERSISTED=PASS          # 3 rows, req_web_sd_20260706
+WEBSITE_RELEVANCE_SIGNAL_PERSISTED=PASS  # confidence_score 90/90/75 + relevance_reason + semantic_keywords
+WEBSITE_REQUIRED_FIELDS_PERCENT=100      # 0/27 missing
+WEBSITE_FINAL_DUPLICATES=0               # 3 distinct dedup_keys
+WEBSITE_BAD_URLS=0                       # all canonical https
+WEBSITE_REPORT_TRACEABILITY=PASS         # WF12 exec 435: 2 competitors + 3 sites w/ prices traceable
+```
+
+Provider cost (best-available; cost telemetry `unknown`): Firecrawl 3 scrapes + Claude 4 calls, projected
+<$0.10; cumulative live cost this cycle well under the $10 ceiling.
+
+**Follow-ups noted (NOT Website source-quality; deferred to their stages):** (1) WF10 competitor "conf" shows
+45 vs the raw `confidence_score` 90 — Stage E scoring reconciliation; (2) "Публичных лид-сигналов: 999" =
+phantom rows from ~999 legacy blank raw_market_records rows — Stage G/persistence hygiene; (3) a minor
+`](https://www` markdown artifact in the lioncredit CTA line — Stage G report render.
