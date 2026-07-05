@@ -39,6 +39,7 @@ const JS_SUITES = [
   ['stage3-gates', 'test_stage3_gates.js'],
   ['cost-model', 'test_cost_model.js'],
   ['fast-lane', 'test_fast_lane.js'],
+  ['progress-lifecycle', 'test_progress_lifecycle.js'],
   // --- Stage 5: guarded provider adapter contract (real runAdapter path + parsers + cost + acceptance) ---
   ['stage5-adapters', 'test_stage5_adapters.js'],
   // --- Stage 4: single-user Telegram agent MVP (libs + generated WF17-20) ---

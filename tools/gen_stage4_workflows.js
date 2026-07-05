@@ -344,11 +344,23 @@ return [{json:{fast:true,fast_kind:d.kind,telegram_send_body:JSON.stringify({cha
   // ---- §8 command lane: /status renders from the ALREADY-READ batch (no context assembly, no persistence
   //      chain, no WF22 dispatch); /cancel gets an immediate ack and CONTINUES to the real WF22 cancel. Both
   //      run AFTER the durable claim (Resolve Winner), so idempotency is intact. ----
-  code('wf18-cmdlane', 'Command Lane', [20, -220], ['plan_render_ru', 'sheets_access'], `
-var g=$('Resolve Winner').first().json;var p=g.parsed||{};
+  code('wf18-cmdlane', 'Command Lane', [20, -220], ['plan_render_ru', 'sheets_access', 'telegram_io'], `
+var g=$('Resolve Winner').first().json;var p=g.parsed||{};var gate=g.gate||{};
 var kind=String(p.kind||'');
 if(kind==='cancel'){
   return [{json:{lane:'cancel_ack',continue_heavy:true,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:'⏳ Отменяю текущую операцию…'})}}];
+}
+// §9 PROGRESS-ACK-001: the heavy path takes ~30-60s to first reply; every accepted NEW update gets an
+// immediate ack here (post-claim, so exactly once per update). Approve callbacks also clear the button
+// spinner via answerCallbackQuery. WF20's single editable progress message follows for approved runs.
+if(kind==='callback'){
+  if(/^approve:/.test(String(p.callback_data||''))){
+    return [{json:{lane:'approve_ack',continue_heavy:true,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:'✅ Принято! Запускаю анализ — прогресс покажу здесь.'}),answer_callback_body:JSON.stringify(answerCallbackBody(String(gate.callback_query_id||''),'Принято'))}}];
+  }
+  return [{json:{lane:'none',continue_heavy:true,has_reply:false}}];
+}
+if(kind==='request'){
+  return [{json:{lane:'request_ack',continue_heavy:true,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:'⏳ Принял запрос, обрабатываю…'})}}];
 }
 if(kind!=='status'){return [{json:{lane:'none',continue_heavy:true,has_reply:false}}];}
 var plans=[];try{plans=extractTab($('Batch Read Sheets').first().json,'execution_plans').map(function(i){return i.json;});}catch(e){}
@@ -361,6 +373,8 @@ return [{json:{lane:'status',continue_heavy:false,has_reply:true,telegram_send_b
   ifNode('wf18-ifcmdreply', 'Command Reply?', [200, -220], '={{ $json.has_reply }}'),
   httpTelegram('wf18-sendcmd', 'Send Command Reply', [380, -300]),
   ifNode('wf18-ifcmdcont', 'Continue Heavy Path?', [380, -140], "={{ $('Command Lane').first().json.continue_heavy }}"),
+  ifNode('wf18-ifcmdack', 'Callback Ack Needed?', [200, -360], '={{ !!$json.answer_callback_body }}'),
+  httpTelegramAnswer('wf18-cmdanswer', 'Answer Command Callback', [380, -420]),
   // ---- shared safe-stop path (used by ingress reject AND duplicate): no business, fast 200, optional ack ----
   code('wf18-term', 'Terminate Safely', [-520, 260], ['telegram_io'], `
 var inp=$json||{};var gate=inp.gate||{};
@@ -618,6 +632,8 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),inten
   ['Resolve Winner', 'New Update?'],
   ['New Update?', 'Command Lane', 0],
   ['Command Lane', 'Command Reply?'],
+  ['Command Lane', 'Callback Ack Needed?'],
+  ['Callback Ack Needed?', 'Answer Command Callback', 0],
   ['Command Reply?', 'Send Command Reply', 0],
   ['Command Reply?', 'Continue Heavy Path?', 1],
   ['Send Command Reply', 'Continue Heavy Path?'],
@@ -947,7 +963,21 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
   // SEPARATE idempotent delivery via the outbox). Runs as a parallel branch off the allowed gate.
   code('wf20-progress', 'Build Progress Update', [180, -300], ['progress_tracker'],
     "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nvar up=advance(st,2,{now:(new Date()).toISOString()});\nvar body={chat_id:chat,text:up.text};\nreturn [{json:{telegram_send_body:JSON.stringify(body),progress_state:up.state,progress_action:up.action,is_final_delivery:up.is_final_delivery}}];"),
-  httpTelegram('wf20-sendprogress', 'Send Progress', [400, -300])
+  Object.assign(httpTelegram('wf20-sendprogress', 'Send Progress', [400, -300]), { onError: 'continueRegularOutput' }),
+  // §9 PROGRESS-EDIT-001: the ONE progress message (created above) is EDITED at each real stage transition.
+  // Each editor rebuilds the tracker state (init + setMessageId from the Send Progress response) and advances
+  // to a hardcoded distinct stage — advance() throttles any repeat, so there is never per-item spam. A missing
+  // message_id (progress send failed) or a Telegram edit error degrades silently (onError continue) — progress
+  // is UX, never a run-killer. Final report delivery stays a SEPARATE idempotent message.
+  ...[[4, 'Quality Gate', 660], [5, 'Analysis', 880], [6, 'Comparison', 1100], [7, 'Report', 1320], [10, 'Done', 2380]].flatMap(function (sp) {
+    var stage = sp[0], label = sp[1], x = sp[2];
+    var slug = label.toLowerCase().replace(/[^a-z]+/g, '');
+    return [
+      code('wf20-prog' + slug, 'Progress: ' + label, [x, -340], ['progress_tracker'],
+        "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=" + (stage - 1) + ";st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st," + stage + ",{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:" + stage + ",telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:" + (stage === 10 ? "'✅ Анализ завершён. Отчёт отправлен ниже.'" : 'up.text') + "})}}];"),
+      Object.assign(httpTelegramEdit('wf20-editprog' + slug, 'Edit Progress (' + label + ')', [x + 110, -340]), { onError: 'continueRegularOutput' })
+    ];
+  })
 ], [
   ['Manual Start', 'Resolve Agent Config'],
   ['When Called by Agent', 'Resolve Agent Config'],
@@ -980,13 +1010,21 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
   ['Run Telegram Source (WF11)', 'Normalize Telegram Result'],
   ['Normalize Telegram Result', 'Collect VK?'],
   ['Collect VK?', 'Shape VK Targets', 0],
-  ['Collect VK?', 'Run WF16 Quality Gate', 1],
+  ['Collect VK?', 'Progress: Quality Gate', 1],
+  ['Progress: Quality Gate', 'Edit Progress (Quality Gate)'],
+  ['Edit Progress (Quality Gate)', 'Run WF16 Quality Gate'],
   ['Shape VK Targets', 'Run VK Source (WF26)'],
   ['Run VK Source (WF26)', 'Normalize VK Result'],
-  ['Normalize VK Result', 'Run WF16 Quality Gate'],
-  ['Run WF16 Quality Gate', 'Run WF08 Analyzer'],
-  ['Run WF08 Analyzer', 'Run WF10 Aggregator'],
-  ['Run WF10 Aggregator', 'Run WF12 Report'],
+  ['Normalize VK Result', 'Progress: Quality Gate'],
+  ['Run WF16 Quality Gate', 'Progress: Analysis'],
+  ['Progress: Analysis', 'Edit Progress (Analysis)'],
+  ['Edit Progress (Analysis)', 'Run WF08 Analyzer'],
+  ['Run WF08 Analyzer', 'Progress: Comparison'],
+  ['Progress: Comparison', 'Edit Progress (Comparison)'],
+  ['Edit Progress (Comparison)', 'Run WF10 Aggregator'],
+  ['Run WF10 Aggregator', 'Progress: Report'],
+  ['Progress: Report', 'Edit Progress (Report)'],
+  ['Edit Progress (Report)', 'Run WF12 Report'],
   ['Run WF12 Report', 'Build Execution Summary'],
   ['Build Execution Summary', 'Build Delivery Outbox'],
   ['Build Execution Summary', 'Shape Execution Summary Row'],
@@ -997,6 +1035,8 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
   ['Shape Report Context', 'Upsert Report Context'],
   ['Build Delivery Outbox', 'Append telegram_outbox'],
   ['Append telegram_outbox', 'Send Telegram Report'],
+  ['Send Telegram Report', 'Progress: Done'],
+  ['Progress: Done', 'Edit Progress (Done)'],
   ['Build Blocked Response', 'Send Blocked Reply']
 ]));
 

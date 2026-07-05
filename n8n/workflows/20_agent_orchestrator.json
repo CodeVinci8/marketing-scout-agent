@@ -1495,7 +1495,168 @@
         -300
       ],
       "id": "wf20-sendprogress",
-      "name": "Send Progress"
+      "name": "Send Progress",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/progress_tracker.js (drift-proof; test asserts equality)\n// progress_tracker.js — one concise, throttled, editable Telegram progress message (Section 10).\n//\n// Not one message per n8n node: a single message is created once and EDITED as the run crosses meaningful\n// stages. Re-emitting the same stage is throttled (no flood); a retry never creates a second message (edit the\n// existing one). Cancellation/failure immediately rewrite the message and name the stage. Progress updates are\n// NOT final delivery — the final report stays separately idempotent. If Telegram edit fails, the fallback is\n// to send a fresh message (and adopt its id). Pure + deterministic state machine, $0.\n\nfunction str(v) { return v == null ? '' : String(v); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\nconst STAGES = [\n  'План подтверждён', 'Ищу источники', 'Собираю страницы', 'Проверяю качество', 'Анализирую данные',\n  'Сравниваю результаты', 'Формирую отчёт', 'Готовлю таблицу и графики', 'Отправляю результат', 'Готово'\n];\nconst TOTAL = STAGES.length;\nconst DEFAULT_THROTTLE_MS = 3000;\n\nfunction initProgress(ids) {\n  ids = ids || {};\n  return {\n    request_id: str(ids.agent_request_id), chat_id: str(ids.chat_id),\n    message_id: '', stage: 0, total: TOTAL, status: 'pending',\n    last_update_ts: '', fallback_count: 0, final_delivered: false, delivery_id: '', throttle_ms: num(ids.throttle_ms, DEFAULT_THROTTLE_MS)\n  };\n}\n\nfunction bar(stage, total) {\n  const filled = Math.max(0, Math.min(total, stage));\n  return '▰'.repeat(filled) + '▱'.repeat(total - filled);\n}\nfunction visibleText(state, name, prefix) {\n  return (prefix || '⏳') + ' Этап ' + state.stage + '/' + state.total + ': ' + name + '\\n' + bar(state.stage, state.total);\n}\nfunction out(state, action, name, prefix) {\n  return {\n    state: state, action: action, text: visibleText(state, name, prefix),\n    // request id lives in diagnostic metadata, NOT in the user-visible text\n    meta: { request_id: state.request_id, stage: state.stage, total: state.total, status: state.status },\n    is_final_delivery: false\n  };\n}\n\n// advance(state, stageNum, opts{now}) -> { state, action: 'create'|'edit'|'skip', text, meta }\nfunction advance(state, stageNum, opts) {\n  state = Object.assign({}, state); opts = opts || {};\n  stageNum = Math.max(1, Math.min(TOTAL, num(stageNum, state.stage + 1)));\n  if (state.status === 'cancelled' || state.status === 'failed') return out(state, 'skip', STAGES[state.stage - 1] || STAGES[0]);\n  // throttle: never go backwards; re-emitting the SAME stage is a no-op (no flood)\n  if (stageNum <= state.stage && state.message_id) { const o = out(state, 'skip', STAGES[Math.max(0, state.stage - 1)]); o.throttled = true; return o; }\n  // time throttle within the same window for same stage handled above; stage advance is always meaningful\n  state.stage = stageNum; state.status = stageNum >= TOTAL ? 'complete' : 'running';\n  state.last_update_ts = str(opts.now);\n  const name = STAGES[stageNum - 1];\n  if (!state.message_id) { return out(state, 'create', name); }   // first send -> create one message\n  return out(state, 'edit', name);                                 // thereafter -> edit the same message\n}\n\n// record the id Telegram returned for the created/sent message\nfunction setMessageId(state, messageId) { return Object.assign({}, state, { message_id: str(messageId) }); }\n\nfunction cancel(state, opts) {\n  state = Object.assign({}, state, { status: 'cancelled', last_update_ts: str((opts || {}).now) });\n  const name = STAGES[Math.max(0, state.stage - 1)] || STAGES[0];\n  const o = out(state, state.message_id ? 'edit' : 'create', name, '⛔');\n  o.text = '⛔ Отменено на этапе ' + state.stage + '/' + state.total + ': ' + name;\n  return o;\n}\nfunction fail(state, stageNum, error, opts) {\n  state = Object.assign({}, state, { status: 'failed', stage: Math.max(1, Math.min(TOTAL, num(stageNum, state.stage))), last_update_ts: str((opts || {}).now) });\n  const name = STAGES[state.stage - 1];\n  const o = out(state, state.message_id ? 'edit' : 'create', name, '⚠️');\n  o.text = '⚠️ Сбой на этапе ' + state.stage + '/' + state.total + ' (' + name + '): ' + (str(error) || 'неизвестная ошибка') + '. Прошлый отчёт сохранён.';\n  return o;\n}\n\n// applyEditResult(state, ok) -> when an edit fails, fall back to a fresh message (clear id so next is 'create')\nfunction applyEditResult(state, ok) {\n  if (ok) return Object.assign({}, state);\n  return Object.assign({}, state, { message_id: '', fallback_count: num(state.fallback_count, 0) + 1 });\n}\n\n// --- final delivery is separate + idempotent (a completed progress message is NOT a delivered report) ---\nfunction canDeliver(state, deliveryId) {\n  if (state.final_delivered && str(state.delivery_id) === str(deliveryId)) return false; // duplicate\n  return true;\n}\nfunction markDelivered(state, deliveryId) {\n  return Object.assign({}, state, { final_delivered: true, delivery_id: str(deliveryId) });\n}\n// --- end embedded progress_tracker ---\n\n// --- node driver ---\nvar g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=3;st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st,4,{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:4,telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:up.text})}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -340
+      ],
+      "id": "wf20-progqualitygate",
+      "name": "Progress: Quality Gate"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/editMessageText",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.telegram_edit_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        770,
+        -340
+      ],
+      "id": "wf20-editprogqualitygate",
+      "name": "Edit Progress (Quality Gate)",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/progress_tracker.js (drift-proof; test asserts equality)\n// progress_tracker.js — one concise, throttled, editable Telegram progress message (Section 10).\n//\n// Not one message per n8n node: a single message is created once and EDITED as the run crosses meaningful\n// stages. Re-emitting the same stage is throttled (no flood); a retry never creates a second message (edit the\n// existing one). Cancellation/failure immediately rewrite the message and name the stage. Progress updates are\n// NOT final delivery — the final report stays separately idempotent. If Telegram edit fails, the fallback is\n// to send a fresh message (and adopt its id). Pure + deterministic state machine, $0.\n\nfunction str(v) { return v == null ? '' : String(v); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\nconst STAGES = [\n  'План подтверждён', 'Ищу источники', 'Собираю страницы', 'Проверяю качество', 'Анализирую данные',\n  'Сравниваю результаты', 'Формирую отчёт', 'Готовлю таблицу и графики', 'Отправляю результат', 'Готово'\n];\nconst TOTAL = STAGES.length;\nconst DEFAULT_THROTTLE_MS = 3000;\n\nfunction initProgress(ids) {\n  ids = ids || {};\n  return {\n    request_id: str(ids.agent_request_id), chat_id: str(ids.chat_id),\n    message_id: '', stage: 0, total: TOTAL, status: 'pending',\n    last_update_ts: '', fallback_count: 0, final_delivered: false, delivery_id: '', throttle_ms: num(ids.throttle_ms, DEFAULT_THROTTLE_MS)\n  };\n}\n\nfunction bar(stage, total) {\n  const filled = Math.max(0, Math.min(total, stage));\n  return '▰'.repeat(filled) + '▱'.repeat(total - filled);\n}\nfunction visibleText(state, name, prefix) {\n  return (prefix || '⏳') + ' Этап ' + state.stage + '/' + state.total + ': ' + name + '\\n' + bar(state.stage, state.total);\n}\nfunction out(state, action, name, prefix) {\n  return {\n    state: state, action: action, text: visibleText(state, name, prefix),\n    // request id lives in diagnostic metadata, NOT in the user-visible text\n    meta: { request_id: state.request_id, stage: state.stage, total: state.total, status: state.status },\n    is_final_delivery: false\n  };\n}\n\n// advance(state, stageNum, opts{now}) -> { state, action: 'create'|'edit'|'skip', text, meta }\nfunction advance(state, stageNum, opts) {\n  state = Object.assign({}, state); opts = opts || {};\n  stageNum = Math.max(1, Math.min(TOTAL, num(stageNum, state.stage + 1)));\n  if (state.status === 'cancelled' || state.status === 'failed') return out(state, 'skip', STAGES[state.stage - 1] || STAGES[0]);\n  // throttle: never go backwards; re-emitting the SAME stage is a no-op (no flood)\n  if (stageNum <= state.stage && state.message_id) { const o = out(state, 'skip', STAGES[Math.max(0, state.stage - 1)]); o.throttled = true; return o; }\n  // time throttle within the same window for same stage handled above; stage advance is always meaningful\n  state.stage = stageNum; state.status = stageNum >= TOTAL ? 'complete' : 'running';\n  state.last_update_ts = str(opts.now);\n  const name = STAGES[stageNum - 1];\n  if (!state.message_id) { return out(state, 'create', name); }   // first send -> create one message\n  return out(state, 'edit', name);                                 // thereafter -> edit the same message\n}\n\n// record the id Telegram returned for the created/sent message\nfunction setMessageId(state, messageId) { return Object.assign({}, state, { message_id: str(messageId) }); }\n\nfunction cancel(state, opts) {\n  state = Object.assign({}, state, { status: 'cancelled', last_update_ts: str((opts || {}).now) });\n  const name = STAGES[Math.max(0, state.stage - 1)] || STAGES[0];\n  const o = out(state, state.message_id ? 'edit' : 'create', name, '⛔');\n  o.text = '⛔ Отменено на этапе ' + state.stage + '/' + state.total + ': ' + name;\n  return o;\n}\nfunction fail(state, stageNum, error, opts) {\n  state = Object.assign({}, state, { status: 'failed', stage: Math.max(1, Math.min(TOTAL, num(stageNum, state.stage))), last_update_ts: str((opts || {}).now) });\n  const name = STAGES[state.stage - 1];\n  const o = out(state, state.message_id ? 'edit' : 'create', name, '⚠️');\n  o.text = '⚠️ Сбой на этапе ' + state.stage + '/' + state.total + ' (' + name + '): ' + (str(error) || 'неизвестная ошибка') + '. Прошлый отчёт сохранён.';\n  return o;\n}\n\n// applyEditResult(state, ok) -> when an edit fails, fall back to a fresh message (clear id so next is 'create')\nfunction applyEditResult(state, ok) {\n  if (ok) return Object.assign({}, state);\n  return Object.assign({}, state, { message_id: '', fallback_count: num(state.fallback_count, 0) + 1 });\n}\n\n// --- final delivery is separate + idempotent (a completed progress message is NOT a delivered report) ---\nfunction canDeliver(state, deliveryId) {\n  if (state.final_delivered && str(state.delivery_id) === str(deliveryId)) return false; // duplicate\n  return true;\n}\nfunction markDelivered(state, deliveryId) {\n  return Object.assign({}, state, { final_delivered: true, delivery_id: str(deliveryId) });\n}\n// --- end embedded progress_tracker ---\n\n// --- node driver ---\nvar g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=4;st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st,5,{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:5,telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:up.text})}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -340
+      ],
+      "id": "wf20-proganalysis",
+      "name": "Progress: Analysis"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/editMessageText",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.telegram_edit_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        990,
+        -340
+      ],
+      "id": "wf20-editproganalysis",
+      "name": "Edit Progress (Analysis)",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/progress_tracker.js (drift-proof; test asserts equality)\n// progress_tracker.js — one concise, throttled, editable Telegram progress message (Section 10).\n//\n// Not one message per n8n node: a single message is created once and EDITED as the run crosses meaningful\n// stages. Re-emitting the same stage is throttled (no flood); a retry never creates a second message (edit the\n// existing one). Cancellation/failure immediately rewrite the message and name the stage. Progress updates are\n// NOT final delivery — the final report stays separately idempotent. If Telegram edit fails, the fallback is\n// to send a fresh message (and adopt its id). Pure + deterministic state machine, $0.\n\nfunction str(v) { return v == null ? '' : String(v); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\nconst STAGES = [\n  'План подтверждён', 'Ищу источники', 'Собираю страницы', 'Проверяю качество', 'Анализирую данные',\n  'Сравниваю результаты', 'Формирую отчёт', 'Готовлю таблицу и графики', 'Отправляю результат', 'Готово'\n];\nconst TOTAL = STAGES.length;\nconst DEFAULT_THROTTLE_MS = 3000;\n\nfunction initProgress(ids) {\n  ids = ids || {};\n  return {\n    request_id: str(ids.agent_request_id), chat_id: str(ids.chat_id),\n    message_id: '', stage: 0, total: TOTAL, status: 'pending',\n    last_update_ts: '', fallback_count: 0, final_delivered: false, delivery_id: '', throttle_ms: num(ids.throttle_ms, DEFAULT_THROTTLE_MS)\n  };\n}\n\nfunction bar(stage, total) {\n  const filled = Math.max(0, Math.min(total, stage));\n  return '▰'.repeat(filled) + '▱'.repeat(total - filled);\n}\nfunction visibleText(state, name, prefix) {\n  return (prefix || '⏳') + ' Этап ' + state.stage + '/' + state.total + ': ' + name + '\\n' + bar(state.stage, state.total);\n}\nfunction out(state, action, name, prefix) {\n  return {\n    state: state, action: action, text: visibleText(state, name, prefix),\n    // request id lives in diagnostic metadata, NOT in the user-visible text\n    meta: { request_id: state.request_id, stage: state.stage, total: state.total, status: state.status },\n    is_final_delivery: false\n  };\n}\n\n// advance(state, stageNum, opts{now}) -> { state, action: 'create'|'edit'|'skip', text, meta }\nfunction advance(state, stageNum, opts) {\n  state = Object.assign({}, state); opts = opts || {};\n  stageNum = Math.max(1, Math.min(TOTAL, num(stageNum, state.stage + 1)));\n  if (state.status === 'cancelled' || state.status === 'failed') return out(state, 'skip', STAGES[state.stage - 1] || STAGES[0]);\n  // throttle: never go backwards; re-emitting the SAME stage is a no-op (no flood)\n  if (stageNum <= state.stage && state.message_id) { const o = out(state, 'skip', STAGES[Math.max(0, state.stage - 1)]); o.throttled = true; return o; }\n  // time throttle within the same window for same stage handled above; stage advance is always meaningful\n  state.stage = stageNum; state.status = stageNum >= TOTAL ? 'complete' : 'running';\n  state.last_update_ts = str(opts.now);\n  const name = STAGES[stageNum - 1];\n  if (!state.message_id) { return out(state, 'create', name); }   // first send -> create one message\n  return out(state, 'edit', name);                                 // thereafter -> edit the same message\n}\n\n// record the id Telegram returned for the created/sent message\nfunction setMessageId(state, messageId) { return Object.assign({}, state, { message_id: str(messageId) }); }\n\nfunction cancel(state, opts) {\n  state = Object.assign({}, state, { status: 'cancelled', last_update_ts: str((opts || {}).now) });\n  const name = STAGES[Math.max(0, state.stage - 1)] || STAGES[0];\n  const o = out(state, state.message_id ? 'edit' : 'create', name, '⛔');\n  o.text = '⛔ Отменено на этапе ' + state.stage + '/' + state.total + ': ' + name;\n  return o;\n}\nfunction fail(state, stageNum, error, opts) {\n  state = Object.assign({}, state, { status: 'failed', stage: Math.max(1, Math.min(TOTAL, num(stageNum, state.stage))), last_update_ts: str((opts || {}).now) });\n  const name = STAGES[state.stage - 1];\n  const o = out(state, state.message_id ? 'edit' : 'create', name, '⚠️');\n  o.text = '⚠️ Сбой на этапе ' + state.stage + '/' + state.total + ' (' + name + '): ' + (str(error) || 'неизвестная ошибка') + '. Прошлый отчёт сохранён.';\n  return o;\n}\n\n// applyEditResult(state, ok) -> when an edit fails, fall back to a fresh message (clear id so next is 'create')\nfunction applyEditResult(state, ok) {\n  if (ok) return Object.assign({}, state);\n  return Object.assign({}, state, { message_id: '', fallback_count: num(state.fallback_count, 0) + 1 });\n}\n\n// --- final delivery is separate + idempotent (a completed progress message is NOT a delivered report) ---\nfunction canDeliver(state, deliveryId) {\n  if (state.final_delivered && str(state.delivery_id) === str(deliveryId)) return false; // duplicate\n  return true;\n}\nfunction markDelivered(state, deliveryId) {\n  return Object.assign({}, state, { final_delivered: true, delivery_id: str(deliveryId) });\n}\n// --- end embedded progress_tracker ---\n\n// --- node driver ---\nvar g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=5;st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st,6,{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:6,telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:up.text})}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -340
+      ],
+      "id": "wf20-progcomparison",
+      "name": "Progress: Comparison"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/editMessageText",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.telegram_edit_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1210,
+        -340
+      ],
+      "id": "wf20-editprogcomparison",
+      "name": "Edit Progress (Comparison)",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/progress_tracker.js (drift-proof; test asserts equality)\n// progress_tracker.js — one concise, throttled, editable Telegram progress message (Section 10).\n//\n// Not one message per n8n node: a single message is created once and EDITED as the run crosses meaningful\n// stages. Re-emitting the same stage is throttled (no flood); a retry never creates a second message (edit the\n// existing one). Cancellation/failure immediately rewrite the message and name the stage. Progress updates are\n// NOT final delivery — the final report stays separately idempotent. If Telegram edit fails, the fallback is\n// to send a fresh message (and adopt its id). Pure + deterministic state machine, $0.\n\nfunction str(v) { return v == null ? '' : String(v); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\nconst STAGES = [\n  'План подтверждён', 'Ищу источники', 'Собираю страницы', 'Проверяю качество', 'Анализирую данные',\n  'Сравниваю результаты', 'Формирую отчёт', 'Готовлю таблицу и графики', 'Отправляю результат', 'Готово'\n];\nconst TOTAL = STAGES.length;\nconst DEFAULT_THROTTLE_MS = 3000;\n\nfunction initProgress(ids) {\n  ids = ids || {};\n  return {\n    request_id: str(ids.agent_request_id), chat_id: str(ids.chat_id),\n    message_id: '', stage: 0, total: TOTAL, status: 'pending',\n    last_update_ts: '', fallback_count: 0, final_delivered: false, delivery_id: '', throttle_ms: num(ids.throttle_ms, DEFAULT_THROTTLE_MS)\n  };\n}\n\nfunction bar(stage, total) {\n  const filled = Math.max(0, Math.min(total, stage));\n  return '▰'.repeat(filled) + '▱'.repeat(total - filled);\n}\nfunction visibleText(state, name, prefix) {\n  return (prefix || '⏳') + ' Этап ' + state.stage + '/' + state.total + ': ' + name + '\\n' + bar(state.stage, state.total);\n}\nfunction out(state, action, name, prefix) {\n  return {\n    state: state, action: action, text: visibleText(state, name, prefix),\n    // request id lives in diagnostic metadata, NOT in the user-visible text\n    meta: { request_id: state.request_id, stage: state.stage, total: state.total, status: state.status },\n    is_final_delivery: false\n  };\n}\n\n// advance(state, stageNum, opts{now}) -> { state, action: 'create'|'edit'|'skip', text, meta }\nfunction advance(state, stageNum, opts) {\n  state = Object.assign({}, state); opts = opts || {};\n  stageNum = Math.max(1, Math.min(TOTAL, num(stageNum, state.stage + 1)));\n  if (state.status === 'cancelled' || state.status === 'failed') return out(state, 'skip', STAGES[state.stage - 1] || STAGES[0]);\n  // throttle: never go backwards; re-emitting the SAME stage is a no-op (no flood)\n  if (stageNum <= state.stage && state.message_id) { const o = out(state, 'skip', STAGES[Math.max(0, state.stage - 1)]); o.throttled = true; return o; }\n  // time throttle within the same window for same stage handled above; stage advance is always meaningful\n  state.stage = stageNum; state.status = stageNum >= TOTAL ? 'complete' : 'running';\n  state.last_update_ts = str(opts.now);\n  const name = STAGES[stageNum - 1];\n  if (!state.message_id) { return out(state, 'create', name); }   // first send -> create one message\n  return out(state, 'edit', name);                                 // thereafter -> edit the same message\n}\n\n// record the id Telegram returned for the created/sent message\nfunction setMessageId(state, messageId) { return Object.assign({}, state, { message_id: str(messageId) }); }\n\nfunction cancel(state, opts) {\n  state = Object.assign({}, state, { status: 'cancelled', last_update_ts: str((opts || {}).now) });\n  const name = STAGES[Math.max(0, state.stage - 1)] || STAGES[0];\n  const o = out(state, state.message_id ? 'edit' : 'create', name, '⛔');\n  o.text = '⛔ Отменено на этапе ' + state.stage + '/' + state.total + ': ' + name;\n  return o;\n}\nfunction fail(state, stageNum, error, opts) {\n  state = Object.assign({}, state, { status: 'failed', stage: Math.max(1, Math.min(TOTAL, num(stageNum, state.stage))), last_update_ts: str((opts || {}).now) });\n  const name = STAGES[state.stage - 1];\n  const o = out(state, state.message_id ? 'edit' : 'create', name, '⚠️');\n  o.text = '⚠️ Сбой на этапе ' + state.stage + '/' + state.total + ' (' + name + '): ' + (str(error) || 'неизвестная ошибка') + '. Прошлый отчёт сохранён.';\n  return o;\n}\n\n// applyEditResult(state, ok) -> when an edit fails, fall back to a fresh message (clear id so next is 'create')\nfunction applyEditResult(state, ok) {\n  if (ok) return Object.assign({}, state);\n  return Object.assign({}, state, { message_id: '', fallback_count: num(state.fallback_count, 0) + 1 });\n}\n\n// --- final delivery is separate + idempotent (a completed progress message is NOT a delivered report) ---\nfunction canDeliver(state, deliveryId) {\n  if (state.final_delivered && str(state.delivery_id) === str(deliveryId)) return false; // duplicate\n  return true;\n}\nfunction markDelivered(state, deliveryId) {\n  return Object.assign({}, state, { final_delivered: true, delivery_id: str(deliveryId) });\n}\n// --- end embedded progress_tracker ---\n\n// --- node driver ---\nvar g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=6;st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st,7,{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:7,telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:up.text})}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        -340
+      ],
+      "id": "wf20-progreport",
+      "name": "Progress: Report"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/editMessageText",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.telegram_edit_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1430,
+        -340
+      ],
+      "id": "wf20-editprogreport",
+      "name": "Edit Progress (Report)",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// embedded n8n/lib/progress_tracker.js (drift-proof; test asserts equality)\n// progress_tracker.js — one concise, throttled, editable Telegram progress message (Section 10).\n//\n// Not one message per n8n node: a single message is created once and EDITED as the run crosses meaningful\n// stages. Re-emitting the same stage is throttled (no flood); a retry never creates a second message (edit the\n// existing one). Cancellation/failure immediately rewrite the message and name the stage. Progress updates are\n// NOT final delivery — the final report stays separately idempotent. If Telegram edit fails, the fallback is\n// to send a fresh message (and adopt its id). Pure + deterministic state machine, $0.\n\nfunction str(v) { return v == null ? '' : String(v); }\nfunction num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\nconst STAGES = [\n  'План подтверждён', 'Ищу источники', 'Собираю страницы', 'Проверяю качество', 'Анализирую данные',\n  'Сравниваю результаты', 'Формирую отчёт', 'Готовлю таблицу и графики', 'Отправляю результат', 'Готово'\n];\nconst TOTAL = STAGES.length;\nconst DEFAULT_THROTTLE_MS = 3000;\n\nfunction initProgress(ids) {\n  ids = ids || {};\n  return {\n    request_id: str(ids.agent_request_id), chat_id: str(ids.chat_id),\n    message_id: '', stage: 0, total: TOTAL, status: 'pending',\n    last_update_ts: '', fallback_count: 0, final_delivered: false, delivery_id: '', throttle_ms: num(ids.throttle_ms, DEFAULT_THROTTLE_MS)\n  };\n}\n\nfunction bar(stage, total) {\n  const filled = Math.max(0, Math.min(total, stage));\n  return '▰'.repeat(filled) + '▱'.repeat(total - filled);\n}\nfunction visibleText(state, name, prefix) {\n  return (prefix || '⏳') + ' Этап ' + state.stage + '/' + state.total + ': ' + name + '\\n' + bar(state.stage, state.total);\n}\nfunction out(state, action, name, prefix) {\n  return {\n    state: state, action: action, text: visibleText(state, name, prefix),\n    // request id lives in diagnostic metadata, NOT in the user-visible text\n    meta: { request_id: state.request_id, stage: state.stage, total: state.total, status: state.status },\n    is_final_delivery: false\n  };\n}\n\n// advance(state, stageNum, opts{now}) -> { state, action: 'create'|'edit'|'skip', text, meta }\nfunction advance(state, stageNum, opts) {\n  state = Object.assign({}, state); opts = opts || {};\n  stageNum = Math.max(1, Math.min(TOTAL, num(stageNum, state.stage + 1)));\n  if (state.status === 'cancelled' || state.status === 'failed') return out(state, 'skip', STAGES[state.stage - 1] || STAGES[0]);\n  // throttle: never go backwards; re-emitting the SAME stage is a no-op (no flood)\n  if (stageNum <= state.stage && state.message_id) { const o = out(state, 'skip', STAGES[Math.max(0, state.stage - 1)]); o.throttled = true; return o; }\n  // time throttle within the same window for same stage handled above; stage advance is always meaningful\n  state.stage = stageNum; state.status = stageNum >= TOTAL ? 'complete' : 'running';\n  state.last_update_ts = str(opts.now);\n  const name = STAGES[stageNum - 1];\n  if (!state.message_id) { return out(state, 'create', name); }   // first send -> create one message\n  return out(state, 'edit', name);                                 // thereafter -> edit the same message\n}\n\n// record the id Telegram returned for the created/sent message\nfunction setMessageId(state, messageId) { return Object.assign({}, state, { message_id: str(messageId) }); }\n\nfunction cancel(state, opts) {\n  state = Object.assign({}, state, { status: 'cancelled', last_update_ts: str((opts || {}).now) });\n  const name = STAGES[Math.max(0, state.stage - 1)] || STAGES[0];\n  const o = out(state, state.message_id ? 'edit' : 'create', name, '⛔');\n  o.text = '⛔ Отменено на этапе ' + state.stage + '/' + state.total + ': ' + name;\n  return o;\n}\nfunction fail(state, stageNum, error, opts) {\n  state = Object.assign({}, state, { status: 'failed', stage: Math.max(1, Math.min(TOTAL, num(stageNum, state.stage))), last_update_ts: str((opts || {}).now) });\n  const name = STAGES[state.stage - 1];\n  const o = out(state, state.message_id ? 'edit' : 'create', name, '⚠️');\n  o.text = '⚠️ Сбой на этапе ' + state.stage + '/' + state.total + ' (' + name + '): ' + (str(error) || 'неизвестная ошибка') + '. Прошлый отчёт сохранён.';\n  return o;\n}\n\n// applyEditResult(state, ok) -> when an edit fails, fall back to a fresh message (clear id so next is 'create')\nfunction applyEditResult(state, ok) {\n  if (ok) return Object.assign({}, state);\n  return Object.assign({}, state, { message_id: '', fallback_count: num(state.fallback_count, 0) + 1 });\n}\n\n// --- final delivery is separate + idempotent (a completed progress message is NOT a delivered report) ---\nfunction canDeliver(state, deliveryId) {\n  if (state.final_delivered && str(state.delivery_id) === str(deliveryId)) return false; // duplicate\n  return true;\n}\nfunction markDelivered(state, deliveryId) {\n  return Object.assign({}, state, { final_delivered: true, delivery_id: str(deliveryId) });\n}\n// --- end embedded progress_tracker ---\n\n// --- node driver ---\nvar g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=9;st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st,10,{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:10,telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:'✅ Анализ завершён. Отчёт отправлен ниже.'})}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2380,
+        -340
+      ],
+      "id": "wf20-progdone",
+      "name": "Progress: Done"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/editMessageText",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.telegram_edit_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2490,
+        -340
+      ],
+      "id": "wf20-editprogdone",
+      "name": "Edit Progress (Done)",
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -1808,6 +1969,28 @@
         ],
         [
           {
+            "node": "Progress: Quality Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: Quality Gate": {
+      "main": [
+        [
+          {
+            "node": "Edit Progress (Quality Gate)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Progress (Quality Gate)": {
+      "main": [
+        [
+          {
             "node": "Run WF16 Quality Gate",
             "type": "main",
             "index": 0
@@ -1841,7 +2024,7 @@
       "main": [
         [
           {
-            "node": "Run WF16 Quality Gate",
+            "node": "Progress: Quality Gate",
             "type": "main",
             "index": 0
           }
@@ -1849,6 +2032,28 @@
       ]
     },
     "Run WF16 Quality Gate": {
+      "main": [
+        [
+          {
+            "node": "Progress: Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: Analysis": {
+      "main": [
+        [
+          {
+            "node": "Edit Progress (Analysis)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Progress (Analysis)": {
       "main": [
         [
           {
@@ -1863,6 +2068,28 @@
       "main": [
         [
           {
+            "node": "Progress: Comparison",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: Comparison": {
+      "main": [
+        [
+          {
+            "node": "Edit Progress (Comparison)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Progress (Comparison)": {
+      "main": [
+        [
+          {
             "node": "Run WF10 Aggregator",
             "type": "main",
             "index": 0
@@ -1871,6 +2098,28 @@
       ]
     },
     "Run WF10 Aggregator": {
+      "main": [
+        [
+          {
+            "node": "Progress: Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: Report": {
+      "main": [
+        [
+          {
+            "node": "Edit Progress (Report)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Progress (Report)": {
       "main": [
         [
           {
@@ -1979,6 +2228,28 @@
         [
           {
             "node": "Send Telegram Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram Report": {
+      "main": [
+        [
+          {
+            "node": "Progress: Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress: Done": {
+      "main": [
+        [
+          {
+            "node": "Edit Progress (Done)",
             "type": "main",
             "index": 0
           }

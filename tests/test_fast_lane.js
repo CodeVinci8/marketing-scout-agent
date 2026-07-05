@@ -86,7 +86,7 @@ A.section('WF18 topology — command lane (/status from batch, /cancel ack + con
   H.inject(run3, 'Resolve Winner', [{ parsed: { kind: 'request', chat_id: 'c1', user_id: 'u1', text: 'найди брокеров' } }]);
   const rq = H.runCodeNode(run3, WF18, 'Command Lane', [{ json: {} }])[0].json;
   A.eq('a business request passes through untouched', rq.continue_heavy, true);
-  A.eq('a business request sends no lane reply', rq.has_reply, false);
+  A.eq('a business request gets the §9 immediate ack (not the final answer)', rq.lane, 'request_ack');
 }
 
 A.section('fast reply content — canonical Russian renderers via the real Code node');
