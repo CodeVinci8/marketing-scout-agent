@@ -77,6 +77,35 @@ separate); (4) close Stage D; (5) `/status`→`/cancel`→progress lifecycle (ea
 (6) user-supplied URL end-to-end Telegram proof; (7) Stage E (existing canonical scoring contract).
 Apify cred `zPAwUY66Ae5ZcQW1`, Firecrawl `Dykz5MKZ5RoDmslr`, Claude `OEen8Vl1tdWtv7v4` all bound in prod.
 
+**UPDATE-2 — TELEGRAM PUBLIC FRESH-LIVE DONE + PROVEN (HEAD `f8221f1`).** WF11 live `http_get` (free public
+t.me/s; no token) driver `msdrvtglv0001` → **WF11 exec 437**, request `req_tg_sd_20260706`. 3 configured
+channels fetched (mfo_market/da_credit/broker_Aleksey), **30 real posts reviewed**, precision **10/10=100%** on
+accepted, required-fields 100% (0/100), 0 dups, 0 bad URLs, canonical scores 55/80. LIVE noise rejection PROVEN:
+channel-rename `system_event`, generic-news `irrelevant`, `invalid`(<30), recruitment/RE-adjacent, dropper-
+vacancy — all hard-skipped on real content. Holiday/greeting/meme = NOT_OBSERVED (recorded honestly). WF11
+"Parse Live Preview Posts (inert)" is a REAL parser (inert=gate-protected). Gate token
+`I_APPROVE_LIVE_TELEGRAM_PREVIEW`; agent inputs channels/max_posts/data_mode=live/transport/approval_token.
+Evidence: `docs/STAGE_D_SOURCE_QUALITY_ACCEPTANCE.md`. Commits this session: `aaee541`,`6420a63`,`70c90a6`,
+`c93389b`,`f8221f1` (+bbf364e docs). **$0 this run.**
+
+**Open defect TELEGRAM-CAP-001:** agent-called WF11 leaves `pipeline_limit=10` while max_posts=30 → persistence
+caps at 10 total, so broker_Aleksey persisted 0 rows (fetched+classified but past cap). Quality unaffected;
+coverage capped below ≤90 plan. FIX NEXT: honor plan cap in the agent override + focused regression + deploy +
+fresh WF11 re-run (all 3 channels persist), THEN Telegram SOURCE_QUALITY fully closes.
+
+**Provider spend this session (best-available; telemetry `unknown`):** Firecrawl 3 scrapes + Claude 4 calls
+(Website) + t.me http_get 3 (free). Cumulative well under the $10 ceiling.
+
+**EXACT NEXT (in order):** (a) fix TELEGRAM-CAP-001 (cycle) → re-run WF11 live → confirm 3-channel persistence;
+(b) **Avito** — run imported driver `msdrvavitolv001` (WF09 id `msloc524306e4474`, approval_token
+`AVITO_LIVE_APPROVED`, actor `fatihtahta~avito-russia-scraper`, 3 queries×30, body limit+startUrls) → inspect
+new rows/precision/dedup; (c) **VK last** — WF26 (id `SMQkUppyeFH2sFuf`) + cred `pRZcJEyp7KExTReQ`, communities
+kredit874/da_credit/anna_findoctor, posts+comments separate, tolerant-empty; (d) close Stage D matrix
+(STAGE_D_SOURCE_QUALITY=PASS only when all targets met); (e) `/status`→`/cancel`→progress lifecycle (each: fix +
+regression + deploy + fresh REAL Telegram proof via secure WF18 — needs a real inbound; webhook/ngrok live since
+bot is replying); (f) user-supplied-URL end-to-end Telegram proof (real non-preset URL); (g) Stage E (existing
+canonical scoring contract — do NOT invent a second). Drivers are disposable/inactive; DB-delete in a window.
+
 ---
 
 ## Session: 2026-07-05 (session 34) — Empty-report root cause fixed: ISO-ARID-001 + PENDING-MINORITY-001
