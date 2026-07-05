@@ -4,6 +4,63 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-05 (session 34) — Empty-report root cause fixed: ISO-ARID-001 + PENDING-MINORITY-001
+
+**Status (exact):** branch `fix/stage4-live-final-acceptance`, HEAD **`8cf219e`** (2 commits this session: `63c1d87`
+eligibility + `8cf219e` report cleanliness, NOT pushed). `make test` ALL PASS · validate_workflows 308/0 · $0.
+**Production WAS mutated (operator-authorized): WF10+WF12 re-imported + reactivated (twice); 2 inactive disposable
+QA drivers added.** Reporting product path now proven END-TO-END: content-ful + clean + non-empty readable XLSX.
+
+**REPORT-CLEAN-001 (commit `8cf219e`, DEPLOYED + LIVE-proven):** WF20 deliveryBody sends WF12 `report_markdown`
+verbatim to the user; the render leaked report_id/`WF10 run`/`rows_after_filters=`/`trend_status=`/DEC codes/English
+section-enums/workflow-names (WF04-14)/internal flags (outreach_allowed=, review_status=, manual_review). Rewrote the
+render to clean concise Russian (business content unchanged); added REPORT-CLEAN-001 regression + updated VK-wording &
+lead_scout redaction assertions. Live WF12 replay (report_20260705_125958): rows_after_filters=11, ALL 11 leak
+patterns clear, real content (МКБК finance/LionCredit/Кредитный брокер Москва + sites+prices). **XLSX proven offline
+from the real report_bundle:** 9427 bytes, valid OOXML (PK zip, 15 parts), 8 sheets, Competitors=3 rows with real
+names+domains+region+source links. Detailed provenance stays in the XLSX (report_package/report_bundles), which is
+report_markdown-independent.
+
+**Defect (why approved runs delivered an empty "NO DATA" report):** two independent bugs in the aggregation path.
+- **ISO-ARID-001** — WF10 run-isolation used strict `r.agent_request_id === cfg.agent_request_id_filter`, but WF08
+  queue rows carry **no `agent_request_id` column** (only a family `source_run_id` like `req_x::website::a1[::telegram]`).
+  Result: `rows_after_isolation` went 28→0 → empty report. Fix: isolate via `runFamilyMatch(source_run_id, filter)`
+  fallback (mirrors the existing source_run_id_filter line). Cross-request isolation stays strict.
+- **PENDING-MINORITY-001** — a run-level `pending_review` quality flag (ONE pending sibling) made
+  `report_gate.decideRun` exclude the WHOLE website run, discarding the two confirmed report-eligible records
+  (mkbkfin.ru, lioncredit.ru). Fix: run-level gate now excludes only on run-level `review_status=pending`; the
+  per-record `rowEligible` still drops the individual pending record; fully-pending runs stay fail-closed.
+
+**Changed (commit 63c1d87):** `n8n/lib/report_gate.js` + WF10/WF12 embedded mirrors (programmatically re-synced
+byte-identical; drift tests green) + `tests/test_report_gate.js` + `tests/test_wf10_source_health.js` (focused
+regressions for both bugs incl. no-cross-request-leakage + confirmed-survive/pending-excluded + fully-pending fail-closed).
+
+**Live proof (real data, req_90112771, zero recollection):** deployed via surgical splice (exported live WF10/WF12,
+replaced only the changed node `jsCode`, preserved credential bindings + ids + `active=true`; import deactivates →
+reactivated). Replayed WF10→WF12 through a disposable driver. **WF10 exec 414:** rows_after_isolation=**12**,
+rows_after_filters=**11**, excluded_by_health=1 (pending sibling), competitor_profiles=**3**, market_angles=**5**,
+no foreign-request rows. **WF12 report** (report_20260705_121358): rows_after_filters=11, NOT no_data; real content —
+competitors МКБК finance / LionCredit / Кредитный брокер Москва; sites mkbkfin.ru, finardi.ru, lioncredit.ru w/ prices;
+angles ипотека/рефинансирование, плохая КИ, скорость; telegram audience q=8/obj=3/complaints=3.
+
+**Prod preserved:** secure WF18 ACTIVE · legacy WF18 / WF23 / WF25 inactive · Telegram webhook healthy (url set,
+pending=0, no error) · command menu [start,help,status,cancel]. Backups: `scratchpad/backup/wf{10,12}_prod_*.json`.
+
+**Operator added a large product-acceptance list (12 items). Done so far: 1–3 (deploy 63c1d87, WF10/WF12 replay,
+content-ful+clean report+XLSX). NEXT = item 4: fix `/status`** — it shows multiple stale/duplicate requests
+(waiting-for-approval, approved-preparing, old test requests). Required: scope by owner+chat; show at most ONE current
+active request (newest valid non-terminal); ignore completed/rejected/cancelled/superseded; TTL-expire stale awaiting-
+approval; reconcile approved-but-completed; `/cancel` acts only on the current active; no internal IDs/raw states.
+Trace status selection logic + persisted request states (agent_requests / conversation_state sheets), add focused
+regressions, reconcile only the operator's stale rows (never delete valid reports). THEN items 5-12: durable business
+profile/memory (`что ты помнишь?`), report follow-ups/filters/evidence/export/charts, source-registry management UX
+(one canonical registry; migrate configured web/TG/VK sources), Telegram source types, bounded VK acceptance (WF26,
+existing cred), weekly-digest control (WF23/WF25 stay inactive), one-message progress lifecycle, full source acceptance,
+final regression, operator checkpoint. Do NOT introduce PostgreSQL. 2 inactive disposable drivers (`msdrvreplay0001`,
+`msdrvwf12only01`) safe to DB-delete in a maintenance window.
+
+---
+
 ## Session: 2026-06-28 (session 32) — Stage 4–8 final closure: LIVE production repair + image pin (DEC-164)
 
 **Status (exact):** branch `fix/stage4-8-final-closure` off `main` @ `189c0ee` (PR #45). **3 repo commits, NOT
