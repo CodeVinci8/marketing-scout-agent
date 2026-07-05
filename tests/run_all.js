@@ -19,6 +19,7 @@ const JS_SUITES = [
   ['wf04-processed', 'test_wf04_processed.js'],
   ['wf04-accounting', 'test_wf04_accounting.js'],
   ['wf04-relevance-score', 'test_wf04_relevance_score.js'],
+  ['wf04-force-reprocess', 'test_wf04_force_reprocess.js'],
   ['wf05-classify', 'test_wf05_classify.js'],
   ['wf09-searchcard', 'test_wf09_searchcard.js'],
   ['wf06-processed', 'test_wf06_processed.js'],
