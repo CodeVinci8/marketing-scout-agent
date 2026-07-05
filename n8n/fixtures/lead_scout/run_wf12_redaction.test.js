@@ -60,16 +60,18 @@ for (const f of ['notes', 'audience_summary', 'top_competitors', 'top_angles']) 
 for (const keep of MUST_KEEP) H.ok('preserved (business context): ' + keep, blob.indexOf(keep) >= 0, keep);
 H.ok('redaction marker present', /\[PUBLIC CONTACT REDACTED\]/.test(blob));
 // counts must stay correct after redaction
-H.ok('lead block present in notes', /public_lead_signals: 2/.test(rep.notes));
-// C1-D2: unambiguous contact counters (replaces the old "found/blanked/скрыто" mix).
-H.ok('contacts_detected counter = 1', /контакты: обнаружено 1/.test(rep.notes));
-H.ok('contacts_excluded_from_report = 1', /исключено из отчёта 1/.test(rep.notes));
-H.ok('contacts_redacted counter = 1', /отредактировано 1/.test(rep.notes));
-H.ok('report_contains_contacts=false rendered', /report_contains_contacts=false/.test(rep.notes));
+// REPORT-CLEAN-001: user-facing lead block uses clean Russian (no internal field/enum names, no key=value diagnostics).
+H.ok('lead block present in notes', /Публичные лид-сигналы: 2/.test(rep.notes));
+// C1-D2: unambiguous contact counters, now in clean Russian without raw field/flag names.
+H.ok('contacts detected count shown', /обнаружено 1/.test(rep.notes));
+H.ok('contacts excluded count shown', /исключено 1/.test(rep.notes));
+H.ok('contacts are stated as not published (redaction)', /контакты не публикуются/.test(rep.notes));
+H.ok('no raw report_contains_contacts= diagnostic leaks to the user', !/report_contains_contacts=/.test(rep.notes));
 H.eq('report row contacts_detected field = 1', rep.contacts_detected, 1);
 H.eq('report row contacts_excluded_from_report field = 1', rep.contacts_excluded_from_report, 1);
+H.eq('report row contacts_redacted field = 1', rep.contacts_redacted, 1);
 H.eq('report row report_contains_contacts field = false', rep.report_contains_contacts, false);
-H.ok('manual-review / no-outreach statement present', /outreach_allowed=false/.test(rep.notes) || /БЕЗ аутрича/.test(rep.notes));
+H.ok('manual-review / no-outreach statement present', /без аутрича/i.test(rep.notes) && !/outreach_allowed=/.test(rep.notes));
 
 // Claude facts payload (future Telegram/LLM) must also be contact-free
 H.inject(run, 'Read public_lead_signals', leadRows);
