@@ -56,7 +56,12 @@ function decideRun(h, cfg) {
   if (data_mode === 'fixture') { if (allowFixture) warning = 'fixture'; else reasons.push(EXCLUDE.FIXTURE); }
   if (data_mode === 'manual_test') { if (allowFixture) warning = warning || 'manual_test'; else reasons.push(EXCLUDE.MANUAL_TEST); }
   if (quality_status === 'quarantined') reasons.push(EXCLUDE.QUARANTINED);
-  if (review_status === 'pending' || /(^|; )pending_review/.test(flags)) reasons.push(EXCLUDE.PENDING);
+  // PENDING-MINORITY-001: a run-level `pending_review` FLAG only means SOME records in the run are pending —
+  // WF16 sets report_eligible=false ONLY when the WHOLE run is pending (pending===total), which is enforced
+  // below via NOT_ELIGIBLE. So a minority-pending run must stay eligible here and let the per-record gate
+  // (rowEligible) drop the individual pending rows; otherwise one pending sibling poisons every clean,
+  // report_candidate record from the same source run. Only a run-level review_status=pending excludes the run.
+  if (review_status === 'pending') reasons.push(EXCLUDE.PENDING);
   if (/semantic_validation_failed/.test(flags)) reasons.push(EXCLUDE.SEMANTIC);
   if (/(^|; )stale_source/.test(flags)) reasons.push(EXCLUDE.STALE);
 
