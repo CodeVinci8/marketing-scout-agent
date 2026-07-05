@@ -67,6 +67,14 @@ A.section('WF18 §9 — immediate ack per accepted update (post-claim, exactly o
   const rj = H.runCodeNode(run3, WF18, 'Command Lane', [{ json: {} }])[0].json;
   A.eq('a reject callback gets NO premature launch ack', rj.has_reply, false);
   A.ok('callback ack branch is wired', hasEdge(WF18, 'Command Lane', 'Callback Ack Needed?') && hasEdge(WF18, 'Callback Ack Needed?', 'Answer Command Callback', 0));
+  // TELEGRAM-TOLERANT-001: a failed spinner-clear / ack send must NEVER abort the approve→analysis dispatch.
+  // Answer Command Callback runs on a parallel branch; Send Command Reply feeds Continue Heavy Path? — both must
+  // be fail-open so a stale callback id or a Telegram hiccup cannot cancel a launched analysis (live exec 403).
+  const ack = WF18.nodes.find(n => n.name === 'Answer Command Callback');
+  const cmdReply = WF18.nodes.find(n => n.name === 'Send Command Reply');
+  A.eq('Answer Command Callback is fail-open (never aborts dispatch)', ack.onError, 'continueRegularOutput');
+  A.eq('Send Command Reply is fail-open (dispatch survives a failed ack send)', cmdReply.onError, 'continueRegularOutput');
+  A.eq('the approve/cancel dispatch continues past the command reply', hasEdge(WF18, 'Send Command Reply', 'Continue Heavy Path?'), true);
 }
 
 A.section('WF20 §9 — the ONE progress message is edited on the real main line');

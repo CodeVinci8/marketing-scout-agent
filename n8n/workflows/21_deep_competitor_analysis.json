@@ -344,6 +344,7 @@
         "jsonBody": "={{ $json.telegram_send_body }}",
         "options": {}
       },
+      "onError": "continueRegularOutput",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -375,6 +376,7 @@
         "jsonBody": "={{ $json.telegram_send_body }}",
         "options": {}
       },
+      "onError": "continueRegularOutput",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [

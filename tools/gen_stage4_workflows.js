@@ -78,6 +78,10 @@ function httpTelegramAnswer(id, name, pos) {
       sendBody: true, specifyBody: 'json', jsonBody: '={{ $json.answer_callback_body }}',
       options: { ignoreHttpStatusErrors: true }
     },
+    // TELEGRAM-TOLERANT-001: clearing the callback spinner is best-effort. A stale/expired/invalid callback id
+    // makes Telegram return 400; that must NEVER abort the approval→analysis dispatch (which runs on a parallel
+    // branch). Fail-open, exactly like WF20's progress sends.
+    onError: 'continueRegularOutput',
     type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
   };
 }
@@ -207,6 +211,10 @@ function httpTelegram(id, name, pos) {
       method: 'POST', url: '=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/sendMessage',
       sendBody: true, specifyBody: 'json', jsonBody: '={{ $json.telegram_send_body }}', options: {}
     },
+    // TELEGRAM-TOLERANT-001: a Telegram sendMessage failure (ack, plan reply, fast reply) must never abort the
+    // claim→dispatch pipeline. Send Command Reply feeds Continue Heavy Path?; on error, continueRegularOutput
+    // passes the item through so the approve/cancel dispatch still proceeds. Same fail-open as WF20 progress.
+    onError: 'continueRegularOutput',
     type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
   };
 }

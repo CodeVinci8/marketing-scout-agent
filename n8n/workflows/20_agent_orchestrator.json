@@ -286,6 +286,7 @@
         "jsonBody": "={{ $json.telegram_send_body }}",
         "options": {}
       },
+      "onError": "continueRegularOutput",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -1261,6 +1262,7 @@
         "jsonBody": "={{ $json.telegram_send_body }}",
         "options": {}
       },
+      "onError": "continueRegularOutput",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -1457,6 +1459,7 @@
         "jsonBody": "={{ $json.telegram_send_body }}",
         "options": {}
       },
+      "onError": "continueRegularOutput",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -1488,6 +1491,7 @@
         "jsonBody": "={{ $json.telegram_send_body }}",
         "options": {}
       },
+      "onError": "continueRegularOutput",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -1495,8 +1499,7 @@
         -300
       ],
       "id": "wf20-sendprogress",
-      "name": "Send Progress",
-      "onError": "continueRegularOutput"
+      "name": "Send Progress"
     },
     {
       "parameters": {
