@@ -4,6 +4,57 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-05 (session 35) — FILE 1 Stage D (source quality): RELEV-WEB-001 fixed+deployed
+
+**Canonical FILE 1 stage:** **D — Validate source quality** (IN_PROGRESS). Order confirmed by operator:
+finish Stage D (**VK last**) → `/status` lifecycle → `/cancel` (same selector) → one-message progress
+lifecycle → then resume **Stage E**. Do NOT redo completed collection/acceptance; no PostgreSQL.
+
+**Status (exact):** branch `fix/stage4-live-final-acceptance`, HEAD **`aaee541`**. 2 commits this session
+(`bbf364e` docs-only session-34 closure; `aaee541` RELEV-WEB-001) + a docs commit for the Stage D matrix.
+NOT pushed. **$0, 0 provider calls this session** (all Stage D evidence read from the LIVE execution store
+read-only). Best-available cumulative live cost: unchanged (no new provider spend); $10 test budget untouched.
+
+**Recovery (reconciled against real repo + n8n DB, not summaries):** container `n8n-n8n-1` Up (image pinned
+2.23.3); DB 191MB. **No execution running** (the `finished=0` rows are all errored+stopped, newest 01:13).
+Executions 405 (WF20)/410 (WF08)/412 (WF12)/414 (WF10) all `success`. Active set = WF04/08/10/12/16 pipeline +
+WF09/11/26 collectors + WF19/20/21/22/24 agent + **secure WF18 (`mslocf50ab8007ca`) active**; **legacy WF18
+(`Iz1kWo…`) / WF23 / WF25 inactive** ✓. Latest report = `report_20260705_125958` (req_90112771).
+
+**Stage D — persisted controlled sample (req_90112771), traced provider→normalize→WF16→WF08→WF10→WF12→bundle
+via `node:sqlite`+`flatted` on exec 410/414 (zero cost):** 12 selected records = 2 website (mkbkfin.ru healthy,
+lioncredit.ru healthy) + 1 website excluded (finardi.ru **degraded**→excluded_by_health, correct) + 10 Telegram
+Public (mfo_market×8, da_credit×2). **Relevance precision = 12/12 = 100%** by manual FULL-TEXT read (T5
+"Проверка СБ" is in-scope — pivots to кредитная история, NOT HR noise; I verified before judging). **Dedup=0
+final duplicates** (12 distinct per-post `t.me/<ch>/<id>` URLs + domains; stable dedup_key). **BAD_URLS=0,
+PLACEHOLDER_ROWS=0, contact policy respected, provenance traceable.** Full matrix + markers in
+`docs/STAGE_D_SOURCE_QUALITY_ACCEPTANCE.md`. `STAGE_D_SOURCE_QUALITY=IN_PROGRESS`.
+
+**Defect fixed (full cycle): RELEV-WEB-001** — website (WF04) records persisted with an EMPTY relevance signal
+(`confidence_score=''`, `semantic_keywords=''`, no reason) while Telegram carries `confidence_score` 45/70.
+Root cause: WF04 `Build Canonical Raw Record` never emitted them. Patched canonically (evidence-based 0-100
+confidence: healthy competitor 70 +5/service ≤90; degraded 50; quarantined 10; market 45 + content-derived
+`semantic_keywords` + Russian `relevance_reason`). Regression `tests/test_wf04_relevance_score.js` (27) +
+run_all wired. Focused suites, compile gate (252 nodes), validator 308, **full `make test` ALL PASS** ($0).
+**Deployed** via surgical splice (WF04 id `k4ob2TaXvCx6IDrm`, active preserved, 11 creds intact, RELEV-WEB-001
+verified in DB). **Rollback:** `scratchpad/backup/wf04_prod_20260705_235439.json`. **Step-7 replay deferred:**
+re-persisting historical website rows needs a live Firecrawl recollect — bundled into the Stage F/G live run
+(NOT a test-only paid call).
+
+**Remaining Stage D (exact next):** (a) **Avito** — 0 persisted rows → insufficient → needs a bounded live
+Apify/Avito sample (≤3 queries, ≤30/query, budget-gated) OR record WF09-fixture acceptance as interim; (b) **VK
+last** — protected token `/root/.secrets/marketing-scout-vk.token` (never print), public communities
+kredit874/da_credit/anna_findoctor, posts+comments separately, tolerant-empty. Then the 3 Telegram defects
+(`/status` canonical single-active selector, `/cancel` same selector, one-message progress editMessageText
+proof — all need canonical patch + regression + safe deploy + one controlled live proof), then Stage E
+(inspect the existing canonical scoring contract first — do NOT invent a second scoring system).
+
+**Exact next command:** trace Avito adapter/fixture (`tests/test_wf09_*`, `n8n/workflows/09_*`) to decide
+bounded-live-vs-fixture; OR (if operator green-lights spend) run one bounded Avito query set. Cross-cutting
+defects tracked as task #12 (progress lifecycle) — bot currently sends "⏳ Принял запрос…" and never edits it.
+
+---
+
 ## Session: 2026-07-05 (session 34) — Empty-report root cause fixed: ISO-ARID-001 + PENDING-MINORITY-001
 
 **Status (exact):** branch `fix/stage4-live-final-acceptance`, HEAD **`8cf219e`** (2 commits this session: `63c1d87`
