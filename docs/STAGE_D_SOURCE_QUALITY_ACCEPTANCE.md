@@ -428,43 +428,83 @@ persistence hygiene); `](https://www` CTA render artifact (Stage G report render
 
 ---
 
-## Avito LIVE acceptance — executed, provider returned no usable listings, 2026-07-06
+## Avito LIVE acceptance — deep root-cause investigation, blocked by Apify free-tier proxy (2026-07-06)
 
-Two bounded, authorized live Apify runs (actor `fatihtahta~avito-russia-scraper`, 3 approved service-search
-queries "кредитный брокер Москва" / "помощь в получении кредита Москва" / "кредит под ПТС Москва",
-`data_mode=live`, token `AVITO_LIVE_APPROVED`, `max_budget_usd=1`, overall items ≤10):
+Per operator directive ("do not immediately classify Avito as an external limitation… investigate why the current
+path now returns `[{}]`"), a full evidence-based investigation was run — **read-only, $0-cheap** (Apify metadata/log/
+dataset reads are free; the only paid runs were pay-per-event with **0 output records → ~$0.10 total compute**).
 
-- **WF09 exec 447** (before fix): actor returned `[{}]` — **1 empty placeholder item, 0 usable listings**.
-  `items_received=1, items_relevant=0, items_written=0`. The source-quality gate correctly classified the empty
-  card `is_valid_listing=false` (reason `search_card_no_detail`) → **0 rows persisted** (no fabrication).
-- **Defect investigated + patched (AVITO-PROXY-001, commit `b66677b`, DEPLOYED to WF09 `msloc524306e4474`):**
-  Avito is anti-bot protected; the actor's documented schema requires a **residential proxy**, but the connector
-  sent no `proxyConfiguration`. Confirmed the request format was otherwise correct against the actor's public
-  schema (`startUrls` = plain strings + `limit`). Added residential `proxy_config` (agent + manual paths) +
-  forwarded it as `proxyConfiguration`; regression `tests/test_wf09_avito_proxy.js` (9); `make test` ALL PASS;
-  surgical splice deploy (active + 6 credential nodes preserved); rollback
-  `scratchpad/backup/wf09_prod_20260706_041906.json`.
-- **WF09 exec 451** (after fix, residential proxy in effect — run took 2.4 min vs 1.7 min, proxy latency): actor
-  **again returned `[{}]`** — 0 usable listings, 0 rows persisted.
+**Step 1 — historical WF09 execution audit (live n8n DB, `node:sqlite`+`flatted`).** WF09 (`msloc524306e4474`)
+has **7 executions** — 357, 365, 379, 393, 407 (pre-Stage-D dev) + **447, 451** (Stage-D live). The
+`Apify Avito Classifieds Actor Request` node returned **`{ json: {} }` in every single one** — no WF09 run has
+*ever* returned a real listing in this instance. (So "the actor previously returned real listings here" is not
+borne out by the persisted record; see Step 2 for where it *did* work.)
 
-**Honest conclusion:** the configured Apify Avito actor yields **no usable public listings** for these bounded
-queries even with its documented residential proxy — a **confirmed external provider/actor limitation** (Avito
-anti-bot / actor layout-parse / no-results), NOT a pipeline code defect. The pipeline's source-quality integrity
-is **positively demonstrated**: it received an empty/placeholder provider payload and persisted **zero** bad rows
-(fail-closed, no placeholder, no fabrication). A real Avito competitor/lead harvest needs a working actor (or a
-residential-proxy-verified Apify plan, or a detail-actor step, or an alternative classifieds source) — a bounded
-follow-up, recorded honestly, **not** substituted with fixtures.
+**Step 2 — the actor IS structurally functional (proven).** Direct free Apify API inspection of the actor's run
+history found run `lf084750doGbs2z6w` (2026-06-20) whose dataset `FQgm8HLd8Zh3jdalN` holds **10 real Avito
+listings** (real `url`/`priceText`/`location`/`image`; titles were photo-count placeholders "Ещё N фото", but the
+URLs/prices are genuine). That run used the actor's **default input** (base услуги catalogue, default session
+warming) and finished in 11 s. So the actor can return real data — the recent 0-item runs are a *runtime* failure,
+not a broken actor.
+
+**Step 3 — the `[{}]` is a genuine 0-listing fetch, not a code/mapping defect (proven).** Run logs for the
+Stage-D runs (447/451) and two fresh direct diagnostic probes show the fetch layer failing:
+`Request blocked - received 403 status code` (Avito anti-bot) **and** `Proxy responded with 590 UPSTREAM504`
+(Apify residential proxy upstream failure) — `0 succeeded, N failed`, `We saved 0 listings from 0 catalogue pages`.
+Verified on our side there is **no code defect**: the request body is schema-correct for the actor
+(`startUrls` array of strings + `limit`≥10 + `proxyConfiguration`, confirmed against the actor's published input
+schema, build v0.0.20); n8n's HTTP node maps an empty-array actor response to a single `{ json:{} }` item which the
+normalizer's valid-listing guard correctly rejects (0 rows), and would split a *populated* array into per-listing
+items that `const items=$input.all().map(i=>i.json)` consumes correctly. AVITO-PROXY-001 (residential proxy) was
+the *correct* fix and moved exec 451 from instant datacenter-403 to the residential path — which then hit 590
+UPSTREAM504 (see Step 5).
+
+**Step 4 — replacement actor tested, per operator directive (fails identically).** Evaluated the Apify store for
+alternatives and probed the purpose-built **`abotapi/avito-ru-scraper`** (2 117 runs, actively maintained, native
+Avito.ru `query`/`urls`/region support). Run `h4VsxjaheondddQVD` on our exact search URL returned **0 listings**
+with an explicit self-diagnosed error item: *"No listings found for the given input"* and the log line
+**`Detected free-tier limitation — switching to backup pool. Recommend upgrading to a paid Apify plan with
+RESIDENTIAL proxy for higher reliability`** → `Could not connect after 15 tries`. A second, independent, purpose-
+built Avito.ru actor failing the same way — **for an explicitly stated proxy/plan reason** — isolates the cause to
+the account, not the actor.
+
+**Step 5 — DEFINITIVE ROOT CAUSE (proven): Apify account is FREE-tier without residential proxy entitlement.**
+`GET /v2/users/me` → `plan.id: FREE`; `plan.availableProxyGroups = { BUYPROXIES94952: 5 }` — the **only** usable
+group is a datacenter pool (quota 5). `RESIDENTIAL` is listed as a platform *feature flag* but is **not granted**
+to the free plan, so every actor that requests `apifyProxyGroups:['RESIDENTIAL']` gets **590 UPSTREAM504**, and
+datacenter requests get Avito **403**. Avito rejects datacenter/unverified IPs and *requires* residential — which
+this account does not have. **This is an operator infrastructure prerequisite (a paid Apify plan with residential
+proxy), NOT a Marketing Scout defect, and NOT fixable in workflow/generator/library code.**
+
+**Decision — no WF09 actor swap.** Switching actors gains nothing while the account lacks residential proxy (proven
+by the identical `abotapi` failure); it would be churn requiring re-proof. WF09 is left unchanged: its input is
+schema-correct, its mapping/normalizer are correct, and its source-quality gate **positively fail-closes** on the
+empty provider payload (0 placeholder rows, 0 bad URLs, 0 fabrication). When the operator provisions a paid Apify
+residential plan (or supplies residential proxy credentials / an alternative classifieds path), the *same* bounded
+WF09 run should yield real listings with no code change — a clean bounded follow-up, recorded honestly, **not**
+substituted with fixtures.
+
+**Provider accounting (this investigation):** actor runs consumed = **5** (WF09 447/451 + 3 direct diagnostic
+probes: fatihtahta search+base, abotapi url), all **0 output records**; monetary spend ≈ **$0.10** (Apify month
+cumulative **$0.329 / $5 free cap**), within the $10 Stage-D ceiling and the ≤5-run limit. Actor run IDs:
+`wX1WlThgmpRqS6POS` (447), `w90S5bo8J63HjeHvI` (451), plus 2 fatihtahta + 1 abotapi (`h4VsxjaheondddQVD`) probes.
 
 ```
-AVITO_LIVE_SAMPLE_EXECUTED=PASS                 # 2 bounded authorized runs (exec 447, 451), $ within budget
-AVITO_ACTOR_PROXY_HARDENED=PASS                 # AVITO-PROXY-001 residential proxyConfiguration deployed
-AVITO_PROVIDER_RETURNED_USABLE_LISTINGS=FALSE   # actor returned [{}] both runs (external limitation)
+AVITO_LIVE_SAMPLE_EXECUTED=PASS                 # 5 bounded authorized actor runs (447,451 + 3 probes), $ within budget
+AVITO_ROOT_CAUSE_INVESTIGATED=PASS              # historical execs + run logs + datasets + schema + account plan inspected
+AVITO_ACTOR_PROXY_HARDENED=PASS                 # AVITO-PROXY-001 residential proxyConfiguration deployed (correct fix)
+AVITO_ACTOR_STRUCTURALLY_FUNCTIONAL=TRUE        # run lf084750doGbs2z6w / dataset FQgm8HLd8Zh3jdalN = 10 real listings (2026-06-20)
+AVITO_CODE_OR_MAPPING_DEFECT=NONE               # input schema-correct; n8n array->items mapping correct; normalizer correct
+AVITO_REPLACEMENT_ACTOR_TESTED=PASS             # abotapi/avito-ru-scraper probed — fails identically (free-tier proxy)
+AVITO_ROOT_CAUSE=APIFY_FREE_PLAN_NO_RESIDENTIAL_PROXY   # plan.id=FREE; only datacenter group BUYPROXIES94952; Avito 403 dc / 590 residential
+AVITO_BLOCKER_CLASS=OPERATOR_INFRASTRUCTURE_PREREQUISITE # paid Apify residential plan required; not a code defect
+AVITO_PROVIDER_RETURNED_USABLE_LISTINGS=FALSE   # 0 listings across every 2026-07 run (all actors, all proxy attempts)
 AVITO_NEW_ROWS_PERSISTED=NOT_APPLICABLE_PROVIDER_RETURNED_NO_LISTINGS
-AVITO_SOURCE_QUALITY_GATE_FAIL_CLOSED=PASS      # empty placeholder -> valid=false -> 0 rows persisted
-AVITO_PLACEHOLDER_ROWS=0                         # 0 persisted (the empty card was rejected, not written)
-AVITO_BAD_URLS=0                                 # 0 rows
-AVITO_FINAL_DUPLICATES=0                         # 0 rows
-AVITO_EVERY_REVIEWED_LISTING_MANUALLY_CLASSIFIED=PASS   # the 1 returned item classified blocked_or_error
+AVITO_SOURCE_QUALITY_GATE_FAIL_CLOSED=PASS      # empty/error provider payload -> valid=false -> 0 rows persisted
+AVITO_PLACEHOLDER_ROWS=0
+AVITO_BAD_URLS=0
+AVITO_FINAL_DUPLICATES=0
+AVITO_EVERY_REVIEWED_LISTING_MANUALLY_CLASSIFIED=PASS   # every returned item classified provider_empty / provider_error
 AVITO_COMPETITOR_SIGNALS_GROUNDED=NOT_APPLICABLE_NO_VALID_LISTINGS
 AVITO_PUBLIC_LEAD_SIGNALS_GROUNDED=NOT_APPLICABLE_NO_VALID_LEAD_SIGNALS
 AVITO_CLAIMED_PAINS_GROUNDED=NOT_APPLICABLE_NO_VALID_LISTINGS
@@ -472,5 +512,5 @@ AVITO_OBSERVED_PAINS_GROUNDED=NOT_APPLICABLE_NO_VALID_LEAD_SIGNALS
 AVITO_MARKETING_ANGLES_GROUNDED=NOT_APPLICABLE_NO_VALID_LISTINGS
 AVITO_DOWNSTREAM_ANALYSIS=NOT_APPLICABLE_NO_VALID_LISTINGS
 AVITO_COMPETITOR_LEAD_CONTAMINATION=0
-AVITO_SOURCE_QUALITY=PASS_FAIL_CLOSED_NO_DATA   # gate integrity proven; positive competitor/lead data NOT obtained (external)
+AVITO_SOURCE_QUALITY=PASS_FAIL_CLOSED_NO_DATA   # gate integrity proven; real listings require operator paid-proxy prerequisite
 ```
