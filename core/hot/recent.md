@@ -4,6 +4,58 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-06 (session 37) — STAGE D CLOSED: Avito root-caused + VK live accepted → STAGE_D_SOURCE_QUALITY=PASS
+
+**Canonical FILE 1 stage:** **D — Validate source quality = CLOSED (PASS).** Branch `fix/stage4-live-final-acceptance`,
+HEAD **`aceb25a`**. 3 docs commits this session (`a15c80b` Avito root cause, `1b9d882` VK acceptance, `aceb25a` Stage D
+closure). NOT pushed. **$0 net (Avito ~$0.10 Apify compute on 0-record runs; VK free API $0).** No code changed this
+session (all prior fixes RELEV-WEB-001/FORCE-REPROCESS-001/TELEGRAM-CAP-001/AVITO-PROXY-001/VK-ENABLE-001/VK-PARSE-001
+already deployed+committed). Tree clean.
+
+**AVITO — deep root cause (operator rejected the prior "external limitation" hand-wave; I investigated).** Inspected
+all 7 WF09 execs via `node:sqlite` (357..451 ALL returned `{}` — no persisted success ever), then FREE Apify API
+metadata/log/dataset reads: the actor `fatihtahta~avito-russia-scraper` IS functional (run `lf084750doGbs2z6w` /
+dataset `FQgm8HLd8Zh3jdalN` = **10 real listings 2026-06-20**). Recent 0-item runs = Avito **403** (datacenter
+blocked) + **590 UPSTREAM504** (residential proxy not entitled). Verified **no WF09 code/mapping/normalizer defect**
+(input schema-correct vs actor build v0.0.20; n8n empty-array→`{}` handled/rejected; normalizer `$input.all()` correct).
+Tested replacement `abotapi/avito-ru-scraper` per operator directive → fails identically with explicit *"free-tier
+limitation — upgrade to paid RESIDENTIAL"*. **DEFINITIVE:** account `plan.id=FREE`, only datacenter group
+`BUYPROXIES94952`; Avito requires residential → **operator infrastructure prerequisite (paid Apify plan), NOT a
+Marketing Scout defect.** No actor swap (won't help on free plan). Gate fail-closes: 0 bad rows. `AVITO_SOURCE_QUALITY=
+PASS_FAIL_CLOSED_NO_DATA`. Actor run IDs: 447=`wX1WlThgmpRqS6POS`, 451=`w90S5bo8J63HjeHvI`, +3 probes (abotapi=
+`h4VsxjaheondddQVD`). Apify month cumulative **$0.329/$5**.
+
+**VK — live accepted (last, per FILE 1).** Deployed WF26 (`SMQkUppyeFH2sFuf`) confirmed carries VK-PARSE-001
+(`$('VK wall.get')`). Re-ran driver `msdrvvklv002` (req `req_vk_sd2_20260706`) — the prior session's 460/462 "crashed"
+= session-kill interruptions (no node error), NOT code bugs. **Fresh WF26 execs 464/465/466 (all success, $0 free VK
+API):** kredit874=**6**, da_credit=**25**, anna_findoctor=**25** real wall posts persisted w/ full provenance +
+canonical `vk.com/wall-<owner>_<id>` URLs. VK-PARSE-001 PROVEN (pre-fix execs 457/458/459 persisted 0 despite walls
+of 6/605/261). Manual classification: ALL wall posts competitor/market-owned (kredit874 микрозайм CTAs; da_credit
+"Кредитный доктор" expert content; anna_findoctor promo/CTA/testimonials) → **0 false leads, 0 contamination**;
+public `vk.me/...` contacts verbatim only. Relevance ~93% at collection (a few da_credit off-topic finance-news;
+WF26 is a raw collector, precision deferred downstream). **Comments live-verified via free `wall.getComments`: 4
+total across 56 posts (kredit874=0, anna=0, da_credit=4), ALL noise (👍 / Привет / 2 stickers) → 0 leads.** Promo
+communities keep comments empty → VK = competitor intel, not leads. **Did NOT build comment-collection wiring** (would
+harvest only noise, can't live-prove leads) — recorded as scoped enhancement. **Honest deferred gaps:** vk_posts has
+**no downstream reader** (not wired into WF16/WF08 → VK not in reports yet; Stage E/G); no collection-time relevance
+score; per-request snapshot semantics (source_change_events dedups incrementally — 0 new events on re-run; the
+kredit874 461+464 double-persist = same-source_run_id QA re-run artifact, prod mints fresh id per request).
+
+**STAGE D VERDICT (grounded in persisted rows, not fixtures):** Website + Telegram = source quality PASS + end-to-end
+grounded into reports (WF16→WF08→WF10→WF12, execs 433-435 / 442-445). Avito = PASS fail-closed no-data (infra
+prerequisite). VK = PASS posts + comments-empty + integration-deferred. `STAGE_D_SOURCE_QUALITY=PASS` (see closure
+table + markers in `docs/STAGE_D_SOURCE_QUALITY_ACCEPTANCE.md`). Task board #5 (D) = completed.
+
+**EXACT NEXT (operator order, all post-Stage-D):** (1) `/status` canonical single-active selector (owner+chat scoped;
+newest non-terminal; TTL-expire stale awaiting-approval; hide QA/test rows; no internal IDs) — fix+regression+deploy+
+fresh REAL Telegram proof; (2) `/cancel` same selector (idempotent, one request); (3) one-message progress lifecycle
+(persist message_id, editMessageText through stages, throttle, fallback); (4) auto report+XLSX delivery + contextual
+follow-up; (5) canonical monitored-source registry (Google Sheets, NL Telegram UX, migrate 9 sources, no PostgreSQL);
+(6) user-supplied-URL Telegram proof; (7) Stage E (existing canonical scoring contract — do NOT invent a second).
+Disposable drivers to DB-delete in a window: msdrvvklv001/002, msdrvavitolv001, msdrvtg*, msdrvweb*.
+
+---
+
 ## Session: 2026-07-05 (session 35) — FILE 1 Stage D (source quality): RELEV-WEB-001 fixed+deployed
 
 **Canonical FILE 1 stage:** **D — Validate source quality** (IN_PROGRESS). Order confirmed by operator:
