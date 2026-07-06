@@ -514,3 +514,103 @@ AVITO_DOWNSTREAM_ANALYSIS=NOT_APPLICABLE_NO_VALID_LISTINGS
 AVITO_COMPETITOR_LEAD_CONTAMINATION=0
 AVITO_SOURCE_QUALITY=PASS_FAIL_CLOSED_NO_DATA   # gate integrity proven; real listings require operator paid-proxy prerequisite
 ```
+
+## VK LIVE acceptance — 3 public communities, real wall posts collected + comment reality proven (2026-07-06)
+
+Bounded, authorized live VK collection (free VK API, `$0`) of the three approved PUBLIC communities via WF26
+(`SMQkUppyeFH2sFuf`, VK-ENABLE-001 + VK-PARSE-001 deployed), driven by disposable `msdrvvklv002`
+(request `req_vk_sd2_20260706`, `mode=collect`, `data_mode=live`, `vk_enable_approval=VK_LIVE_APPROVED`). Token
+read from `/root/.secrets/marketing-scout-vk.token` and used **only** in the query-auth header — never printed,
+never persisted. WF26 calls only `groups.getById` (public metadata) + `wall.get` (public wall). No member lists,
+no private profiles/groups/messages, no hidden contact data.
+
+**Fresh-live post executions (all `success`, VK-PARSE-001 in effect):**
+
+| community | VK exec | community_id | wall total | fetched | persisted vk_posts | intra-run dups | empty-text |
+|-----------|---------|--------------|-----------:|--------:|-------------------:|---------------:|-----------:|
+| vk.com/kredit874 | 464 | 236140557 | 6 | 6 | **6** | 0 (6/6 hashes) | 1 (_302 photo-only) |
+| vk.com/da_credit | 465 | 226298905 | 605 | 25 | **25** | 0 (25/25 hashes) | 0 |
+| vk.com/anna_findoctor | 466 | 225516714 | 263 | 25 | **25** | 0 (24/25 hashes*) | 0 |
+
+*anna_findoctor: 24 distinct content_hash / 25 rows — one testimonial CTA text ("💭Новый отзыв…") is reposted on
+two different days (posts _510 and _504); they are **distinct posts** (distinct post_id + canonical_url) correctly
+kept as two rows — NOT a duplicate (dedup key is post identity, not text).
+
+**VK-PARSE-001 proven end-to-end.** Before the fix, execs 457/458/459 fetched real walls (`wall.count`=6/605/261)
+but persisted **0** posts because the parse node read `$json` (a `source_change_events` row) instead of the wall
+response; after the fix (`$('VK wall.get')`), execs 464/465/466 persist real posts. Every persisted row carries
+full provenance (agent_request_id, source_run_id, workflow_run_id, owner_user_id, platform, source_type,
+community_id, owner_id, post_id, post_version, canonical_url, published_at, collected_at, content_hash, data_mode).
+
+**Manual full-text classification of the persisted sample (56 posts):** every wall post is **competitor-owned
+content** authored by the community itself — three genuine Moscow/МО credit-broker communities:
+- **kredit874** — микрозайм CTAs ("До 100.000₽ · Без проверок · С любой КИ · за 5 минут", "Даём деньги в день
+  обращения", public contact `vk.me/club236140557`). Role = **competitor_signal** (offer/CTA).
+- **da_credit** — "Кредитный доктор" expert/educational positioning (как проверить кредитную историю, разбор схем
+  «спишем долги», ЦБ ключевая ставка). Role = **competitor_signal + market_signal** (thought-leadership).
+- **anna_findoctor** — broker promo (🚨 pain-hook CTAs "ОТКАЗЫ ПО ВСЕМ ФРОНТАМ?", daily "✔ N ОДОБРЕНО" results,
+  testimonials, public contact `vk.me/anna_findoctor`). Role = **competitor_signal**.
+
+Because a community **wall** is authored by the community owner, **every** wall post is competitor/market content
+and **none** is a user-authored lead — **0 false leads, 0 competitor↔lead contamination** (correct by design).
+Public contacts (`vk.me/club236140557`, `vk.me/anna_findoctor`) are verbatim business links in the post text →
+allowed; no private contact data extracted.
+
+**Relevance (collection layer, honest):** ~52/56 posts are on-topic (credit / loans / credit history / broker
+services). A few da_credit posts are generic finance-news or off-topic reposts (e.g. _686 "рейтинг свободы
+интернета" is off-topic; several ЦБ key-rate items are market-adjacent). WF26 is a **raw wall collector** and does
+**not** hard-skip at collection (unlike WF11 Telegram); it persists all wall posts with `quality_status=pending`
+and defers relevance/competitor scoring to the downstream analyzer. Collection-layer relevance ≈ **93%** on this
+sample; authoritative precision is a downstream concern (see integration gap below).
+
+**VK COMMENTS — live-verified reality: near-zero public comments → 0 lead signals (evidence-backed).** Bounded live
+`wall.getComments` probes (free) across the fetched sample found **4 public comments total** on 3 da_credit posts
+(kredit874 = 0, anna_findoctor = 0), and **every one is noise**: `👍` (emoji-only), `Привет` (generic greeting),
+and 2 stickers (empty text). Per the canonical lead threshold (real service intent / real problem / real request
+for help), **0** qualify as leads — correctly rejected. These promotional broker communities keep comments
+disabled/empty, so **VK yields competitor intelligence, not public leads**, for the approved sample. This is a
+**data reality**, honestly recorded — not fabricated and not padded with fixtures.
+
+**Decision — no speculative comment-collection wiring.** The lib exposes `commentsRequest` (wall.getComments,
+disabled-by-default flag), but a full comment-collection + persistence path is intentionally **not** wired into
+WF26 now: the bounded live sample proves the approved communities have ~0 public comments, so it would harvest only
+noise and cannot be live-proven with real lead data. Wiring bounded public-comment collection + a lead-intent
+classifier is a scoped enhancement to enable when a monitored community with active public discussion is added
+(via the future source registry) — recorded, not built against zero data.
+
+**Known VK integration gaps (deferred to Stage E/G, honestly flagged — NOT Stage-D source-quality failures):**
+1. **vk_posts is not yet wired into the analysis pipeline** — `vk_posts` is written by WF26 but currently has **no
+   downstream reader** (WF16/WF08/WF10 do not consume it), so VK competitor content does not yet appear in reports.
+   Website + Telegram ARE fully wired and grounded (proven elsewhere in this doc). VK→WF16/WF08 normalization is a
+   Stage E/G integration task.
+2. **vk_posts carries no collection-time relevance score** (`quality_status=pending`; no `confidence_score`/
+   `relevance_reason`), mirroring pre-fix Website — authoritative VK scoring belongs to WF08 once wired.
+3. **cross-run snapshot semantics** — WF26 persists a full per-request wall snapshot tagged by `source_run_id`
+   (correct for request-scoped isolated analysis); the incremental dedup lives in `source_change_events` (proven:
+   the re-run emitted **0** new change events for kredit874) and the report layer dedups by canonical_url. The one
+   observed double-persist of kredit874 (execs 461 + 464 under the *same* source_run_id) is a QA re-run artifact
+   (partial-crash 461 + full 464), not a production path — production mints a fresh source_run_id per request.
+
+**Provider accounting:** VK API is free ($0). Actor/paid spend this VK cycle = $0. Communities: 3/3 resolved & real.
+
+```
+VK_LIVE_SAMPLE_EXECUTED=PASS                    # WF26 execs 464/465/466, 3 communities, $0 (free VK API)
+VK_PARSE_001_PROVEN=PASS                        # pre-fix 0 persisted -> post-fix 6/25/25 real posts persisted
+VK_TOKEN_HANDLING=PASS                          # token header-only, never printed/persisted; wall.get + groups.getById only
+VK_PUBLIC_ONLY=PASS                             # no member lists, no private groups/profiles/messages/contacts
+VK_POSTS_PERSISTED=56                           # kredit874=6, da_credit=25, anna_findoctor=25
+VK_POST_REQUIRED_FIELDS_PERCENT=100             # full provenance + identity + canonical_url + date on every row
+VK_POST_BAD_URLS=0                              # all canonical vk.com/wall-<owner>_<postid>
+VK_POST_INTRARUN_DUPLICATES=0                   # 6/6, 25/25 distinct; anna 24/25 = legit reposted-text distinct posts
+VK_POST_RELEVANCE_PERCENT=93                    # collection layer (recall-oriented); a few da_credit off-topic news posts
+VK_POST_ROLE=COMPETITOR_OR_MARKET_SIGNAL        # walls are competitor-owned by definition
+VK_FALSE_LEADS=0                                # no user-authored content on a community wall
+VK_COMPETITOR_LEAD_CONTAMINATION=0
+VK_PUBLIC_CONTACT_POLICY=PASS                   # only verbatim public vk.me business links; no private data
+VK_COMMENTS_IN_BOUNDED_SAMPLE=4                 # kredit874=0, anna=0, da_credit=4 (on 3 posts)
+VK_COMMENT_LEAD_SIGNALS=0                        # all 4 = noise (👍 / Привет / 2 stickers) -> correctly rejected
+VK_COMMENTS_AVAILABILITY=NEAR_ZERO_PROMO_COMMUNITIES_COMMENTS_EMPTY   # data reality, live-verified
+VK_COMMENT_COLLECTION_WIRED=DEFERRED_NO_DATA_TO_COLLECT   # capability in lib; enable when a community has active comments
+VK_DOWNSTREAM_INTEGRATION=DEFERRED_STAGE_E_G    # vk_posts has no WF16/WF08 reader yet (Website+Telegram ARE wired)
+VK_SOURCE_QUALITY=PASS_POSTS_COLLECTED_COMMENTS_EMPTY_INTEGRATION_DEFERRED
+```
