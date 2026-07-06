@@ -41,6 +41,16 @@ function libCore(name) {
   let s = fs.readFileSync(path.join(LIB, name + '.js'), 'utf8');
   s = s.replace(/^'use strict';\s*$/m, '').replace(/module\.exports[\s\S]*$/m, '');
   s = s.replace(/^\s*const\s*\{[^}]*\}\s*=\s*require\('\.\/[^']+'\);\s*$/gm, ''); // drop local cross-requires
+  // semantic_core loads config/taxonomy.json via fs at Node load time. n8n Code nodes cannot require('fs') or
+  // read a repo path, so inline the taxonomy JSON at generation time — this keeps classifyOffline the SINGLE
+  // canonical scoring contract inside n8n (tests/test_wf26_vk_rmr_mapping.js asserts the embedded classifier
+  // is byte-for-byte the library core and behaves identically).
+  if (/taxonomy\.json/.test(s)) {
+    const taxJson = fs.readFileSync(path.join(LIB, '..', '..', 'config', 'taxonomy.json'), 'utf8').trim();
+    s = s.replace(/^const fs = require\('fs'\);\s*$/m, '')
+         .replace(/^const path = require\('path'\);\s*$/m, '')
+         .replace(/const TAXONOMY = JSON\.parse\([\s\S]*?taxonomy\.json[\s\S]*?\);/m, 'const TAXONOMY = ' + taxJson + ';');
+  }
   return s.trim();
 }
 function embed(names, driver) {
@@ -1389,6 +1399,74 @@ return [{json:{ok:true,baseline:det.baseline,records:parsed.posts,events:fresh,n
   code('wf26-shaperecs', 'Shape VK Posts', [1000, -240], [], `
 var d=$('Parse Wall & Detect Changes').first().json;return (d.records||[]).map(function(r){return {json:r};});`),
   sheetsAppend('wf26-aprecs', 'Append vk_posts', [1220, -240], 'vk_posts'),
+  // D1 (Stage D): normalize every collected VK post into the canonical 40-column raw_market_records shape so VK
+  // flows through the SAME pipeline as Website/Telegram: WF16 quality gate -> WF08 role classifier -> WF10
+  // aggregation -> WF12 report. Relevance/scoring uses the embedded semantic_core.classifyOffline — the ONE
+  // canonical contract (no VK-specific scoring). Off-topic posts classify as irrelevant here and are excluded
+  // downstream by WF16 (report_candidate=0) / WF08 (record_type_hint='irrelevant' -> skipped_log). Every row
+  // carries confidence_score + a grounded manager_note reason. Column set mirrors WF07/WF09/WF11 exactly.
+  code('wf26-buildrmr', 'Build VK raw_market_records Rows', [1000, -380], ['semantic_core'], `
+var d=$('Parse Wall & Detect Changes').first().json;
+var recs=(d&&d.records)?d.records:[];
+var comm=(d&&d.community)?d.community:{};
+function vstr(v){return v==null?'':String(v).trim();}
+function vid(v){return vstr(v).replace(/[^A-Za-z0-9]+/g,'_');}
+function vkw(cls){var a=[];if(cls.service_primary&&cls.service_primary!=='unknown')a.push(cls.service_primary);(cls.content_topics||[]).forEach(function(t){if(t)a.push(t);});(cls.pain_tags||[]).forEach(function(t){if(t)a.push(t);});((cls.offer_terms&&cls.offer_terms.documents_not_required)||[]).forEach(function(t){if(t)a.push(t);});return Array.from(new Set(a)).join(', ');}
+var out=[];
+for(var i=0;i<recs.length;i++){
+  var p=recs[i];
+  var text=vstr(p.text);
+  var url=vstr(p.canonical_url);
+  var cls=classifyOffline({text_context:text,text:text,title:'',platform:'vk',source_type:'vk_community_wall',post_url:url,source_url:vstr(comm.canonical_url),exact_evidence_url:url,competitor_name:vstr(comm.display_name),profile_name:vstr(comm.display_name),published_at:vstr(p.published_at)});
+  var compRel=(cls.record_type==='competitor_activity');
+  var reason='VK '+(vstr(comm.display_name)||'сообщество')+' — '+cls.record_type+' (уверенность '+cls.confidence_score+'): '+(((cls.confidence_reasons||[]).slice(0,3).join('; '))||'нет явных сигналов');
+  out.push({json:{
+    record_id:'wf26_'+vid(p.source_run_id||p.agent_request_id)+'_'+vstr(p.owner_id)+'_'+vstr(p.post_id),
+    agent_request_id:vstr(p.agent_request_id),
+    source_run_id:vstr(p.source_run_id)||vstr(p.agent_request_id),
+    data_mode:vstr(p.data_mode)||'live',
+    created_at:vstr(p.collected_at),
+    source_type:'vk_community_wall',
+    platform:'vk',
+    source_url:vstr(comm.canonical_url),
+    post_url:url,
+    profile_url:vstr(comm.canonical_url),
+    profile_name:vstr(comm.display_name),
+    author_handle:vstr(comm.screen_name),
+    published_at:vstr(p.published_at),
+    region_hint:'',
+    service_hint:vstr(cls.service_primary),
+    query:'',
+    text_context:text,
+    comment_text:'',
+    contact_public:'',
+    contact_channel:'',
+    dedup_key:'vk::vk_community_wall::'+url,
+    record_type_hint:vstr(cls.record_type),
+    touchpoint_type:'',
+    lead_intent_hint:'',
+    urgency_hint:'',
+    interest_topic:vstr(cls.offer_text)||vkw(cls),
+    probable_need:'',
+    competitor_related:compRel,
+    competitor_name:compRel?(vstr(cls.competitor_name)||vstr(comm.display_name)):'',
+    semantic_keywords:vkw(cls),
+    ad_channel_hint:'vk',
+    confidence_score:Number(cls.confidence_score)||0,
+    lead_temperature:'',
+    next_action:'',
+    responsible:'',
+    dedup_status:'unique',
+    approval_status:'',
+    approved_by:'',
+    approved_at:'',
+    estimated_analysis_cost_usd:0,
+    manager_note:reason,
+    notes:'stage_d_vk_post_normalized; source_record_id='+vstr(p.source_record_id)+'; route='+vstr(cls.route)+'; hard_skip='+(cls.hard_skip===true)+'; evidence='+url
+  }});
+}
+return out;`),
+  sheetsAppend('wf26-aprmr', 'Append raw_market_records', [1220, -380], 'raw_market_records'),
   code('wf26-shapestate', 'Shape VK Post State', [1000, -100], ['vk_collector'], `
 var d=$('Parse Wall & Detect Changes').first().json;
 return (d.records||[]).map(function(r){return {json:{owner_user_id:r.owner_user_id,community_id:r.community_id,owner_id:r.owner_id,post_id:r.post_id,post_version:r.post_version,content_hash:r.content_hash,is_pinned:r.is_pinned,updated_at:r.collected_at}};});`),
@@ -1427,6 +1505,8 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),statu
   ['Read source_change_events', 'Parse Wall & Detect Changes'],
   ['Parse Wall & Detect Changes', 'Shape VK Posts'],
   ['Shape VK Posts', 'Append vk_posts'],
+  ['Parse Wall & Detect Changes', 'Build VK raw_market_records Rows'],
+  ['Build VK raw_market_records Rows', 'Append raw_market_records'],
   ['Parse Wall & Detect Changes', 'Shape VK Post State'],
   ['Shape VK Post State', 'Append vk_post_state'],
   ['Parse Wall & Detect Changes', 'VK Change?'],

@@ -25,6 +25,7 @@ const JS_SUITES = [
   ['wf26-vk-enable', 'test_wf26_vk_enable.js'],
   ['wf26-vk-parse', 'test_wf26_vk_parse.js'],
   ['wf26-generator-sync', 'test_wf26_generator_sync.js'],
+  ['wf26-vk-rmr-mapping', 'test_wf26_vk_rmr_mapping.js'],
   ['wf05-classify', 'test_wf05_classify.js'],
   ['wf09-searchcard', 'test_wf09_searchcard.js'],
   ['wf06-processed', 'test_wf06_processed.js'],
