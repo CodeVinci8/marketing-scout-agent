@@ -4,7 +4,68 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
-## Session: 2026-07-06 (session 37) — STAGE D CLOSED: Avito root-caused + VK live accepted → STAGE_D_SOURCE_QUALITY=PASS
+## Session: 2026-07-06 (session 38) — STAGE D REOPENED by operator: VK must be full competitor+lead source
+
+**Operator reopened Stage D** (session-37 PASS was premature): VK must be a full **competitor-intelligence AND
+public-lead** source, not raw-post-collection only. `STAGE_D_SOURCE_QUALITY=IN_PROGRESS`. Paid live calls
+authorized (do NOT optimize for min spend; bounded public-data-only; no fixtures for acceptance). Branch
+`fix/stage4-live-final-acceptance`, HEAD **`a1bbcda`**. Commits this session: `39c7fc6` (VK canonical sync),
+`a1bbcda` (Avito checkpoint + reopen docs). NOT pushed.
+
+**AVITO — OPERATOR CHECKPOINT (terminal for me; needs operator action).** Re-verified `GET /v2/users/me`:
+plan=`FREE`, `availableProxyGroups={BUYPROXIES94952:5}` (datacenter only), **RESIDENTIAL NOT granted**. Avito
+requires residential → operator must upgrade Apify to a paid plan w/ Residential proxy (Console→Billing→
+Subscription + Proxy→Residential; verify via `.data.plan.availableProxyGroups` listing `RESIDENTIAL`), then re-run
+existing WF09 (no code change). **NO more actor swaps.** Avito = OPTIONAL blocked source, must NOT block MVP.
+Marker reframed `AVITO_SOURCE_QUALITY=BLOCKED_OPTIONAL_OPERATOR_INFRA_PREREQUISITE` (NOT acceptance).
+
+**VK #1 DONE — canonical generator sync (`39c7fc6`).** VK-ENABLE-001 + VK-PARSE-001 were only in committed WF26
+JSON; generator was stale (a plain regen reverted them — I reproduced this). Moved both into
+`tools/gen_stage4_workflows.js` (gate trigger-merge + approval; parse reads `$('VK wall.get')`; trigger exposes
+`vk_enable_approval`). Regenerated WF26 (byte-identical VK nodes + trailing newline). New drift-proof
+`tests/test_wf26_generator_sync.js` (9) asserts generator emits both fixes == committed. **make test ALL PASS $0.**
+
+**VK REMAINING (exact plan, all live-proven, no fixtures as acceptance):**
+- **#2 VK posts → pipeline** (NOT started): build canonical VK→`raw_market_records` normalizer reusing
+  `n8n/lib/semantic_core.js` `classifyOffline(rec)` (ONE scoring contract — do NOT invent a 2nd). Map each vk_post
+  to the 40-col raw_market_records shape (same as WF11 "Build raw_market_records Rows"): confidence_score +
+  record_type_hint + service_hint + semantic_keywords + competitor_related + competitor_name + relevance reason in
+  manager_note/notes; off-topic posts → classifyOffline returns `irrelevant` → health-excluded by WF16. Add nodes
+  "Build VK raw_market_records Rows" (embed `semantic_core`) + "Append raw_market_records" in the GENERATOR, wire
+  after Shape VK Posts (`['Append vk_posts','Build VK raw_market_records Rows']`,`[…,'Append raw_market_records']`),
+  regenerate, focused test, deploy (surgical: add 2 nodes+edges), live WF26 run → then WF16→WF08→WF10→WF12 over the
+  request's raw_market_records → inspect VK competitors in a real report. raw_market_records tab: writers
+  04/07/09/11/13/14/16, readers 08/14/16 (request_scoped). classifyOffline in semantic_core exports:
+  `classifyOffline, computeConfidence, hitTerms, deriveServiceFromText, detectDirectOffer, detectMarketSignal`.
+- **#3 VK comments path** (NOT started): wire `wall.getComments` (lib has `commentsRequest`, gated
+  `vk_enable_comments`; NO parser/classifier yet) → parse → normalize → persist (new `vk_comments` tab) → dedup →
+  relevance + PUBLIC-LEAD classifier (real service need/credit problem/objection/request → exactly one lead;
+  reject emoji/sticker/greeting/praise/contest) → into pipeline. Commit `feat(wf26): collect and classify bounded
+  public VK comments`. The 3 approved communities have ~0 comments (live-verified: 4 total, all noise) → find ONE
+  additional PUBLIC VK credit community/post WITH active relevant comments for a positive-lead QA (do NOT add to
+  canonical registry). Prove: real credit-help request → 1 lead; question/objection classified; no competitor
+  contamination; no duplicate leads. ALL live.
+- **#4 final cross-source report** (NOT started): fresh stored-data WF16→WF08→WF10→WF12 over Website+Telegram+VK
+  posts+VK comments; inspect real report + XLSX; VK competitors/offers/angles grounded, claimed-vs-observed pains
+  separated, public questions/objections, leads only when threshold met, empty sections omitted, evidence URLs, no
+  internal names/IDs/enums/DEC/diagnostics. Re-verify (fresh live user-facing report, don't assume) the reporting
+  defects: phantom "Публичных лид-сигналов: 999", malformed CTA "](https://www", empty summary,
+  telegram_send=false, WF10/WF16/DEC/rows_after_filters/report-ID leakage.
+- **#5** update Stage D closure → PASS only after #2-#4 live-proven.
+
+**THEN post-Stage-D (operator order):** /status(#13) → /cancel(#14) → progress lifecycle(#12) → auto report → auto
+XLSX → contextual follow-up → monitored-source registry → user-URL Telegram proof → remove disposable drivers.
+**Do NOT start Stage E until all live-proven or operator-infra-blocked.** VK live so far: WF26 execs 464/465/466
+(6/25/25 real posts persisted); comments verified empty on the 3 communities. Apify token
+`/root/.secrets/marketing-scout-apify.token`, VK token `/root/.secrets/marketing-scout-vk.token` (header-only,
+never print). WF26 id `SMQkUppyeFH2sFuf`; driver `msdrvvklv002` (req `req_vk_sd2_20260706`).
+
+**EXACT NEXT COMMAND:** build the VK→raw_market_records normalizer (VK #2) — add `classifyOffline`-based
+"Build VK raw_market_records Rows" + "Append raw_market_records" to the generator, regenerate, test, deploy, live-run.
+
+---
+
+## Session: 2026-07-06 (session 37) — STAGE D (prematurely) CLOSED then REOPENED: Avito root-caused + VK posts live
 
 **Canonical FILE 1 stage:** **D — Validate source quality = CLOSED (PASS).** Branch `fix/stage4-live-final-acceptance`,
 HEAD **`aceb25a`**. 3 docs commits this session (`a15c80b` Avito root cause, `1b9d882` VK acceptance, `aceb25a` Stage D
