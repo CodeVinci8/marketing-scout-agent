@@ -212,3 +212,108 @@ Cost: $0 (free public preview HTTP GET; no Firecrawl/API used for this run).
   + fresh live re-run required before final Stage D PASS.
 - Holiday/greeting/meme negatives were NOT present in this bounded live window → recorded NOT_OBSERVED (a
   focused classifier regression for "С 8 марта"-class strings may be added but does NOT substitute for live proof).
+
+---
+
+## TELEGRAM-CAP-001 CLOSURE — fair per-channel persistence proven, 2026-07-06
+
+**Fix (commit `9de541a`, DEPLOYED to WF11 `mslocacac6611966`):** the agent-called path kept `pipeline_limit=10`
+and applied the global cap in channel-fetch order, starving the 3rd configured channel. `Set Connector Config`
+now derives `pipeline_limit = min(max_posts × channel_count, 90)` (TELEGRAM-CAP-001), and `Deduplicate Posts`
+was rewritten to **round-robin fair selection**: per-channel cap `min(live_max_posts_per_channel, 30)` + global
+ceiling `min(pipeline_limit, 90)`, so no earlier channel consumes the whole allowance and only unique-accepted
+rows consume capacity (invalid/hard_skip/duplicate never counted). Regression
+`tests/test_wf11_channel_fairness.js` (19: fair 3-channel share, third not starved, per-channel + total
+ceilings, noise/dupes don't consume capacity, string/numeric `max_posts` consistent). Full `make test` PASS.
+Deployed by surgical splice (active + credential bindings preserved).
+
+**Fresh live proof — WF11 exec `440`** (`success`, `mslocacac6611966`, request `req_tg_sd2_20260706`,
+`transport=http_get`, $0 free public `t.me/s` preview). All 3 configured channels fetched **10 real posts
+each** (30 total). Round-robin dedup dispositions per channel (verified from the real execution store via
+`node:sqlite`+`flatted`):
+
+| channel | fetched | hard_skipped | invalid | duplicate_in_registry | **unique accepted** |
+|---|---|---|---|---|---|
+| mfo_market | 10 | 2 | 0 | 8 | **0** (all already collected in exec 437 — correct) |
+| da_credit | 10 | 3 | 0 | 2 | **5** |
+| broker_Aleksey | 10 | 4 | 1 | 0 | **5** |
+
+**broker_Aleksey went 0 → 5 unique — starvation fixed.** Global dedup still holds (mfo's 8 already-registered
+posts correctly skipped as `duplicate_in_registry`; da_credit's 2 too). 10 duplicate-audit rows also persisted
+(`write_duplicate_audit=true`, `approval_status=duplicate`, `next_action=monitor_duplicate`) — pre-existing
+behavior, correctly marked, and must be excluded downstream (verified in the downstream trace section).
+
+### Record-level acceptance matrix — 10 new unique Telegram rows (exec 440; full-text manually inspected)
+
+Per-post canonical URL = `post_url` (`t.me/<ch>/<id>`); dedup_key = `telegram::social_channel::<post_url>`.
+All are **competitor-owned public channel posts** (author = the broker channel itself). None are user-authored,
+so **no lead_signal / observed_pain applies at this source** (`touchpoint_type=public_channel_post`,
+`lead_intent_hint=none` on every row — correct). Contacts copied only when **verbatim public** in the post.
+
+| # | channel | post_url | published | record role (WF11 hint) | conf | manual business relevance (full text) | public contact |
+|---|---|---|---|---|---|---|---|
+| U1 | da_credit | t.me/da_credit/597 | 2026-04-02 | market_signal | 55 | "Кредитный шопоголик" checklist — кредитная зависимость, микрозаймы, плохая КИ | — |
+| U2 | da_credit | t.me/da_credit/598 | 2026-04-04 | market_signal* | 55 | Микрозаймы→ПДН→отказы; pitches **рефинансирование под залог** + CTA "бесплатный разбор КИ" | — |
+| U3 | da_credit | t.me/da_credit/601 | 2026-04-09 | market_signal | 55 | Поручительство рушит КИ; blocks ипотеку/автокредит; link da.credit/poruchitelstvo | — |
+| U4 | da_credit | t.me/da_credit/602 | 2026-04-09 | market_signal | 55 | **Weakest**: СБП/ИНН/дропперы payment-regulation news (bank-adjacent, not broker-specific) | — |
+| U5 | da_credit | t.me/da_credit/603 | 2026-04-14 | **competitor_activity** | 80 | "Очистить КИ за деньги — развод"; author self-IDs "как кредитный брокер"; link da.credit/fix-history | — |
+| U6 | broker_Aleksey | t.me/broker_Aleksey/11637 | 2026-07-01 | market_signal* | 55 | Приставы ст.46 ≠ списание; долг остаётся, банки отказывают; CTA "напишите ПРИСТАВЫ" | — |
+| U7 | broker_Aleksey | t.me/broker_Aleksey/11640 | 2026-07-02 | market_signal* | 55 | "Любую КИ можно вылечить" — исправление кредитной истории + CTA "Пишите" | — |
+| U8 | broker_Aleksey | t.me/broker_Aleksey/11642 | 2026-07-03 | market_signal* | 55 | **Strong offer**: объединить 10 кредитов **под залог недвижимости**, платёж ×2–3 меньше; CTA @ipotekaprosto1 | @ipotekaprosto1 (verbatim) |
+| U9 | broker_Aleksey | t.me/broker_Aleksey/11643 | 2026-07-03 | market_signal* | 55 | **Affiliate**: программа кэшбэка за рефералов на ипотеку/кредит/рефинансирование; CTA @ipotekaprosto1 | @ipotekaprosto1 (verbatim) |
+| U10 | broker_Aleksey | t.me/broker_Aleksey/11646 | 2026-07-04 | **competitor_activity** | 80 | 15 лет опыта, платный разбор кредитных ситуаций (5–6 тыс ₽); CTA "пишите в личку" @ipotekaprosto1 | @ipotekaprosto1 (verbatim) |
+
+`*` = **coarse-hint under-classification** (see nuance 1 below): a competitor-owned post carrying a real
+offer/CTA/affiliate mechanic that WF11's collection-stage keyword lists label `market_signal`
+(competitor_related=false) instead of `competitor_activity`, because the exact OFFER/CTA/AFFIL phrasings
+("бесплатный разбор", "напишите X в комментариях", "Пишите @handle", "залог недвижимости" w/o the literal
+"кредит под залог", "программа кэшбэка") are not in the lists. This **never fabricates a competitor** (it is
+conservative under-labeling) — its materiality depends entirely on whether **WF08 re-derives** competitor
+identity + offers from full text downstream. **Verified in the downstream-trace section before any WF11 change.**
+
+**Disposition of the 20 non-accepted fetched posts — every one justified (relevance is post-text-only; channel
+title can only RAISE confidence on an already-relevant post, never create relevance):**
+- `system_event` ×1 — mfo_market/225 "Channel name was changed…" (service NOT derived from new title) ✓
+- `invalid` ×1 — broker_Aleksey/11636 "Мы потеряли хороший банк 🤔" (text<30) ✓
+- `irrelevant_false_positive` ×1 — da_credit/599 "Россия на дне рейтинга свободы интернета" (no finance evidence) ✓
+- `adjacent_real_estate_signal` ×5 — 222/600 (квартир), 592 (вакансия/dropper recruitment), 11635/11639 (застройщик), 11638/11645 (риелтор) — skipped by credit_brokerage niche default (nuance 2) ✓
+- `duplicate_in_registry` ×10 — mfo ×8 + da_credit ×2, already collected in exec 437; **0 consumed accepted capacity** ✓
+
+### TELEGRAM-CAP-001 closure markers
+
+```
+TELEGRAM_CAP_001_FIXED=PASS
+TELEGRAM_CAP_001_COMMIT=9de541a
+TELEGRAM_CAP_001_DEPLOYED=PASS                      # WF11 mslocacac6611966, active+creds preserved
+TELEGRAM_CAP_001_FRESH_LIVE_EXECUTION=440
+TELEGRAM_LIVE_SOURCE_COUNT=3
+TELEGRAM_CHANNEL_MFO_MARKET_FETCHED_GT_0=PASS       # 10
+TELEGRAM_CHANNEL_DA_CREDIT_FETCHED_GT_0=PASS        # 10
+TELEGRAM_CHANNEL_BROKER_ALEKSEY_FETCHED_GT_0=PASS   # 10
+TELEGRAM_CHANNEL_MFO_MARKET_NOT_STARVING_OTHERS=PASS  # mfo all-duplicate; da+broker got their fair 5+5
+TELEGRAM_CHANNEL_DA_CREDIT_PERSISTENCE_EVALUATED=PASS      # 5 unique
+TELEGRAM_CHANNEL_BROKER_ALEKSEY_PERSISTENCE_EVALUATED=PASS # 5 unique (0→5, starvation fixed)
+TELEGRAM_NEW_UNIQUE_ROWS_REVIEWED=10
+TELEGRAM_EVERY_NEW_UNIQUE_POST_MANUALLY_REVIEWED=PASS
+TELEGRAM_REQUIRED_FIELDS_PERCENT=100                # 0/120 core-field misses (semantic_keywords blank on 6 is derived, non-core)
+TELEGRAM_RELEVANCE_PRECISION_PERCENT=100            # 10/10 materially credit-relevant (U4 weakest, still bank/finance market news)
+TELEGRAM_SCORE_CONTRACT_VIOLATIONS=0                # 55=market(45+10) / 80=competitor(70+10) per WF11 tier
+TELEGRAM_SCORE_REASON_MISMATCHES=0                  # each relevance_reason cites a token actually present in the post
+TELEGRAM_FINAL_DUPLICATES=0                         # 10/10 distinct dedup_keys + post_urls
+TELEGRAM_BAD_URLS=0                                 # all t.me/<ch>/<id>
+TELEGRAM_PLACEHOLDER_ROWS=0
+TELEGRAM_FALSE_COMPETITORS=0                        # only genuine broker channels marked competitor_activity
+TELEGRAM_FALSE_LEADS=0                              # 0 rows marked lead; all lead_intent_hint=none (correct — no user content)
+TELEGRAM_TOTAL_LIMIT_RESPECTED=PASS                # 10 unique ≤ 90 ceiling; per-channel ≤30
+TELEGRAM_PUBLIC_CONTACT_POLICY=PASS                # @ipotekaprosto1 copied only where verbatim public; manual_review flagged
+TELEGRAM_PROVENANCE=PASS                            # record_id → source_run_id(req_tg_sd2_20260706) → post_url
+TELEGRAM_PUBLIC_SOURCE_QUALITY=PASS                # collection stage; coverage now fair across 3 channels
+```
+
+**Two nuances recorded honestly (NOT marked PASS prematurely; resolved in the next sections):**
+1. **Competitor/market coarse-hint under-classification** (U2/U6/U7/U8/U9) → verify WF08 re-derives competitor
+   identity+offers from full text (downstream-trace section). If it does, the hint is immaterial and keyword-list
+   expansion is Stage E scoring-granularity polish; if it drops them, it is a real defect fixed via the atomic cycle.
+2. **adjacent_real_estate over-skip** of ~3 credit-relevant posts (222/600/11635 mention квартира/застройщик
+   without an exact strong-service phrase) — a deliberate credit_brokerage niche recall trade-off, not a
+   precision defect. Candidate for Stage E niche-pack tuning; recorded, not silently "fixed".

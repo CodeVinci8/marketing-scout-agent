@@ -106,6 +106,28 @@ regression + deploy + fresh REAL Telegram proof via secure WF18 — needs a real
 bot is replying); (f) user-supplied-URL end-to-end Telegram proof (real non-preset URL); (g) Stage E (existing
 canonical scoring contract — do NOT invent a second). Drivers are disposable/inactive; DB-delete in a window.
 
+**UPDATE-3 (session 36, 2026-07-06) — TELEGRAM-CAP-001 CLOSED + fresh-live proven.** HEAD **`9de541a`**
+(`fix(wf11): fair per-channel Telegram persistence within approved bounds`) + `cfee86f` docs continuation +
+pending docs commit. Fix: `Set Connector Config` derives `pipeline_limit=min(max_posts×channels,90)`; `Deduplicate
+Posts` rewritten to **round-robin fair** per-channel cap `min(live_max_posts_per_channel,30)` + global
+`min(pipeline_limit,90)` (only unique-accepted rows consume capacity). Regression `test_wf11_channel_fairness.js`
+(19). **Fresh live WF11 exec `440`** (`mslocacac6611966`, req `req_tg_sd2_20260706`, http_get, $0): 3 channels
+fetched 10 each; dedup mfo {2 skip, 8 dup} / da_credit {3 skip, 2 dup, **5 unique**} / broker_Aleksey {4 skip, 1
+invalid, **5 unique**} — **broker_Aleksey 0→5, starvation fixed**; global dedup intact (mfo all-duplicate =
+already collected run-1). 10 new unique rows manually full-text inspected: precision **10/10**, 0 bad URLs, 10/10
+distinct dedup_keys, 0 placeholders, scores 55(market)/80(competitor) per tier, contacts (@ipotekaprosto1) only
+where verbatim public. Markers in `docs/STAGE_D_SOURCE_QUALITY_ACCEPTANCE.md`. **Two honest nuances (recorded,
+NOT auto-PASS):** (1) WF11 coarse hint under-labels 5 competitor-owned offer/CTA posts (U2/U6/U7/U8/U9) as
+`market_signal` — verified vs WF08 routing: WF08 `classifyDeterministic` is source-of-truth for route/entity
+(Claude enrichment only enriches fields+scores, NEVER route), competitor_activity→monitor_queue→competitor,
+market_signal+public_channel_post→FALLBACK review_queue/content_idea; BOTH competitor channels still captured as
+competitors via U5(da_credit/603)+U10(broker_Aleksey/11646) → competitor identity NOT lost; the other posts feed
+market_angles/content (defensible = marketing/positioning angles). Downstream persisted-run inspection = IN
+PROGRESS (running WF16→WF08→WF10→WF12 over req_tg_sd2). (2) adjacent_real_estate over-skips ~3 credit-relevant
+posts (222/600/11635 mention квартира/застройщик w/o exact strong-service phrase) = deliberate niche recall
+trade-off → Stage E niche tuning. **EXACT NEXT:** finish Telegram downstream persisted trace → Avito
+(`msdrvavitolv001`) → VK last (WF26 `SMQkUppyeFH2sFuf`) → close Stage D → bot defects → delivery proofs → Stage E.
+
 ---
 
 ## Session: 2026-07-05 (session 34) — Empty-report root cause fixed: ISO-ARID-001 + PENDING-MINORITY-001
