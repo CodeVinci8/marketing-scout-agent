@@ -425,3 +425,52 @@ links, and does not inflate confidence (raw 78 shown as conf 45 = the known Stag
 `CROSS_SOURCE_OBSERVED_PAINS_GROUNDED=NOT_APPLICABLE_NO_VALID_USER_AUTHORED_SIGNALS`.
 Known non-Telegram follow-ups unchanged: "Публичных лид-сигналов: 999" phantom legacy blank rows (Stage G
 persistence hygiene); `](https://www` CTA render artifact (Stage G report render).
+
+---
+
+## Avito LIVE acceptance — executed, provider returned no usable listings, 2026-07-06
+
+Two bounded, authorized live Apify runs (actor `fatihtahta~avito-russia-scraper`, 3 approved service-search
+queries "кредитный брокер Москва" / "помощь в получении кредита Москва" / "кредит под ПТС Москва",
+`data_mode=live`, token `AVITO_LIVE_APPROVED`, `max_budget_usd=1`, overall items ≤10):
+
+- **WF09 exec 447** (before fix): actor returned `[{}]` — **1 empty placeholder item, 0 usable listings**.
+  `items_received=1, items_relevant=0, items_written=0`. The source-quality gate correctly classified the empty
+  card `is_valid_listing=false` (reason `search_card_no_detail`) → **0 rows persisted** (no fabrication).
+- **Defect investigated + patched (AVITO-PROXY-001, commit `b66677b`, DEPLOYED to WF09 `msloc524306e4474`):**
+  Avito is anti-bot protected; the actor's documented schema requires a **residential proxy**, but the connector
+  sent no `proxyConfiguration`. Confirmed the request format was otherwise correct against the actor's public
+  schema (`startUrls` = plain strings + `limit`). Added residential `proxy_config` (agent + manual paths) +
+  forwarded it as `proxyConfiguration`; regression `tests/test_wf09_avito_proxy.js` (9); `make test` ALL PASS;
+  surgical splice deploy (active + 6 credential nodes preserved); rollback
+  `scratchpad/backup/wf09_prod_20260706_041906.json`.
+- **WF09 exec 451** (after fix, residential proxy in effect — run took 2.4 min vs 1.7 min, proxy latency): actor
+  **again returned `[{}]`** — 0 usable listings, 0 rows persisted.
+
+**Honest conclusion:** the configured Apify Avito actor yields **no usable public listings** for these bounded
+queries even with its documented residential proxy — a **confirmed external provider/actor limitation** (Avito
+anti-bot / actor layout-parse / no-results), NOT a pipeline code defect. The pipeline's source-quality integrity
+is **positively demonstrated**: it received an empty/placeholder provider payload and persisted **zero** bad rows
+(fail-closed, no placeholder, no fabrication). A real Avito competitor/lead harvest needs a working actor (or a
+residential-proxy-verified Apify plan, or a detail-actor step, or an alternative classifieds source) — a bounded
+follow-up, recorded honestly, **not** substituted with fixtures.
+
+```
+AVITO_LIVE_SAMPLE_EXECUTED=PASS                 # 2 bounded authorized runs (exec 447, 451), $ within budget
+AVITO_ACTOR_PROXY_HARDENED=PASS                 # AVITO-PROXY-001 residential proxyConfiguration deployed
+AVITO_PROVIDER_RETURNED_USABLE_LISTINGS=FALSE   # actor returned [{}] both runs (external limitation)
+AVITO_NEW_ROWS_PERSISTED=NOT_APPLICABLE_PROVIDER_RETURNED_NO_LISTINGS
+AVITO_SOURCE_QUALITY_GATE_FAIL_CLOSED=PASS      # empty placeholder -> valid=false -> 0 rows persisted
+AVITO_PLACEHOLDER_ROWS=0                         # 0 persisted (the empty card was rejected, not written)
+AVITO_BAD_URLS=0                                 # 0 rows
+AVITO_FINAL_DUPLICATES=0                         # 0 rows
+AVITO_EVERY_REVIEWED_LISTING_MANUALLY_CLASSIFIED=PASS   # the 1 returned item classified blocked_or_error
+AVITO_COMPETITOR_SIGNALS_GROUNDED=NOT_APPLICABLE_NO_VALID_LISTINGS
+AVITO_PUBLIC_LEAD_SIGNALS_GROUNDED=NOT_APPLICABLE_NO_VALID_LEAD_SIGNALS
+AVITO_CLAIMED_PAINS_GROUNDED=NOT_APPLICABLE_NO_VALID_LISTINGS
+AVITO_OBSERVED_PAINS_GROUNDED=NOT_APPLICABLE_NO_VALID_LEAD_SIGNALS
+AVITO_MARKETING_ANGLES_GROUNDED=NOT_APPLICABLE_NO_VALID_LISTINGS
+AVITO_DOWNSTREAM_ANALYSIS=NOT_APPLICABLE_NO_VALID_LISTINGS
+AVITO_COMPETITOR_LEAD_CONTAMINATION=0
+AVITO_SOURCE_QUALITY=PASS_FAIL_CLOSED_NO_DATA   # gate integrity proven; positive competitor/lead data NOT obtained (external)
+```
