@@ -22,6 +22,7 @@ const JS_SUITES = [
   ['wf04-force-reprocess', 'test_wf04_force_reprocess.js'],
   ['wf11-channel-fairness', 'test_wf11_channel_fairness.js'],
   ['wf09-avito-proxy', 'test_wf09_avito_proxy.js'],
+  ['wf26-vk-enable', 'test_wf26_vk_enable.js'],
   ['wf05-classify', 'test_wf05_classify.js'],
   ['wf09-searchcard', 'test_wf09_searchcard.js'],
   ['wf06-processed', 'test_wf06_processed.js'],
