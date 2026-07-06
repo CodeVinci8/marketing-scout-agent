@@ -317,3 +317,111 @@ TELEGRAM_PUBLIC_SOURCE_QUALITY=PASS                # collection stage; coverage 
 2. **adjacent_real_estate over-skip** of ~3 credit-relevant posts (222/600/11635 mention квартира/застройщик
    without an exact strong-service phrase) — a deliberate credit_brokerage niche recall trade-off, not a
    precision defect. Candidate for Stage E niche-pack tuning; recorded, not silently "fixed".
+
+---
+
+## Telegram DOWNSTREAM business-analysis trace (persisted rows, no recollection), 2026-07-06
+
+Canonical downstream ran on the **persisted** exec-440 Telegram rows (no re-collection): driver `msdrvtgds001` =
+WF16→WF08→WF10→WF12 scoped to `req_tg_sd2_20260706::telegram::a1`, `data_mode=live`, WF08 in the **production
+`llm_primary`** mode (`llm_enabled=true`, token `WF08_LLM_APPROVED`, budget $0.50). Executions **442/443/444/445**
+all `success`. Read read-only from the execution store.
+
+**WF08 exec 443 — per-record analysis (10 selected = the 10 unique; the 10 duplicate-audit rows were NEVER
+selected because `Filter & Select` takes only `dedup_status=unique`):**
+- 2 rows (U5 da_credit/603, U10 broker_Aleksey/11646, `record_type_hint=competitor_activity`) → **deterministic**
+  path → `monitor_queue` / **entity=competitor** / strength 78.
+- 8 rows (`market_signal`) → `review_queue` / entity=content_idea / lead=1 (deterministic route is authoritative;
+  Claude enriches fields+scores only — proven in `Merge LLM Enrichment` code).
+- **Claude (aiprimetech.io) reliability = 3/8 valid JSON** (2 `primary_json`, 1 `repaired_json`, **5
+  `deterministic_fallback_after_llm_fail`**). Where Claude returned JSON it was **grounded in real post text**:
+  row 7 (U8) → *"Рефинансирование и консолидация долгов под залог недвижимости: один кредит на 10 лет"*; row 8
+  (U9) → *"Реферальная программа кэшбэка…"* + grounded angle reason. Where it failed it fell back **honestly**
+  ("Claude не вернул валидный JSON", offer=`market context`) — **no fabrication**. The 5 fallback rows became
+  `quality_status=degraded` → correctly **health-excluded** downstream (fail-closed).
+
+**WF10 exec 444 — aggregation:** `rows_after_isolation=10 → rows_excluded_by_health=5 → rows_after_filters=5`
+(2 competitors + 3 Claude-OK content rows). **competitor_profiles = 2** (both channels captured):
+`Кредитный брокер💲 Банки`, `Ипотека и кредит с Алексеем Светловым`. **market_angles = 3** (grounded): "ценовой
+якорь («от N ₽»)", "ипотека / рефинансирование", "плохая КИ / просрочки".
+
+**WF12 exec 445 — stakeholder report (cross-source: Telegram + Website snapshots):**
+- "Конкурентов в поле зрения: **2**; самый заметный — Кредитный брокер💲 Банки." ✓
+- "Главный рекламный угол рынка: **ценовой якорь («от N ₽»)**." ✓ grounded
+- "Аудитория (telegram): вопросов 3, возражений 0, **покупательских сигналов 0**; боли: **просрочки / плохая КИ,
+  страх предоплаты / мошенников**." → **claimed_pain** (competitor messaging), correctly **not** observed_pain;
+  **0 buyer/lead signals** (no user-authored content) ✓
+- "Топ офферов и цен: … competitor channel ad copy" ← **thin** (see limitation A).
+
+### Telegram downstream markers
+
+```
+TELEGRAM_DOWNSTREAM_ANALYSIS_EXECUTED=PASS              # WF16/WF08/WF10/WF12 exec 442/443/444/445
+TELEGRAM_ACCEPTED_POSTS_TRACEABLE_TO_WF08=PASS          # 10 unique selected + analyzed
+TELEGRAM_REJECTED_POSTS_EXCLUDED_FROM_WF08=PASS         # dedup_status!=unique never selected (10 dup-audit + skips)
+TELEGRAM_COMPETITOR_IDENTITY_GROUNDED=PASS              # da_credit + broker_Aleksey -> competitor_profiles
+TELEGRAM_OFFER_EXTRACTION_GROUNDED=PASS                 # where produced (U8 залог refinance grounded); coverage limited by Claude reliability (Task F)
+TELEGRAM_CLAIMED_PAINS_GROUNDED=PASS                    # просрочки/плохая КИ/предоплата — from competitor messaging
+TELEGRAM_OBSERVED_PAINS_GROUNDED=NOT_APPLICABLE_NO_PUBLIC_USER_CONTENT   # Telegram public channel posts are competitor-owned
+TELEGRAM_MARKETING_ANGLES_GROUNDED=PASS                 # ценовой якорь / ипотека-рефинанс / плохая КИ
+TELEGRAM_POSITIONING_ANGLES_GROUNDED=PASS               # competitor authority/education framing captured as angles
+TELEGRAM_LEAD_TOUCHPOINTS_GROUNDED=PASS                 # @ipotekaprosto1 preserved as public contact evidence (manual_review, no outreach)
+TELEGRAM_PUBLIC_LEAD_SIGNALS_GROUNDED=NOT_APPLICABLE_NO_PUBLIC_USER_CONTENT
+TELEGRAM_SCORE_PRESERVATION=PASS                        # deterministic floors held; Claude only raised within floors
+TELEGRAM_SOURCE_LINKS_PRESERVED=PASS                    # post_url/source_url carried into queue+profiles+report
+TELEGRAM_REJECTED_POST_DOWNSTREAM_LEAKS=0
+TELEGRAM_DUPLICATE_DOWNSTREAM_LEAKS=0                   # duplicate_in_registry rows not selected by WF08
+TELEGRAM_UNGROUNDED_CLAIMED_PAINS=0
+TELEGRAM_UNGROUNDED_OBSERVED_PAINS=0
+TELEGRAM_UNGROUNDED_MARKETING_ANGLES=0                  # Claude failures fell back honestly; nothing invented
+TELEGRAM_UNGROUNDED_LEAD_SIGNALS=0
+```
+
+**Limitations recorded for their correct stages (per operator: factual defect = fix now; model refinement = Stage E; Claude robustness = Stage F):**
+- **A (Stage E — classification/enrichment):** competitor *offer detail* is thin in competitor_profiles/report
+  ("competitor channel ad copy") because (i) the WF11 coarse hint routes genuine competitor offer/CTA posts
+  (U2/U6/U7/U8/U9) to market_signal→angles rather than competitor_activity, and (ii) `competitor_activity` rows
+  skip Claude (`deterministic_needs_llm=false`, `llm_enrichment=false`) so their offer stays the deterministic
+  string. The offer *content* is NOT lost (surfaces as grounded market_angles); competitor *identity* is NOT
+  lost. This is a competitor-offer **recognition/enrichment** refinement for Stage E (use the existing canonical
+  scoring contract — do NOT invent a second), NOT a Stage-D correctness defect (no wrong/fabricated output,
+  no false competitor, no false lead, no malformed data).
+- **B (Stage F — Claude robustness):** aiprimetech.io returned valid JSON on only 3/8 calls; the pipeline
+  degrades gracefully (deterministic fallback, honest reason, degraded→health-excluded). Confirms Task F is real
+  and needed; it does not block Stage D source quality (collection is clean; downstream never fabricated).
+
+---
+
+## Website DOWNSTREAM business-analysis grounding (from WF12 exec 445 cross-source report), 2026-07-06
+
+The same cross-source report grounds the already-persisted Website snapshots (mkbkfin.ru / finardi.ru /
+lioncredit.ru) — no Website re-collection:
+- **mkbkfin.ru — МКБК finance:** "помощь в получении кредитов **под залог имущества, ипотеки, рефинансирование**" ✓
+- **finardi.ru — Финарди:** "кредиты **под залог недвижимости от 9,5%**, под залог авто, рефинанс…" · prices
+  "**Кредит под залог недвижимости от 9,5%/год**; кредит наличными…" ✓ **"от" preserved as "от"**
+- **lioncredit.ru — LionCredit:** "Ставка **от 4,99%**. Сумма **до 100 млн** рублей." · CTA "Оставить заявку" ✓
+  **"от"/"до" preserved; "до 100 млн" NOT converted to a guaranteed amount**
+
+```
+WEBSITE_DOWNSTREAM_ANALYSIS_EXECUTED=PASS               # WF12 exec 445 (cross-source)
+WEBSITE_COMPETITOR_IDENTITY_GROUNDED=PASS               # МКБК finance / Финарди / LionCredit
+WEBSITE_SERVICES_GROUNDED=PASS                          # залог недвиж/авто, ипотека, рефинанс, наличные
+WEBSITE_OFFERS_GROUNDED=PASS
+WEBSITE_PRICES_AND_CONDITIONS_GROUNDED=PASS             # от 9,5% / от 4,99% / до 100 млн preserved verbatim
+WEBSITE_CLAIMED_PAINS_GROUNDED=PASS                     # плохая КИ / после отказа (from site copy)
+WEBSITE_MARKETING_ANGLES_GROUNDED=PASS                  # ценовой якорь «от N₽»
+WEBSITE_LEAD_TOUCHPOINTS_GROUNDED=PASS                  # "Оставить заявку" CTA preserved (link render artifact = Stage G)
+WEBSITE_SOURCE_LINKS_PRESERVED=PASS                     # domains + snapshot URLs
+WEBSITE_UNGROUNDED_OFFERS=0
+WEBSITE_UNGROUNDED_PRICES=0                             # no "от" upgraded to guaranteed; no "до" upgraded
+WEBSITE_UNGROUNDED_CLAIMED_PAINS=0
+WEBSITE_FALSE_LEAD_SIGNALS=0
+```
+
+**Cross-source grounding:** the report correctly separates competitor-owned messaging (Telegram + Website →
+competitor/angles) from user-authored intent (none present → 0 observed pains / 0 leads), preserves evidence
+links, and does not inflate confidence (raw 78 shown as conf 45 = the known Stage E scoring reconciliation).
+`CROSS_SOURCE_ROLE_CONTAMINATION=0`, `CROSS_SOURCE_UNGROUNDED_INSIGHTS=0`,
+`CROSS_SOURCE_OBSERVED_PAINS_GROUNDED=NOT_APPLICABLE_NO_VALID_USER_AUTHORED_SIGNALS`.
+Known non-Telegram follow-ups unchanged: "Публичных лид-сигналов: 999" phantom legacy blank rows (Stage G
+persistence hygiene); `](https://www` CTA render artifact (Stage G report render).

@@ -122,8 +122,15 @@ NOT auto-PASS):** (1) WF11 coarse hint under-labels 5 competitor-owned offer/CTA
 (Claude enrichment only enriches fields+scores, NEVER route), competitor_activity→monitor_queue→competitor,
 market_signal+public_channel_post→FALLBACK review_queue/content_idea; BOTH competitor channels still captured as
 competitors via U5(da_credit/603)+U10(broker_Aleksey/11646) → competitor identity NOT lost; the other posts feed
-market_angles/content (defensible = marketing/positioning angles). Downstream persisted-run inspection = IN
-PROGRESS (running WF16→WF08→WF10→WF12 over req_tg_sd2). (2) adjacent_real_estate over-skips ~3 credit-relevant
+market_angles/content (defensible = marketing/positioning angles). **Downstream persisted-run PROVEN:** driver
+`msdrvtgds001` WF16→WF08→WF10→WF12 (exec 442/443/444/445, WF08 llm_primary llm_enabled=true) over persisted
+req_tg_sd2 (no recollection): 10 unique selected (10 dup-audit NOT selected — Filter takes dedup_status=unique
+only → 0 duplicate leaks), competitor_profiles=2 (BOTH channels captured), market_angles=3 grounded (ценовой
+якорь/ипотека-рефинанс/плохая КИ), claimed_pains grounded, observed_pains/leads=N/A (competitor-owned, no user
+content → 0 false leads), NO fabrication. **Claude aiprimetech.io 3/8 valid JSON** (5 deterministic_fallback →
+degraded→health-excluded, honest, no fabrication) = **Task F** confirmed (separate stage). Report also grounds
+Website snapshots (finardi от 9,5%, lioncredit от 4,99%/до 100 млн — "от"/"до" preserved). Limitation A
+(competitor offer detail thin "competitor channel ad copy") = Stage E enrichment. (2) adjacent_real_estate over-skips ~3 credit-relevant
 posts (222/600/11635 mention квартира/застройщик w/o exact strong-service phrase) = deliberate niche recall
 trade-off → Stage E niche tuning. **EXACT NEXT:** finish Telegram downstream persisted trace → Avito
 (`msdrvavitolv001`) → VK last (WF26 `SMQkUppyeFH2sFuf`) → close Stage D → bot defects → delivery proofs → Stage E.
