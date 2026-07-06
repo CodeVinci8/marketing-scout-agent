@@ -101,7 +101,19 @@ end-to-end grounded into reports. See the per-source sections above and the clos
 
 ---
 
-## STAGE D CLOSURE — 2026-07-06 (final, all four sources)
+## STAGE D CLOSURE — ⚠️ REOPENED 2026-07-06 (operator directive)
+
+> **REOPENED.** The operator ruled the closure below premature: VK must be a full **competitor-intelligence AND
+> public-lead** source, not raw-post-collection only. Stage D stays IN_PROGRESS until VK is: (1) synced in the
+> canonical generator ✅ (commit `39c7fc6` — done); (2) normalized into `raw_market_records` and wired through
+> WF16→WF08→WF10→WF12 with a canonical relevance score+reason and role classification (pending); (3) collecting +
+> classifying bounded **public comments** with a real lead-intent classifier, live-proven on the 3 communities +
+> one additional public community that actually has relevant comments for a positive-lead QA (pending); (4)
+> reflected in a fresh cross-source report (Website+Telegram+VK) with the known reporting defects re-verified
+> closed (pending). Avito = OPTIONAL, operator-infra-blocked (see checkpoint above), must not block the MVP.
+> **Current marker: `STAGE_D_SOURCE_QUALITY=IN_PROGRESS` (VK integration + comments + cross-source report pending).**
+
+## STAGE D closure DRAFT — 2026-07-06 (superseded by the REOPEN above; retained for the Website/Telegram/Avito evidence)
 
 Stage D validates **source quality**: is the collected data real, relevant, clean, correctly typed, deduplicated,
 and well-attributed? Verdict per source, grounded in **persisted rows** (never fixtures) and manual full-text review:
@@ -130,7 +142,7 @@ SOURCE_QUALITY_COMPETITOR_LEAD_CONTAMINATION=0
 SOURCE_QUALITY_PUBLIC_CONTACT_POLICY=PASS             # only verbatim public contacts; no private/member data
 SOURCE_QUALITY_PROVENANCE=PASS                        # source_record_id → source_run_id family → canonical url on every row
 SOURCE_QUALITY_BUSINESS_INSIGHTS_GROUNDED=PASS        # Website + Telegram grounded in reports; no fabrication
-STAGE_D_SOURCE_QUALITY=PASS
+STAGE_D_SOURCE_QUALITY=IN_PROGRESS                    # REOPENED — VK pipeline integration + comments + cross-source report pending
 ```
 
 **Honest scope of the PASS (no overstatement):**
@@ -562,8 +574,33 @@ AVITO_OBSERVED_PAINS_GROUNDED=NOT_APPLICABLE_NO_VALID_LEAD_SIGNALS
 AVITO_MARKETING_ANGLES_GROUNDED=NOT_APPLICABLE_NO_VALID_LISTINGS
 AVITO_DOWNSTREAM_ANALYSIS=NOT_APPLICABLE_NO_VALID_LISTINGS
 AVITO_COMPETITOR_LEAD_CONTAMINATION=0
-AVITO_SOURCE_QUALITY=PASS_FAIL_CLOSED_NO_DATA   # gate integrity proven; real listings require operator paid-proxy prerequisite
+AVITO_SOURCE_QUALITY=BLOCKED_OPTIONAL_OPERATOR_INFRA_PREREQUISITE   # NOT acceptance — gate integrity only; 0 real listings obtained
 ```
+
+### Avito — OPERATOR CHECKPOINT (residential proxy required; re-verified 2026-07-06)
+
+Fail-closed no-data is **not** Avito source acceptance — it only proves the gate rejects bad payloads. Avito
+cannot yield real listings on this account. Re-checked `GET /v2/users/me`:
+
+- **Apify plan = `FREE`**; granted proxy groups = **`{ BUYPROXIES94952: 5 }`** only (a datacenter pool).
+- **`RESIDENTIAL` is NOT granted** (it appears in the platform feature *flags* but not in
+  `plan.availableProxyGroups`), so any actor requesting `apifyProxyGroups:['RESIDENTIAL']` gets `590 UPSTREAM504`,
+  and datacenter requests get Avito **403**. Confirmed identically on two independent actors (fatihtahta, abotapi).
+
+**What the operator must do to unblock Avito (no secret in chat):**
+1. **Requirement:** an Apify plan that includes **Residential proxy** (Avito rejects datacenter/unverified IPs).
+   Apify Residential proxy is a paid add-on — available on the **Starter** plan and above (or as a proxy add-on),
+   not on Free.
+2. **Where to enable/purchase:** Apify Console → **Billing → Subscription** (upgrade to a paid plan) and/or
+   **Proxy → Residential** (enable the Residential add-on) at `https://console.apify.com/billing` and
+   `https://console.apify.com/proxy`.
+3. **How to verify RESIDENTIAL is actually granted** (no secret needed here; run with the operator's own token):
+   `curl -s -H "Authorization: Bearer <APIFY_TOKEN>" https://api.apify.com/v2/users/me | jq '.data.plan.availableProxyGroups'`
+   → must list a `RESIDENTIAL` entry (not only `BUYPROXIES94952`). When it does, re-run the **existing** bounded
+   WF09 live path (no code change) and inspect real listings.
+4. **No more actor swapping** while the account lacks residential (proven futile).
+5. **Avito is an OPTIONAL blocked source** — if the operator elects not to provision residential proxy, the MVP
+   proceeds without Avito. It must not block the rest of the MVP.
 
 ## VK LIVE acceptance — 3 public communities, real wall posts collected + comment reality proven (2026-07-06)
 
