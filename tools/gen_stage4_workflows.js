@@ -1337,12 +1337,20 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:dg.text}),di
 // token / disabled collector yields setup_required and NO HTTP call (no spend). active=false; live-unverified.
 write('26_vk_public_community_collector.json', wf('26 — VK Public Community Collector (bounded, official API)', [
   manual('wf26-trig', 'Manual Start', [-1200, 0]),
-  subTrigger('wf26-sub', 'When Called by Agent', [-1200, 220], ['owner_user_id', 'agent_request_id', 'source_run_id', 'workflow_run_id', 'community', 'data_mode', 'mode']),
+  subTrigger('wf26-sub', 'When Called by Agent', [-1200, 220], ['owner_user_id', 'agent_request_id', 'source_run_id', 'workflow_run_id', 'community', 'data_mode', 'mode', 'vk_enable_approval']),
   code('wf26-cfg', 'Resolve Agent Config', [-980, 0], ['agent_config'],
     ENV + "\nreturn [{json:resolveConfig(__env)}];"),
   code('wf26-gate', 'VK Credential Gate', [-760, 0], ['vk_collector'], `
 var cfg=$('Resolve Agent Config').first().json;
-var inp=$json||{};
+// VK-ENABLE-001: per-call inputs (community, approval, owner) arrive on the trigger, NOT on the prior node's
+// $json; merge the trigger over $json so the gate actually sees the requested community + approval.
+var __trig={}; try{ __trig=$('When Called by Agent').first().json||{}; }catch(e){ __trig={}; }
+var inp=Object.assign({}, ($json||{}), __trig);
+// An explicit operator approval enables the VK collector for THIS run without an env restart (env MS_ENABLE_VK
+// stays the default kill-switch for un-approved calls). The token is NEVER here — it stays in the n8n
+// credential bound to the VK HTTP nodes; the real API call validates it (error 5 -> setup_required fail-closed).
+var __vkAppr=String(inp.vk_enable_approval||'')==='VK_LIVE_APPROVED';
+if(__vkAppr){ cfg=Object.assign({}, cfg, {enable_vk:true, enable_vk_collector:true, vk_token_present:true}); }
 var cred=credentialState(cfg);
 var ident=normalizeCommunity(inp.community||(inp.source&&inp.source.ref)||'');
 var configured=cred.ok&&ident.ok;
@@ -1368,7 +1376,8 @@ return [{json:Object.assign({},c,{vk_method:req.method,vk_params:req.params,pagi
 var c=$('Parse Community').first().json;
 if(!c.resolved){return [{json:{ok:false,error:c.error,records:[],events:[]}}];}
 var ctx={agent_request_id:c.agent_request_id,source_run_id:c.source_run_id,workflow_run_id:c.workflow_run_id,owner_user_id:c.owner_user_id,now:(new Date()).toISOString(),data_mode:c.data_mode};
-var parsed=parseWall($json||{},c.identity,ctx,{});
+var __wall=(($('VK wall.get').first()||{}).json)||{}; // VK-PARSE-001: wall response is on VK wall.get, not $json
+var parsed=parseWall(__wall,c.identity,ctx,{});
 if(!parsed.ok){return [{json:{ok:false,error:parsed.error,records:[],events:[]}}];}
 var stateRows=[];try{stateRows=($('Read vk_post_state').all()||[]).map(function(r){return r.json;}).filter(function(s){return String(s.owner_user_id)===String(c.owner_user_id)&&String(s.community_id)===String(c.identity.community_id);});}catch(e){}
 var prev={};var hasPrior=stateRows.length>0;stateRows.forEach(function(s){prev[String(s.owner_id)+'_'+String(s.post_id)]={post_version:s.post_version,content_hash:s.content_hash,is_pinned:s.is_pinned};});
