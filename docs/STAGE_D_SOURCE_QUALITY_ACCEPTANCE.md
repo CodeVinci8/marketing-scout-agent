@@ -113,6 +113,29 @@ end-to-end grounded into reports. See the per-source sections above and the clos
 > closed (pending). Avito = OPTIONAL, operator-infra-blocked (see checkpoint above), must not block the MVP.
 > **Current marker: `STAGE_D_SOURCE_QUALITY=IN_PROGRESS` (VK integration + comments + cross-source report pending).**
 
+### D1 — VK posts → canonical pipeline: LOCAL-COMPLETE (deploy + live proof auth-gated) — 2026-07-06 (commit `48a52fb`)
+
+**Built (canonical, committed):** VK→`raw_market_records` normalizer. `semantic_core` is now embeddable
+(`libCore()` inlines `config/taxonomy.json`), so the **real `classifyOffline`** runs inside the new WF26 node
+**"Build VK raw_market_records Rows"** → **"Append raw_market_records"** — the single canonical scoring contract, no
+VK-specific scoring. Each VK post → canonical 40-col row (`record_type_hint`/`confidence_score`/`service_hint`/
+`semantic_keywords`/`competitor_related`/`competitor_name` + grounded `manager_note` reason); off-topic → `irrelevant`
+→ excluded by WF16 (`report_candidate=0`) / WF08 (`skipped_log`). VK now flows
+`WF26 → raw_market_records → WF16 → WF08 → WF10 → WF12`. `raw_market_records.writers += "26"`. Regression
+`tests/test_wf26_vk_rmr_mapping.js` (105) incl. **embedded==library drift proof**; full `make test` PASS ($0).
+
+```
+VK_D1_NORMALIZER=BUILT_LOCAL           # WF26 -> raw_market_records via canonical classifyOffline
+VK_D1_SCORING_CONTRACT=semantic_core.classifyOffline (single, embedded, drift-proof)
+VK_D1_DEPLOYED=NO                       # production splice auth-gated (docs/STAGE_D_VK_D1_DEPLOY_RUNBOOK.md)
+VK_D1_LIVE_PROVEN=NO                    # bounded live VK run + fresh report pending operator authorization
+```
+
+**Not yet done (needs operator authorization — production write + live/paid calls):** surgical splice of the 2 new
+nodes into prod WF26 (`SMQkUppyeFH2sFuf`), one bounded live VK run over the 3 communities, downstream
+WF16→WF08→WF10→WF12 over that request, and inspection proving VK competitors reach a real report with evidence URLs.
+Exact sequence: `docs/STAGE_D_VK_D1_DEPLOY_RUNBOOK.md`.
+
 ## STAGE D closure DRAFT — 2026-07-06 (superseded by the REOPEN above; retained for the Website/Telegram/Avito evidence)
 
 Stage D validates **source quality**: is the collected data real, relevant, clean, correctly typed, deduplicated,

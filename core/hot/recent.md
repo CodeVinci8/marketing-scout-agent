@@ -4,6 +4,41 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-06 (session 39) — Stage D · D1 BUILT (VK posts → canonical pipeline), local-complete, deploy auth-gated
+
+**Canonical FILE 1 stage:** **D — source quality (IN_PROGRESS).** Continuation brief re-scoped Stage D into D1 (VK
+posts → pipeline), D2 (VK comments → lead signals), D3 (fresh cross-source report + reporting-defect repair). This
+session did **D1 local implementation only** and STOPPED at the authorization boundary (no production write, no
+live/paid call this session — the brief instructs: if no active prod/live auth, finish local + prepare exact deploy
+commands + stop; do not misrepresent deployment-ready as live-proven). Branch `fix/stage4-live-final-acceptance`,
+HEAD **`48a52fb`**. 1 commit this session (`48a52fb`). NOT pushed. **$0, 0 external calls.**
+
+**D1 BUILT (canonical, committed `48a52fb`):** VK→`raw_market_records` normalizer. Key move: made
+`n8n/lib/semantic_core.js` **embeddable** — `libCore()` in the generator now inlines `config/taxonomy.json` and
+strips the `fs`/`path`/`readFileSync` load, so the REAL `classifyOffline` runs inside the WF26 Code node = the
+SINGLE canonical scoring contract (no VK-specific scoring, no 2nd contract). New WF26 nodes **"Build VK
+raw_market_records Rows"** (embeds `semantic_core`) + **"Append raw_market_records"**, wired `Parse Wall & Detect
+Changes → Build → Append`. Each VK post → canonical 40-col row with `record_type_hint` + `confidence_score` +
+`service_hint` + `semantic_keywords` + `competitor_related`/`competitor_name` + grounded `manager_note` reason;
+off-topic → `irrelevant` (WF16 `report_candidate=0` / WF08 → `skipped_log`). VK now flows
+WF26→raw_market_records→WF16→WF08→WF10→WF12 like Website/Telegram. WF26 regenerated 24→26 nodes (only WF26 changed;
+generator was already source-of-truth). `config/sheets_contracts.json` `raw_market_records.writers += "26"` (drift
+validator green). New `tests/test_wf26_vk_rmr_mapping.js` (105): topology; 42 collector columns ⊆ real 68-col
+contract (derived from WF11, no parallel fields); **embedded classifier == library (drift-proof)**; VK semantics
+(promo→competitor, market→market_signal, greeting→NOT-competitor). **Full `make test` ALL SUITES PASS ($0).**
+
+**NOT done (auth-gated):** production splice of the 2 new WF26 nodes into prod WF26 (`SMQkUppyeFH2sFuf`) + bounded
+live VK run (3 communities, `vk_enable_approval=VK_LIVE_APPROVED`) + downstream WF16→WF08→WF10→WF12 over the VK
+request + inspect real report. Exact sequence: **`docs/STAGE_D_VK_D1_DEPLOY_RUNBOOK.md`** (backup → surgical splice
+binding googleApi cred on Append raw_market_records → live run with unique `req_vk_d1_*` → downstream → verify VK
+competitors in a real report). D1 is complete only when fresh evidence shows VK competitors in a WF12 report.
+
+**EXACT NEXT COMMAND (needs operator auth):** deploy per the D1 runbook → bounded live VK run → downstream → inspect;
+then D2 (VK comments path). Apify/VK tokens `/root/.secrets/*.token` (header-only, never print). Avito unchanged =
+`AVITO_SOURCE_QUALITY=BLOCKED_OPTIONAL_OPERATOR_INFRA_PREREQUISITE` (residential proxy on a paid Apify plan).
+
+---
+
 ## Session: 2026-07-06 (session 38) — STAGE D REOPENED by operator: VK must be full competitor+lead source
 
 **Operator reopened Stage D** (session-37 PASS was premature): VK must be a full **competitor-intelligence AND
