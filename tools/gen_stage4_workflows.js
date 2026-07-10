@@ -1347,7 +1347,7 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:dg.text}),di
 // token / disabled collector yields setup_required and NO HTTP call (no spend). active=false; live-unverified.
 write('26_vk_public_community_collector.json', wf('26 — VK Public Community Collector (bounded, official API)', [
   manual('wf26-trig', 'Manual Start', [-1200, 0]),
-  subTrigger('wf26-sub', 'When Called by Agent', [-1200, 220], ['owner_user_id', 'agent_request_id', 'source_run_id', 'workflow_run_id', 'community', 'data_mode', 'mode', 'vk_enable_approval']),
+  subTrigger('wf26-sub', 'When Called by Agent', [-1200, 220], ['owner_user_id', 'agent_request_id', 'source_run_id', 'workflow_run_id', 'community', 'data_mode', 'mode', 'vk_enable_approval', 'vk_comments_approval']),
   code('wf26-cfg', 'Resolve Agent Config', [-980, 0], ['agent_config'],
     ENV + "\nreturn [{json:resolveConfig(__env)}];"),
   code('wf26-gate', 'VK Credential Gate', [-760, 0], ['vk_collector'], `
@@ -1361,6 +1361,10 @@ var inp=Object.assign({}, ($json||{}), __trig);
 // credential bound to the VK HTTP nodes; the real API call validates it (error 5 -> setup_required fail-closed).
 var __vkAppr=String(inp.vk_enable_approval||'')==='VK_LIVE_APPROVED';
 if(__vkAppr){ cfg=Object.assign({}, cfg, {enable_vk:true, enable_vk_collector:true, vk_token_present:true}); }
+// VK-COMMENTS-001 (Stage D · D2): bounded public comment collection is a SEPARATE per-call approval — the wall
+// (posts) path stays unchanged, and comments stay disabled unless this explicit token is present.
+var __cmAppr=String(inp.vk_comments_approval||'')==='VK_COMMENTS_APPROVED';
+if(__cmAppr){ cfg=Object.assign({}, cfg, {vk_enable_comments:true}); }
 var cred=credentialState(cfg);
 var ident=normalizeCommunity(inp.community||(inp.source&&inp.source.ref)||'');
 var configured=cred.ok&&ident.ok;
@@ -1467,6 +1471,71 @@ for(var i=0;i<recs.length;i++){
 }
 return out;`),
   sheetsAppend('wf26-aprmr', 'Append raw_market_records', [1220, -380], 'raw_market_records'),
+  // D2 (Stage D): bounded PUBLIC comment collection -> canonical raw_market_records (touchpoint_type=public_comment,
+  // source_type=public_discussion) so WF14 triages them into public_lead_signals. Gated behind vk_comments_approval
+  // (separate from the wall/posts approval); INERT with 0 API calls unless approved. Scoring = the single canonical
+  // classifyOffline audience branch. Community-owned comments (from_id<0 or == owner) can NEVER be a lead; obvious
+  // noise (stickers/emoji/greeting/praise/contest/too-short) is rejected deterministically (audit kept in the parse
+  // node output). Public data only: comment id, parent post, public numeric author id, text, date — no author PII.
+  code('wf26-cmreq', 'Build VK Comment Requests', [1000, 340], ['vk_collector'], `
+var g=$('VK Credential Gate').first().json;var cfg=(g&&g.cfg)||{};
+var c=collectorConfig(cfg);
+if(!c.comments_enabled){return [];} // gated: no vk_comments_approval -> zero wall.getComments calls
+var d=$('Parse Wall & Detect Changes').first().json;
+var posts=(d&&d.records)?d.records:[];
+var ident=(d&&d.community)||g.identity||{};
+var ctx={agent_request_id:g.agent_request_id,source_run_id:g.source_run_id,workflow_run_id:g.workflow_run_id,owner_user_id:g.owner_user_id,now:(new Date()).toISOString(),data_mode:g.data_mode};
+var out=[];var cap=Math.min(posts.length,c.max_comment_posts);
+for(var i=0;i<cap;i++){var p=posts[i];var req=commentsRequest(ident,{post_id:p.post_id},cfg);if(!req)continue;
+  out.push({json:{vk_method:req.method,vk_params:req.params,_post:{post_id:p.post_id,owner_id:p.owner_id},_community:ident,_ctx:ctx}});}
+return out;`),
+  httpVk('wf26-cmhttp', 'VK wall.getComments', [1220, 340]),
+  code('wf26-cmparse', 'Parse & Classify VK Comments', [1440, 340], ['semantic_core', 'vk_collector'], `
+var reqs=[];try{reqs=$('Build VK Comment Requests').all().map(function(i){return i.json;});}catch(e){reqs=[];}
+var resps=$input.all().map(function(i){return i.json;});
+var out=[];
+for(var i=0;i<resps.length;i++){
+  var req=reqs[i]||{};var ident=req._community||{};var ctx=req._ctx||{};var post=req._post||{};
+  var parsed=parseComments(resps[i]||{},post,ident,ctx);
+  if(!parsed.ok){out.push({json:{_kind:'error',post_id:post.post_id,noise_reason:'',relevance_reason:((parsed.error&&parsed.error.kind)||'parse_error')}});continue;}
+  for(var j=0;j<parsed.comments.length;j++){
+    var cm=parsed.comments[j];var rec=buildCommentRecord(cm,ident,ctx);var noise=commentNoiseClass(cm.text);
+    var verdict,rt='',conf=1,reason='';
+    if(noise.noise){verdict='rejected_noise';reason='noise: '+noise.reason;}
+    else if(rec.owner_authored){verdict='competitor_owned';rt='competitor_activity';conf=60;reason='community-authored (from_id='+cm.from_id+') — competitor/content context, never a lead';}
+    else{var cls=classifyOffline({text_context:cm.text,text:cm.text,source_type:'public_discussion',touchpoint_type:'public_comment',post_url:rec.canonical_url,source_url:rec.community_url,exact_evidence_url:rec.canonical_url,competitor_name:''});
+      rt=cls.record_type;conf=Number(cls.confidence_score)||1;reason=(cls.confidence_reasons||[]).slice(0,3).join('; ')||'audience comment';verdict='accepted';}
+    out.push({json:Object.assign({},rec,{_kind:verdict,record_type_hint:rt,confidence_score:conf,relevance_reason:reason,noise_reason:noise.reason})});
+  }
+}
+return out;`),
+  code('wf26-cmshape', 'Shape VK Comment Rows', [1660, 340], [], `
+var items=$input.all().map(function(i){return i.json;});
+function s(v){return v==null?'':String(v).trim();}
+function safe(v){v=s(v);return /^[+=]/.test(v)?("'"+v):v;}
+function contact(t){t=s(t);var ph=t.match(/(?:\\+7|8)[\\s\\-(]*\\d{3}[\\s\\-)]*\\d{3}[\\s\\-]*\\d{2}[\\s\\-]*\\d{2}/);if(ph)return {v:ph[0],ch:'phone'};var h=t.match(/@[a-zA-Z0-9_]{5,32}/);if(h)return {v:h[0],ch:'telegram'};return {v:'',ch:''};}
+var out=[];
+for(var i=0;i<items.length;i++){var r=items[i];
+  if(r._kind!=='accepted'&&r._kind!=='competitor_owned')continue; // noise/error not persisted (audit stays in parse node)
+  var compRel=(r.record_type_hint==='competitor_activity');
+  var ct=(r._kind==='accepted')?contact(r.text):{v:'',ch:''};
+  out.push({json:{
+    record_id:'wf26c_'+s(r.owner_id)+'_'+s(r.post_id)+'_'+s(r.comment_id),
+    agent_request_id:s(r.agent_request_id),source_run_id:s(r.source_run_id)||s(r.agent_request_id),data_mode:s(r.data_mode)||'live',
+    created_at:s(r.collected_at),source_type:'public_discussion',platform:'vk',
+    source_url:s(r.community_url),post_url:s(r.canonical_url),profile_url:'',profile_name:s(r.community_name),author_handle:'',
+    published_at:s(r.published_at),region_hint:'',service_hint:'',query:'',
+    text_context:s(r.text),comment_text:s(r.text),contact_public:safe(ct.v),contact_channel:ct.ch,
+    dedup_key:s(r.dedup_key),record_type_hint:s(r.record_type_hint),touchpoint_type:'public_comment',
+    lead_intent_hint:'',urgency_hint:'',interest_topic:'audience comment',probable_need:'',
+    competitor_related:compRel,competitor_name:compRel?s(r.community_name):'',semantic_keywords:'',ad_channel_hint:'vk',
+    confidence_score:Number(r.confidence_score)||1,lead_temperature:'',next_action:'',responsible:'',
+    dedup_status:'unique',approval_status:'new',approved_by:'',approved_at:'',estimated_analysis_cost_usd:0,
+    manager_note:'VK комментарий ('+s(r._kind)+'): '+s(r.relevance_reason),
+    notes:'stage_d_vk_comment; from_id='+s(r.from_id)+'; parent_post='+s(r.post_id)+'; comment_id='+s(r.comment_id)+'; owner_authored='+(r.owner_authored===true)+'; evidence='+s(r.canonical_url)
+  }});}
+return out;`),
+  sheetsAppend('wf26-cmappend', 'Append VK Comment Records', [1880, 340], 'raw_market_records'),
   code('wf26-shapestate', 'Shape VK Post State', [1000, -100], ['vk_collector'], `
 var d=$('Parse Wall & Detect Changes').first().json;
 return (d.records||[]).map(function(r){return {json:{owner_user_id:r.owner_user_id,community_id:r.community_id,owner_id:r.owner_id,post_id:r.post_id,post_version:r.post_version,content_hash:r.content_hash,is_pinned:r.is_pinned,updated_at:r.collected_at}};});`),
@@ -1507,6 +1576,11 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),statu
   ['Shape VK Posts', 'Append vk_posts'],
   ['Parse Wall & Detect Changes', 'Build VK raw_market_records Rows'],
   ['Build VK raw_market_records Rows', 'Append raw_market_records'],
+  ['Parse Wall & Detect Changes', 'Build VK Comment Requests'],
+  ['Build VK Comment Requests', 'VK wall.getComments'],
+  ['VK wall.getComments', 'Parse & Classify VK Comments'],
+  ['Parse & Classify VK Comments', 'Shape VK Comment Rows'],
+  ['Shape VK Comment Rows', 'Append VK Comment Records'],
   ['Parse Wall & Detect Changes', 'Shape VK Post State'],
   ['Shape VK Post State', 'Append vk_post_state'],
   ['Parse Wall & Detect Changes', 'VK Change?'],

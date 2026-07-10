@@ -83,7 +83,8 @@ function collectorConfig(cfg) {
     page_size: Math.min(100, num(cfg.vk_page_size) || 50),
     lookback_days: num(cfg.vk_lookback_days) || 30,
     comments_enabled: cfg.vk_enable_comments === true,
-    max_comments_per_post: num(cfg.vk_max_comments_per_post) || 10
+    max_comments_per_post: num(cfg.vk_max_comments_per_post) || 10,
+    max_comment_posts: num(cfg.vk_max_comment_posts) || 8   // D2: bound how many posts we pull comments for per run
   };
 }
 
@@ -252,6 +253,98 @@ function shouldNotify(existingEvents, ev) {
   return prior.length ? { notify: false, reason: 'already_notified' } : { notify: true, reason: '' };
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// D2 — bounded PUBLIC comment collection (Section 6 comments path). Public data only: comment id, parent post,
+// public numeric author id (from_id), text, date. We NEVER resolve author profiles/names (avoids extra calls +
+// non-public PII); author identity stays the public from_id. All functions are PURE (no token, no HTTP). Scoring
+// is NOT done here — the WF26 node calls semantic_core.classifyOffline (the single scoring contract). These helpers
+// only parse, gate obvious noise deterministically, separate community-owned content, and stamp lineage.
+
+// Deterministic noise gate. Rejects stickers/emoji-only/greeting/praise-without-need/contest/too-short comments so
+// only substantive comments reach classifyOffline + WF14. Returns {noise, reason}. Conservative: a comment showing
+// ANY credit/loan/question demand marker is NEVER rejected as noise.
+function commentNoiseClass(text) {
+  const t = str(text);
+  if (!t) return { noise: true, reason: 'empty' };
+  const letters = t.replace(/[^0-9A-Za-zА-Яа-яЁё]/g, '');
+  if (letters.length === 0) return { noise: true, reason: 'emoji_or_sticker_only' };
+  const l = low(t);
+  if (/^\[?(sticker|стикер)\]?/.test(l)) return { noise: true, reason: 'sticker' };
+  // a real demand/question signal overrides every noise rule below
+  const demandish = /(кредит|займ|ипотек|рефинанс|залог|птс|брокер|отказ|просрочк|долг|банк|деньг|ставк|помог|подскаж|посоветуй|как\s|почему|сколько|можно ли|нужн|ищу|\?)/.test(l);
+  if (demandish) return { noise: false, reason: '' };
+  if (/(конкурс|розыгрыш|giveaway|участву)/.test(l) && letters.length < 80) return { noise: true, reason: 'contest' };
+  if (/^(привет|здравствуй|здравствуйте|добрый|доброе|доброй|хай|ку|доброго)\b/.test(l) && letters.length < 40) return { noise: true, reason: 'greeting' };
+  if (/(спасибо|благодар|класс|супер|отличн|молодц|полезн|топ|огонь|респект|круто|ясно|понятно|согласен|верно|👍|❤)/.test(l) && letters.length < 60) return { noise: true, reason: 'praise_without_need' };
+  if (letters.length < 12) return { noise: true, reason: 'too_short' };
+  return { noise: false, reason: '' };
+}
+
+// Community-owned separation: a comment authored by the community itself (negative VK id = a group/community, or an
+// exact match on the resolved community owner) can NEVER be a public consumer lead. Wall posts are never leads.
+function commentIsOwnerAuthored(fromId, identity) {
+  const f = num(fromId);
+  if (f == null) return false;
+  if (f < 0) return true;                       // any group/community author
+  identity = identity || {};
+  const oid = num(identity.owner_id), cid = num(identity.community_id);
+  if (oid != null && f === oid) return true;
+  if (cid != null && f === -Math.abs(cid)) return true;
+  return false;
+}
+
+// Parse a wall.getComments response (VK's HTTP-200-with-error-body convention respected). Public fields only.
+function parseComments(resp, post, identity, ctx) {
+  resp = resp || {}; post = post || {}; identity = identity || {}; ctx = ctx || {};
+  const err = mapError(resp);
+  if (err) return { ok: false, error: err, comments: [], total: 0, returned: 0 };
+  const r = resp.response || resp;
+  const items = arr(r.items);
+  const ownerId = num(post.owner_id) != null ? num(post.owner_id) : num(identity.owner_id);
+  const postId = num(post.post_id) != null ? num(post.post_id) : num(post.id);
+  const comments = [];
+  let skipped_deleted = 0;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i] || {};
+    const cid = num(it.id);
+    if (cid == null) continue;
+    if (it.deleted === true || str(it.deleted)) { skipped_deleted++; continue; }
+    const dateTs = num(it.date) || 0;
+    comments.push({
+      comment_id: cid, from_id: num(it.from_id), post_id: postId, owner_id: ownerId,
+      community_id: identity.community_id != null ? identity.community_id : (ownerId != null ? Math.abs(ownerId) : null),
+      text: str(it.text), date: dateTs,
+      published_at: dateTs ? new Date(dateTs * 1000).toISOString() : '',
+      canonical_url: 'https://vk.com/wall' + ownerId + '_' + postId + '?reply=' + cid,
+      reply_to_user: num(it.reply_to_user), reply_to_comment: num(it.reply_to_comment)
+    });
+  }
+  return { ok: true, comments: comments, total: num(r.count) || items.length, returned: items.length, skipped_deleted: skipped_deleted };
+}
+
+// Stamp full lineage onto a parsed comment (mechanical; no scoring). owner_authored is surfaced so the WF26 node
+// routes community-owned comments to competitor context, never to the lead pool. Canonical reply URL + dedup key.
+function buildCommentRecord(comment, identity, ctx) {
+  comment = comment || {}; identity = identity || {}; ctx = ctx || {};
+  const ownerId = comment.owner_id, postId = comment.post_id, cid = comment.comment_id;
+  const url = str(comment.canonical_url) || ('https://vk.com/wall' + ownerId + '_' + postId + '?reply=' + cid);
+  return {
+    agent_request_id: str(ctx.agent_request_id), source_run_id: str(ctx.source_run_id), workflow_run_id: str(ctx.workflow_run_id),
+    owner_user_id: str(ctx.owner_user_id),
+    source_record_id: 'vkc_' + str(ownerId) + '_' + str(postId) + '_' + str(cid),
+    platform: PLATFORM, source_type: 'public_discussion', touchpoint_type: 'public_comment',
+    community_id: comment.community_id, owner_id: ownerId, post_id: postId, comment_id: cid, from_id: comment.from_id,
+    owner_authored: commentIsOwnerAuthored(comment.from_id, identity),
+    canonical_url: url, post_url: url,
+    community_url: str(identity.canonical_url) || ('https://vk.com/' + (str(identity.screen_name) || ('club' + Math.abs(num(ownerId) || 0)))),
+    community_name: str(identity.display_name),
+    published_at: str(comment.published_at), collected_at: str(ctx.now) || new Date().toISOString(),
+    text: str(comment.text), evidence_excerpt: str(comment.text).slice(0, 280),
+    dedup_key: 'vk::comment::' + str(ownerId) + '_' + str(postId) + '_' + str(cid),
+    content_hash: hash(str(comment.text)), data_mode: str(ctx.data_mode) || 'live'
+  };
+}
+
 // failed collection: keep the last valid cursor/baseline + bounded backoff; setup_required is skipped (no spend).
 function onCollectionFailure(source, err, cfg) {
   const base = num((source || {}).error_count) || 0;
@@ -267,5 +360,6 @@ module.exports = {
   PLATFORM, SOURCE_TYPE, DEFAULT_API_VERSION, SUPPORTED_API_VERSIONS, resolveApiVersion, collectorConfig,
   normalizeCommunity, communityKey, credentialState, resolveRequest, wallRequest, commentsRequest,
   mapError, parseResolution, parseWall, buildRecord, recordIdentity, recordVersion, paginationPlan,
-  detectChanges, changeEvent, shouldNotify, onCollectionFailure, hash
+  detectChanges, changeEvent, shouldNotify, onCollectionFailure, hash,
+  commentNoiseClass, commentIsOwnerAuthored, parseComments, buildCommentRecord
 };

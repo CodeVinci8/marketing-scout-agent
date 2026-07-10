@@ -44,7 +44,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// WF14 v0.3 — Lead Scout Triage & Scoring config (Stage 3.5, DEC-138). Deterministic, $0, NO Claude, NO external calls.\n// Central lead engine: reads raw_market_records audience rows (PRIMARY) + review_queue (enrichment), scores public\n// lead signals, extracts ONLY public contact evidence, routes everything to MANUAL review. Quota-safe (DEC-131):\n// each tab read exactly once, bounded candidate pool, capped batched append. Public evidence only; a public\n// profile/contact is EVIDENCE, never outreach permission; outreach_allowed=false ALWAYS (CONTACT_AND_OUTREACH_POLICY).\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst stamp=moscowStamp();\nreturn [{ json: {\n  // ---- schema / scope (quota safety; DEC-131)\n  schema_version:'public_lead_signals_v0.3',\n  time_window_days:30,\n  max_source_rows:120,            // working candidate pool cap (applied AFTER score/sort/filter)\n  max_signals_to_write:25,        // HARD ceiling on appended rows\n  platform_filter:'',             // '' = any; operator may set 'vk'\n  source_type_filter:'',          // '' = any\n  only_untriaged:true,\n  include_review_queue:true,      // clean-isolation: set false so old review_queue rows can't contaminate a WF13-run acceptance test\n  source_agent_request_id:'',     // '' = all sources; set to a WF13 run's agent_request_id to triage ONLY that source run (Defect G)\n  backfill_untriaged:true,        // allow older untriaged high-score rows when the fresh window is thin\n  // ---- scoring engine (deterministic; weights sum to 100 before penalties)\n  min_lead_score:25,              // below this -> not written (ignore band kept out of the sheet by default)\n  band_high:75,                   // >=75 high priority manual review\n  band_medium:50,                 // 50-74 medium\n  band_low:25,                    // 25-49 low (monitor / content idea)\n  score_weights:{ intent:25, urgency:15, pain:20, niche:15, contact:8, region:7, freshness:10 },\n  // ---- contact / outreach policy (CONTACT_AND_OUTREACH_POLICY: evidence, NOT permission)\n  contact_use_policy_default:'aggregate_only',\n  contact_use_policy_with_public_contact:'manual_review',\n  contact_use_policy_weak_evidence:'do_not_use',\n  outreach_allowed:false,         // ALWAYS false in Stage 3.5 — no auto-outreach, ever\n  allowed_recommended_actions:['manual_review','content_idea','monitor','ignore'],\n  forbidden_recommended_actions:['outreach','contact','dm','message','call','email','send'],\n  region_default:'Москва/МО',\n  requested_by:'operator',\n  // ---- deterministic ids + MSK stamps\n  run_stamp:stamp,\n  run_id:'wf14_'+stamp,\n  agent_request_id:'wf14_req_'+stamp,\n  created_at:moscowIsoNow()\n}}];\n"
+        "jsCode": "// WF14 v0.3 — Lead Scout Triage & Scoring config (Stage 3.5, DEC-138). Deterministic, $0, NO Claude, NO external calls.\n// Central lead engine: reads raw_market_records audience rows (PRIMARY) + review_queue (enrichment), scores public\n// lead signals, extracts ONLY public contact evidence, routes everything to MANUAL review. Quota-safe (DEC-131):\n// each tab read exactly once, bounded candidate pool, capped batched append. Public evidence only; a public\n// profile/contact is EVIDENCE, never outreach permission; outreach_allowed=false ALWAYS (CONTACT_AND_OUTREACH_POLICY).\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst stamp=moscowStamp();\nvar __cfg = {\n  // ---- schema / scope (quota safety; DEC-131)\n  schema_version:'public_lead_signals_v0.3',\n  time_window_days:30,\n  max_source_rows:120,            // working candidate pool cap (applied AFTER score/sort/filter)\n  max_signals_to_write:25,        // HARD ceiling on appended rows\n  platform_filter:'',             // '' = any; operator may set 'vk'\n  source_type_filter:'',          // '' = any\n  only_untriaged:true,\n  include_review_queue:true,      // clean-isolation: set false so old review_queue rows can't contaminate a WF13-run acceptance test\n  source_agent_request_id:'',     // '' = all sources; set to a WF13 run's agent_request_id to triage ONLY that source run (Defect G)\n  backfill_untriaged:true,        // allow older untriaged high-score rows when the fresh window is thin\n  // ---- scoring engine (deterministic; weights sum to 100 before penalties)\n  min_lead_score:25,              // below this -> not written (ignore band kept out of the sheet by default)\n  band_high:75,                   // >=75 high priority manual review\n  band_medium:50,                 // 50-74 medium\n  band_low:25,                    // 25-49 low (monitor / content idea)\n  score_weights:{ intent:25, urgency:15, pain:20, niche:15, contact:8, region:7, freshness:10 },\n  // ---- contact / outreach policy (CONTACT_AND_OUTREACH_POLICY: evidence, NOT permission)\n  contact_use_policy_default:'aggregate_only',\n  contact_use_policy_with_public_contact:'manual_review',\n  contact_use_policy_weak_evidence:'do_not_use',\n  outreach_allowed:false,         // ALWAYS false in Stage 3.5 — no auto-outreach, ever\n  allowed_recommended_actions:['manual_review','content_idea','monitor','ignore'],\n  forbidden_recommended_actions:['outreach','contact','dm','message','call','email','send'],\n  region_default:'Москва/МО',\n  requested_by:'operator',\n  // ---- deterministic ids + MSK stamps\n  run_stamp:stamp,\n  run_id:'wf14_'+stamp,\n  agent_request_id:'wf14_req_'+stamp,\n  created_at:moscowIsoNow()\n};\n// D2 (VK-COMMENTS-001): request-scoping via the callable trigger. Manual runs (empty inputs) keep every default.\nvar __in={}; try{ __in=$('When Called by Agent').first().json||{}; }catch(e){ __in=(typeof $json!=='undefined'&&$json&&typeof $json==='object')?$json:{}; }\nfunction __num(v){var n=Number(v);return isNaN(n)?null:n;}\nfunction __bool(v){if(v===true||v===false)return v;var s=String(v==null?'':v).toLowerCase();if(s==='true')return true;if(s==='false')return false;return null;}\nif(String(__in.source_agent_request_id||'')!=='')__cfg.source_agent_request_id=String(__in.source_agent_request_id);\nif(String(__in.agent_request_id||'')!=='')__cfg.agent_request_id=String(__in.agent_request_id);\nif(String(__in.platform_filter||'')!=='')__cfg.platform_filter=String(__in.platform_filter);\nif(String(__in.source_type_filter||'')!=='')__cfg.source_type_filter=String(__in.source_type_filter);\nif(__num(__in.min_lead_score)!=null)__cfg.min_lead_score=__num(__in.min_lead_score);\nif(__bool(__in.include_review_queue)!=null)__cfg.include_review_queue=__bool(__in.include_review_queue);\nreturn [{ json: __cfg }];\n"
       },
       "id": "wf14-config",
       "name": "Set Triage Config",
@@ -306,6 +306,51 @@
         2000,
         560
       ]
+    },
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "source_agent_request_id",
+              "type": "string"
+            },
+            {
+              "name": "agent_request_id",
+              "type": "string"
+            },
+            {
+              "name": "data_mode",
+              "type": "string"
+            },
+            {
+              "name": "platform_filter",
+              "type": "string"
+            },
+            {
+              "name": "source_type_filter",
+              "type": "string"
+            },
+            {
+              "name": "min_lead_score",
+              "type": "string"
+            },
+            {
+              "name": "include_review_queue",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -40,
+        -160
+      ],
+      "id": "wf14-subtrig",
+      "name": "When Called by Agent"
     }
   ],
   "connections": {
@@ -442,6 +487,17 @@
         [
           {
             "node": "Final Summary Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Set Triage Config",
             "type": "main",
             "index": 0
           }
