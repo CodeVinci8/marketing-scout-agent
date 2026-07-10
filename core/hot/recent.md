@@ -4,6 +4,45 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-10 (session 41) — Stage D · D2 DEPLOYED + LIVE-PROVEN (VK comments → public lead signals)
+
+**Canonical FILE 1 stage:** **D — source quality (IN_PROGRESS).** D1 done (session 40). **D2 = DONE, live-proven.**
+D3 (report-quality repair) is next. Branch `fix/stage4-live-final-acceptance`. Commits this session: `e9c2ecc`
+(D2 code: WF26 comment branch + WF14 trigger + lib + 74-test), then this docs commit. NOT pushed. **$0, 0 paid calls.**
+
+**D2 route (no vk_comments tab — reuses canonical):** `WF26 comments → raw_market_records (touchpoint=public_comment,
+source_type=public_discussion) → WF16 → WF14 → public_lead_signals`. classifyOffline audience branch classifies;
+WF14 (sole lead writer) scores. Lib additions in `n8n/lib/vk_collector.js`: parseComments, commentNoiseClass
+(deterministic noise gate), commentIsOwnerAuthored (from_id<0/==owner → never a lead), buildCommentRecord.
+WF26 gate honors separate `vk_comments_approval=VK_COMMENTS_APPROVED` (comments INERT/0 calls unless approved),
+bounded per-post `wall.getComments` loop.
+
+**Deployed (backup-first):** backup `/root/backups/n8n-backup-20260710-172931` (sha256 `fcba3f69…`). Prod WF26
+`SMQkUppyeFH2sFuf` 26→**31 nodes** (comment branch; VK cred `pRZcJEyp7KExTReQ`, google `U7zcRXq79mhonIPF`), active.
+**KEY FINDING: WF14 (and WF13) were NEVER in prod** — deployed WF14 fresh as **`mslocwf14lead`** (google cred +
+`$env.MS_SPREADSHEET_ID` bound on 5 Sheets nodes, new callable trigger, **active=1 required for executeWorkflow**).
+
+**Live proof — req `req_vk_d2_20260710_173725`:** 3 approved communities reconfirmed ~0 comments. Bounded QA sources
+(groups.search denied by token scope → probed finance communities directly): **webbankir** (80 comments: 2 accepted,
+78 noise=praise/contest) + **sovcombank** (27: 23 accepted, 4 noise) — neither added to canonical registry. WF14
+exec **506**: 25 public_comment candidates (118 post rows correctly NOT candidates — posts never leads) → **13
+public_lead_signals written**; re-run **509**: 0 new, **13 deduped**. Genuine lead: «Подскажите офис в Москве…
+ипотечным кредитованием?» → service=credit_broker, url `vk.com/wall-33340946_157690?reply=157721`. Public from_id
+only (no PII).
+
+**Honest gaps (NOT blockers):** several of 13 leads are bank service-complaints WF14 accepts as question/unknown
+(WF14's existing scorer, reused as-is — relevance tuning separate). Owner-authored (from_id=community) separation is
+code+test proven but no community-authored comment appeared live (supplier_skipped=0). n8n gotchas: executeWorkflow
+"run once for all items" passes ALL items to `.first()` → use per-community drivers; a 0-item sub-return skips
+downstream code nodes (barriers don't help) → separate `n8n execute` per community; sub-workflow must be ACTIVE.
+
+**D3 defects still reproduce (unchanged, deferred):** phantom `Публичных лид-сигналов: 999`, malformed CTA
+`](https://www`, empty `«»` lead rows, competitor wall posts as `вопросов N`. **EXACT NEXT: D3** — fresh bounded
+cross-source report (Website+Telegram+VK posts+VK comments) + fix+freshly-prove those report-level defects; own
+atomic increment. Disposable drivers to remove later (backlog #9): `msdrvvkd1*`, `msdrvvkd2`, `msdrvd2web/kre/dac/ann/sov`, `msdrvd2dn`.
+
+---
+
 ## Session: 2026-07-10 (session 40) — Stage D · D1 DEPLOYED + LIVE-PROVEN (VK posts reach a real report)
 
 **Canonical FILE 1 stage:** **D — source quality (IN_PROGRESS).** D1 = **DONE, live-proven**. D2 (VK comments →

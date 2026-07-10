@@ -187,6 +187,58 @@ These belong to **D3 (report-quality repair)**.
 (`req_vk_d1_20260710_000937`, `approval_status=''`) remain; they are request-scoped and can never be selected.
 Disposable QA drivers created: `msdrvvkd1001/1002/dn/dn2/rep` (removal is pre-Stage-E backlog item #9).
 
+### D2 — VK comments → public lead signals: LIVE PROOF (2026-07-10) · `VK_D2_LIVE_PROVEN=PASS` · $0
+
+**Canonical route (no vk_comments tab, no second scoring contract):**
+`WF26 comments → raw_market_records (touchpoint_type=public_comment, source_type=public_discussion) → WF16 → WF14 →
+public_lead_signals`. classifyOffline's audience branch classifies each comment; WF14 (sole `public_lead_signals`
+writer) does the lead scoring.
+
+**Deployment (backup-first).** Backup `/root/backups/n8n-backup-20260710-172931/n8n-data.tar.gz`
+(sha256 `fcba3f69…`). Prod WF26 `SMQkUppyeFH2sFuf` 26→**31 nodes** (comment branch: Build VK Comment Requests →
+VK wall.getComments → Parse & Classify → Shape → Append VK Comment Records; VK cred `pRZcJEyp7KExTReQ`, google
+`U7zcRXq79mhonIPF`), active. **WF14 was NOT in production** (never deployed) — deployed fresh as `mslocwf14lead`
+(16 nodes, google cred + `$env.MS_SPREADSHEET_ID` bound on all 5 Sheets nodes, new callable trigger, active).
+
+**Bounded live collection** — request `req_vk_d2_20260710_173725`, free `wall.getComments` (≤8 posts × 10
+comments/community). The 3 approved communities reconfirmed ~0 useful comments (kredit874/da_credit/anna). One
+bounded temporary QA source found via a bounded probe (groups.search denied by token scope; probed finance
+communities directly): **webbankir** (МФО) and **sovcombank** (bank) had open comments — used both for the
+positive/negative proof; NEITHER added to the canonical registry.
+
+| community | comments | accepted | noise rejected (reasons) |
+|---|---|---|---|
+| webbankir (QA) | 80 | 2 | 78 (praise_without_need 77, contest 1) |
+| sovcombank (QA) | 27 | 23 | 4 |
+| kredit874/da_credit/anna (approved) | ~0 | 0 | — |
+
+**Downstream.** WF16 wrote source_health for the request. **WF14 exec 506** (source_agent_request_id=req_vk_d2,
+platform_filter=vk, include_review_queue=false): read 143 request rows → **25 public_comment candidates** (the 118
+post rows were correctly NOT candidates — wall posts never become leads) → **13 public_lead_signals written**,
+irrelevant_skipped 11, below_threshold 1, supplier_skipped 0. **Re-run exec 509: signals_written=0,
+duplicates_skipped=13 (dedup proven).**
+
+**Genuine lead proof.** `public_lead_signals` includes a real credit demand comment:
+*«Подскажите офис в Москве, который занимается ипотечным кредитованием?»* → intent=question,
+**service_type=credit_broker**, canonical evidence URL `vk.com/wall-33340946_157690?reply=157721`; and a refusal
+signal *«…вы все равно не выдаёте кредиты?»* (credit_broker). Lineage + canonical reply URLs present on every row;
+public numeric `from_id` only (no author PII).
+
+```
+VK_D2_REQUEST=req_vk_d2_20260710_173725
+VK_D2_COMMENTS_COLLECTED=107   VK_D2_NOISE_REJECTED=82   VK_D2_ACCEPTED_AUDIENCE=25
+VK_D2_LEAD_SIGNALS_WRITTEN=13  VK_D2_DEDUP_RERUN_NEW=0 (13 deduped)   VK_D2_COST_USD=0
+VK_D2_WALL_POSTS_AS_LEADS=0 (118 post rows excluded; only 25 comments were candidates)
+VK_D2_OWNER_AUTHORED_SEPARATION=code+test proven (commentIsOwnerAuthored + WF14 supplier gate); no community-
+  authored comment appeared in the live sample, so no live supplier_skipped>0 example
+```
+
+**Honest observations (NOT D2 blockers):** (1) several of the 13 leads are bank service-complaints (app down,
+spam, support) that WF14's broad question detector accepts as `intent=question, service=unknown` — this is WF14's
+existing deterministic scoring (reused as-is, the canonical lead writer), not the D2 collection/classification;
+relevance tuning of WF14 is a separate concern. (2) The existing `public_lead_signals` tab still shows the phantom
+"999" downstream in WF12 — that is a **D3** report defect, not touched here.
+
 ## STAGE D closure DRAFT — 2026-07-06 (superseded by the REOPEN above; retained for the Website/Telegram/Avito evidence)
 
 Stage D validates **source quality**: is the collected data real, relevant, clean, correctly typed, deduplicated,
