@@ -127,14 +127,65 @@ VK-specific scoring. Each VK post → canonical 40-col row (`record_type_hint`/`
 ```
 VK_D1_NORMALIZER=BUILT_LOCAL           # WF26 -> raw_market_records via canonical classifyOffline
 VK_D1_SCORING_CONTRACT=semantic_core.classifyOffline (single, embedded, drift-proof)
-VK_D1_DEPLOYED=NO                       # production splice auth-gated (docs/STAGE_D_VK_D1_DEPLOY_RUNBOOK.md)
-VK_D1_LIVE_PROVEN=NO                    # bounded live VK run + fresh report pending operator authorization
+VK_D1_DEPLOYED=YES                      # prod WF26 SMQkUppyeFH2sFuf, 26 nodes, active=1
+VK_D1_LIVE_PROVEN=YES                   # see "D1 LIVE PROOF" below
 ```
 
-**Not yet done (needs operator authorization — production write + live/paid calls):** surgical splice of the 2 new
-nodes into prod WF26 (`SMQkUppyeFH2sFuf`), one bounded live VK run over the 3 communities, downstream
-WF16→WF08→WF10→WF12 over that request, and inspection proving VK competitors reach a real report with evidence URLs.
-Exact sequence: `docs/STAGE_D_VK_D1_DEPLOY_RUNBOOK.md`.
+### D1 — LIVE PROOF (2026-07-10) · `VK_D1_LIVE_PROVEN=PASS` · $0
+
+**Deployment (surgical splice, backup-first).** Backup `/root/backups/n8n-backup-20260710-000535/n8n-data.tar.gz`
+(sha256 `e0a9706d54aa…`, `BACKUP_RESULT=PASS`). Prod WF26 `SMQkUppyeFH2sFuf`: 24 → **26 nodes**, `active=1`,
+`Append raw_market_records` bound to the SAME googleApi cred as the other Sheets nodes (`U7zcRXq79mhonIPF`);
+read-back verified **deployed Build jsCode === canonical export**; the other 24 nodes had **0 jsCode drift**.
+
+**Bounded live VK collection** — request marker `req_vk_d1b_20260710_032001`, 3 approved public communities,
+free `wall.get` (no paid provider, no Claude):
+
+| exec | community | posts → rows | classifyOffline types | append |
+|---|---|---|---|---|
+| 476 | vk.com/kredit874 | 6 → 6 | competitor_activity 1, unknown 5 | success |
+| 477 | vk.com/da_credit | 25 → 25 | competitor_activity 10, market_signal 10, unknown 5 | success |
+| 478 | vk.com/anna_findoctor | 25 → 25 | competitor_activity 17, unknown 8 | success |
+
+**Downstream (request-scoped).** WF16 exec **480**: all 3 runs `healthy` (score 83/86/93), `report_eligible=true`.
+WF08 exec **481**: selected **56/56**, `claude_calls=0`, routed **monitor_queue 28 / review_queue 28**.
+WF10 exec **486**: `rows_after_isolation=56 → rows_after_filters=28`, `rows_excluded_by_review=28`,
+`rows_excluded_by_health=0` → **3 competitor_profiles + 4 market_angles**. WF12 exec **487**:
+report **`report_20260710_063410`**, `rows_after_filters=28`, `market_intelligence_reports +1`.
+
+**Report evidence (real, user-facing).** Top competitors = **Анна Викторовна - Кредитный Брокер (evidence 17,
+conf 60) · Кредитный брокер (10, conf 60) · Кредитный брокер Помощь в получении кредита (1, conf 45)**; profiles
+carry `platforms=vk`, `source_urls=https://vk.com/<community>`, grounded `semantic_keywords` and
+`pain_points_targeted` (просрочки / плохая КИ, срочная потребность в деньгах). Market angles derived from real VK
+post text (ценовой якорь x12, плохая КИ x6, скорость x4). **Off-topic/thin posts were NOT reported as relevant** —
+the 28 `unknown` rows were excluded by the existing review gate. No duplicate competitor rows; per-post canonical
+`vk.com/wall-<owner>_<id>` URLs persisted in `raw_market_records`.
+
+```
+VK_D1_REQUEST=req_vk_d1b_20260710_032001
+VK_D1_ROWS_PERSISTED=56          VK_D1_COMPETITOR_ROWS=28   VK_D1_EXCLUDED_UNKNOWN=28
+VK_D1_COMPETITOR_PROFILES=3      VK_D1_MARKET_ANGLES=4      VK_D1_REPORT=report_20260710_063410
+VK_D1_HEALTH=healthy x3 (83/86/93, all report_eligible)     VK_D1_COST_USD=0   VK_D1_CLAUDE_CALLS=0
+```
+
+**Defect found + fixed during the live proof — `VK-APPROVAL-001` (commit `1a74f5c`).** The first live run
+persisted 56 rows but WF08 selected **0**, so WF10/WF12 never ran. Root cause: WF08 keeps only rows whose
+`approval_status` ∈ allowed set (`['approved','new']`); the VK normalizer wrote `''` while WF11/WF04 write `'new'`.
+Fixed canonically in the generator + regression; regenerated, `make test` ALL PASS, redeployed, re-proved live.
+
+**QA-driver artifact (NOT a product defect).** Chaining WF08's 56 output items straight into WF10 leaked a
+per-source `source_run_id` into WF10's callable input (WF10 declares `source_run_id`), over-narrowing the
+aggregation to one community (`rows_after_filters=1`). The real orchestrator WF20 passes `source_run_id`
+**explicitly**, so production is unaffected. The QA driver now emits one clean item per step.
+
+**Known D3 defects CONFIRMED still reproducing (deferred — NOT fixed or accepted here):** phantom
+`Публичных лид-сигналов: 999`; malformed CTA link `Оставить заявку](https://www`; empty lead rows (`«»`, `unknown`);
+competitor-owned VK wall posts counted as audience `вопросов 23` (competitor↔audience contamination).
+These belong to **D3 (report-quality repair)**.
+
+**Residual (non-destructive):** 56 inert `raw_market_records` rows from the first attempt
+(`req_vk_d1_20260710_000937`, `approval_status=''`) remain; they are request-scoped and can never be selected.
+Disposable QA drivers created: `msdrvvkd1001/1002/dn/dn2/rep` (removal is pre-Stage-E backlog item #9).
 
 ## STAGE D closure DRAFT — 2026-07-06 (superseded by the REOPEN above; retained for the Website/Telegram/Avito evidence)
 

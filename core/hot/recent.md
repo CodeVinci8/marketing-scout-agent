@@ -4,6 +4,44 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-10 (session 40) — Stage D · D1 DEPLOYED + LIVE-PROVEN (VK posts reach a real report)
+
+**Canonical FILE 1 stage:** **D — source quality (IN_PROGRESS).** D1 = **DONE, live-proven**. D2 (VK comments →
+public-lead classification) is the next atomic increment; D3 (report-quality repair) after it. Branch
+`fix/stage4-live-final-acceptance`. Commits this session: `1a74f5c` (VK-APPROVAL-001 fix) + this docs commit.
+NOT pushed. **$0, 0 paid calls** (VK `wall.get` is free; `claude_calls=0`).
+
+**Deployed (backup-first surgical splice).** Backup `/root/backups/n8n-backup-20260710-000535/n8n-data.tar.gz`
+(sha256 `e0a9706d…`). Prod WF26 `SMQkUppyeFH2sFuf` 24→**26 nodes**, `active=1`, `Append raw_market_records` bound to
+googleApi `U7zcRXq79mhonIPF`; read-back proved **deployed Build jsCode === canonical**, 0 drift on the other 24 nodes.
+Mechanism: `n8n export:workflow` → splice → `docker cp` → `import:workflow` → `update:workflow --active=true`
+(import always deactivates). `n8n execute` needs `N8N_RUNNERS_TASK_BROKER_PORT=5690`.
+
+**Live proof — request `req_vk_d1b_20260710_032001`:** WF26 execs **476/477/478** = kredit874 6, da_credit 25,
+anna_findoctor 25 → **56 raw_market_records rows** (competitor_activity 28, market_signal 10, unknown 18).
+WF16 **480**: 3 runs healthy 83/86/93, all `report_eligible`. WF08 **481**: selected 56/56, `claude_calls=0`,
+monitor_queue 28 / review_queue 28. WF10 **486**: isolation 56 → after_filters **28**, excluded_by_review 28,
+excluded_by_health 0 → **3 competitor_profiles + 4 market_angles**. WF12 **487**: report
+**`report_20260710_063410`** with the 3 VK competitors (evidence 17/10/1, conf 60/60/45), `source_urls=vk.com/<community>`,
+grounded keywords + pains; angles from real post text. Off-topic/thin posts NOT reported (28 unknown excluded).
+
+**Defect fixed live: VK-APPROVAL-001 (`1a74f5c`).** First run persisted 56 rows but WF08 selected **0** → chain
+stopped (n8n skips downstream on empty output). Cause: WF08 keeps only `approval_status ∈ {approved,new}`; VK wrote
+`''` while WF11/WF04 write `'new'`. Fixed in the generator + regression (test 107), regenerated, `make test` ALL PASS,
+redeployed, re-proved. **QA-driver artifact (not product):** chaining WF08's 56 items into WF10 leaked a per-source
+`source_run_id` into WF10's callable input → over-narrowed to 1 community; WF20 passes it explicitly, so prod is safe.
+
+**D3 defects CONFIRMED still reproducing (do NOT claim fixed):** phantom `Публичных лид-сигналов: 999`; malformed CTA
+`Оставить заявку](https://www`; empty `«»`/unknown lead rows; competitor wall posts counted as audience `вопросов 23`.
+
+**EXACT NEXT: D2** — bounded public `wall.getComments` → parse → persist (`vk_comments`) → dedup → deterministic
+relevance + public-lead-intent classification; competitor-owned wall posts must never become leads; reject stickers/
+emoji/greetings/praise/contests; ≤1 lead per valid signal. The 3 approved communities have ~0 useful comments
+(live-verified: 4 total, all noise) → ONE bounded temporary QA source with real comments is needed for positive+negative
+proof (do NOT add it to the canonical registry). Then D3. Disposable drivers to remove later: `msdrvvkd1001/1002/dn/dn2/rep`.
+
+---
+
 ## Session: 2026-07-06 (session 39) — Stage D · D1 BUILT (VK posts → canonical pipeline), local-complete, deploy auth-gated
 
 **Canonical FILE 1 stage:** **D — source quality (IN_PROGRESS).** Continuation brief re-scoped Stage D into D1 (VK
