@@ -34,11 +34,32 @@ redeployed, re-proved. **QA-driver artifact (not product):** chaining WF08's 56 
 **D3 defects CONFIRMED still reproducing (do NOT claim fixed):** phantom `Публичных лид-сигналов: 999`; malformed CTA
 `Оставить заявку](https://www`; empty `«»`/unknown lead rows; competitor wall posts counted as audience `вопросов 23`.
 
-**EXACT NEXT: D2** — bounded public `wall.getComments` → parse → persist (`vk_comments`) → dedup → deterministic
-relevance + public-lead-intent classification; competitor-owned wall posts must never become leads; reject stickers/
-emoji/greetings/praise/contests; ≤1 lead per valid signal. The 3 approved communities have ~0 useful comments
-(live-verified: 4 total, all noise) → ONE bounded temporary QA source with real comments is needed for positive+negative
-proof (do NOT add it to the canonical registry). Then D3. Disposable drivers to remove later: `msdrvvkd1001/1002/dn/dn2/rep`.
+**EXACT NEXT: D2 (VK comments → public lead signals).** Preconditions inspected 2026-07-10:
+
+**ARCHITECTURE DECISION (verified against the contract — do NOT create a `vk_comments` tab).** `vk_comments` is
+**absent** from `config/sheets_contracts.json` (no `tabs` entry, no `headers`, not in `sheet_order`). The canonical
+comment→lead path already exists and must be reused, not duplicated:
+`WF26 comments → raw_market_records (touchpoint_type=public_comment, source_type=public_discussion)
+→ WF16 → WF08 → WF14 → public_lead_signals (47 cols; sole writer WF14, reader WF12)`.
+WF13 already implements this exact pattern for VK public comments. A new `vk_comments` tab would be a parallel store
++ a second lead contract, which the operator brief forbids ("preserve the current canonical contract if it differs").
+
+**What exists:** `vk_collector.commentsRequest(identity, post, cfg)` → `wall.getComments`, **gated** by
+`cfg.vk_enable_comments===true` (`comments_enabled`, `max_comments_per_post` default 10). **No comment parser, no
+noise gate, no lead classifier yet.** `semantic_core.classifyOffline` already has an **audience branch** that triggers
+when `source_type==='public_discussion'` (or touchpoint/record hints contain question/audience) and yields
+`audience_question | audience_objection | audience_complaint | buying_intent` — reuse it (ONE scoring contract).
+
+**D2 build order:** (1) lib: `parseComments` + a deterministic **noise gate** (reject emoji-only/stickers/greetings/
+praise/contest/spam/too-short) + `buildCommentRecord` (owner scope, parent post id, comment id, canonical
+`vk.com/wall-<owner>_<post>?reply=<cid>`, published_at, public author only, dedup_key `vk::comment::<owner>_<post>_<cid>`);
+(2) **competitor-owned separation**: a comment whose `from_id` is the community itself (negative owner id) can NEVER
+be a lead; wall posts are never leads; (3) WF26 nodes: bounded per-post `wall.getComments` loop (cap posts × comments),
+classify, emit raw_market_records audience rows → existing append; (4) ≤1 lead per valid signal (dedup by comment id);
+(5) tests + `make test`; (6) deploy (surgical splice, backup first); (7) live proof. The 3 approved communities have
+~0 useful comments (live-verified: 4 total, all noise) → find **ONE** bounded temporary public QA community with real
+comments for positive+negative proof; stop at the first lawful source; do **NOT** add it to the canonical registry.
+Public data only. Then D3 (report-quality repair). Disposable drivers to remove later: `msdrvvkd1001/1002/dn/dn2/rep`.
 
 ---
 
