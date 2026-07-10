@@ -34,6 +34,7 @@ const JS_SUITES = [
   ['wf09-multiquery', 'test_wf09_multiquery.js'],
   ['wf10-source-health', 'test_wf10_source_health.js'],
   ['wf12-closure', 'test_wf12_closure.js'],
+  ['stage-d3-report-quality', 'test_stage_d3_report_quality.js'],
   // --- Stage C Runtime Patch 4: first real WF09 -> WF16 live execution regression ---
   ['wf16-runtime-searchcards', 'test_wf16_runtime_searchcards.js'],
   // --- Stage C Runtime Patch 5: WF09 Apify actor-input regression (string startUrls, query origin) ---
