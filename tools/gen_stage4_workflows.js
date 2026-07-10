@@ -1457,7 +1457,7 @@ for(var i=0;i<recs.length;i++){
     next_action:'',
     responsible:'',
     dedup_status:'unique',
-    approval_status:'',
+    approval_status:'new',
     approved_by:'',
     approved_at:'',
     estimated_analysis_cost_usd:0,

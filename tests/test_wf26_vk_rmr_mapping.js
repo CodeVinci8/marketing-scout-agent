@@ -53,6 +53,13 @@ for (const c of COLS) {
 // no EXTRA / parallel columns: every VK-emitted key must be a real raw_market_records header
 vkCols.forEach(k => A.ok('VK column "' + k + '" is a real raw_market_records header', HEADERS.indexOf(k) >= 0, 'non-contract column ' + k));
 
+A.section('WF26 D1 — rows are selectable by WF08 (approval_status=new, dedup_status=unique)');
+// WF08 "Filter & Select Records" only keeps rows whose approval_status is in {approved,new} (test_mode) and
+// dedup_status===unique. A collector that writes approval_status='' is silently dropped (LIVE-observed: 56 VK
+// rows read, 0 selected). VK must mirror WF11/WF04 collectors which write 'new'.
+A.ok("normalizer writes approval_status:'new' (selectable by WF08)", /approval_status:'new'/.test(buildJs), "approval_status is not 'new'");
+A.ok('normalizer writes dedup_status:\'unique\'', /dedup_status:'unique'/.test(buildJs), 'dedup_status is not unique');
+
 A.section('WF26 D1 — embedded classifier is the semantic_core library core, verbatim');
 A.ok('node embeds semantic_core', /embedded n8n\/lib\/semantic_core\.js/.test(buildJs), 'semantic_core not embedded');
 A.ok('taxonomy inlined (no fs.readFileSync)', /const TAXONOMY = \{/.test(buildJs) && !/fs\.readFileSync/.test(buildJs), 'taxonomy not inlined');
