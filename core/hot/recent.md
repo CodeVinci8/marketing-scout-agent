@@ -4,6 +4,53 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-11 (session 44) — pre-Stage-E: AVITO-BLOCK-001 graceful Avito bot/UX disablement (feature-flagged) DEPLOYED + LIVE-PROVEN
+
+**Stage D = PASS** (prior). Pre-Stage-E backlog. New required item done FIRST (operator brief): gracefully disable
+Avito in the bot/product UX while it stays operator-infra-blocked (Residential proxy on paid Apify). Branch
+`fix/stage4-live-final-acceptance`, HEAD after this = a08c414 + this commit. **$0, 0 paid calls.**
+
+**AVITO-BLOCK-001 (smallest canonical change; config/planner gating, NO workflow code deleted):**
+- **The ONE gate** = `agent_config.resolveConfig()`: new flag `MS_AVITO_ENABLED` (default false). While blocked,
+  `avito` is stripped from the resolved `source_allowlist` (even if in `MS_SOURCE_ALLOWLIST`) + recorded in
+  `cfg.blocked_sources=['avito']` + `cfg.avito_block_reason='residential_proxy_required'`. Everything downstream
+  derives availability from the allowlist → planner never selects Avito, `/help`/catalog never advertise it,
+  `tracked_sources` refuses it, `collectorEnabled('avito')` false even with `MS_ENABLE_APIFY=true`.
+- **Explicit Avito request answered honestly** (never silent drop): new `request_planner.blockedRequestedSources()`
+  detects the named blocked source; WF19 "Build Approval Message" prepends `plan_render_ru.ruAvitoUnavailableMessage()`
+  (RU: temporarily unavailable — residential proxy not configured; can enable later, nothing lost; will proceed on
+  other sources). Removed the two hardcoded `avito → always available` leaks in `scope_preview.js` +
+  `refresh_policy.js` (now track the allowlist).
+- New `tests/test_avito_block.js` (35) — not-proposed-in-planning, not-in-help/registry/scope, explicit-request
+  honest message, no-collection-while-blocked, WF09 + Avito tests intact, re-enable path. Updated
+  test_stage4_contracts (allowlist strip + re-enable) + test_scope_preview (avito blocked-by-default). Regenerated
+  WF17-26 (embedded-lib sync). **`make test` ALL SUITES PASS ($0, 0 calls).**
+
+**Deployed (backup-first surgical splice, NO restart — WF19 is a callable sub-wf, not webhook):** backup =
+`scratchpad/backup/wf19_prod_20260711_125052.json` (sha256 3124f8b3…). Prod WF19 `d0ffU5QxNb8zpwKW`, spliced 5 code
+nodes (Resolve Agent Config, Deterministic Plan, Build Planner Prompt, Validate Plan, Build Approval Message),
+import + reactivate. **Verified deployed jsCode === canonical 5/5, active=1, Claude cred `OEen8Vl1tdWtv7v4`
+preserved, allowlist-strip + note wiring live.** Other regenerated workflows NOT deployed (only WF19 gates
+planning/approval; avoids touching WF18 webhook).
+
+**LIVE PROOF (real Telegram round-trip, allowed user 1188830082, secret header):**
+- Avito request "…конкурентов…на Авито в Москве" → WF18 exec 555 (success) → WF19 exec **556**: `plan.sources=["website"]`
+  (Avito NOT planned), approval_text led with the honest RU notice, **sent to Telegram msg 114** (ok=true). 0 leakage.
+- Control "Найди кредитных брокеров в Москве…" → WF19 exec **558**: `plan.sources=["website","telegram"]` — Avito NOT
+  proposed, NO notice (correct; user didn't ask). Both plans left UNAPPROVED (harmless, TTL-expire 120min).
+
+**Feature flag / re-enable path documented:** `docs/STAGE_D_SOURCE_QUALITY_ACCEPTANCE.md` (AVITO-BLOCK-001 section)
++ `docs/RUNTIME_CONFIGURATION.md` (MS_AVITO_ENABLED). `AVITO_SOURCE_QUALITY=BLOCKED_OPTIONAL_OPERATOR_INFRA_PREREQUISITE`
+unchanged.
+
+**EXACT NEXT (unchanged from session 43):** #12 one-message progress lifecycle — prove DETERMINISTICALLY (WF20
+driver, `enable_llm_summary=false`, telegram-only plan, ~$0.24 bounded) to avoid the Stage-F Claude summary endpoint;
+then auto summary(#3)/XLSX(#4)/follow-up(#5) [same run], source-registry(#7), user-URL E2E(#8), remove disposable
+drivers(#9). Injector = `docker exec n8n-n8n-1 node /tmp/inject.js "<text>"`. WF18 dispatch STATUS-SELECT-002 line
+still deploy-DEFERRED (restart-gated, non-critical). Pending harmless plans: req from execs 556/558.
+
+---
+
 ## Session: 2026-07-11 (session 43) — pre-Stage-E: /status + /cancel canonical selector BUILT+DEPLOYED+live-proven; WF18 webhook-restart BLOCKER
 
 **Stage D = PASS** (prior). Started the pre-Stage-E backlog. Branch `fix/stage4-live-final-acceptance`, HEAD after

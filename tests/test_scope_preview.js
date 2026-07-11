@@ -4,9 +4,12 @@
 const A = require('./_assert.js');
 const S = require('../n8n/lib/scope_preview.js');
 
-A.section('source availability (website/Avito available; Telegram/VK setup_required by default)');
+A.section('source availability (website first-class; Avito blocked by default; Telegram/VK setup_required)');
 A.ok('website available', S.collectorAvailable('website', {}));
-A.ok('avito available (discovery/search-card)', S.collectorAvailable('avito', {}));
+// AVITO-BLOCK-001: Avito availability tracks the resolved allowlist (stripped while operator-infra-blocked), so
+// it is NOT advertised by default; it is available only when explicitly re-enabled + present in the allowlist.
+A.ok('avito NOT available while blocked (not in allowlist)', !S.collectorAvailable('avito', {}));
+A.ok('avito available only when re-enabled + allowlisted', S.collectorAvailable('avito', { source_allowlist: ['website', 'avito'] }));
 A.ok('telegram needs collector', !S.collectorAvailable('telegram', {}));
 A.ok('vk needs collector', !S.collectorAvailable('vk', {}));
 A.ok('vk available when configured', S.collectorAvailable('vk', { enable_vk_collector: true }));

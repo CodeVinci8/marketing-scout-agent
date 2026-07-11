@@ -26,9 +26,10 @@ function thresholdFor(platform, cfg, instr) {
 function collectorAvailable(platform, cfg) {
   platform = low(platform); cfg = cfg || {};
   if (platform === 'website' || platform === '') return true;
-  if (platform === 'avito') return true; // search-card discovery is available (see source matrix)
   if (platform === 'telegram_channel') return cfg.enable_telegram_collector === true;
   if (platform === 'vk_community') return cfg.enable_vk_collector === true;
+  // AVITO-BLOCK-001: Avito refresh availability tracks the resolved allowlist (stripped while blocked) rather
+  // than a hardcoded "always available" — so refresh never proposes re-collecting Avito while it is blocked.
   const allow = (cfg.source_allowlist || []).map(low);
   return allow.indexOf(platform) >= 0;
 }

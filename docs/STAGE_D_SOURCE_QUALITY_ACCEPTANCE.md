@@ -290,6 +290,41 @@ Avito remains **optional, operator-infra-blocked** (`AVITO_SOURCE_QUALITY=BLOCKE
 STAGE_D_SOURCE_QUALITY=PASS
 ```
 
+## AVITO-BLOCK-001 — graceful bot/UX disablement of Avito (2026-07-11)
+
+Avito is **optional and operator-infra-blocked** (needs a Residential proxy on a paid Apify plan;
+`AVITO_SOURCE_QUALITY=BLOCKED_OPTIONAL_OPERATOR_INFRA_PREREQUISITE`). The full implementation (WF09 connector, its
+parser/gate tests, and all root-cause evidence above) stays in the repo, but the **bot no longer offers, plans,
+selects, or runs Avito for users** until the operator re-enables it. Nothing was deleted; this is a config gate.
+
+**The ONE canonical gate** is `n8n/lib/agent_config.js` → `resolveConfig()`. While Avito is blocked it is stripped
+from the resolved runtime `source_allowlist` and recorded in `cfg.blocked_sources`. Every downstream surface derives
+availability from the allowlist, so the block propagates automatically: the request planner never selects Avito
+(`request_planner.deterministicPlan`), the capability catalog/`/help` never advertise it, `tracked_sources` refuses
+it, and `scope_preview`/`refresh_policy` report it unavailable. The per-collector gate (`collectorEnabled`) also
+returns false, so no Avito call can run even with `MS_ENABLE_APIFY=true`.
+
+An **explicit** Avito request is answered honestly (never a silent drop): `request_planner.blockedRequestedSources`
+detects the named blocked source and WF19 prepends `plan_render_ru.ruAvitoUnavailableMessage()` to the approval
+message — a Russian notice that Avito monitoring is temporarily unavailable (Residential proxy not yet configured),
+that it can be enabled later without losing the implementation, and that the analysis will proceed on the remaining
+sources.
+
+### Feature flag / RE-ENABLE PATH
+
+| | |
+|---|---|
+| Flag | `MS_AVITO_ENABLED` (env; default `false` = blocked) |
+| Default while blocked | Avito stripped from `source_allowlist`; `cfg.blocked_sources=['avito']`; `cfg.avito_block_reason='residential_proxy_required'` |
+| To re-enable | 1) provision a Residential proxy on a paid Apify plan (the real prerequisite); 2) set `MS_AVITO_ENABLED=true`; 3) ensure `avito` is present in `MS_SOURCE_ALLOWLIST`. Then Avito returns to planning/selection/collection with **no code change** — the strip is a no-op when the flag is true. |
+
+Coverage: `tests/test_avito_block.js` (35 checks) proves not-proposed-in-planning, not-in-help/registry/scope,
+explicit-request honest message, no-collection-while-blocked, and that the WF09 workflow + Avito tests remain intact.
+**Live-proven in production** (WF19 `d0ffU5QxNb8zpwKW`, deployed surgical splice, active, Claude cred preserved):
+explicit "…на Авито…" → WF19 exec 556, `plan.sources=["website"]`, approval led with the honest notice, sent to
+Telegram msg 114; control "найди брокеров…" → WF19 exec 558, `plan.sources=["website","telegram"]`, no Avito, no
+notice. Both plans left unapproved (harmless, TTL-expire). `$0`, 0 paid calls.
+
 ## STAGE D closure DRAFT — 2026-07-06 (superseded by the REOPEN above; retained for the Website/Telegram/Avito evidence)
 
 Stage D validates **source quality**: is the collected data real, relevant, clean, correctly typed, deduplicated,

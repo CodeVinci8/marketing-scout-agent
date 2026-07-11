@@ -62,6 +62,13 @@ const DEFAULTS = {
   enable_apify: false,
   enable_firecrawl: false,
   enable_vk: false,
+  // AVITO-BLOCK-001: Avito is an OPTIONAL source that is operator-infra-blocked until a Residential proxy is
+  // provisioned on a paid Apify plan (AVITO_SOURCE_QUALITY=BLOCKED_OPTIONAL_OPERATOR_INFRA_PREREQUISITE). The
+  // WF09 implementation + tests + evidence stay in the repo, but the bot must NOT offer/plan/select/run Avito
+  // for users while blocked. Default OFF => Avito is stripped from the resolved runtime source_allowlist (the
+  // one gate every downstream surface derives availability from). RE-ENABLE PATH: set MS_AVITO_ENABLED=true
+  // once Residential proxy access exists — nothing is deleted, so re-enabling restores the full Avito path.
+  avito_enabled: false,
   // Stage 5: Telegram PUBLIC channel preview collector (t.me/s/<channel>, no per-call fee but still an external
   // fetch — gated like every collector). Distinct from enable_telegram (the bot ingress).
   enable_telegram_collector: false,
@@ -111,6 +118,7 @@ function resolveConfig(env, overrides) {
     enable_apify: bool(env.MS_ENABLE_APIFY, DEFAULTS.enable_apify),
     enable_firecrawl: bool(env.MS_ENABLE_FIRECRAWL, DEFAULTS.enable_firecrawl),
     enable_vk: bool(env.MS_ENABLE_VK, DEFAULTS.enable_vk),
+    avito_enabled: bool(env.MS_AVITO_ENABLED, DEFAULTS.avito_enabled),
     enable_telegram_collector: bool(env.MS_ENABLE_TELEGRAM_COLLECTOR, DEFAULTS.enable_telegram_collector),
     monitoring_enabled: bool(env.MS_MONITORING_ENABLED, DEFAULTS.monitoring_enabled),
     weekly_digest_enabled: bool(env.MS_WEEKLY_DIGEST_ENABLED, DEFAULTS.weekly_digest_enabled),
@@ -134,6 +142,18 @@ function resolveConfig(env, overrides) {
   cfg.effective_max_external_calls = cfg.zero_paid_mode ? 0 : Number(cfg.max_external_calls);
   // scope_preview/collector naming alias — one flag, two historical names
   cfg.enable_vk_collector = cfg.enable_vk === true;
+  // AVITO-BLOCK-001 (see DEFAULTS.avito_enabled): the ONE canonical Avito gate. While Avito is blocked it is
+  // removed from the resolved runtime allowlist AND recorded in cfg.blocked_sources, so the request planner can
+  // tell a user who explicitly asks for Avito that it is temporarily unavailable (never a silent drop). Every
+  // surface that derives availability from source_allowlist — planner, capability registry, tracked sources,
+  // scope preview, refresh policy, per-collector gate — inherits the block from here.
+  cfg.avito_enabled = cfg.avito_enabled === true;
+  cfg.blocked_sources = [];
+  if (!cfg.avito_enabled) {
+    cfg.source_allowlist = (cfg.source_allowlist || []).filter(s => String(s).toLowerCase() !== 'avito');
+    cfg.blocked_sources.push('avito');
+    cfg.avito_block_reason = 'residential_proxy_required';
+  }
   // completeness check the orchestrator surfaces in the execution summary — never starts paid work blind
   cfg.missing = [];
   if (!cfg.spreadsheet_id) cfg.missing.push('MS_SPREADSHEET_ID');

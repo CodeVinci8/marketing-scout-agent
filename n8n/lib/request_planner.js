@@ -29,6 +29,20 @@ const SOURCE_HINTS = [
   [/vk|вконтакте|соцсет/i, 'vk']
 ];
 
+// AVITO-BLOCK-001: the sources the user EXPLICITLY named in the request text that are currently blocked (listed
+// in cfg.blocked_sources). Lets the approval flow tell the user honestly that e.g. Avito is temporarily
+// unavailable, instead of silently clamping the plan to the remaining allowlisted sources. Pure; reuses the
+// SAME SOURCE_HINTS the planner parses, so detection can never drift from what the planner would have selected.
+function blockedRequestedSources(text, cfg) {
+  cfg = cfg || {};
+  const blocked = ((cfg.blocked_sources) || []).map(low);
+  if (!blocked.length) return [];
+  const t = str(text);
+  const named = [];
+  for (const [rx, v] of SOURCE_HINTS) { if (rx.test(t) && named.indexOf(v) < 0) named.push(v); }
+  return named.filter(s => blocked.indexOf(s) >= 0);
+}
+
 function deterministicPlan(text, cfg) {
   cfg = cfg || {};
   const t = str(text);
@@ -181,5 +195,6 @@ function pendingPlansForOwner(planRows, ownerUserId) {
 
 module.exports = {
   deterministicPlan, normalizePlan, validatePlanJSON, planToApprovalText,
-  planHash, planIdentity, buildPlanRow, validateApproval, pendingPlansForOwner
+  planHash, planIdentity, buildPlanRow, validateApproval, pendingPlansForOwner,
+  blockedRequestedSources
 };

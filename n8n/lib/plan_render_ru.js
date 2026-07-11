@@ -317,6 +317,18 @@ function ruHelpMessage(caps) {
   return lines.join('\n');
 }
 
+// AVITO-BLOCK-001: honest notice for a user who explicitly asked for Avito while it is temporarily blocked.
+// Distinct from the generic "пока настраивается" — it names the reason (residential proxy / provider access not
+// configured) and reassures that Avito can be enabled later without losing the existing implementation. No env
+// var names, flags, workflow ids or provider errors — user-facing Russian only.
+function ruAvitoUnavailableMessage() {
+  return [
+    'Мониторинг Авито сейчас временно недоступен: для него нужен доступ к резидентному прокси, который пока не подключён.',
+    'Его можно будет включить позже — реализация сохранена, ничего не потеряно.',
+    'Пока подготовлю анализ по остальным доступным источникам.'
+  ].join('\n');
+}
+
 // A single unavailable source (e.g. VK before its credential exists) — brief, with the next available action.
 function ruUnavailableSourceMessage(source) {
   var label = ruEnum(RU_SOURCE, ruText(source).toLowerCase(), 'этого источника');
@@ -403,7 +415,7 @@ module.exports = {
   ruStartMessage, ruWhoAmIMessage, ruIsWhoAmI,
   ruCapabilityGroups, ruHelpMessage, ruCapLabel, ruCapAdvertisable,
   RU_CAP_LABEL, RU_CAP_GROUP,
-  ruUnavailableSourceMessage, ruCollectionDisabledMessage, ruCapabilityUnavailableMessage,
+  ruUnavailableSourceMessage, ruAvitoUnavailableMessage, ruCollectionDisabledMessage, ruCapabilityUnavailableMessage,
   ruStatusReport, ruErrorMessage, ruSourceOpFailure, ruSourceStatusLabel,
   RU_INTENT, RU_INTENT_EXTRA, RU_NICHE, RU_REGION, RU_SOURCE, RU_PLAN_STATUS, RU_STAGE, RU_ERROR
 };

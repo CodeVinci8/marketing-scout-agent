@@ -73,9 +73,11 @@ function buildScopePreview(input) {
 
 function collectorAvailable(platform, cfg) {
   platform = str(platform).toLowerCase(); cfg = cfg || {};
-  if (platform === 'website' || platform === '' || platform === 'avito') return true;
+  if (platform === 'website' || platform === '') return true;
   if (platform === 'telegram_channel' || platform === 'telegram') return cfg.enable_telegram_collector === true;
   if (platform === 'vk_community' || platform === 'vk') return cfg.enable_vk_collector === true;
+  // AVITO-BLOCK-001: Avito availability tracks the resolved allowlist (blocked -> stripped from it) instead of a
+  // hardcoded "always available", so the scope preview never advertises Avito while it is operator-infra-blocked.
   return ((cfg.source_allowlist || []).map(s => String(s).toLowerCase())).indexOf(platform) >= 0;
 }
 
