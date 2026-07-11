@@ -36,6 +36,23 @@ function sourceAvailable(cfg, platform) {
   return allow.indexOf(low(platform)) >= 0;
 }
 
+// SOURCE-OP-001: classify a free-text source command into a concrete sub-op (+arg) so WF22 can act on it. The
+// WF18 dispatch only knows the coarse intent ('manage_sources'); this turns "покажи источники" -> list,
+// "поставь на паузу vk.com/x" -> pause+ref, "добавь https://a.ru" -> add+ref, etc. Deterministic; order matters
+// (specific verbs before the generic add / list fallback). arg prefers an explicit URL/@handle, else the tail text.
+function parseSourceOp(text) {
+  const t = low(text);
+  const ref = (str(text).match(/https?:\/\/\S+|(?:^|\s)@[a-z0-9_]{3,32}|\b(?:t\.me|telegram\.me)\/\S+|\bvk\.com\/\S+|\b[a-z0-9-]+\.[a-z]{2,}(?:\/\S*)?/i) || [''])[0].trim();
+  function tail(rx) { const m = str(text).replace(rx, '').trim(); return ref || m; }
+  if (/пауз|приостанов|останов/.test(t)) return { op: 'pause', arg: tail(/.*пауз[а-яё]*|.*приостанов[а-яё]*|.*останов[а-яё]*/i) };
+  if (/возобнов|resume|сними?\s*(с\s*)?паузы?|верни\s*в\s*работу/.test(t)) return { op: 'resume', arg: tail(/.*возобнов[а-яё]*|.*resume|.*пауз[а-яё]*/i) };
+  if (/убер|удал|remove|перестан[ья]|не\s*следи/.test(t)) return { op: 'remove', arg: tail(/.*убер[а-яё]*|.*удал[а-яё]*|.*remove/i) };
+  if (/провер|check|статус\b/.test(t)) return { op: 'check', arg: tail(/.*провер[а-яё]*|.*check|.*статус/i) };
+  if (/(покаж|список|list|какие|все|мои)\b.{0,20}источник|^\/?sources?\b|список источник/.test(t) || /покажи.*источник|источники\??$/.test(t)) return { op: 'list', arg: '' };
+  if (ref || /добав|подключ|track|включи\s*в\s*монитор/.test(t)) return { op: 'add', arg: ref || tail(/.*добав[а-яё]*|.*подключ[а-яё]*/i) };
+  return { op: 'list', arg: '' }; // safest default: show the registry
+}
+
 // A newly tracked source is monitorable (active) only when a real collector is configured for its platform.
 // website is always collectable; Telegram/VK are active only when the operator has enabled their collector,
 // otherwise the honest initial state is setup_required (visible, but not checked until configured).
@@ -84,7 +101,7 @@ function setSourceStatus(existing, key, status, ctx) {
   const userId = str(ctx.owner_user_id);
   let changed = false, audit = null;
   const out = existing.map(s => {
-    if ((str(s.key) === str(key) || str(s.source_id) === str(key)) && str(s.owner_user_id) === userId && s.status !== 'removed') {
+    if (s.status !== 'removed' && sourceMatches(s, key, userId)) {
       if (s.status === status) return s; // idempotent
       changed = true;
       audit = { event: 'source_status', owner_user_id: userId, source_id: s.source_id, key: s.key, from: s.status, to: status, ts: str(ctx.ts) };
@@ -95,9 +112,19 @@ function setSourceStatus(existing, key, status, ctx) {
   return { sources: out, changed: changed, reason: changed ? '' : 'not_found_or_unchanged', audit: audit };
 }
 
+// SOURCE-OP-001: match a tracked source by its key, its source_id, OR a raw URL/handle the user typed (normalized
+// to the same canonical key add uses) — so pause/resume/remove/check work on "vk.com/x" / "https://a.ru", not only
+// on an internal key.
+function sourceMatches(x, keyOrRef, owner) {
+  if (str(x.owner_user_id) !== str(owner)) return false;
+  const k = str(keyOrRef);
+  if (str(x.key) === k || str(x.source_id) === k) return true;
+  const nk = normalizeSourceRef(keyOrRef).key;
+  return nk && str(x.key) === nk;
+}
 function checkSource(existing, key, ctx) {
   ctx = ctx || {};
-  const s = (existing || []).find(x => (str(x.key) === str(key) || str(x.source_id) === str(key)) && str(x.owner_user_id) === str(ctx.owner_user_id));
+  const s = (existing || []).find(x => x.status !== 'removed' && sourceMatches(x, key, ctx.owner_user_id));
   if (!s) return { found: false, status: '', last_checked_at: '' };
   return { found: true, status: s.status, platform: s.platform, ref: s.ref, last_checked_at: s.last_checked_at };
 }
@@ -118,5 +145,5 @@ function resolveSourcesFromContext(ctx) {
 
 module.exports = {
   PLATFORMS, STATUSES, normalizeSourceRef, sourceAvailable, addSource, listSources,
-  setSourceStatus, checkSource, resolveSourcesFromContext, str, low
+  setSourceStatus, checkSource, resolveSourcesFromContext, parseSourceOp, str, low
 };

@@ -1572,6 +1572,7 @@
             "domain": "={{ ($('Build Intake Decision').first().json.action === 'manage_memory') ? 'memory' : (($('Build Intake Decision').first().json.action === 'manage_sources') ? 'source' : 'request') }}",
             "op": "={{ $('Build Intake Decision').first().json.action }}",
             "arg": "={{ (($('Build Intake Decision').first().json.routed.intent || {}).entities || {}).arg || '' }}",
+            "text": "={{ $('Build Intake Decision').first().json.request.request_text }}",
             "owner_user_id": "={{ $('Build Intake Decision').first().json.request.user_id }}",
             "chat_id": "={{ $('Build Intake Decision').first().json.request.chat_id }}",
             "agent_request_id": "={{ $('Build Intake Decision').first().json.request.agent_request_id }}",
@@ -1597,6 +1598,14 @@
             {
               "id": "arg",
               "displayName": "arg",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "text",
+              "displayName": "text",
               "required": false,
               "type": "string",
               "display": true,

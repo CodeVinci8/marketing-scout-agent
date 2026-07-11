@@ -601,6 +601,7 @@ return [{json:{telegram_send_body:$('Handle Plan Result').first().json.telegram_
     domain: "={{ ($('Build Intake Decision').first().json.action === 'manage_memory') ? 'memory' : (($('Build Intake Decision').first().json.action === 'manage_sources') ? 'source' : 'request') }}",
     op: "={{ $('Build Intake Decision').first().json.action }}",
     arg: "={{ (($('Build Intake Decision').first().json.routed.intent || {}).entities || {}).arg || '' }}",
+    text: "={{ $('Build Intake Decision').first().json.request.request_text }}",
     owner_user_id: "={{ $('Build Intake Decision').first().json.request.user_id }}",
     chat_id: "={{ $('Build Intake Decision').first().json.request.chat_id }}",
     agent_request_id: "={{ $('Build Intake Decision').first().json.request.agent_request_id }}",
@@ -711,7 +712,7 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),inten
 //   the mutation is applied (an audit never claims a change that did not happen). Per-user isolation; no secrets.
 write('22_conversation_control.json', wf('22 — Conversation Control & Sources', [
   manual('wf22-trig', 'Manual Start', [-780, -160]),
-  subTrigger('wf22-sub', 'When Called by Agent', [-780, 60], ['domain', 'op', 'arg', 'owner_user_id', 'chat_id', 'agent_request_id', 'conversation_id', 'confirmed']),
+  subTrigger('wf22-sub', 'When Called by Agent', [-780, 60], ['domain', 'op', 'arg', 'text', 'owner_user_id', 'chat_id', 'agent_request_id', 'conversation_id', 'confirmed']),
   code('wf22-cfg', 'Resolve Agent Config', [-560, 0], ['agent_config'],
     ENV + "\nreturn [{json:resolveConfig(__env)}];"),
   sheetsRead('wf22-readmem', 'Read durable_memories', [-340, -160], 'durable_memories'),
@@ -724,6 +725,9 @@ var ts=(new Date()).toISOString();
 var memories=[];try{memories=($('Read durable_memories').all()||[]).map(function(r){return r.json;});}catch(e){}
 var sources=[];try{sources=($('Read tracked_sources').all()||[]).map(function(r){return r.json;});}catch(e){}
 var plans=[];try{plans=($('Read execution_plans').all()||[]).map(function(r){return r.json;});}catch(e){}
+// SOURCE-OP-001: WF18 dispatches the COARSE action ('manage_sources'); resolve the concrete sub-op (+arg) from the
+// user's text so list/add/pause/resume/remove/check actually run instead of falling through to "not recognized".
+if(inp.domain==='source'&&['add','list','pause','resume','remove','check'].indexOf(String(inp.op))<0){var __so=parseSourceOp(String(inp.text||inp.arg||''));inp.op=__so.op;if(!inp.arg)inp.arg=__so.arg;}
 var out={domain:inp.domain,op:inp.op,owner_user_id:owner,chat_id:String(inp.chat_id||''),agent_request_id:String(inp.agent_request_id||''),reply:'',memory_audit:[],source_audit:[],changed_memories:[],changed_sources:[],changed_plans:[],request_event:null};
 function diff(before,after,key){var b={};before.forEach(function(x){b[x[key]]=JSON.stringify(x);});return after.filter(function(x){return b[x[key]]!==JSON.stringify(x);});}
 if(inp.domain==='memory'){

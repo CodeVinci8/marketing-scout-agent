@@ -4,6 +4,31 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-12 (session 46) — pre-Stage-E: monitored-source registry NL ops fixed + live-proven (SOURCE-OP-001)
+
+Branch `fix/stage4-live-final-acceptance`. **$0.** Continued pre-Stage-E after Items 1-4 (progress/summary/XLSX/follow-up).
+
+**Item 5 monitored-source registry — fixed 2 real defects + LIVE-PROVEN.** Live test showed «Команда источников не
+распознана» for every NL source command. Root cause **SOURCE-OP-001**: WF18 dispatched the COARSE action
+(`op='manage_sources'`) to WF22, but WF22 expected a concrete sub-op — no NL→sub-op parser existed. Fix: new
+`tracked_sources.parseSourceOp(text)` → {op,arg} (list/add/pause/resume/remove/check + URL/@handle extraction);
+WF22 `Apply Control Command` derives the sub-op when a coarse action arrives; `text` now flows WF18→WF22 (dispatch
+input + WF22 trigger). Second defect: `checkSource`/`setSourceStatus` matched only by internal key/source_id, so
+pause/resume/remove/check on a raw URL (what users type) never matched → added `sourceMatches()` that also
+normalizes the raw ref to its canonical key. Test `test_source_registry.js` (23). `make test` ALL PASS.
+**Deployed WF18 (`mslocf50ab8007ca`) + WF22 (`T98dK-CIsTRnO-M5`)** surgical splice (WF18 also brought the previously
+deferred STATUS-SELECT-002 dispatch line + accumulated lib updates current) → **`docker restart n8n-n8n-1`**
+(authorized) re-registered the webhook (verified webhook_entity + WF18 active). **LIVE round-trip (real Telegram,
+user 1188830082):** list(empty)→msg133 · add «https://mkbkfin.ru»→WF22 exec 596 persisted `website::mkbkfin.ru`
+active, msg135 · list→«mkbkfin.ru — активен» msg137 (round-trip) · remove→«источник удалён из мониторинга» msg139
+(QA source cleaned up, not left permanently). Owner-scoped, URL-dedup, Avito-not-addable-while-blocked all covered.
+
+**REMAINING pre-Stage-E:** Item 6 user-supplied Website URL E2E (needs bounded Firecrawl), Item 7 remove disposable
+drivers, Item 8 final boundary verification + Stage E readiness. Disposable drivers to remove:
+`msdrvprog0001`, `msdrvreplay001`, `msdrvbundle001`, `msdrvbundle002`, `msdrvxlsx001` + any older `msdrv*`/`msqa*`.
+
+---
+
 ## Session: 2026-07-11 (session 45) — pre-Stage-E: progress lifecycle LIVE-PROVEN (deterministic) + report-quality repair v2
 
 Branch `fix/stage4-live-final-acceptance`. Pre-Stage-E backlog. **$0, 0 paid/Claude calls** (deterministic override).
