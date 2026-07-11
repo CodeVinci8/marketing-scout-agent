@@ -291,6 +291,24 @@ never print). WF26 id `SMQkUppyeFH2sFuf`; driver `msdrvvklv002` (req `req_vk_sd2
 **EXACT NEXT COMMAND:** build the VK→raw_market_records normalizer (VK #2) — add `classifyOffline`-based
 "Build VK raw_market_records Rows" + "Append raw_market_records" to the generator, regenerate, test, deploy, live-run.
 
+**[session 43 addendum — pre-Stage-E progress lifecycle (#12) ASSESSMENT + cost/Stage-F gate]** Progress lifecycle
+is BUILT + offline-tested (`progress_tracker.js` STAGES/throttle/editMessageText/fallback; WF20 PROGRESS-EDIT-001 one
+message + edits; `test_progress_lifecycle` passing). Live-proof needs a real approved WF20 E2E run. Live-verified
+the request→plan path via real Telegram (WF18 exec 553 → WF19 exec 554 → approval msg 112): the deterministic
+planner produced a **telegram-only** plan (sources=["telegram"], max_items=10, max_external_calls=2, projected
+$0.24, hard_cap $8; `req_1783754385245`, awaiting_approval). **Did NOT approve it:** MS_ENABLE_LLM_SUMMARY=true +
+MS_ENABLE_CLAUDE=true → an approved run would call the **Claude aiprimetech.io summary endpoint = Stage F (task #7,
+pending/untested)**, which must not be exercised pre-Stage-E and would deliver unproven AI output to the operator's
+Telegram. **Correct next step:** prove the progress lifecycle DETERMINISTICALLY — invoke WF20 via a driver with
+`enable_llm_summary=false` + the telegram-only plan (free/$0.24 bounded), observe the ONE progress message +
+editMessageText through stages + persisted message_id + final report/XLSX/follow-up. Env enable flags:
+VK=false, TELEGRAM=true, FIRECRAWL/APIFY/CLAUDE=true, LLM_PLANNER=false, LLM_SUMMARY=true; allowlist=website,avito,
+telegram; budgets source=$5/llm=$3/hard_cap=$8. Pending plan `req_1783754385245` is harmless (TTL-expires 120min).
+Real-Telegram injector = `docker exec n8n-n8n-1 node /tmp/inject.js "<text>"` (secret from env; allowed user
+1188830082). Remaining pre-Stage-E after #12: auto summary(#3)/XLSX(#4)/follow-up(#5) [same WF20 run],
+source-registry(#7, WF22-callable, free, no webhook), user-URL E2E(#8), remove disposable drivers(#9:
+msdrvvkd1*/vkd2*/d2*/d3*/d4*/d3b/wf22status/wf22cancel/msdrvd3*).
+
 ---
 
 ## Session: 2026-07-06 (session 37) — STAGE D (prematurely) CLOSED then REOPENED: Avito root-caused + VK posts live
