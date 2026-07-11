@@ -92,4 +92,37 @@ const aggMixed = runAgg(competitorPosts, audienceComments);
 const sigMixed = (aggMixed.audience_activity_signals || []).find(s => s.platform === 'vk') || {};
 A.eq('1 real comment question counted, competitor posts excluded -> question_count 1', Number(sigMixed.question_count || 0), 1);
 
+// ---------------- WF14: competitor/market posts never become leads; weak service complaints capped ----------------
+const wf14 = H.loadWorkflow('14_public_lead_signal_triage.json');
+function runTriage(review, raw) {
+  const run = H.makeRun();
+  const cfg = H.runCodeNode(run, wf14, 'Set Triage Config', [])[0].json;
+  run.outputs['Set Triage Config'] = [{ json: cfg }];
+  H.inject(run, 'Read review_queue', review);
+  H.inject(run, 'Read raw_market_records', raw);
+  H.inject(run, 'Read public_lead_signals', []);
+  const out = H.runCodeNode(run, wf14, 'Build Candidate Pool & Classify', []);
+  const sigs = (out.length === 1 && out[0].json._no_signals) ? [] : out.map(i => i.json);
+  return sigs;
+}
+const nowI = new Date().toISOString();
+const rbase = { source_run_id: 'run_aud', data_mode: 'live', report_eligible: true, quality_status: 'healthy', review_status: 'confirmed', dedup_status: 'unique', created_at: nowI, region: REGION, platform: 'vk' };
+// review_queue: a telegram MARKET/competitor post (source_type=social_channel) with '?' + credit words — must NOT become a lead
+const tgMarketPost = Object.assign({}, rbase, { platform: 'telegram', source_type: 'social_channel', entity_type: 'content_idea', record_type_hint: 'market_signal', post_url: 'https://t.me/mfo_market/223', text_context: 'Микрозаймы: медленная смерть кредитной истории? Перехватил 5 тысяч до зарплаты, почему отказали в кредите?' });
+// raw_market_records: a genuine credit-pain VK comment (SHOULD be a strong lead) + a pain-less bank service complaint (must be capped)
+const creditComment = Object.assign({}, rbase, { source_type: 'public_discussion', touchpoint_type: 'public_comment', record_type_hint: 'buying_intent', post_url: 'https://vk.com/wall-1_3?reply=10', text_context: 'Нужен кредит после отказов банков, плохая кредитная история, поможете получить?', comment_text: 'Нужен кредит после отказов банков, плохая кредитная история, поможете получить?', agent_request_id: '' });
+const serviceComplaint = Object.assign({}, rbase, { source_type: 'public_discussion', touchpoint_type: 'public_comment', record_type_hint: 'audience_question', post_url: 'https://vk.com/wall-2_4?reply=11', text_context: 'Почему не работает приложение? Когда заработает сайт?', comment_text: 'Почему не работает приложение? Когда заработает сайт?', agent_request_id: '' });
+
+A.section('D3 — WF14: competitor/market review_queue posts never become public leads (LEAD-AUD-001)');
+const sigs1 = runTriage([tgMarketPost], []);
+A.ok('a telegram market/competitor post is NOT written as a public lead', !sigs1.some(s => String(s.source_post_url || s.source_url || '').indexOf('t.me/mfo_market') >= 0), 'market post leaked as a lead');
+
+A.section('D3 — WF14: genuine credit lead stays strong; pain-less service complaint is capped to low (LEAD-STRONG-001)');
+const sigs2 = runTriage([], [creditComment, serviceComplaint]);
+const credLead = sigs2.find(s => String(s.evidence_excerpt || s.evidence_text || '').indexOf('после отказов') >= 0);
+const svcLead = sigs2.find(s => String(s.evidence_excerpt || s.evidence_text || '').indexOf('приложение') >= 0);
+A.ok('genuine credit-pain comment is written as a lead', !!credLead, 'credit lead missing');
+A.ok('genuine credit-pain lead is strong (high/medium)', credLead && ['high', 'medium'].indexOf(String(credLead.score_band)) >= 0, 'credit lead not strong: ' + (credLead && credLead.score_band));
+A.ok('pain-less service complaint is NOT in the strong band', !svcLead || ['high', 'medium'].indexOf(String(svcLead.score_band)) < 0, 'service complaint is strong: ' + (svcLead && svcLead.score_band));
+
 A.report('stage-d3-report-quality');
