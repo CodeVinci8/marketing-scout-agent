@@ -22,7 +22,23 @@ WF22 exec **542** op=cancel → cancelled newest (`plan_req_90112771` approved�
 execution_plans success)**, RU reply, no leak. WF22 exec **544** 2nd cancel → targeted a DIFFERENT plan, **never
 re-touched the cancelled one** (idempotent/terminal-excluded). Cancelled 2 stale week-old abandoned plans as proof.
 
-**⚠️ BLOCKER (operator-infra, hard boundary): WF18 webhook unregistered → needs n8n restart.** Deploying any WF18
+**✅ RESOLVED 2026-07-11 (operator restarted n8n-n8n-1): WF18 webhook re-registered; /status + /cancel REAL
+TELEGRAM round-trip PROVEN.** After `docker restart n8n-n8n-1`: `webhook_entity` has ms-telegram-agent POST →
+mslocf50ab8007ca, local `POST /webhook/ms-telegram-agent` → 200, WF18 active, TG no errors. Injected real updates
+(allowed user 1188830082, secret header): **/status** WF18 exec 546 → canonical selector, humanized RU, 0 leak,
+**real Telegram reply sent (msg_id 104)**. **/cancel** WF18 exec 549 ack (msg 107) → WF22 dispatch exec 550 cancelled
+newest active `plan_req_1783124815701` (approved→cancelled), **persisted (Upsert success)**, confirmation **msg 108**;
+2nd /cancel exec 552 → 0 changes, "Сейчас нет активного запроса" (idempotent/empty-safe).
+**BUG the round-trip exposed + fixed (STATUS-SELECT-002, commit `4a286b0`, WF22 deployed):** WF18 dispatch sets
+`agent_request_id=req_<update_id>` for a TEXT /cancel (isLifecycle=approve/reject only); WF22 treated any non-empty
+arid as an explicit plan target → matched no plan → "нет активного". Fix: WF22 resolves `__planForArid` only when a
+plan with that id exists (real callback), else falls back to `selectActiveRequest()` newest-active. The last
+session's WF22-callable proof passed arid='' so it MISSED this — the real round-trip caught it. WF18 dispatch also
+binds the callback plan id for cancel (committed, **deploy DEFERRED** — re-importing WF18 re-registers the webhook
+only on restart, and the WF22 fallback already makes text /cancel correct, so prod WF18 keeps the old dispatch line
+until a restart-gated window; prod WF18 != canonical by that ONE line, non-critical). make test ALL PASS.
+
+**(historical) ⚠️ BLOCKER (now resolved above): WF18 webhook unregistered → needs n8n restart.** Deploying any WF18
 (webhook gateway) change requires a CLI re-import; n8n's model then leaves the production webhook UNREGISTERED in
 the running process until an **n8n restart** (or REST-API activation with owner creds — none available). Verified:
 `webhook_entity` empty, local `POST /webhook/ms-telegram-agent` → **404**, TG webhook url set (tunnel
