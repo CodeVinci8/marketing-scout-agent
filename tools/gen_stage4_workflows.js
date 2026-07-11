@@ -1186,7 +1186,11 @@ write('24_report_export_delivery.json', wf('24 — Report Export, Filter, Compar
   sheetsRead('wf24-readout', 'Read attachment_outbox', [-660, 120], 'attachment_outbox'),
   code('wf24-scope', 'Select & Scope Report', [-440, 0], ['report_export'], `
 var cfg=$('Resolve Agent Config').first().json;
-var inp=$json||{};
+${CALLER}
+// EXPORT-CHAT-001: the caller (owner/agent_request_id/report_id) MUST come from the trigger. The upstream Google
+// Sheets Read nodes replace $json with sheet rows, so reading $json here loses the caller and leaves the delivery
+// chat_id empty (Telegram 400 "chat_id is empty") — the reason the export was never delivered. Use callerInput().
+var inp=callerInput();
 var owner=String(inp.owner_user_id||'');var arid=String(inp.agent_request_id||'');var rid=String(inp.report_id||'');
 var action=String(inp.action||'export');var filter_text=String(inp.filter_text||'');
 function J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}
@@ -1242,7 +1246,9 @@ var chartRoute=routeAttachment(chartMime);
 var json={scope:scope,csv_filename:csv.filename,csv_row_count:csv.row_count,xlsx_filename:pkg.filename,xlsx_size:pkg.size_bytes,xlsx_sheets:pkg.sheet_names,chart_title:chart.title,chart_mime:chartMime,chart_insufficient:!!chart.insufficient_data,doc_api_method:docRoute.api_method,doc_form_field:docRoute.form_field,chart_api_method:chartRoute.api_method,chart_form_field:chartRoute.form_field,chat_id:String(scope.owner_user_id||''),caption:'Отчёт по анализу конкурентов',attachment_deliveries:[xlsxDeliv,csvDeliv,chartDeliv],xlsx_should_send:xlsxSend.send,chart_should_send:chartSend.send,external_calls:0};
 return [{json:json,binary:{attachment:{data:Buffer.from(pkg.buffer).toString('base64'),fileName:pkg.filename,mimeType:pkg.mime},chart:{data:Buffer.from(String(chart.svg||''),'utf8').toString('base64'),fileName:'chart.svg',mimeType:chartMime}}}];`),
   httpTelegramFile('wf24-senddoc', 'Send Document', [440, -60], 'sendDocument', 'document', 'attachment'),
-  httpTelegramFile('wf24-sendchart', 'Send Chart (SVG via sendDocument)', [440, 120], 'sendDocument', 'document', 'chart'),
+  // EXPORT-CHART-001: the chart is a best-effort EXTRA. When the report has no chartable numeric series the
+  // chart binary is absent — sending must degrade silently (never error the run after the XLSX already went out).
+  Object.assign(httpTelegramFile('wf24-sendchart', 'Send Chart (SVG via sendDocument)', [440, 120], 'sendDocument', 'document', 'chart'), { onError: 'continueRegularOutput' }),
   code('wf24-outrows', 'Shape Attachment Outbox', [440, 280], [], `
 var e=$('Build Exports & Outbox').first().json;
 return (e.attachment_deliveries||[]).map(function(d){return {json:d};});`),

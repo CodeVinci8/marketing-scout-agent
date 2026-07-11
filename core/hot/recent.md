@@ -46,11 +46,28 @@ surfaced defects; fixed canonically + `test_report_quality_v2.js` (34) + deploye
   placeholders, 10/10 defect checks pass. no-data path also proven clean (exec 571).
 - Harness gained `$env` support (`run.env`) for env-gated node tests.
 
-`make test` ALL SUITES PASS ($0). **PENDING: #3 XLSX/Excel delivery (WF24) not yet live-proven** — next. Then
-follow-up(#5 button live), source-registry(#7), user-URL E2E(#8), remove disposable drivers(#9). Disposable drivers
-added this session: `msdrvprog0001`, `msdrvreplay001` (remove in #9). Injector `docker exec n8n-n8n-1 node
-/tmp/inject.js "<text>"`. Telegram dedup: identical channel posts within a short window dedup → a 2nd fresh run is
-no_data (expected); content-rich proof uses the WF10→WF12 replay over the first run's stored analysis.
+`make test` ALL SUITES PASS ($0).
+
+**#3 XLSX/Excel delivery (WF24) — LIVE-PROVEN + fixed 2 real latent WF24 bugs.** Root cause the operator "never saw
+Excel": **EXPORT-CHAT-001** — WF24 `Select & Scope Report` read the caller owner from `$json`, but the upstream
+Google Sheets Read nodes replace `$json` with sheet rows → owner empty → delivery `chat_id` empty → Telegram 400
+"chat_id is empty" (silent). Fixed to `callerInput()` (from the trigger). **EXPORT-CHART-001** — the optional chart
+`sendDocument` threw when the report had no chartable series (binary 'chart' absent) and errored the whole run AFTER
+the XLSX had been sent → `onError:continueRegularOutput` (chart is best-effort). Tests `test_wf24_export.js` (10).
+Deployed WF24 (`C5lHoiF7yEF4toVW`). **Proof:** persisted the clean replay bundle to `report_bundles` (owner-stamped)
+→ WF24 exec **590** success: **XLSX delivered to Telegram msg 128** (`marketing_scout_report_20260711_232327_report.xlsx`,
+9793 bytes) + result reply msg 129. **Inspected the delivered file**: valid OOXML, 8 sheets (Summary, Competitors,
+Offers_Prices, Evidence, Recommendations, Source_Quality, Changes, Run_Metadata); Competitors sheet cols
+Competitor/Domain/Region/Positioning/Score/Quality/Last checked/Source link with 2 real competitors (name entity
+decoded «…Светловым!», telegram evidence URLs t.me/s/da_credit + broker_Aleksey), 0 placeholders, 0 HTML entities,
+0 Avito. Report↔XLSX consistent (2 competitors both). Drivers this session: `msdrvprog0001`, `msdrvreplay001`,
+`msdrvbundle001/002`, `msdrvxlsx001` (remove in #9).
+
+`make test` ALL SUITES PASS ($0). **REMAINING pre-Stage-E:** follow-up-button live (#5, buttons already proven in
+outbox — deep-analysis/ideas/rerun/compare, no Avito), source-registry(#7), user-URL E2E(#8), remove disposable
+drivers(#9), final boundary verification. Injector `docker exec n8n-n8n-1 node /tmp/inject.js "<text>"`. Telegram
+dedup: identical channel posts within a short window dedup → a 2nd fresh run is no_data (expected); content-rich
+proof uses the WF10→WF12 replay over the first run's stored analysis (`msdrvreplay001`).
 
 ---
 

@@ -57,6 +57,8 @@ const JS_SUITES = [
   ['deterministic-run', 'test_deterministic_run.js'],
   // --- RQ-v2: report-quality repair (Avito leak, placeholders, entities, empty sections, trend, counts, buttons) ---
   ['report-quality-v2', 'test_report_quality_v2.js'],
+  // --- WF24 XLSX export/delivery fixes (EXPORT-CHAT-001 caller scope + EXPORT-CHART-001 chart tolerance) ---
+  ['wf24-export', 'test_wf24_export.js'],
   // --- Stage 5: guarded provider adapter contract (real runAdapter path + parsers + cost + acceptance) ---
   ['stage5-adapters', 'test_stage5_adapters.js'],
   // --- Stage 4: single-user Telegram agent MVP (libs + generated WF17-20) ---
