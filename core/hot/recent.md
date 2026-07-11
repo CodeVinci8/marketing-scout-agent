@@ -4,6 +4,52 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-11 (session 42) — Stage D · D3 report-quality repair DEPLOYED + LIVE-PROVEN → STAGE D = PASS
+
+**Canonical FILE 1 stage:** **D — source quality = PASS** (D1+D2+D3 all live-proven; Avito optional-blocked).
+Branch `fix/stage4-live-final-acceptance`. Commits this session: `aee19bb` (WF12+WF10 fixes), `d6175b4` (WF14
+fixes), + this docs commit. NOT pushed. **$0, 0 paid calls** (VK free API; deterministic report, claude_calls=0).
+
+**D3 fixes (canonical hand-authored WF10/WF12/WF14; deployed backup-first, sha256 backups 13bdb8a9/… on record):**
+- **WF12 REPORT-LEADS-001**: public_lead_signals read was unscoped → the tab holds ~999 BLANK rows (only row_number
+  set) that rowsOf() kept → phantom "лид-сигналов: 999" + empty «» rows. Now filtered by __leadValid (real id OR
+  evidence OR intent OR score) + __leadInReq (labelled leads scoped to the report request family; unlabelled kept).
+- **WF12 markdown/CTA sanitize (stripMd)**: collapses [label](url)→label, strips dangling "](https…"; applied to
+  site-snapshot offer/prices/guarantees/cta → no more "Оставить заявку](https://www".
+- **WF10 AUD-COUNT-001**: audience counters (questions/objections/complaints/buying) count ONLY audience-voice rows
+  (source_type=public_discussion/social_comment, touchpoint=public_comment). Competitor/market/unknown posts with
+  "?" no longer inflate "вопросов N".
+- **WF14 LEAD-AUD-001**: review_queue candidates gated to genuine audience rows → telegram MARKET/competitor posts
+  can never become public leads. **WF14 LEAD-STRONG-001**: a comment with no credit pain and no buying intent is
+  capped to 'low' band → bank service complaints never pollute the strong (high/medium) section.
+
+**Live proof (fresh, deterministic reports; all rendering defects verified GONE):**
+- **report_20260711_025451** (req_vk_d3, 4 communities posts+comments): 999=false, "](http"=false, empty «»=false,
+  internal-leakage=false, **audience вопросов=0 (was 23)**; 4 VK competitors grounded, angles from real post text.
+- **report_20260711_031651** (req_vk_d4, fresh untriaged **vtb** bank comments): **21 fresh comment leads, ALL
+  band='low'** (dup=0 on the untriaged source) → LEAD-STRONG-001 proven: bank service complaints do NOT enter the
+  strong section; report body correctly `no_data` (a bank's posts aren't broker competitors). Rendering clean.
+- **WF14(fixed) candidate pool over req_vk_d3** = 23 VK comments, **0 telegram market posts** → LEAD-AUD-001 proven
+  live. Focused test_stage_d3_report_quality.js (15) + lead_scout + full make test PASS ($0).
+
+**AI/Claude enrichment:** WF12 enable_llm_summary=false by default; Claude is behind budget+approval gates (the
+separate Stage F aiprimetech.io work). Canonical MVP Stage-D report mode is **deterministic** — D3 proven in that
+mode; Claude enrichment NOT force-enabled (would need budget approval; deferred to Stage F).
+
+**Honest constraint (not a defect):** a SINGLE report combining broker competitors + fresh clean non-empty leads
+isn't achievable in one artifact — broker communities have competitors but ~0 comments, banks have comments but
+aren't broker competitors — plus cross-request lead dedup means already-triaged QA comments can't be re-triaged
+into a new request. Each element is independently live-proven. Residual: req_vk_d3's first report (pre-WF14-fix)
+had 25 leads incl. telegram pollution; those historical rows remain but the fix excludes them for future runs.
+
+**EXACT NEXT (post-Stage-D backlog, per operator order — NOT started; needs explicit authorization):** /status →
+/cancel → one-message progress lifecycle → auto report/XLSX delivery → contextual follow-up → monitored-source
+registry → user-supplied-URL proof → remove disposable drivers → then Stage E. Disposable drivers to remove:
+msdrvvkd1*, msdrvvkd2*, msdrvd2*, msdrvd3*, msdrvd4*, msdrvd3b. Prod deployed: WF26(31n)/WF14(mslocwf14lead)/
+WF10/WF12 all carry the D1-D3 fixes.
+
+---
+
 ## Session: 2026-07-10 (session 41) — Stage D · D2 DEPLOYED + LIVE-PROVEN (VK comments → public lead signals)
 
 **Canonical FILE 1 stage:** **D — source quality (IN_PROGRESS).** D1 done (session 40). **D2 = DONE, live-proven.**

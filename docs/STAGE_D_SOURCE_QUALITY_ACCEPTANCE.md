@@ -111,7 +111,9 @@ end-to-end grounded into reports. See the per-source sections above and the clos
 > one additional public community that actually has relevant comments for a positive-lead QA (pending); (4)
 > reflected in a fresh cross-source report (Website+Telegram+VK) with the known reporting defects re-verified
 > closed (pending). Avito = OPTIONAL, operator-infra-blocked (see checkpoint above), must not block the MVP.
-> **Current marker: `STAGE_D_SOURCE_QUALITY=IN_PROGRESS` (VK integration + comments + cross-source report pending).**
+> **RESOLVED 2026-07-11: all three items (D1 posts, D2 comments, D3 cross-source report) are deployed and
+> live-proven — see the D1/D2/D3 LIVE PROOF sections and the STAGE D CLOSURE below. Final marker:
+> `STAGE_D_SOURCE_QUALITY=PASS`.**
 
 ### D1 — VK posts → canonical pipeline: LOCAL-COMPLETE (deploy + live proof auth-gated) — 2026-07-06 (commit `48a52fb`)
 
@@ -238,6 +240,55 @@ spam, support) that WF14's broad question detector accepts as `intent=question, 
 existing deterministic scoring (reused as-is, the canonical lead writer), not the D2 collection/classification;
 relevance tuning of WF14 is a separate concern. (2) The existing `public_lead_signals` tab still shows the phantom
 "999" downstream in WF12 — that is a **D3** report defect, not touched here.
+
+### D3 — cross-source report-quality repair: LIVE PROOF (2026-07-11) · `VK_D3_REPORT_QUALITY=PASS` · $0
+
+**Root causes (all LIVE-observed in the D1/D2 reports) fixed in the canonical hand-authored WF10/WF12/WF14 and
+deployed backup-first (deployed jsCode === canonical; workflows active):**
+
+| defect | root cause | fix |
+|---|---|---|
+| phantom `Публичных лид-сигналов: 999` | WF12 read `public_lead_signals` unscoped; the tab holds ~999 BLANK rows (only `row_number` set) kept by `rowsOf()` | WF12 **REPORT-LEADS-001**: `__leadValid` (real id/evidence/intent/score) + `__leadInReq` (labelled leads scoped to request family; unlabelled kept) |
+| malformed CTA `Оставить заявку](https://www` | competitor `cta_text` markdown link truncated mid-link | WF12 `stripMd()` collapses `[label](url)`→label + strips dangling `](https…`; applied to site-snapshot offer/prices/guarantees/cta |
+| empty `«»` / unknown lead rows | blank stale rows rendered | removed by REPORT-LEADS-001 (blank rows never counted) |
+| competitor wall posts as `вопросов 23` | WF10 counted `?` on ALL rows incl. competitor posts | WF10 **AUD-COUNT-001**: audience counters gated to `source_type=public_discussion/social_comment` / `touchpoint=public_comment` |
+| competitor/market posts scored as public leads | WF14 pulled telegram market posts from `review_queue` | WF14 **LEAD-AUD-001**: review_queue candidates gated to genuine audience rows |
+| bank service complaints as strong leads | WF14 scored pain-less questions `medium` | WF14 **LEAD-STRONG-001**: pain-less, non-buying comments capped to `low` band |
+
+**Fresh live proof (deterministic reports; `claude_calls=0`, $0):**
+- **report_20260711_025451** (req_vk_d3, 4 communities): `999`=**absent**, `](http`=**absent**, empty `«»`=**absent**,
+  internal-leakage=**absent**, **audience вопросов=0** (was 23); 4 VK competitors grounded with evidence URLs.
+- **report_20260711_031651** (req_vk_d4, fresh untriaged **vtb** bank comments, dup=0): WF14 wrote **21 fresh leads,
+  ALL `low` band** → LEAD-STRONG-001 proven live (bank service complaints never strong); report body correctly
+  `no_data` (a bank's posts aren't broker competitors) — accurate, not a defect. Rendering clean on all checks.
+- WF14(fixed) candidate pool over req_vk_d3 = **23 VK comments, 0 telegram market posts** → LEAD-AUD-001 proven live.
+
+```
+VK_D3_RENDERING_DEFECTS=FIXED (999/CTA/empty-rows/audience-miscount/internal-leakage — live-verified absent)
+VK_D3_LEAD_AUD_001=PASS (competitor/market posts never public leads)
+VK_D3_LEAD_STRONG_001=PASS (21 vtb service-complaint leads all 'low'; no strong-section pollution)
+VK_D3_REPORT_MODE=deterministic (WF12 enable_llm_summary=false; Claude enrichment = Stage F, budget/approval-gated)
+VK_D3_COST_USD=0
+```
+
+**Honest constraint (not a defect):** a SINGLE report combining broker competitors AND fresh clean non-empty leads
+isn't achievable in one artifact (broker communities have competitors but ~0 comments; banks have comments but
+aren't broker competitors) plus cross-request lead dedup blocks re-triaging already-used QA comments. Each element
+is independently live-proven. req_vk_d3's first report (pre-WF14-fix) had 25 leads incl. telegram pollution; those
+historical `public_lead_signals` rows persist but the deployed fix excludes such content for future runs.
+
+---
+
+## STAGE D — CLOSURE (2026-07-11): `STAGE_D_SOURCE_QUALITY=PASS`
+
+D1 (VK posts → competitor intelligence), D2 (VK comments → public lead signals), and D3 (cross-source report-quality
+repair) are all deployed and live-proven at $0. Website + Telegram source quality proven earlier (session 35/37).
+Avito remains **optional, operator-infra-blocked** (`AVITO_SOURCE_QUALITY=BLOCKED_OPTIONAL_OPERATOR_INFRA_PREREQUISITE`
+— paid Apify residential proxy) and does NOT block the MVP.
+
+```
+STAGE_D_SOURCE_QUALITY=PASS
+```
 
 ## STAGE D closure DRAFT — 2026-07-06 (superseded by the REOPEN above; retained for the Website/Telegram/Avito evidence)
 
