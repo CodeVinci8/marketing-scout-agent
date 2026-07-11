@@ -23,9 +23,29 @@ user 1188830082):** list(empty)→msg133 · add «https://mkbkfin.ru»→WF22 ex
 active, msg135 · list→«mkbkfin.ru — активен» msg137 (round-trip) · remove→«источник удалён из мониторинга» msg139
 (QA source cleaned up, not left permanently). Owner-scoped, URL-dedup, Avito-not-addable-while-blocked all covered.
 
-**REMAINING pre-Stage-E:** Item 6 user-supplied Website URL E2E (needs bounded Firecrawl), Item 7 remove disposable
-drivers, Item 8 final boundary verification + Stage E readiness. Disposable drivers to remove:
-`msdrvprog0001`, `msdrvreplay001`, `msdrvbundle001`, `msdrvbundle002`, `msdrvxlsx001` + any older `msdrv*`/`msqa*`.
+**Item 7 (remove disposable drivers) — SUPPORTED MECHANISM BLOCKED (documented, operator-gated).** 43 disposable
+QA/driver workflows identified, **ALL inactive/harmless** (never execute; don't touch the bot/webhook/pipeline);
+none are canonical (the 15 active WF04/08/09/10/11/12/14/16/18/19/20/21/22/24/26 are untouched). n8n 2.23.3 has **no
+`delete:workflow` CLI**; the REST API `DELETE /api/v1/workflows/:id` needs an owner **X-N8N-API-KEY** (not available);
+UI needs owner login. Raw sqlite delete on the live prod DB = Red-Zone (FK/orphan risk) → NOT done. Exact id list:
+`scratchpad/backup/disposable_driver_ids.txt`. **Safe next action:** operator deletes via n8n UI (multi-select) or
+creates an API key + `DELETE /api/v1/workflows/:id` per id.
+
+**Item 8 (final verification) — production HEALTHY.** Post WF18/WF22 redeploy + restart: webhook re-registered,
+WF18 active, 15 canonical workflows active, `/status` live msg 142 clean (no leak). Avito blocked, progress
+lifecycle + XLSX + source registry all live-proven this + prior sessions. `make test` ALL SUITES PASS ($0).
+
+**NOT STAGE-E-READY — ONE pre-Stage-E item remains: Item 6 (user-supplied Website URL E2E).** ROOT CAUSE found:
+the request path **never populates `request.urls` from the user's text** — WF20 `Resolve Collection Set` uses
+`g.request.urls` if present else falls back to preset `cfg.website_competitor_urls`, and nothing extracts a URL from
+the Telegram message into `request.urls`. **Implementation plan:** (1) `request_planner` (or a url_safety helper)
+extracts https URL(s) from the request text (https-only, reject private/non-public) → `plan.urls`; (2) add a `urls`
+column to the `execution_plans` contract + `buildPlanRow`; (3) WF20 `Resolve Approved Plan` reads `urls` into
+`out.plan`; (4) `Approval & Budget Gate` sets `req.urls = plan.urls`; (5) focused test + deploy WF19+WF20; (6)
+BOUNDED live proof — send a real public URL via Telegram, drive WF20 deterministically (`enable_llm_summary=false`
++ `enable_llm_analysis=false`) to avoid the Stage-F Claude endpoint, real Firecrawl website collection (budget-gated,
+~1-3 pages), inspect the report reflects THAT url. Firecrawl is a source collector (bounded live run, NOT Stage F).
+Then Item 7 operator removal, then Stage-E readiness.
 
 ---
 
