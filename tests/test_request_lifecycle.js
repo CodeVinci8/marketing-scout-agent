@@ -61,4 +61,35 @@ const libCore = fs.readFileSync(path.join(__dirname, '..', 'n8n', 'lib', 'reques
 A.ok('WF18 embed === library core', cmd.indexOf(libCore) >= 0, 'wf18 embed drift');
 A.ok('WF22 embed === library core', ctl.indexOf(libCore) >= 0, 'wf22 embed drift');
 
+A.section('WF22 /cancel — STATUS-SELECT-002: a text-command arid (req_<update_id>) falls back to the newest active');
+const H = require('./wf_harness');
+const WF22 = H.loadWorkflow('22_conversation_control.json');
+function control(input, plansArr) {
+  const run = H.makeRun();
+  H.inject(run, 'Resolve Agent Config', [{ source_allowlist: ['website'] }]);
+  H.inject(run, 'Read durable_memories', []);
+  H.inject(run, 'Read tracked_sources', []);
+  H.inject(run, 'Read execution_plans', plansArr || []);
+  return H.runCodeNode(run, WF22, 'Apply Control Command', [{ json: input }])[0].json;
+}
+const activePlans = [
+  { plan_id: 'pA', agent_request_id: 'rA', owner_user_id: '111', chat_id: '555', status: 'approved', sources: 'website', created_at: iso(5) },
+  { plan_id: 'pB', agent_request_id: 'rB', owner_user_id: '111', chat_id: '555', status: 'collecting', sources: 'vk', created_at: iso(30) }
+];
+// text /cancel: the dispatch passes the command's own update id, which matches no plan -> newest active (pA) cancelled
+const cText = control({ domain: 'request', op: 'cancel', owner_user_id: '111', chat_id: '555', agent_request_id: 'req_1783753557665' }, activePlans);
+A.eq('text /cancel cancels the newest active plan (pA)', (cText.changed_plans || []).map(p => p.plan_id).join(','), 'pA');
+A.eq('text /cancel newest plan -> cancelled', (cText.changed_plans || [])[0] && cText.changed_plans[0].status, 'cancelled');
+A.ok('text /cancel reply is user-safe (no "нет активного")', cText.reply.indexOf('отмен') >= 0 && cText.reply.indexOf('Сейчас нет') < 0, 'reply=' + cText.reply);
+// a REAL callback arid targets that specific plan
+const cCb = control({ domain: 'request', op: 'cancel', owner_user_id: '111', chat_id: '555', agent_request_id: 'rB' }, activePlans);
+A.eq('callback arid=rB cancels exactly pB', (cCb.changed_plans || []).map(p => p.plan_id).join(','), 'pB');
+// nothing active -> safe idempotent reply
+const cNone = control({ domain: 'request', op: 'cancel', owner_user_id: '111', chat_id: '555', agent_request_id: 'req_x' }, [{ plan_id: 'pD', agent_request_id: 'rD', owner_user_id: '111', chat_id: '555', status: 'cancelled', created_at: iso(1) }]);
+A.eq('no active -> no changed_plans', (cNone.changed_plans || []).length, 0);
+A.ok('no active -> safe reply', /нет активного/i.test(cNone.reply), 'reply=' + cNone.reply);
+// /status via WF22 also uses the selector (owner+chat), humanized, no leak
+const sWf22 = control({ domain: 'request', op: 'status', owner_user_id: '111', chat_id: '555' }, activePlans);
+A.ok('WF22 /status renders a humanized status (no raw enum)', sWf22.reply.indexOf('Статус запроса') >= 0 && !/approved|collecting|plan_/.test(sWf22.reply), 'reply=' + sWf22.reply);
+
 A.report('request-lifecycle');

@@ -467,7 +467,7 @@ var isCallback=p.kind==='callback';
 var boundArid=(r.freetext_approval&&r.freetext_approval.bound_request_id)||'';
 if(!boundArid&&isCallback&&p.callback_data){var m=String(p.callback_data).match(/^(approve|reject|cancel):(.+)$/);if(m)boundArid=m[2];}
 var isLifecycle=(action==='approve'||action==='reject');
-var arid=(isLifecycle&&boundArid)?boundArid:('req_'+(p.update_id||p.message_id||stamp.replace(/[^0-9]/g,'')));
+var arid=((isLifecycle||action==='cancel')&&boundArid)?boundArid:('req_'+(p.update_id||p.message_id||stamp.replace(/[^0-9]/g,'')));
 var rec={agent_request_id:arid,update_id:p.update_id,chat_id:p.chat_id,user_id:p.user_id,owner_user_id:p.user_id,request_text:p.text||p.callback_data,kind:p.kind,intent:intent.intent,requested_action:action,idempotency_key:p.idempotency_key,plan_source:'',data_mode:cfg.report_data_mode||'live',created_at:stamp,state:'received'};
 var t=transition(rec,'classified',{ts:stamp});
 var request=t.record;
@@ -745,12 +745,16 @@ if(inp.domain==='memory'){
  // valid active, TTL-expired approvals + terminal/QA/foreign ignored). An explicit agent_request_id (from an
  // approve/reject/cancel callback) still targets that exact plan; otherwise the newest active request is chosen.
  var __selCancel=selectActiveRequest(plans,{owner_user_id:owner,chat_id:out.chat_id,now_iso:ts});
+ // STATUS-SELECT-002: a callback (approve/reject/cancel:<plan>) binds a REAL plan agent_request_id; a TEXT command
+ // carries the update's own id (req_<update_id>) which matches no plan — so only treat arid as an explicit target
+ // when a plan with that id actually exists, otherwise fall back to the canonical newest-active selector.
+ var __planForArid=arid?plans.filter(function(p){return String(p.owner_user_id)===owner&&String(p.agent_request_id)===arid;})[0]:null;
  if(inp.op==='cancel'){
-  var tg=arid?(plans.filter(function(p){return String(p.owner_user_id)===owner&&String(p.agent_request_id)===arid&&rlIsActive(p.status);})[0]||null):__selCancel.request;
+  var tg=__planForArid?(rlIsActive(__planForArid.status)?__planForArid:null):__selCancel.request;
   if(!tg){out.reply='Сейчас нет активного запроса для отмены.';}
   else{out.changed_plans=[Object.assign({},tg,{status:'cancelled',decided_at:ts,decided_by:owner})];out.request_event={agent_request_id:tg.agent_request_id,from_state:tg.status,to_state:'cancelled',accepted:true,reason:'user_cancel',idempotency_key:'cancel::'+tg.plan_id,ts:ts};out.reply='Запрос отменён. Дальнейшие шаги выполняться не будут.';}
  }else if(inp.op==='reject'){
-  var t2=arid?(plans.filter(function(p){return String(p.owner_user_id)===owner&&String(p.agent_request_id)===arid&&String(p.status)==='awaiting_approval';})[0]||null):((__selCancel.request&&String(__selCancel.request.status)==='awaiting_approval')?__selCancel.request:null);
+  var t2=__planForArid?(String(__planForArid.status)==='awaiting_approval'?__planForArid:null):((__selCancel.request&&String(__selCancel.request.status)==='awaiting_approval')?__selCancel.request:null);
   if(!t2){out.reply='Нет плана, ожидающего подтверждения.';}
   else{out.changed_plans=[Object.assign({},t2,{status:'rejected',decided_at:ts,decided_by:owner})];out.request_event={agent_request_id:t2.agent_request_id,from_state:'awaiting_approval',to_state:'cancelled',accepted:true,reason:'user_reject',idempotency_key:'reject::'+t2.plan_id,ts:ts};out.reply='План отклонён. Запуск не выполнен.';}
  }else if(inp.op==='status'){
