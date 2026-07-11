@@ -362,7 +362,7 @@ return [{json:{fast:true,fast_kind:d.kind,telegram_send_body:JSON.stringify({cha
   // ---- §8 command lane: /status renders from the ALREADY-READ batch (no context assembly, no persistence
   //      chain, no WF22 dispatch); /cancel gets an immediate ack and CONTINUES to the real WF22 cancel. Both
   //      run AFTER the durable claim (Resolve Winner), so idempotency is intact. ----
-  code('wf18-cmdlane', 'Command Lane', [20, -220], ['plan_render_ru', 'sheets_access', 'telegram_io'], `
+  code('wf18-cmdlane', 'Command Lane', [20, -220], ['plan_render_ru', 'sheets_access', 'telegram_io', 'request_lifecycle'], `
 var g=$('Resolve Winner').first().json;var p=g.parsed||{};var gate=g.gate||{};
 var kind=String(p.kind||'');
 if(kind==='cancel'){
@@ -382,11 +382,12 @@ if(kind==='request'){
 }
 if(kind!=='status'){return [{json:{lane:'none',continue_heavy:true,has_reply:false}}];}
 var plans=[];try{plans=extractTab($('Batch Read Sheets').first().json,'execution_plans').map(function(i){return i.json;});}catch(e){}
-var mine=plans.filter(function(r){return String(r.owner_user_id)===String(p.user_id);});
-var act=mine.filter(function(r){return ['awaiting_approval','approved','collecting'].indexOf(String(r.status))>=0;});
+// STATUS-SELECT-001: the ONE canonical active-request selector (owner+chat scoped, newest valid, TTL-expired
+// approvals + terminal/QA/foreign rows ignored) — identical to /cancel in WF22.
+var sel=selectActiveRequest(plans,{owner_user_id:p.user_id,chat_id:p.chat_id,now_iso:new Date().toISOString()});
 var text;
-if(!act.length){text='Активных запросов нет. Напишите, что нужно изучить, — я подготовлю план анализа.';}
-else{var p0=act[0];var srcs=String(p0.sources||'').split(',').map(function(x){return x.trim();}).filter(Boolean);text=ruStatusReport({status:p0.status,sources:srcs});if(act.length>1){text+='\\n\\nЕщё в работе: '+act.slice(1).map(planStatusLineRu).join('; ')+'.';}}
+if(!sel.found){text='Активных запросов нет. Напишите, что нужно изучить, — я подготовлю план анализа.';}
+else{var p0=sel.request;var srcs=String(p0.sources||'').split(',').map(function(x){return x.trim();}).filter(Boolean);text=ruStatusReport({status:p0.status,sources:srcs});if(sel.active_count>1){text+='\\n\\nЕщё в работе: '+sel.others.map(planStatusLineRu).join('; ')+'.';}}
 return [{json:{lane:'status',continue_heavy:false,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:text})}}];`),
   ifNode('wf18-ifcmdreply', 'Command Reply?', [200, -220], '={{ $json.has_reply }}'),
   httpTelegram('wf18-sendcmd', 'Send Command Reply', [380, -300]),
@@ -716,7 +717,7 @@ write('22_conversation_control.json', wf('22 — Conversation Control & Sources'
   sheetsRead('wf22-readmem', 'Read durable_memories', [-340, -160], 'durable_memories'),
   sheetsRead('wf22-readsrc', 'Read tracked_sources', [-340, 0], 'tracked_sources'),
   sheetsRead('wf22-readplans', 'Read execution_plans', [-340, 160], 'execution_plans'),
-  code('wf22-apply', 'Apply Control Command', [-120, 0], ['conversation_memory', 'tracked_sources', 'plan_render_ru'], CALLER + `
+  code('wf22-apply', 'Apply Control Command', [-120, 0], ['conversation_memory', 'tracked_sources', 'plan_render_ru', 'request_lifecycle'], CALLER + `
 var cfg=$('Resolve Agent Config').first().json;
 var inp=callerInput();var owner=String(inp.owner_user_id||'');
 var ts=(new Date()).toISOString();
@@ -740,21 +741,24 @@ if(inp.domain==='memory'){
  else{out.reply='Команда источников не распознана.';}
 }else if(inp.domain==='request'){
  var arid=String(inp.agent_request_id||'');
- var mine=plans.filter(function(p){return String(p.owner_user_id)===owner;});
+ // STATUS-SELECT-001: /cancel and /status share the ONE canonical selector with WF18 (owner+chat scoped, newest
+ // valid active, TTL-expired approvals + terminal/QA/foreign ignored). An explicit agent_request_id (from an
+ // approve/reject/cancel callback) still targets that exact plan; otherwise the newest active request is chosen.
+ var __selCancel=selectActiveRequest(plans,{owner_user_id:owner,chat_id:out.chat_id,now_iso:ts});
  if(inp.op==='cancel'){
-  var active=mine.filter(function(p){return ['awaiting_approval','approved','collecting'].indexOf(String(p.status))>=0;});if(arid)active=active.filter(function(p){return String(p.agent_request_id)===arid;});
-  if(!active.length){out.reply='Нет активного запроса для отмены.';}
-  else{var tg=active[0];out.changed_plans=[Object.assign({},tg,{status:'cancelled',decided_at:ts,decided_by:owner})];out.request_event={agent_request_id:tg.agent_request_id,from_state:tg.status,to_state:'cancelled',accepted:true,reason:'user_cancel',idempotency_key:'cancel::'+tg.plan_id,ts:ts};out.reply='Запрос отменён. Дальнейшие шаги выполняться не будут.';}
+  var tg=arid?(plans.filter(function(p){return String(p.owner_user_id)===owner&&String(p.agent_request_id)===arid&&rlIsActive(p.status);})[0]||null):__selCancel.request;
+  if(!tg){out.reply='Сейчас нет активного запроса для отмены.';}
+  else{out.changed_plans=[Object.assign({},tg,{status:'cancelled',decided_at:ts,decided_by:owner})];out.request_event={agent_request_id:tg.agent_request_id,from_state:tg.status,to_state:'cancelled',accepted:true,reason:'user_cancel',idempotency_key:'cancel::'+tg.plan_id,ts:ts};out.reply='Запрос отменён. Дальнейшие шаги выполняться не будут.';}
  }else if(inp.op==='reject'){
-  var aw=mine.filter(function(p){return String(p.status)==='awaiting_approval';});if(arid)aw=aw.filter(function(p){return String(p.agent_request_id)===arid;});
-  if(!aw.length){out.reply='Нет плана, ожидающего подтверждения.';}
-  else{var t2=aw[0];out.changed_plans=[Object.assign({},t2,{status:'rejected',decided_at:ts,decided_by:owner})];out.request_event={agent_request_id:t2.agent_request_id,from_state:'awaiting_approval',to_state:'cancelled',accepted:true,reason:'user_reject',idempotency_key:'reject::'+t2.plan_id,ts:ts};out.reply='План отклонён. Запуск не выполнен.';}
+  var t2=arid?(plans.filter(function(p){return String(p.owner_user_id)===owner&&String(p.agent_request_id)===arid&&String(p.status)==='awaiting_approval';})[0]||null):((__selCancel.request&&String(__selCancel.request.status)==='awaiting_approval')?__selCancel.request:null);
+  if(!t2){out.reply='Нет плана, ожидающего подтверждения.';}
+  else{out.changed_plans=[Object.assign({},t2,{status:'rejected',decided_at:ts,decided_by:owner})];out.request_event={agent_request_id:t2.agent_request_id,from_state:'awaiting_approval',to_state:'cancelled',accepted:true,reason:'user_reject',idempotency_key:'reject::'+t2.plan_id,ts:ts};out.reply='План отклонён. Запуск не выполнен.';}
  }else if(inp.op==='status'){
-  var act=mine.filter(function(p){return ['awaiting_approval','approved','collecting'].indexOf(String(p.status))>=0;});
-  if(!act.length){out.reply='Активных запросов нет. Напишите, что нужно изучить, — я подготовлю план анализа.';}
-  else{var p0=act[0];var srcs=String(p0.sources||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+  var __selStatus=selectActiveRequest(plans,{owner_user_id:owner,chat_id:out.chat_id,now_iso:ts});
+  if(!__selStatus.found){out.reply='Активных запросов нет. Напишите, что нужно изучить, — я подготовлю план анализа.';}
+  else{var p0=__selStatus.request;var srcs=String(p0.sources||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
   out.reply=ruStatusReport({status:p0.status,sources:srcs});
-  if(act.length>1){out.reply+='\\n\\nЕщё в работе: '+act.slice(1).map(planStatusLineRu).join('; ')+'.';}}
+  if(__selStatus.active_count>1){out.reply+='\\n\\nЕщё в работе: '+__selStatus.others.map(planStatusLineRu).join('; ')+'.';}}
  }else{out.reply='Команда не распознана.';}
 }else{out.reply='Неизвестный домен команды.';}
 return [{json:out}];`),
