@@ -4,6 +4,39 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-11 (session 43) — pre-Stage-E: /status + /cancel canonical selector BUILT+DEPLOYED+live-proven; WF18 webhook-restart BLOCKER
+
+**Stage D = PASS** (prior). Started the pre-Stage-E backlog. Branch `fix/stage4-live-final-acceptance`, HEAD after
+this = `5f8e37d`+docs. Commit this session: `5f8e37d` (STATUS-SELECT-001). NOT pushed. $0.
+
+**#13 /status + #14 /cancel — DONE (code+deployed+live-proven on real data); one gap = webhook restart.**
+Built `n8n/lib/request_lifecycle.js` `selectActiveRequest()` = THE ONE canonical active-request selector, embedded
+in BOTH WF18 Command Lane (/status) and WF22 Apply Control Command (/cancel + /status): owner+chat scoped, newest
+valid active, TTL-expires stale awaiting_approval (120min), ignores terminal/QA/foreign, no id/enum leak. Replaced
+3 duplicated inline filters. Test `test_request_lifecycle.js` (21) incl. WF18==WF22 embed drift proof. **make test
+ALL PASS.** Deployed WF18(`mslocf50ab8007ca`)+WF22(`T98dK-CIsTRnO-M5`) surgical splice (deployed jsCode===canonical,
+active), backup `n8n-backup-20260710-232613` (kept) + `8cd4adbf…`.
+**LIVE PROOF on real production execution_plans (9 rows, owner 1188830082):** WF22 exec **540** op=status → picked
+newest active, **TTL-expired 5 week-old awaiting_approval** (8 pre-TTL→3 shown), humanized RU, **0 internal leak**.
+WF22 exec **542** op=cancel → cancelled newest (`plan_req_90112771` approved→cancelled), **persisted (Upsert
+execution_plans success)**, RU reply, no leak. WF22 exec **544** 2nd cancel → targeted a DIFFERENT plan, **never
+re-touched the cancelled one** (idempotent/terminal-excluded). Cancelled 2 stale week-old abandoned plans as proof.
+
+**⚠️ BLOCKER (operator-infra, hard boundary): WF18 webhook unregistered → needs n8n restart.** Deploying any WF18
+(webhook gateway) change requires a CLI re-import; n8n's model then leaves the production webhook UNREGISTERED in
+the running process until an **n8n restart** (or REST-API activation with owner creds — none available). Verified:
+`webhook_entity` empty, local `POST /webhook/ms-telegram-agent` → **404**, TG webhook url set (tunnel
+`perkin…free.dev`) but n8n not answering it. So (a) the live bot is currently NOT answering real Telegram messages,
+and (b) my WF18 /status Command Lane fix won't take effect, until the operator restarts n8n. I could NOT restart
+(no docker/service changes). **This gates the real-Telegram round-trip for ALL pre-Stage-E Telegram items.** Items
+#3-7 (progress lifecycle, auto summary/XLSX, follow-up, source registry) are provable at the WF20/WF22/WF24
+EXECUTION level (like /status/cancel via callable) without the webhook; only #8 (user-supplied URL from Telegram)
+truly needs the webhook. **EXACT NEXT: operator restarts n8n to re-register WF18 webhook + activate the fix; then
+inject a real /status //cancel to confirm the Telegram send.** OR continue #3-7 at execution level. Disposable
+drivers added: msdrvwf22status/cancel.
+
+---
+
 ## Session: 2026-07-11 (session 42) — Stage D · D3 report-quality repair DEPLOYED + LIVE-PROVEN → STAGE D = PASS
 
 **Canonical FILE 1 stage:** **D — source quality = PASS** (D1+D2+D3 all live-proven; Avito optional-blocked).
