@@ -43,11 +43,23 @@ planning/approval; avoids touching WF18 webhook).
 + `docs/RUNTIME_CONFIGURATION.md` (MS_AVITO_ENABLED). `AVITO_SOURCE_QUALITY=BLOCKED_OPTIONAL_OPERATOR_INFRA_PREREQUISITE`
 unchanged.
 
-**EXACT NEXT (unchanged from session 43):** #12 one-message progress lifecycle — prove DETERMINISTICALLY (WF20
-driver, `enable_llm_summary=false`, telegram-only plan, ~$0.24 bounded) to avoid the Stage-F Claude summary endpoint;
-then auto summary(#3)/XLSX(#4)/follow-up(#5) [same run], source-registry(#7), user-URL E2E(#8), remove disposable
-drivers(#9). Injector = `docker exec n8n-n8n-1 node /tmp/inject.js "<text>"`. WF18 dispatch STATUS-SELECT-002 line
-still deploy-DEFERRED (restart-gated, non-critical). Pending harmless plans: req from execs 556/558.
+**EXACT NEXT (unchanged from session 43): #12 one-message progress lifecycle — DETERMINISTIC live proof.**
+VERIFIED this session that it is fully BUILT + wired in WF20 (`test_progress_lifecycle` 58/58): node chain =
+`Build Progress Update`(`progress_tracker.initProgress`+`advance(...,2)`) → `Send Progress` (sendMessage = the ONE
+message, stage 2 «Ищу источники») → `Progress: Quality Gate/Analysis/Comparison/Report/Done` each rebuild tracker
+state + read message_id from Send Progress + `advance` + emit `editMessageText` → `Edit Progress (<label>)`
+(httpTelegramEdit, `onError:continueRegularOutput` = edit-fail fallback); stage 10 «Готово» edits to «✅ Анализ
+завершён. Отчёт отправлен ниже.» → `Send Telegram Report` (deliveryBody = auto summary #3 + proactiveKeyboard
+follow-up #5). XLSX = WF24 (#4). `enable_llm_summary` gated to WF12 at WF20 gen line ~953 (`===false?'false':'true'`).
+**PROOF PLAN:** drive WF20 via a disposable executeWorkflow driver feeding the `Approval & Budget Gate` an APPROVED
+telegram-only plan (`sources=['telegram']`, `enable_llm_summary=false` override) so the Claude aiprimetech.io summary
+endpoint (Stage F) is never touched; needs `enable_telegram_collector=true` (free t.me/s fetch). Observe: ONE
+sendMessage then N editMessageText on the SAME message_id through stages, persisted message_id, terminal «Готово»,
+final report + follow-up keyboard, then WF24 XLSX. Inspect real WF20 exec (runData Send Progress + Edit Progress*)
++ Telegram message/edits + Sheets. Then #3/#4/#5 recorded from that run; source-registry(#7, WF22-callable, free),
+user-URL E2E(#8), remove disposable drivers(#9). Injector = `docker exec n8n-n8n-1 node /tmp/inject.js "<text>"`.
+WF18 dispatch STATUS-SELECT-002 line still deploy-DEFERRED (restart-gated, non-critical). Harmless pending plans from
+execs 556/558 (TTL-expire).
 
 ---
 
