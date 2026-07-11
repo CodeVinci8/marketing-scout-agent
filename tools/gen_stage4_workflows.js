@@ -847,9 +847,9 @@ write('19_request_planner.json', wf('19 — Request Planner (deterministic + gua
 // =========================================================================================== WF20 orchestrator
 write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)', [
   manual('wf20-trig', 'Manual Start', [-940, -180]),
-  subTrigger('wf20-sub', 'When Called by Agent', [-940, 60], ['agent_request_id', 'chat_id', 'owner_user_id', 'conversation_id', 'plan_id', 'plan_hash', 'data_mode', 'state']),
+  subTrigger('wf20-sub', 'When Called by Agent', [-940, 60], ['agent_request_id', 'chat_id', 'owner_user_id', 'conversation_id', 'plan_id', 'plan_hash', 'data_mode', 'state', 'enable_llm_summary', 'enable_llm_analysis']),
   code('wf20-cfg', 'Resolve Agent Config', [-720, 0], ['agent_config'],
-    ENV + "\nreturn [{json:resolveConfig(__env)}];"),
+    ENV + "\n" + CALLER + "\n// DETERMINISTIC-RUN-001: a caller may force the paid LLM features OFF (fail-safe direction ONLY) for a bounded / deterministic run. It can NEVER enable an LLM feature and NEVER touches the allowlist, budgets, approval or any fail-closed gate — resolveConfig also independently pins llm off when enable_claude is false.\nvar __ci=callerInput();var __ov={};\nif(String(__ci.enable_llm_summary)==='false')__ov.enable_llm_summary=false;\nif(String(__ci.enable_llm_analysis)==='false')__ov.enable_llm_analysis=false;\nreturn [{json:resolveConfig(__env,__ov)}];"),
   // Stage 5 (PLAN-EXEC-001): the orchestrator executes the STORED approved plan, not a caller-supplied shape.
   // Fail-closed: missing plan / hash mismatch / not awaiting approval all block before any external call. The
   // plan is flipped to approved (decided_at) BEFORE collection so a second approval press can never re-run it.

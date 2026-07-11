@@ -4,6 +4,56 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-11 (session 45) — pre-Stage-E: progress lifecycle LIVE-PROVEN (deterministic) + report-quality repair v2
+
+Branch `fix/stage4-live-final-acceptance`. Pre-Stage-E backlog. **$0, 0 paid/Claude calls** (deterministic override).
+
+**#12 one-message progress lifecycle — LIVE-PROVEN (deterministic WF20 run).** Blocker: prod env forces
+`MS_ENABLE_LLM_SUMMARY=true`+`MS_ENABLE_CLAUDE=true`, and WF20 `Resolve Agent Config` read `$env` with no override →
+a full run would hit the Stage-F Claude endpoint (WF08 analysis + WF12 summary). **Fix = DETERMINISTIC-RUN-001:** WF20
+`Resolve Agent Config` now accepts caller `enable_llm_summary`/`enable_llm_analysis` that can ONLY force LLM **off**
+(fail-safe; never enables, never weakens allowlist/budget/approval; resolveConfig also pins llm off when
+!enable_claude). Added the 2 inputs to WF20 callable trigger. Test `test_deterministic_run.js` (20). Deployed WF20
+(surgical splice `QBNFpiZE_IHKUKkf`, 5 nodes incl. avito-strip agent_config, cred preserved). **Proof:** disposable
+driver `msdrvprog0001` → executeWorkflow WF20 with an APPROVED telegram-only plan + `enable_llm_summary=false` +
+`enable_llm_analysis=false`. WF20 exec **562**: ONE sendMessage (Telegram msg **119** «Этап 2/10: Ищу источники»)
++ **5 editMessageText on the SAME message_id 119** through stages (Проверяю качество→Анализирую→Сравниваю→Формирую
+отчёт→«✅ Анализ завершён»), all ok, no separate technical messages, 0 leakage; final report delivered separately
+(msg **120**). llm calls 0/0, cost $0. Re-proven clean after report fixes: exec **571** (msg 123 + 5 edits + msg 124).
+
+**#3 auto summary + #5 follow-up proven same run.** deliveryBody (report_markdown + proactiveKeyboard) fires on the
+final message; proactive follow-up buttons attached.
+
+**Report-quality repair v2 (RQ-*, WF12 `Build Deterministic Report` + conversation_response) — the live reports
+surfaced defects; fixed canonically + `test_report_quality_v2.js` (34) + deployed WF12 (`3H7SR0tG12sK_JTV`):**
+- **AVITO-BLOCK-001 regression**: report «Действия по источникам» advertised «Avito: доступен плановый сбор» while
+  blocked → now gated on `$env.MS_AVITO_ENABLED==='true'` (omitted while blocked; shown only when re-enabled).
+- **RQ-PLACEHOLDER-001**: internal «competitor channel ad copy» rendered as an offer → `realOffer()` maps known
+  placeholders to '' → offer row omitted (markdown AND the XLSX report_bundle offers).
+- **RQ-ENTITY-001**: `&#33;`→`!` (decodeEntities in cleanName + bundle names/positioning).
+- **RQ-EMPTY-001**: omit blank «## План контента» (removed), «## Идеи для контента» + «## Топ углов рынка» rendered
+  only when non-empty; collapse stray blank lines.
+- **RQ-TREND-001**: claim «есть сравнение с прошлым периодом» ONLY when concrete deltas (`hasConcreteTrend`), else
+  «недостаточно данных для сравнения».
+- **RQ-COUNTS-001**: distinct counts (профили/сайты/лид-сигналы/записи); dropped internal `source_confidence_rules`.
+- **RQ-NODATA-001**: no more «NO DATA / no_data / broaden filters» English leak → clean RU «## Что произошло / ##
+  Что можно сделать»; no-data counts separate «новых записей в окне: 0» from «сохранённых веб-снапшотов: N (вне
+  текущего окна)» (no self-contradiction).
+- **RQ-BUTTONS-001**: follow-up captions proper-cased/concise (button labels ≠ lowercase sentence phrase).
+- **CONTENT-RICH clean report LIVE-PROVEN** via WF10→WF12 replay over stored data (driver `msdrvreplay001`, $0):
+  WF12 exec **579** report `report_20260711_232327` — 2 telegram competitors («…Светловым!» decoded), placeholder
+  offers omitted, no Avito, no empty sections, honest trend, distinct counts, real website prices, bundle offers=0
+  placeholders, 10/10 defect checks pass. no-data path also proven clean (exec 571).
+- Harness gained `$env` support (`run.env`) for env-gated node tests.
+
+`make test` ALL SUITES PASS ($0). **PENDING: #3 XLSX/Excel delivery (WF24) not yet live-proven** — next. Then
+follow-up(#5 button live), source-registry(#7), user-URL E2E(#8), remove disposable drivers(#9). Disposable drivers
+added this session: `msdrvprog0001`, `msdrvreplay001` (remove in #9). Injector `docker exec n8n-n8n-1 node
+/tmp/inject.js "<text>"`. Telegram dedup: identical channel posts within a short window dedup → a 2nd fresh run is
+no_data (expected); content-rich proof uses the WF10→WF12 replay over the first run's stored analysis.
+
+---
+
 ## Session: 2026-07-11 (session 44) — pre-Stage-E: AVITO-BLOCK-001 graceful Avito bot/UX disablement (feature-flagged) DEPLOYED + LIVE-PROVEN
 
 **Stage D = PASS** (prior). Pre-Stage-E backlog. New required item done FIRST (operator brief): gracefully disable

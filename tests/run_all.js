@@ -53,6 +53,10 @@ const JS_SUITES = [
   ['request-lifecycle', 'test_request_lifecycle.js'],
   // --- AVITO-BLOCK-001: feature-flagged temporary Avito disablement in the bot/product UX ---
   ['avito-block', 'test_avito_block.js'],
+  // --- DETERMINISTIC-RUN-001: WF20 fail-safe caller override to force paid LLM off for a bounded run ---
+  ['deterministic-run', 'test_deterministic_run.js'],
+  // --- RQ-v2: report-quality repair (Avito leak, placeholders, entities, empty sections, trend, counts, buttons) ---
+  ['report-quality-v2', 'test_report_quality_v2.js'],
   // --- Stage 5: guarded provider adapter contract (real runAdapter path + parsers + cost + acceptance) ---
   ['stage5-adapters', 'test_stage5_adapters.js'],
   // --- Stage 4: single-user Telegram agent MVP (libs + generated WF17-20) ---

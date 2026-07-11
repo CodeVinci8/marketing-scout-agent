@@ -42,9 +42,12 @@ function runCodeNode(run, wf, name, inputItems) {
     if (SAFE_BUILTINS.indexOf(String(name)) >= 0) return require(String(name));
     throw new Error('require("' + name + '") is not allowed in the offline Code-node harness');
   };
-  const fn = new Function('$', '$input', '$getWorkflowStaticData', '$json', 'require', 'Buffer', code);
+  // $env mirrors n8n's $env (non-secret runtime config). Default {} (backward compatible); a test may set
+  // run.env to exercise env-gated node logic (e.g. MS_AVITO_ENABLED in the WF12 report renderer).
+  const $env = run.env || {};
+  const fn = new Function('$', '$input', '$getWorkflowStaticData', '$json', 'require', 'Buffer', '$env', code);
   const $json = (inputItems[0] && inputItems[0].json) || {};
-  const res = fn($, $input, $getWorkflowStaticData, $json, requireShim, Buffer);
+  const res = fn($, $input, $getWorkflowStaticData, $json, requireShim, Buffer, $env);
   const items = Array.isArray(res) ? res : (res ? [res] : []);
   run.outputs[name] = items;
   return items;

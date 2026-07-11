@@ -77,14 +77,25 @@ function actionButtons(availableCaps) {
 // --- proactive post-report continuation (attached to the REAL delivery path) -------------------------------
 // Conversational phrasing per capability for the proactive section. (Claude may rephrase, but the action set
 // comes from the deterministic registry — never invented here.)
+// Sentence phrasing (lowercase) — reads naturally inside "Я могу <phrase>, <phrase>. …".
 const PROACTIVE_LABELS = {
-  deep_competitor_analysis: 'подробнее сравнить этих конкурентов',
-  generate_ideas: 'предложить идеи для вашего оффера',
-  add_source: 'добавить их источники в мониторинг',
+  deep_competitor_analysis: 'подробнее сравнить конкурентов',
+  generate_ideas: 'предложить идеи для оффера',
+  add_source: 'добавить источники в мониторинг',
   rerun_request: 'проверить изменения повторно',
   compare_periods: 'сравнить с прошлым периодом',
   manage_sources: 'настроить или проверить источники'
 };
+// RQ-BUTTONS-001: button captions are proper-cased and concise (a button is a title, not a mid-sentence clause).
+const PROACTIVE_BUTTON_LABELS = {
+  deep_competitor_analysis: 'Подробнее сравнить конкурентов',
+  generate_ideas: 'Предложить идеи для оффера',
+  add_source: 'Добавить источники в мониторинг',
+  rerun_request: 'Проверить изменения повторно',
+  compare_periods: 'Сравнить с прошлым периодом',
+  manage_sources: 'Настроить источники'
+};
+function btnCap(s) { s = str(s); return s ? (s.charAt(0).toUpperCase() + s.slice(1)) : s; }
 // State-aware action set, drawn ONLY from available capabilities. A success report offers the rich set; a
 // partial/no-data report offers recovery actions instead of "success" actions.
 function proactiveActions(state, availableCaps) {
@@ -96,7 +107,11 @@ function proactiveActions(state, availableCaps) {
   else if (partial) wanted = ['rerun_request', 'generate_ideas', 'manage_sources', 'compare_periods'];
   else wanted = ['deep_competitor_analysis', 'generate_ideas', 'add_source', 'rerun_request', 'compare_periods'];
   const byId = {}; (availableCaps || []).forEach(c => { if (c) byId[c.id] = c; });
-  return wanted.filter(id => byId[id] && byId[id].available).map(id => ({ id: id, label: PROACTIVE_LABELS[id] || (byId[id].name) }));
+  return wanted.filter(id => byId[id] && byId[id].available).map(id => ({
+    id: id,
+    label: PROACTIVE_LABELS[id] || (byId[id].name),
+    button_label: PROACTIVE_BUTTON_LABELS[id] || btnCap(PROACTIVE_LABELS[id] || byId[id].name)
+  }));
 }
 // The proactive sentence — useful WITHOUT buttons, ending with the natural-language invitation.
 function proactiveText(state, availableCaps) {
@@ -108,7 +123,7 @@ function proactiveText(state, availableCaps) {
 // attaches this to the FINAL message chunk only.
 function proactiveKeyboard(state, availableCaps) {
   const acts = proactiveActions(state, availableCaps);
-  return acts.length ? { inline_keyboard: acts.map(a => [{ text: a.label, callback_data: 'intent:' + a.id }]) } : null;
+  return acts.length ? { inline_keyboard: acts.map(a => [{ text: a.button_label || a.label, callback_data: 'intent:' + a.id }]) } : null;
 }
 // The full delivery body: IMMUTABLE report facts first (verbatim, never rewritten), then a state-aware
 // proactive continuation. Partial/no-data get an honest one-line status before the continuation.
