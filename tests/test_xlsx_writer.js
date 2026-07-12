@@ -94,4 +94,23 @@ A.eq('deterministic bytes', W.crc32(buf), W.crc32(P.buildReportPackage(F.current
 A.section('size sanity');
 A.ok('reasonable size (<1MB)', pkg.size_bytes > 1000 && pkg.size_bytes < 1024 * 1024);
 
+A.section('XLSX-OMIT-EMPTY-001 — opt-in omit_empty drops header-only sheets (defect D)');
+// default (no opt) is unchanged: the full fixed workbook, so existing consumers/tests are unaffected.
+A.eq('default keeps all sheets', P.buildReportPackage(F.currentReport(), scope).sheet_names.length, P.SHEET_NAMES.length);
+// a sparse run: only competitors + source_quality have data; offers/evidence/recs/changes are empty.
+const sparse = Object.assign({}, F.currentReport(), { offers: [], evidence: [], recommendations: [], changes: [] });
+const sp = P.buildReportPackage(sparse, F.scopeOf(sparse), { omit_empty: true });
+A.ok('empty Offers_Prices omitted', sp.sheet_names.indexOf('Offers_Prices') < 0, sp.sheet_names.join(','));
+A.ok('empty Evidence omitted', sp.sheet_names.indexOf('Evidence') < 0);
+A.ok('empty Recommendations omitted', sp.sheet_names.indexOf('Recommendations') < 0);
+A.ok('empty Changes omitted', sp.sheet_names.indexOf('Changes') < 0);
+A.ok('non-empty Competitors kept', sp.sheet_names.indexOf('Competitors') >= 0);
+A.ok('Summary always kept (never a contentless file)', sp.sheet_names.indexOf('Summary') >= 0);
+A.ok('Run_Metadata always kept', sp.sheet_names.indexOf('Run_Metadata') >= 0);
+// a totally empty run still yields a valid, openable workbook (Summary + Run_Metadata only)
+const empty = { report_id: sparse.report_id, agent_request_id: sparse.agent_request_id, owner_user_id: sparse.owner_user_id, created_at: sparse.created_at, summary: {} };
+const ep = P.buildReportPackage(empty, F.scopeOf(empty), { omit_empty: true });
+A.eq('empty run keeps exactly Summary + Run_Metadata', ep.sheet_names.slice().sort().join(','), 'Run_Metadata,Summary');
+A.ok('empty-run workbook is still a valid ZIP', ep.buffer[0] === 0x50 && ep.buffer[1] === 0x4b);
+
 A.report('xlsx-writer');

@@ -171,10 +171,15 @@ function buildSheets(b) {
 }
 
 // buildReportPackage(bundle, scope, opts) -> { filename, mime, buffer, sheet_names, row_counts, size_bytes }
+// XLSX-OMIT-EMPTY-001: sheets that are ALWAYS meaningful even with one row (the run's identity/scope).
+const ALWAYS_KEEP_SHEETS = ['Summary', 'Run_Metadata'];
 function buildReportPackage(bundle, scope, opts) {
   bundle = bundle || {}; opts = opts || {};
   assertScope(bundle, scope || {});
-  const sheets = buildSheets(bundle);
+  let sheets = buildSheets(bundle);
+  // omit_empty (opt-in; WF24 sets it): a downloadable report should not carry header-only sheets for sections
+  // that produced nothing. Summary + Run_Metadata always stay so the file is never contentless.
+  if (opts.omit_empty) sheets = sheets.filter(s => (s.rows || []).length > 0 || ALWAYS_KEEP_SHEETS.indexOf(s.name) >= 0);
   const buffer = workbookBuffer(sheets);
   const maxBytes = opts.max_bytes || 25 * 1024 * 1024; // reasonable file-size ceiling
   if (buffer.length > maxBytes) throw new Error('report package exceeds size limit (' + buffer.length + ' > ' + maxBytes + ')');
@@ -210,4 +215,4 @@ function shouldSendAttachment(existing, delivery) {
   return { send: true, reason: '' };
 }
 
-module.exports = { buildReportPackage, buildSheets, SHEET_NAMES, qualityHighlight, attachmentDelivery, shouldSendAttachment, djb2 };
+module.exports = { buildReportPackage, buildSheets, SHEET_NAMES, ALWAYS_KEEP_SHEETS, qualityHighlight, attachmentDelivery, shouldSendAttachment, djb2 };
