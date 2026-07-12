@@ -84,7 +84,8 @@ const PROACTIVE_LABELS = {
   add_source: 'добавить источники в мониторинг',
   rerun_request: 'проверить изменения повторно',
   compare_periods: 'сравнить с прошлым периодом',
-  manage_sources: 'настроить или проверить источники'
+  manage_sources: 'настроить или проверить источники',
+  competitor_discovery: 'найти новые источники-конкуренты'
 };
 // RQ-BUTTONS-001: button captions are proper-cased and concise (a button is a title, not a mid-sentence clause).
 const PROACTIVE_BUTTON_LABELS = {
@@ -93,7 +94,8 @@ const PROACTIVE_BUTTON_LABELS = {
   add_source: 'Добавить источники в мониторинг',
   rerun_request: 'Проверить изменения повторно',
   compare_periods: 'Сравнить с прошлым периодом',
-  manage_sources: 'Настроить источники'
+  manage_sources: 'Настроить источники',
+  competitor_discovery: 'Найти новые источники'
 };
 function btnCap(s) { s = str(s); return s ? (s.charAt(0).toUpperCase() + s.slice(1)) : s; }
 // State-aware action set, drawn ONLY from available capabilities. A success report offers the rich set; a
@@ -103,8 +105,8 @@ function proactiveActions(state, availableCaps) {
   const noData = state === 'no_data';
   const partial = state === 'partial';
   let wanted;
-  if (noData) wanted = ['rerun_request', 'manage_sources', 'add_source'];
-  else if (partial) wanted = ['rerun_request', 'generate_ideas', 'manage_sources', 'compare_periods'];
+  if (noData) wanted = ['competitor_discovery', 'rerun_request', 'manage_sources', 'add_source'];
+  else if (partial) wanted = ['rerun_request', 'competitor_discovery', 'generate_ideas', 'manage_sources', 'compare_periods'];
   else wanted = ['deep_competitor_analysis', 'generate_ideas', 'add_source', 'rerun_request', 'compare_periods'];
   const byId = {}; (availableCaps || []).forEach(c => { if (c) byId[c.id] = c; });
   return wanted.filter(id => byId[id] && byId[id].available).map(id => ({

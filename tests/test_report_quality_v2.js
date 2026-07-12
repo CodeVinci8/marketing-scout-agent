@@ -93,6 +93,14 @@ const sentence = CR.proactiveText('completed', caps);
 A.ok('sentence stays natural lowercase after "Я могу"', /Я могу подробнее сравнить конкурентов/.test(sentence), 'sentence: ' + sentence);
 A.ok('no Avito in any follow-up button', !btns.some(t => /avito|авито/i.test(t)), 'avito button present');
 
+// NO-DATA-ACTIONS-001 (defect C): a no-data report offers a discovery pivot ("Найти новые источники").
+const ndCaps = caps.concat([{ id: 'competitor_discovery', name: 'Поиск новых источников-конкурентов', available: true }, { id: 'rerun_request', name: 'Повтор', available: true }, { id: 'manage_sources', name: 'Источники', available: true }]);
+const ndKb = CR.proactiveKeyboard('no_data', ndCaps);
+const ndBtns = ndKb.inline_keyboard.map(r => r[0]);
+A.ok('no-data offers the discovery pivot button', ndBtns.some(b => b.text === 'Найти новые источники'), 'no-data buttons: ' + ndBtns.map(b => b.text).join(' | '));
+A.ok('discovery button routes via intent:competitor_discovery', ndBtns.some(b => b.callback_data === 'intent:competitor_discovery'), 'cb: ' + ndBtns.map(b => b.callback_data).join(' | '));
+A.ok('no-data keyboard has actionable recovery buttons (not empty)', ndBtns.length >= 2, 'only ' + ndBtns.length + ' buttons');
+
 A.section('RQ-PLACEHOLDER — the XLSX report_bundle offers also omit placeholders + decode entities');
 const bundle = JSON.parse(String(rep.report_bundle || '{}'));
 A.ok('bundle has no "competitor channel ad copy" offer', JSON.stringify(bundle.offers || []).indexOf('competitor channel ad copy') < 0, 'bundle offer placeholder leaked');
