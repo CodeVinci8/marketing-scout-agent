@@ -50,7 +50,7 @@ A.section('candidate_classifier — competitor (offer + CTA)');
 const comp = C.classifyCandidate({ title: 'Кредитный брокер Москва', description: 'Поможем получить кредит под ПТС без предоплаты, оплата за результат. Оставьте заявку на бесплатную консультацию.', platform: 'telegram' });
 A.ok('is_competitor', comp.is_competitor && comp.category === 'competitor');
 A.ok('confidence high', comp.confidence >= 70, 'conf=' + comp.confidence);
-A.ok('reason cites the provider offer', /поставщик услуги/.test(comp.classification_reason));
+A.ok('reason cites the provider service evidence', /признаки коммерческой услуги/.test(comp.classification_reason));
 
 A.section('candidate_classifier — lead-source (audience questions, no offer)');
 const lead = C.classifyCandidate({ title: 'Займы и кредиты — обсуждение', description: 'Подскажите, кто брал займ под ПТС? Реально ли получить кредит после отказов? Ищу совет.', platform: 'vk' });
@@ -134,5 +134,35 @@ const aggr2 = C.classifyCandidate({ title: 'Автоломбарды — отз�
 A.eq('banki.ru (via url) not a competitor', aggr2.is_competitor, false);
 const realComp = C.classifyCandidate({ title: 'Автоломбард', description: 'Поможем получить кредит под ПТС без предоплаты, оставьте заявку', platform: 'website', host: 'carmoney.ru' });
 A.eq('a real provider host still classifies as competitor', realComp.is_competitor, true);
+
+A.section('DISCOVERY-005 — region fit (Moscow query penalizes other cities)');
+A.eq('normalizeQueryRegion Москва -> moscow', C.normalizeQueryRegion('Москва'), 'moscow');
+A.eq('normalizeQueryRegion МО -> moscow', C.normalizeQueryRegion('МО'), 'moscow');
+A.eq('Moscow query + Moscow evidence = match', C.regionFit('moscow', 'автоломбард москва химки').region_match, 'match');
+A.eq('Moscow query + Novosibirsk evidence = mismatch', C.regionFit('moscow', 'автоломбард новосибирск').region_match, 'mismatch');
+A.eq('Moscow query + no region = unknown', C.regionFit('moscow', 'автоломбард займ под птс').region_match, 'unknown');
+const inMsk = C.classifyCandidate({ title: 'Автоломбард Москва', description: 'займ под ПТС, оставьте заявку. Москва', platform: 'website', host: 'zalog24h.ru', query_region: 'Москва' });
+const inNsk = C.classifyCandidate({ title: 'Автоломбард Новосибирск', description: 'займ под ПТС, оставьте заявку. Новосибирск', platform: 'website', host: 'a.ru', query_region: 'Москва' });
+A.eq('in-region competitor region_match=match', inMsk.region_match, 'match');
+A.eq('out-of-region competitor region_match=mismatch', inNsk.region_match, 'mismatch');
+A.ok('region mismatch is strongly penalized in confidence', inMsk.confidence - inNsk.confidence >= 40, 'msk=' + inMsk.confidence + ' nsk=' + inNsk.confidence);
+
+A.section('DISCOVERY-005 — component scoring produces varied confidence (not flat 64)');
+A.ok('confidence is 0..100', inMsk.confidence >= 0 && inMsk.confidence <= 100);
+A.ok('score_components present', inMsk.score_components && typeof inMsk.score_components.service_evidence === 'number' && inMsk.score_components.region === 18);
+const val = C.classifyCandidate({ title: 'Автоломбард Москва', description: 'займ под ПТС, автоломбард, оставьте заявку, бесплатная консультация, работаем по договору. Москва', platform: 'website', host: 'zalog24h.ru', query_region: 'Москва', validated: true });
+A.ok('validated evidence scores higher than snippet-only', val.confidence > inMsk.confidence, 'val=' + val.confidence + ' snippet=' + inMsk.confidence);
+A.eq('validated flag echoed', val.validated, true);
+A.ok('three distinct providers give three distinct scores', new Set([inMsk.confidence, inNsk.confidence, val.confidence]).size === 3, [inMsk.confidence, inNsk.confidence, val.confidence].join(','));
+
+A.section('DISCOVERY-005 — ranking + add policy (region-aware, validated-only)');
+const ranked2 = C.rankCandidates([inNsk, val, aggr]);
+A.eq('in-region validated competitor ranks first', ranked2.ranked[0].host, 'zalog24h.ru');
+A.eq('aggregator is bucketed separately (not a competitor)', ranked2.aggregators.length, 1);
+A.ok('add policy: validated in-region competitor is eligible', C.addEligible(val, { min_confidence: 60 }).ok === true);
+const valNsk = C.classifyCandidate({ title: 'Автоломбард Новосибирск', description: 'займ под ПТС, автоломбард, оставьте заявку. Новосибирск', platform: 'website', host: 'b.ru', query_region: 'Москва', validated: true });
+A.ok('add policy: validated region mismatch rejected', C.addEligible(valNsk, { min_confidence: 60 }).ok === false && /регион/.test(C.addEligible(valNsk, {}).reason));
+A.ok('add policy: unvalidated competitor rejected', C.addEligible(inMsk, { min_confidence: 60 }).ok === false && /подтвержд/.test(C.addEligible(inMsk, {}).reason));
+A.ok('add policy: aggregator rejected', C.addEligible(aggr, {}).ok === false);
 
 A.report('discovery-libs');

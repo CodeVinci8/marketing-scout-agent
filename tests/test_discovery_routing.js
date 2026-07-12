@@ -82,4 +82,15 @@ A.ok('more gives actionable guidance (no paid call)', /расширить пои
 const emptyAdd = discRun('add', [{ candidate_id: 'r1::website::x', owner_user_id: '111', discovery_run_id: 'r1', platform: 'website', source_url: 'https://x.ru', normalized_key: 'website::x.ru', display_name: 'x.ru', is_competitor: false, confidence: 30, already_tracked: '' }]);
 A.ok('add with no qualifying competitor adds nothing (fail-safe)', emptyAdd.changed_sources.length === 0 && /нечего добавить/.test(emptyAdd.reply));
 
+// DISCOVERY-005: add policy excludes region mismatch + aggregator-competitors even at high confidence.
+const RC = [
+  { candidate_id: 'r2::website::msk.ru', owner_user_id: '111', discovery_run_id: 'r2', platform: 'website', source_url: 'https://msk.ru', normalized_key: 'website::msk.ru', display_name: 'msk.ru', is_competitor: true, is_news_or_aggregator: false, region: 'match', confidence: 78, already_tracked: '', classification_reason: 'услуга: автоломбард; регион соответствует', query_text: 'автоломбард Москва' },
+  { candidate_id: 'r2::website::nsk.ru', owner_user_id: '111', discovery_run_id: 'r2', platform: 'website', source_url: 'https://nsk.ru', normalized_key: 'website::nsk.ru', display_name: 'nsk.ru', is_competitor: true, is_news_or_aggregator: false, region: 'mismatch', confidence: 70, already_tracked: '', classification_reason: 'услуга: автоломбард; другой регион', query_text: 'автоломбард Москва' },
+  { candidate_id: 'r2::website::2gis.ru', owner_user_id: '111', discovery_run_id: 'r2', platform: 'website', source_url: 'https://2gis.ru', normalized_key: 'website::2gis.ru', display_name: '2gis.ru', is_competitor: true, is_news_or_aggregator: true, region: 'match', confidence: 90, already_tracked: '', classification_reason: 'каталог', query_text: 'автоломбард Москва' }
+];
+const rcAdd = H.runCodeNode((function () { const run = H.makeRun(); H.inject(run, 'Resolve Agent Config', [CFG]); H.inject(run, 'Read durable_memories', []); H.inject(run, 'Read tracked_sources', []); H.inject(run, 'Read execution_plans', []); H.inject(run, 'Read candidate_sources', RC); return run; })(), WF22, 'Apply Control Command', [{ json: { domain: 'discovery', op: 'add', arg: 'r2', owner_user_id: '111', chat_id: '555' } }])[0].json;
+A.ok('add takes only the in-region non-aggregator competitor (msk.ru)', rcAdd.changed_sources.length === 1 && /msk\.ru/.test(JSON.stringify(rcAdd.changed_sources)), 'changed=' + JSON.stringify(rcAdd.changed_sources.map(s => s.key || s.ref)));
+A.ok('region-mismatch competitor NOT added', !/nsk\.ru/.test(JSON.stringify(rcAdd.changed_sources)));
+A.ok('aggregator competitor (2gis) NOT added even at conf 90', !/2gis/.test(JSON.stringify(rcAdd.changed_sources)));
+
 A.report('discovery-routing');

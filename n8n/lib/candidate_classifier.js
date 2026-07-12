@@ -41,6 +41,54 @@ const AGGREGATOR_HOSTS = ['banki.ru', 'sravni.ru', 'vbr.ru', 'kp.ru', 'rbc.ru', 
 function hostOf(url) { return low(url).replace(/^https?:\/\//i, '').split(/[\/?#]/)[0].replace(/^m\./i, '').replace(/^www\./i, ''); }
 function isAggregatorHost(host) { host = low(host); return AGGREGATOR_HOSTS.some(function (d) { return host === d || host.endsWith('.' + d); }); }
 
+// ---- region fit (DISCOVERY-005) --------------------------------------------------------------------------
+// Region groups: substrings that identify a Russian city/region in candidate evidence. Moscow includes МО
+// (Московская область) satellite cities. Used to score region fit against the region the user asked for.
+const REGION_GROUPS = {
+  moscow: ['москв', 'московск', 'подмосков', ' мск', 'зеленоград', 'химк', 'балаших', 'мытищ', 'подольск', 'люберц', 'красногорск', 'одинцов', 'домодедов', 'королёв', 'королев', 'реутов', 'щёлков', 'щелков'],
+  spb: ['санкт-петербург', 'петербург', ' спб', 'ленинградск', 'ленобласт', 'питер'],
+  novosibirsk: ['новосибирск'],
+  barnaul: ['барнаул', 'алтайск'],
+  ekb: ['екатеринбург', 'свердловск'],
+  kazan: ['казан', 'татарстан'],
+  nnovgorod: ['нижн новгород', 'нижегородск', 'нижнего новгород'],
+  rostov: ['ростов-на-дону', 'ростовск'],
+  krasnodar: ['краснодар', 'кубан'],
+  samara: ['самар', 'тольятт'],
+  chelyabinsk: ['челябинск'],
+  omsk: ['омск'],
+  ufa: ['уфа', 'башкорт'],
+  krasnoyarsk: ['красноярск'],
+  perm: ['перм'],
+  voronezh: ['воронеж'],
+  volgograd: ['волгоград'],
+  tyumen: ['тюмен'],
+  irkutsk: ['иркутск']
+};
+const REGION_LABELS = {
+  moscow: 'Москва/МО', spb: 'Санкт-Петербург', novosibirsk: 'Новосибирск', barnaul: 'Барнаул', ekb: 'Екатеринбург',
+  kazan: 'Казань', nnovgorod: 'Нижний Новгород', rostov: 'Ростов-на-Дону', krasnodar: 'Краснодар', samara: 'Самара',
+  chelyabinsk: 'Челябинск', omsk: 'Омск', ufa: 'Уфа', krasnoyarsk: 'Красноярск', perm: 'Пермь', voronezh: 'Воронеж',
+  volgograd: 'Волгоград', tyumen: 'Тюмень', irkutsk: 'Иркутск'
+};
+function regionLabel(k) { return REGION_LABELS[k] || k; }
+function detectRegions(blob) { blob = low(blob); const hits = []; for (const k in REGION_GROUPS) { if (REGION_GROUPS[k].some(function (t) { return blob.indexOf(t) >= 0; })) hits.push(k); } return hits; }
+// Normalize the region the user asked for ('Москва', 'МО', 'Московская область', 'Москва и область') -> a group key.
+function normalizeQueryRegion(region) {
+  const r = low(region); if (!r) return '';
+  for (const k in REGION_GROUPS) { if (REGION_GROUPS[k].some(function (t) { return r.indexOf(t) >= 0; })) return k; }
+  if (/(^|[^а-яё])мо([^а-яё]|$)/.test(r)) return 'moscow';  // МО = Московская область
+  return '';
+}
+// regionFit(queryRegionKey, blob) -> { region_match: 'match'|'mismatch'|'unknown', region_reason }.
+function regionFit(queryRegionKey, blob) {
+  if (!queryRegionKey) return { region_match: 'unknown', region_reason: 'регион запроса не задан' };
+  const found = detectRegions(blob);
+  if (found.indexOf(queryRegionKey) >= 0) return { region_match: 'match', region_reason: 'регион соответствует: ' + regionLabel(queryRegionKey) };
+  if (found.length) return { region_match: 'mismatch', region_reason: 'указан другой регион: ' + found.slice(0, 2).map(regionLabel).join(', ') };
+  return { region_match: 'unknown', region_reason: 'регион на странице не указан' };
+}
+
 function countHits(blob, list) { let n = 0, hit = []; for (let i = 0; i < list.length; i++) { if (blob.indexOf(list[i]) >= 0) { n++; if (hit.length < 4) hit.push(list[i]); } } return { n: n, hit: hit }; }
 
 // classifyCandidate(input) -> classification object. input: { title, description, content, url, platform,
@@ -64,10 +112,29 @@ function classifyCandidate(input) {
   const providerScore = positioning.n * 2 + offer.n * 2 + cta.n;
   const audienceScore = audience.n * 2;
 
+  // DISCOVERY-005: region fit + component scoring. `validated` means the evidence came from a fetched page/preview
+  // (DISCOVERY-006), not just a SERP snippet — it earns a confidence bonus and is required by the add policy.
+  const host = low(input.host) || hostOf(input.url);
+  const validated = input.validated === true;
+  const rf = regionFit(normalizeQueryRegion(input.query_region), blob);
+  const aggregator = !!host && isAggregatorHost(host);
+  // components (0-anchored; summed then clamped 0..100 for competitors)
+  const comp = {
+    service_evidence: clamp(positioning.n * 16 + offer.n * 12, 0, 45),
+    cta: clamp(cta.n * 7, 0, 15),
+    region: rf.region_match === 'match' ? 18 : (rf.region_match === 'mismatch' ? -30 : 0),
+    validation: validated ? 15 : 0,
+    platform_quality: platform === 'website' ? 5 : (platform === 'telegram' ? 5 : 3),
+    aggregator_penalty: aggregator ? -100 : 0,
+    duplicate_penalty: (input.already_tracked === true || String(input.already_tracked).toLowerCase() === 'true') ? -100 : 0
+  };
+  function scoreOf() { return clamp(22 + comp.service_evidence + comp.cta + comp.region + comp.validation + comp.platform_quality + comp.aggregator_penalty + comp.duplicate_penalty, 0, 100); }
+
   const base = {
     platform: platform, is_competitor: false, is_lead_source: false, is_content_creator: false,
     is_news_or_aggregator: false, category: 'irrelevant', confidence: 0, relevance_score: 0,
-    classification_reason: '', evidence: []
+    classification_reason: '', evidence: [], host: host,
+    region_match: rf.region_match, region_reason: rf.region_reason, validated: validated, score_components: comp
   };
 
   // 1. spam / no finance context -> irrelevant (fail closed).
@@ -78,7 +145,6 @@ function classifyCandidate(input) {
   base.evidence = finance.hit.slice();
 
   // 1b. KNOWN aggregator/media/directory host — never a competitor regardless of snippet terms.
-  const host = low(input.host) || hostOf(input.url);
   if (host && isAggregatorHost(host)) {
     base.is_news_or_aggregator = true; base.category = 'news_or_aggregator';
     base.confidence = 55; base.relevance_score = 35;
@@ -90,10 +156,13 @@ function classifyCandidate(input) {
   //    A provider identity (broker/autolombard) or a real provider-action offer — not just a product noun.
   if (providerScore >= 2 && providerScore > audienceScore) {
     base.is_competitor = true; base.category = 'competitor';
-    base.confidence = clamp(50 + positioning.n * 14 + offer.n * 10 + cta.n * 6, 0, 95);
+    base.confidence = scoreOf();
     base.relevance_score = clamp(60 + (positioning.n + offer.n) * 10, 0, 100);
     const why = positioning.hit.concat(offer.hit).slice(0, 3);
-    base.classification_reason = 'поставщик услуги: ' + why.join(', ') + (cta.n ? ('; призыв к действию (' + cta.hit.slice(0, 2).join(', ') + ')') : '');
+    base.classification_reason = 'есть признаки коммерческой услуги: ' + why.join(', ')
+      + (cta.n ? ('; призыв к действию (' + cta.hit.slice(0, 2).join(', ') + ')') : '')
+      + '; ' + rf.region_reason
+      + (validated ? '' : '; по данным из результатов поиска (не подтверждено)');
     base.evidence = positioning.hit.concat(offer.hit, cta.hit).slice(0, 5);
     return base;
   }
@@ -134,19 +203,42 @@ function classifyCandidate(input) {
   return base;
 }
 
-// rank + split a set of classified candidates for the "top competitors to add" UX.
+// rank + split a set of classified candidates for the "top competitors to add" UX. Among competitors, region fit
+// wins before confidence, so an in-region provider outranks a higher-scored out-of-region one (DISCOVERY-005).
+function regionRank(m) { return m === 'match' ? 2 : (m === 'mismatch' ? 0 : 1); }
 function rankCandidates(cands) {
   const arr = (cands || []).slice().sort(function (a, b) {
     const ac = a.is_competitor ? 1 : 0, bc = b.is_competitor ? 1 : 0;
     if (ac !== bc) return bc - ac;
+    if (ac && bc) { const ar = regionRank(a.region_match), br = regionRank(b.region_match); if (ar !== br) return br - ar; }
     return (Number(b.confidence) || 0) - (Number(a.confidence) || 0);
   });
   return {
     competitors: arr.filter(c => c.is_competitor),
     lead_sources: arr.filter(c => c.is_lead_source),
-    other: arr.filter(c => !c.is_competitor && !c.is_lead_source),
+    aggregators: arr.filter(c => c.is_news_or_aggregator),
+    other: arr.filter(c => !c.is_competitor && !c.is_lead_source && !c.is_news_or_aggregator),
     ranked: arr
   };
 }
 
-module.exports = { classifyCandidate, rankCandidates, isAggregatorHost, AGGREGATOR_HOSTS, str, low };
+// Add-to-monitoring eligibility (DISCOVERY-005 #8): only validated in-region competitors above threshold, never
+// aggregators/directories/news, never a region mismatch for a local query, never already tracked.
+function addEligible(c, opts) {
+  c = c || {}; opts = opts || {};
+  const thr = Number(opts.min_confidence != null ? opts.min_confidence : 60);
+  const requireValidated = opts.require_validated !== false;   // default: validated required
+  const allowMismatch = opts.allow_region_mismatch === true;   // default: local query -> no mismatch
+  if (!c.is_competitor) return { ok: false, reason: 'не конкурент' };
+  if (c.is_news_or_aggregator) return { ok: false, reason: 'агрегатор/каталог/СМИ' };
+  if (c.already_tracked === true || String(c.already_tracked).toLowerCase() === 'true') return { ok: false, reason: 'уже отслеживается' };
+  if (requireValidated && c.validated !== true) return { ok: false, reason: 'не подтверждён' };
+  if (!allowMismatch && c.region_match === 'mismatch') return { ok: false, reason: 'регион не соответствует' };
+  if ((Number(c.confidence) || 0) < thr) return { ok: false, reason: 'низкая уверенность' };
+  return { ok: true, reason: '' };
+}
+
+module.exports = {
+  classifyCandidate, rankCandidates, addEligible, isAggregatorHost, AGGREGATOR_HOSTS,
+  regionFit, detectRegions, normalizeQueryRegion, regionLabel, REGION_GROUPS, str, low
+};
