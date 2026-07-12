@@ -84,14 +84,26 @@ function planApprovalMessageRu(plan, opts) {
       ].join('\n')
     };
   }
+  // URL-INTAKE-002: if the user supplied explicit sources, show them grouped by platform instead of a generic label.
+  var exSites = (Array.isArray(plan.urls) ? plan.urls : []).map(function (u) { return String(u).replace(/^https?:\/\//, '').replace(/\/$/, ''); });
+  var exTg = (Array.isArray(plan.telegram_channels) ? plan.telegram_channels : []).map(String);
+  var exVk = (Array.isArray(plan.vk_communities) ? plan.vk_communities : []).map(String);
+  var hasExplicit = plan.explicit_sources === true || exSites.length || exTg.length || exVk.length;
+  var explicitBlock = null;
+  if (hasExplicit) {
+    var eb = ['Проверю указанные источники:'];
+    if (exSites.length) eb.push('• сайт' + (exSites.length > 1 ? 'ы' : '') + ': ' + exSites.slice(0, 3).join(', '));
+    if (exTg.length) eb.push('• Telegram: ' + exTg.slice(0, 3).join(', '));
+    if (exVk.length) eb.push('• VK: ' + exVk.slice(0, 3).join(', '));
+    explicitBlock = eb.join('\n');
+  }
   var lines = [
     '🔎 План анализа',
     '',
     'Цель: ' + ruIntent(plan.intent),
     'Регион: ' + ruRegion(plan.region),
-    'Источники: ' + ruSources(plan.sources, dataMode),
-    // URL-INTAKE-001: when the user supplied specific site(s), say we will check exactly those (null -> omitted).
-    (Array.isArray(plan.urls) && plan.urls.length ? ('Проверю указанные сайты: ' + plan.urls.slice(0, 3).join(', ')) : null),
+    (hasExplicit ? null : ('Источники: ' + ruSources(plan.sources, dataMode))),
+    explicitBlock,
     'Объём: до ' + Math.max(1, ruNum(plan.max_items, 10)) + ' результатов с каждого источника',
     '',
     'Что будет подготовлено:',

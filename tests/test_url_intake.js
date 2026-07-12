@@ -41,12 +41,42 @@ A.section('buildPlanRow persists urls (space-joined) for WF20');
 const row = PLN.buildPlanRow(p, PLN.planIdentity(p, 'req_x', 1), { agent_request_id: 'req_x', owner_user_id: '111', chat_id: '111', ts: 't' });
 A.eq('row.urls persisted', String(row.urls), 'https://lioncredit.ru');
 
-A.section('approval message names the supplied site');
+A.section('approval message names the supplied site (grouped explicit-source block)');
 const rend = RU.planApprovalMessageRu(p, {});
-A.ok('mentions "Проверю указанные сайты"', rend.text.indexOf('Проверю указанные сайты: https://lioncredit.ru') >= 0, rend.text);
+A.ok('mentions "Проверю указанные источники" + the site host', rend.text.indexOf('Проверю указанные источники:') >= 0 && rend.text.indexOf('lioncredit.ru') >= 0, rend.text);
 const rend0 = RU.planApprovalMessageRu(p0, {});
-A.ok('no supplied-site line when no url', rend0.text.indexOf('Проверю указанные сайты') < 0);
+A.ok('no explicit-source block when no url', rend0.text.indexOf('Проверю указанные') < 0);
+A.ok('generic "Источники:" shown when no explicit source', rend0.text.indexOf('Источники:') >= 0);
 A.ok('no stray blank line artifact', !/\n\n\n/.test(rend0.text));
+
+A.section('URL-INTAKE-002 — extractExplicitSources: mixed websites + Telegram + VK; reject invite/private');
+const ex = PLN.extractExplicitSources('сравни https://finardi.ru t.me/da_credit vk.com/kredit874 и t.me/+secret');
+A.eq('website extracted', ex.websites.join(','), 'https://finardi.ru');
+A.eq('telegram channel normalized to @handle', ex.telegram_channels.join(','), '@da_credit');
+A.eq('vk community normalized', ex.vk_sources.join(','), 'vk.com/kredit874');
+A.ok('invite-only telegram rejected with reason', ex.rejected.some(r => r.reason === 'invite_only_or_private'));
+A.eq('t.me/s/<ch> preview form also parses', PLN.extractExplicitSources('https://t.me/s/broker_Aleksey').telegram_channels.join(','), '@broker_aleksey');
+A.eq('total explicit sources capped at 3', (function () { const e = PLN.extractExplicitSources('https://a.ru https://b.ru https://c.ru https://d.ru t.me/e'); return e.websites.length + e.telegram_channels.length + e.vk_sources.length; })(), 3);
+
+A.section('URL-INTAKE-002 — plan carries per-platform supplied sources (allowlisted only)');
+const cfg3 = CFG.resolveConfig({ MS_SPREADSHEET_ID: 'S', MS_TELEGRAM_ALLOWED_USER_IDS: '111', MS_SOURCE_ALLOWLIST: 'website,telegram' });
+const pm = PLN.deterministicPlan('Проверь https://finardi.ru и t.me/da_credit', cfg3);
+A.eq('plan sources = supplied platforms (website+telegram)', pm.sources.slice().sort().join(','), 'telegram,website');
+A.eq('plan.urls', (pm.urls || []).join(','), 'https://finardi.ru');
+A.eq('plan.telegram_channels', (pm.telegram_channels || []).join(','), '@da_credit');
+A.ok('plan.explicit_sources flagged', pm.explicit_sources === true);
+const pvk = PLN.deterministicPlan('глянь vk.com/kredit874', cfg3);
+A.ok('supplied VK dropped when vk not in allowlist', (pvk.vk_communities || []).length === 0 && pvk.sources.indexOf('vk') < 0);
+const rowm = PLN.buildPlanRow(pm, PLN.planIdentity(pm, 'req_m', 1), { agent_request_id: 'req_m', owner_user_id: '111', ts: 't' });
+A.eq('row persists telegram_channels', String(rowm.telegram_channels), '@da_credit');
+A.eq('row persists explicit flag', String(rowm.explicit_sources), 'true');
+
+A.section('URL-INTAKE-002 — grouped-by-platform plan text');
+const rendm = RU.planApprovalMessageRu(pm, {});
+A.ok('shows "Проверю указанные источники:"', rendm.text.indexOf('Проверю указанные источники:') >= 0, rendm.text);
+A.ok('groups sites', /•\s*сайт[ыа]?:\s*finardi\.ru/.test(rendm.text), rendm.text);
+A.ok('groups Telegram', /•\s*Telegram:\s*@da_credit/.test(rendm.text), rendm.text);
+A.ok('does NOT show generic "Источники:" when explicit', rendm.text.indexOf('Источники: сайты конкурентов') < 0);
 
 A.section('WF20 threads plan.urls (generator drift-proof)');
 const gen = require('../tools/gen_stage4_workflows.js');
@@ -55,5 +85,8 @@ const planres = node('20_agent_orchestrator.json', 'Resolve Approved Plan').para
 A.ok('Resolve Approved Plan reads row.urls into the plan', /urls:String\(row\.urls\|\|''\)\.split/.test(planres));
 const colset = node('20_agent_orchestrator.json', 'Resolve Collection Set').parameters.jsCode;
 A.ok('Resolve Collection Set prefers plan.urls over preset competitor list', /plan\.urls&&plan\.urls\.length\)\?plan\.urls/.test(colset));
+A.ok('Resolve Collection Set prefers supplied Telegram channels', /plan\.telegram_channels&&plan\.telegram_channels\.length/.test(colset));
+A.ok('Resolve Collection Set prefers supplied VK communities', /plan\.vk_communities&&plan\.vk_communities\.length/.test(colset));
+A.ok('Resolve Approved Plan reads telegram_channels + vk_communities from the row', /telegram_channels:String\(row\.telegram_channels/.test(planres) && /vk_communities:String\(row\.vk_communities/.test(planres));
 
 A.report('url-intake');

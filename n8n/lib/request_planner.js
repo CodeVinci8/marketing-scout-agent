@@ -74,6 +74,41 @@ function extractSafeUrls(text, max) {
   return out;
 }
 
+// URL-INTAKE-002: general explicit-source extraction — a user may paste 1..N mixed PUBLIC sources (websites,
+// Telegram channels, VK communities) in one message. Returns {websites, telegram_channels, vk_sources, rejected}.
+// Self-contained (embeddable). Total explicit sources capped (default 3). Invite-only Telegram (t.me/+…, joinchat)
+// and VK service links are rejected with a reason; unsafe/private websites are dropped by extractSafeUrls.
+function extractExplicitSources(text, maxTotal) {
+  const raw = str(text);
+  const cap = num(maxTotal, 3);
+  const websites = [], telegram = [], vk = [], rejected = [];
+  const seen = {};
+  function total() { return websites.length + telegram.length + vk.length; }
+  function add(arr, val) { const k = low(val); if (seen[k]) return; if (total() >= cap) return; seen[k] = 1; arr.push(val); }
+  let m;
+  // Telegram public channels: t.me/<ch>, t.me/s/<ch>, https://t.me/<ch>. Reject invite links (t.me/+…, joinchat).
+  const tgRx = /(?:https?:\/\/)?(?:t|telegram)\.me\/(s\/)?(\+?[a-z0-9_]{1,64})/gi;
+  while ((m = tgRx.exec(raw)) !== null) {
+    const h = m[2];
+    if (/^\+/.test(h) || /joinchat/i.test(m[0]) || h.length < 3) { rejected.push({ raw: m[0], platform: 'telegram', reason: 'invite_only_or_private' }); continue; }
+    add(telegram, '@' + h.toLowerCase());
+  }
+  // VK public communities/profiles: vk.com/<public>. Reject service paths (away/share/widget/…).
+  const vkRx = /(?:https?:\/\/)?(?:www\.)?vk\.com\/([a-z0-9_.]{2,64})/gi;
+  while ((m = vkRx.exec(raw)) !== null) {
+    const h = m[1].toLowerCase();
+    if (/^(away|share|widget|search|feed|im|id0)$/.test(h)) { rejected.push({ raw: m[0], platform: 'vk', reason: 'not_a_public_community' }); continue; }
+    add(vk, 'vk.com/' + h);
+  }
+  // Websites: safe public https URLs, excluding t.me / vk.com hosts (handled above).
+  extractSafeUrls(raw, cap).forEach(function (u) {
+    const host = u.slice(8).split('/')[0];
+    if (/(^|\.)(t\.me|telegram\.me|vk\.com)$/i.test(host)) return;
+    add(websites, u);
+  });
+  return { websites: websites, telegram_channels: telegram, vk_sources: vk, rejected: rejected };
+}
+
 function deterministicPlan(text, cfg) {
   cfg = cfg || {};
   const t = str(text);
@@ -86,11 +121,19 @@ function deterministicPlan(text, cfg) {
   // a generic competitor scan collects from EVERY allowlisted source (Stage 5 multi-source); an explicit source
   // mention narrows it. Always intersected with the allowlist and capped by max_sources_per_request.
   const allow = (cfg.source_allowlist || ['website']).map(low);
-  const urls = extractSafeUrls(t);
-  let requested = sources.length ? sources : allow.slice();
-  // URL-INTAKE-001: a pasted public URL is an explicit request to analyse THAT website — ensure website is planned.
-  if (urls.length && allow.indexOf('website') >= 0 && requested.indexOf('website') < 0) requested.unshift('website');
-  requested = requested.filter(s => allow.indexOf(s) >= 0);
+  // URL-INTAKE-002: explicit pasted sources (websites/Telegram/VK) drive the plan to EXACTLY those platforms.
+  const ex = extractExplicitSources(t);
+  const explicitPlatforms = [];
+  if (ex.websites.length) explicitPlatforms.push('website');
+  if (ex.telegram_channels.length) explicitPlatforms.push('telegram');
+  if (ex.vk_sources.length) explicitPlatforms.push('vk');
+  let requested;
+  if (explicitPlatforms.length) {
+    requested = explicitPlatforms.filter(s => allow.indexOf(s) >= 0);   // only allowlisted supplied platforms
+  } else {
+    requested = sources.length ? sources : allow.slice();
+    requested = requested.filter(s => allow.indexOf(s) >= 0);
+  }
   if (!requested.length) requested = allow.slice(0, 1);
   requested = requested.slice(0, Math.max(1, num(cfg.max_sources_per_request, 3)));
   const maxItems = num(cfg.max_items_per_source, 25);
@@ -101,7 +144,11 @@ function deterministicPlan(text, cfg) {
     service: niche,
     region: region,
     sources: requested,
-    urls: urls,
+    // only carry supplied sources for allowlisted platforms — never plan/promise a platform we cannot run.
+    urls: (allow.indexOf('website') >= 0) ? ex.websites : [],
+    telegram_channels: (allow.indexOf('telegram') >= 0) ? ex.telegram_channels : [],
+    vk_communities: (allow.indexOf('vk') >= 0) ? ex.vk_sources : [],
+    explicit_sources: requested.length > 0 && explicitPlatforms.length > 0,
     max_items: maxItems,
     max_external_calls: Math.min(maxCalls, requested.length * Math.max(2, Math.ceil(maxItems / 5))),
     est_source_cost_usd: Number(cfg.source_budget_usd || 0.20),
@@ -126,8 +173,11 @@ function normalizePlan(p, cfg) {
     service: str(p.service) || str(p.niche) || (cfg.default_niche || 'credit_brokerage'),
     region: str(p.region) || (cfg.default_region || 'Москва/МО'),
     sources: sources,
-    // URL-INTAKE-001: re-sanitize any supplied URLs through the same safe extractor (never trust a raw carried value).
+    // URL-INTAKE-001/002: re-sanitize supplied sources through the same safe extractor (never trust a carried value).
     urls: extractSafeUrls(Array.isArray(p.urls) ? p.urls.join(' ') : str(p.urls)),
+    telegram_channels: (function () { var r = extractExplicitSources((Array.isArray(p.telegram_channels) ? p.telegram_channels.join(' ') : str(p.telegram_channels)).replace(/@/g, ' t.me/')); return r.telegram_channels; })(),
+    vk_communities: (function () { var r = extractExplicitSources(Array.isArray(p.vk_communities) ? p.vk_communities.join(' ') : str(p.vk_communities)); return r.vk_sources; })(),
+    explicit_sources: p.explicit_sources === true,
     max_items: Math.min(num(p.max_items, num(cfg.max_items_per_source, 25)), num(cfg.max_items_per_source, 25)),
     max_external_calls: Math.min(num(p.max_external_calls, num(cfg.max_external_calls, 40)), num(cfg.max_external_calls, 40)),
     est_source_cost_usd: Math.min(num(p.est_source_cost_usd, num(cfg.source_budget_usd, 0.20)), num(cfg.source_budget_usd, 0.20)),
@@ -182,8 +232,10 @@ function planHash(plan) {
   const canon = JSON.stringify([
     str(plan.intent), str(plan.niche), str(plan.service), str(plan.region),
     (Array.isArray(plan.sources) ? plan.sources : []).map(low).sort(),
-    // URL-INTAKE-001: bind approval to the exact supplied URL set — a changed URL can't be approved under an old callback.
+    // URL-INTAKE-001/002: bind approval to the exact supplied source set — a change can't be approved under an old callback.
     (Array.isArray(plan.urls) ? plan.urls : []).map(low).sort(),
+    (Array.isArray(plan.telegram_channels) ? plan.telegram_channels : []).map(low).sort(),
+    (Array.isArray(plan.vk_communities) ? plan.vk_communities : []).map(low).sort(),
     num(plan.max_items, 0), num(plan.max_external_calls, 0),
     num(plan.est_source_cost_usd, 0), num(plan.est_llm_cost_usd, 0),
     str(plan.expected_output), str(plan.plan_source)
@@ -205,8 +257,11 @@ function buildPlanRow(plan, identity, ctx) {
     agent_request_id: str(ctx.agent_request_id), owner_user_id: str(ctx.owner_user_id), chat_id: str(ctx.chat_id),
     intent: str(plan.intent), niche: str(plan.niche), service: str(plan.service), region: str(plan.region),
     sources: (Array.isArray(plan.sources) ? plan.sources : []).join(','),
-    // URL-INTAKE-001: persist user-supplied URLs so WF20 targets THEM (space-joined; empty when none supplied).
+    // URL-INTAKE-001/002: persist user-supplied sources so WF20 targets THEM (space/comma-joined; empty when none).
     urls: (Array.isArray(plan.urls) ? plan.urls : []).join(' '),
+    telegram_channels: (Array.isArray(plan.telegram_channels) ? plan.telegram_channels : []).join(','),
+    vk_communities: (Array.isArray(plan.vk_communities) ? plan.vk_communities : []).join(','),
+    explicit_sources: plan.explicit_sources === true ? 'true' : '',
     max_items: num(plan.max_items, 0), max_external_calls: num(plan.max_external_calls, 0),
     est_source_cost_usd: num(plan.est_source_cost_usd, 0), est_llm_cost_usd: num(plan.est_llm_cost_usd, 0),
     expected_output: str(plan.expected_output), plan_source: str(plan.plan_source),
@@ -237,5 +292,5 @@ function pendingPlansForOwner(planRows, ownerUserId) {
 module.exports = {
   deterministicPlan, normalizePlan, validatePlanJSON, planToApprovalText,
   planHash, planIdentity, buildPlanRow, validateApproval, pendingPlansForOwner,
-  blockedRequestedSources, extractSafeUrls
+  blockedRequestedSources, extractSafeUrls, extractExplicitSources
 };
