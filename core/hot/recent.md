@@ -4,6 +4,48 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-13 (session 48) — Cross-source competitor DISCOVERY layer BUILT + LIVE-PROVEN (WF27) + candidate approve/add/remove flow
+
+Branch `fix/stage4-live-final-acceptance`, HEAD **339f16b** (ahead ~87, NOT pushed). Real paid Firecrawl Search
+discovery within budget gates (~4–6 credits/run); **$0 Claude/Avito**. 3 commits this session (a6d6ae3 WF27 +
+40d67d8 routing were prior; this session added DISCOVERY-003 quality + DISCOVERY-004 add-flow).
+
+**Discovery layer DONE + LIVE-PROVEN.** "найди новых конкурентов [в тг/vk/сайты]" → WF27 (id `mslocwf27disc`,
+active) = budget/enable-gated → `discovery_query.buildDiscoveryQueries` (site:t.me/s | site:vk.com | plain web,
+3–5 variants) → **real Firecrawl `POST /v2/search`** → `candidatesFromResults` normalize → dedup vs tracked →
+`candidate_classifier.classifyCandidate` → persist `candidate_sources` (owner-scoped, 33 cols; tab created in prod
+Sheets) → Telegram reply + inline buttons. Router: explicit-pasted-URL → competitor_search (analysis) BEFORE
+discovery; discovery requires `__discoverySignal`. LIVE execs: Telegram (exec 641, @avtosebe автоломбард conf64,
+4 cands), Website (exec 647, 9 cands / 2 real competitors), VK (exec 645, explicit `platform` bypasses monitoring
+allowlist → real site:vk.com discovery, no VK API/`MS_ENABLE_VK` needed). Firecrawl cred `Dykz5MKZ5RoDmslr`.
+
+**DISCOVERY-003 candidate quality (1f892e0) — live-proven.** URL hygiene (clean canonical source_url: strip /s/,
+?before=, ?offset=, #, m./www.); VK junk rejected (id\d+ personal, wall/photo/video/album/topic/market); website
+DROP_HOSTS (yandex/2gis/google/ozon/wildberries + **Avito never a candidate**); classifier AGGREGATOR_HOSTS override
+(banki/sravni/vbr/kp/rbc → news_or_aggregator, never competitor — kills "yandex.ru=автоломбард" false positive).
+Website competitor_count 4→2 (both real autolombard). +9 tests (discovery-libs 58).
+
+**DISCOVERY-004 candidate approve/add flow (339f16b) — LIVE-PROVEN end-to-end.** WF18 routes the 4 candidate buttons
+(disc_add/disc_all/disc_more/disc_none:<run_id>) → WF22 `discovery` domain (Command Lane clears spinner instantly).
+WF22 gained a `Read candidate_sources` node + discovery branch reusing the existing tracked_sources upsert pipeline:
+add top competitors (conf≥60, !already_tracked, top3, dedup) via `addSource`; list = full breakdown; none = dismiss;
+more = refine-and-resend guidance (no surprise paid call). "Искать ещё" button added to WF27 reply. LIVE: disc_add
+(exec 648/649) upserted zalog24h.ru+autolombardn1.ru → registry list showed both active → removed both (op=remove)
+→ registry clean, **prod restored**. +11 tests (discovery-routing 37). Note: telegram_channel/vk_community add is
+honestly gated by the short-name allowlist (`website,avito,telegram`) — website adds work; tg/vk = "площадка
+недоступна" (existing behavior, not introduced here).
+
+**Deployed to prod (surgical splice, creds/id/active preserved):** WF27 (Classify + Build Queries), WF22 (Apply
+Control Command + new Read candidate_sources cred-bound), WF18 (Command Lane + Build Intake Decision + Run WF22
+inputs + Run WF27 workflowId=`mslocwf27disc`). `docker restart n8n-n8n-1` ×2 for webhook re-registration. All active,
+webhook `ms-telegram-agent` healthy. `make test` ALL SUITES PASS ($0, 0 calls). Helpers in scratchpad:
+merge_wf.js, inject_discovery.js, inject_callback.js.
+
+**STILL pending pre-Stage-E:** UX defects A (/status stale-dedup) / B (progress double-message) / D (XLSX polish);
+Item 7+8 (remove disposable QA drivers + final boundary verification). Do NOT start Stage E.
+
+---
+
 ## Session: 2026-07-12 (session 47) — Item 6 user-supplied MULTI-source E2E DONE + memory intent fixed; discovery layer NOT started
 
 Branch `fix/stage4-live-final-acceptance`, HEAD **a7f4cb7** (ahead 80, NOT pushed). **$0 Claude/Avito** (deterministic
