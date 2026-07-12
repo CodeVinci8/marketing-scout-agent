@@ -146,6 +146,14 @@ const inNsk = C.classifyCandidate({ title: 'Автоломбард Новоси�
 A.eq('in-region competitor region_match=match', inMsk.region_match, 'match');
 A.eq('out-of-region competitor region_match=mismatch', inNsk.region_match, 'mismatch');
 A.ok('region mismatch is strongly penalized in confidence', inMsk.confidence - inNsk.confidence >= 40, 'msk=' + inMsk.confidence + ' nsk=' + inNsk.confidence);
+// DISCOVERY-006 region accuracy: a transliterated VK/Telegram handle naming another city is a MISMATCH even when
+// the noisy scraped page body mentions the query city (the live Barnaul-as-Moscow bug).
+const barnaulHandle = C.classifyCandidate({ title: 'Займы под ПТС', description: 'автоломбард', content: 'Работаем по всей России. Москва, оставьте заявку.', platform: 'vk', normalized_key: 'vk_community::zaimypodzalogavtoiptsbarnaul', display_name: 'vk.com/zaimypodzalogavtoiptsbarnaul', url: 'https://vk.com/zaimypodzalogavtoiptsbarnaul', query_region: 'Москва', validated: true });
+A.eq('barnaul handle beats Moscow body text -> mismatch', barnaulHandle.region_match, 'mismatch');
+A.ok('barnaul reason names the real city', /Барнаул/.test(barnaulHandle.region_reason));
+A.eq('regionFitPrioritized trusts identity over body', C.regionFitPrioritized('moscow', 'avtolombard nsk novosibirsk', 'москва москва').region_match, 'mismatch');
+A.eq('regionFitPrioritized: clean body match', C.regionFitPrioritized('moscow', 'autolombard', 'москва подольск').region_match, 'match');
+A.eq('regionFitPrioritized: ambiguous body -> unknown', C.regionFitPrioritized('moscow', 'autolombard', 'москва новосибирск').region_match, 'unknown');
 
 A.section('DISCOVERY-005 — component scoring produces varied confidence (not flat 64)');
 A.ok('confidence is 0..100', inMsk.confidence >= 0 && inMsk.confidence <= 100);

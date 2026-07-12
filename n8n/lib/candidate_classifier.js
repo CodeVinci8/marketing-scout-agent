@@ -44,26 +44,28 @@ function isAggregatorHost(host) { host = low(host); return AGGREGATOR_HOSTS.some
 // ---- region fit (DISCOVERY-005) --------------------------------------------------------------------------
 // Region groups: substrings that identify a Russian city/region in candidate evidence. Moscow includes МО
 // (Московская область) satellite cities. Used to score region fit against the region the user asked for.
+// Each group lists Cyrillic AND transliterated (Latin) fragments — VK/Telegram handles are usually Latin
+// ("...barnaul", "nsk", "spb"), so the handle/title can name the city even when the page body says otherwise.
 const REGION_GROUPS = {
-  moscow: ['москв', 'московск', 'подмосков', ' мск', 'зеленоград', 'химк', 'балаших', 'мытищ', 'подольск', 'люберц', 'красногорск', 'одинцов', 'домодедов', 'королёв', 'королев', 'реутов', 'щёлков', 'щелков'],
-  spb: ['санкт-петербург', 'петербург', ' спб', 'ленинградск', 'ленобласт', 'питер'],
-  novosibirsk: ['новосибирск'],
-  barnaul: ['барнаул', 'алтайск'],
-  ekb: ['екатеринбург', 'свердловск'],
-  kazan: ['казан', 'татарстан'],
-  nnovgorod: ['нижн новгород', 'нижегородск', 'нижнего новгород'],
-  rostov: ['ростов-на-дону', 'ростовск'],
-  krasnodar: ['краснодар', 'кубан'],
-  samara: ['самар', 'тольятт'],
-  chelyabinsk: ['челябинск'],
-  omsk: ['омск'],
-  ufa: ['уфа', 'башкорт'],
-  krasnoyarsk: ['красноярск'],
-  perm: ['перм'],
-  voronezh: ['воронеж'],
-  volgograd: ['волгоград'],
-  tyumen: ['тюмен'],
-  irkutsk: ['иркутск']
+  moscow: ['москв', 'московск', 'подмосков', 'зеленоград', 'химк', 'балаших', 'мытищ', 'подольск', 'люберц', 'красногорск', 'одинцов', 'домодедов', 'королёв', 'королев', 'реутов', 'щёлков', 'щелков', 'moskva', 'moscow'],
+  spb: ['санкт-петербург', 'петербург', 'ленинградск', 'ленобласт', 'питер', 'peterburg', 'spb'],
+  novosibirsk: ['новосибирск', 'novosibirsk', 'nsk'],
+  barnaul: ['барнаул', 'алтайск', 'barnaul', 'altay'],
+  ekb: ['екатеринбург', 'свердловск', 'ekaterinburg', 'ekb'],
+  kazan: ['казан', 'татарстан', 'kazan'],
+  nnovgorod: ['нижн новгород', 'нижегородск', 'нижнего новгород', 'novgorod', 'nnov'],
+  rostov: ['ростов-на-дону', 'ростовск', 'rostov'],
+  krasnodar: ['краснодар', 'кубан', 'krasnodar'],
+  samara: ['самар', 'тольятт', 'samara', 'tolyatti'],
+  chelyabinsk: ['челябинск', 'chelyabinsk'],
+  omsk: ['омск', 'omsk'],
+  ufa: ['уфа', 'башкорт', 'ufa'],
+  krasnoyarsk: ['красноярск', 'krasnoyarsk'],
+  perm: ['перм', 'perm'],
+  voronezh: ['воронеж', 'voronezh'],
+  volgograd: ['волгоград', 'volgograd'],
+  tyumen: ['тюмен', 'tyumen'],
+  irkutsk: ['иркутск', 'irkutsk']
 };
 const REGION_LABELS = {
   moscow: 'Москва/МО', spb: 'Санкт-Петербург', novosibirsk: 'Новосибирск', barnaul: 'Барнаул', ekb: 'Екатеринбург',
@@ -86,6 +88,21 @@ function regionFit(queryRegionKey, blob) {
   const found = detectRegions(blob);
   if (found.indexOf(queryRegionKey) >= 0) return { region_match: 'match', region_reason: 'регион соответствует: ' + regionLabel(queryRegionKey) };
   if (found.length) return { region_match: 'mismatch', region_reason: 'указан другой регион: ' + found.slice(0, 2).map(regionLabel).join(', ') };
+  return { region_match: 'unknown', region_reason: 'регион на странице не указан' };
+}
+// regionFitPrioritized: the IDENTITY (handle/title/description) is authoritative; a foreign city in the identity
+// is a mismatch even if the noisy page BODY mentions the query city. Body text is only trusted when it is
+// unambiguous (query region present and no other city). This stops "…barnaul" VK handles reading as Moscow.
+function regionFitPrioritized(queryRegionKey, strongText, weakText) {
+  if (!queryRegionKey) return { region_match: 'unknown', region_reason: 'регион запроса не задан' };
+  const s = detectRegions(strongText);
+  if (s.indexOf(queryRegionKey) >= 0) return { region_match: 'match', region_reason: 'регион соответствует: ' + regionLabel(queryRegionKey) };
+  if (s.length) return { region_match: 'mismatch', region_reason: 'указан другой регион: ' + s.slice(0, 2).map(regionLabel).join(', ') };
+  const w = detectRegions(weakText);
+  const wOther = w.filter(function (k) { return k !== queryRegionKey; });
+  if (w.indexOf(queryRegionKey) >= 0 && wOther.length === 0) return { region_match: 'match', region_reason: 'регион соответствует: ' + regionLabel(queryRegionKey) };
+  if (w.indexOf(queryRegionKey) >= 0 && wOther.length) return { region_match: 'unknown', region_reason: 'на странице упоминаются разные регионы, город не подтверждён' };
+  if (wOther.length) return { region_match: 'unknown', region_reason: 'город не подтверждён' };
   return { region_match: 'unknown', region_reason: 'регион на странице не указан' };
 }
 
@@ -116,7 +133,10 @@ function classifyCandidate(input) {
   // (DISCOVERY-006), not just a SERP snippet — it earns a confidence bonus and is required by the add policy.
   const host = low(input.host) || hostOf(input.url);
   const validated = input.validated === true;
-  const rf = regionFit(normalizeQueryRegion(input.query_region), blob);
+  // region: identity (handle/title/description/url) is authoritative; the fetched page body is only a weak signal.
+  const strongText = low([input.title, input.description, input.display_name, input.normalized_key, input.url, input.host].map(str).join(' '));
+  const weakText = low([input.content, posts].map(str).join(' '));
+  const rf = regionFitPrioritized(normalizeQueryRegion(input.query_region), strongText, weakText);
   const aggregator = !!host && isAggregatorHost(host);
   // components (0-anchored; summed then clamped 0..100 for competitors)
   const comp = {
@@ -240,5 +260,5 @@ function addEligible(c, opts) {
 
 module.exports = {
   classifyCandidate, rankCandidates, addEligible, isAggregatorHost, AGGREGATOR_HOSTS,
-  regionFit, detectRegions, normalizeQueryRegion, regionLabel, REGION_GROUPS, str, low
+  regionFit, regionFitPrioritized, detectRegions, normalizeQueryRegion, regionLabel, REGION_GROUPS, str, low
 };
