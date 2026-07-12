@@ -43,6 +43,37 @@ function blockedRequestedSources(text, cfg) {
   return named.filter(s => blocked.indexOf(s) >= 0);
 }
 
+// URL-INTAKE-001: extract the safe, PUBLIC https URL(s) a user pasted so a request can target THOSE sites instead
+// of the preset competitor list. Self-contained (embeddable): https-only; reject localhost / private+loopback IPs /
+// link-local / cloud-metadata / credentials-in-url / non-web schemes; normalize (lowercase host, drop fragment);
+// dedup; cap. A pasted URL is never trusted content — only its structure is used, never its page text here.
+function extractSafeUrls(text, max) {
+  const out = [], seen = {};
+  const cap = num(max, 3);
+  const raw = str(text);
+  const rx = /\bhttps?:\/\/[^\s<>"'`)]+/gi;
+  let m;
+  while ((m = rx.exec(raw)) !== null && out.length < cap) {
+    let u = m[0].replace(/[.,;:!?)]+$/, '');
+    if (u.toLowerCase().indexOf('https://') !== 0) continue;          // public https only
+    const afterScheme = u.slice(8);
+    const authority = afterScheme.split(/[/?#]/)[0];
+    if (authority.indexOf('@') >= 0) continue;                        // credentials in url
+    const host = authority.split(':')[0].toLowerCase();
+    if (!host || host === 'localhost' || host.indexOf('.') < 0) continue;
+    if (/^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(host)) continue;        // loopback / private / link-local IPv4
+    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) continue;                    // 172.16-31.x private
+    if (/^\[?::1\]?$/.test(host) || /^\[?f[cd][0-9a-f]{2}:/i.test(host)) continue; // ipv6 loopback / ULA
+    if (host === '169.254.169.254' || host === 'metadata.google.internal') continue; // cloud metadata
+    const path = afterScheme.slice(authority.length).split('#')[0] || '';
+    const norm = 'https://' + host + path;
+    const key = norm.replace(/\/+$/, '').toLowerCase();
+    if (seen[key]) continue; seen[key] = 1;
+    out.push(norm.replace(/\/+$/, '/') === norm ? norm : norm);
+  }
+  return out;
+}
+
 function deterministicPlan(text, cfg) {
   cfg = cfg || {};
   const t = str(text);
@@ -55,7 +86,10 @@ function deterministicPlan(text, cfg) {
   // a generic competitor scan collects from EVERY allowlisted source (Stage 5 multi-source); an explicit source
   // mention narrows it. Always intersected with the allowlist and capped by max_sources_per_request.
   const allow = (cfg.source_allowlist || ['website']).map(low);
+  const urls = extractSafeUrls(t);
   let requested = sources.length ? sources : allow.slice();
+  // URL-INTAKE-001: a pasted public URL is an explicit request to analyse THAT website — ensure website is planned.
+  if (urls.length && allow.indexOf('website') >= 0 && requested.indexOf('website') < 0) requested.unshift('website');
   requested = requested.filter(s => allow.indexOf(s) >= 0);
   if (!requested.length) requested = allow.slice(0, 1);
   requested = requested.slice(0, Math.max(1, num(cfg.max_sources_per_request, 3)));
@@ -67,6 +101,7 @@ function deterministicPlan(text, cfg) {
     service: niche,
     region: region,
     sources: requested,
+    urls: urls,
     max_items: maxItems,
     max_external_calls: Math.min(maxCalls, requested.length * Math.max(2, Math.ceil(maxItems / 5))),
     est_source_cost_usd: Number(cfg.source_budget_usd || 0.20),
@@ -91,6 +126,8 @@ function normalizePlan(p, cfg) {
     service: str(p.service) || str(p.niche) || (cfg.default_niche || 'credit_brokerage'),
     region: str(p.region) || (cfg.default_region || 'Москва/МО'),
     sources: sources,
+    // URL-INTAKE-001: re-sanitize any supplied URLs through the same safe extractor (never trust a raw carried value).
+    urls: extractSafeUrls(Array.isArray(p.urls) ? p.urls.join(' ') : str(p.urls)),
     max_items: Math.min(num(p.max_items, num(cfg.max_items_per_source, 25)), num(cfg.max_items_per_source, 25)),
     max_external_calls: Math.min(num(p.max_external_calls, num(cfg.max_external_calls, 40)), num(cfg.max_external_calls, 40)),
     est_source_cost_usd: Math.min(num(p.est_source_cost_usd, num(cfg.source_budget_usd, 0.20)), num(cfg.source_budget_usd, 0.20)),
@@ -145,6 +182,8 @@ function planHash(plan) {
   const canon = JSON.stringify([
     str(plan.intent), str(plan.niche), str(plan.service), str(plan.region),
     (Array.isArray(plan.sources) ? plan.sources : []).map(low).sort(),
+    // URL-INTAKE-001: bind approval to the exact supplied URL set — a changed URL can't be approved under an old callback.
+    (Array.isArray(plan.urls) ? plan.urls : []).map(low).sort(),
     num(plan.max_items, 0), num(plan.max_external_calls, 0),
     num(plan.est_source_cost_usd, 0), num(plan.est_llm_cost_usd, 0),
     str(plan.expected_output), str(plan.plan_source)
@@ -166,6 +205,8 @@ function buildPlanRow(plan, identity, ctx) {
     agent_request_id: str(ctx.agent_request_id), owner_user_id: str(ctx.owner_user_id), chat_id: str(ctx.chat_id),
     intent: str(plan.intent), niche: str(plan.niche), service: str(plan.service), region: str(plan.region),
     sources: (Array.isArray(plan.sources) ? plan.sources : []).join(','),
+    // URL-INTAKE-001: persist user-supplied URLs so WF20 targets THEM (space-joined; empty when none supplied).
+    urls: (Array.isArray(plan.urls) ? plan.urls : []).join(' '),
     max_items: num(plan.max_items, 0), max_external_calls: num(plan.max_external_calls, 0),
     est_source_cost_usd: num(plan.est_source_cost_usd, 0), est_llm_cost_usd: num(plan.est_llm_cost_usd, 0),
     expected_output: str(plan.expected_output), plan_source: str(plan.plan_source),
@@ -196,5 +237,5 @@ function pendingPlansForOwner(planRows, ownerUserId) {
 module.exports = {
   deterministicPlan, normalizePlan, validatePlanJSON, planToApprovalText,
   planHash, planIdentity, buildPlanRow, validateApproval, pendingPlansForOwner,
-  blockedRequestedSources
+  blockedRequestedSources, extractSafeUrls
 };

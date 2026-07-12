@@ -90,6 +90,8 @@ function planApprovalMessageRu(plan, opts) {
     'Цель: ' + ruIntent(plan.intent),
     'Регион: ' + ruRegion(plan.region),
     'Источники: ' + ruSources(plan.sources, dataMode),
+    // URL-INTAKE-001: when the user supplied specific site(s), say we will check exactly those (null -> omitted).
+    (Array.isArray(plan.urls) && plan.urls.length ? ('Проверю указанные сайты: ' + plan.urls.slice(0, 3).join(', ')) : null),
     'Объём: до ' + Math.max(1, ruNum(plan.max_items, 10)) + ' результатов с каждого источника',
     '',
     'Что будет подготовлено:',
@@ -108,7 +110,7 @@ function planApprovalMessageRu(plan, opts) {
   }
   lines.push('');
   lines.push('Запустить анализ?');
-  return { ok: true, status: 'plan_ready', text: lines.join('\n') };
+  return { ok: true, status: 'plan_ready', text: lines.filter(function (l) { return l !== null; }).join('\n') };
 }
 
 // One /status line for a plan row — never the raw "intent [status]" enum pair.
