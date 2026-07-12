@@ -4,6 +4,60 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-12 (session 47) — Item 6 user-supplied MULTI-source E2E DONE + memory intent fixed; discovery layer NOT started
+
+Branch `fix/stage4-live-final-acceptance`, HEAD **a7f4cb7** (ahead 80, NOT pushed). **$0 Claude/Avito** (deterministic
+override; Firecrawl website + free t.me/s telegram collection only). 4 commits this session.
+
+**Item 6 user-supplied source E2E — DONE + LIVE-PROVEN (b2d3971, f05fc21, 3662f33).** Root cause was `request.urls`
+never populated from user text. Now: `request_planner.extractExplicitSources(text)` → {websites, telegram_channels,
+vk_sources, rejected} (https-only + reject private/loopback/metadata/credentials; t.me→@handle, reject invite
+t.me/+…; vk.com/<pub>; total cap 3). `deterministicPlan` plans EXACTLY the supplied (allowlisted) platforms +
+carries plan.urls/telegram_channels/vk_communities/explicit_sources; planHash binds approval to the full set;
+buildPlanRow persists all; WF20 `Resolve Approved Plan` reads them, `Resolve Collection Set` targets supplied
+sources (NOT presets) + emits `supplied_sources`; `plan_render_ru` shows them grouped by platform ("Проверю
+указанные источники: • сайты… • Telegram… • VK…"). **WF12 report SCOPED** to supplied sources: "## Проверенные
+источники" per-source status + no-data names the EXACT supplied sources ("Проверил указанные источники: …") — no
+more misleading "3 historical snapshots" fallback. TG/VK handles render redaction-safe («handle», no @/t.me/vk.com
+so the contact-redactor doesn't blank them). Tests test_url_intake (43) + test_report_quality_v2 (+scoping, 42).
+**LIVE:** single URL → WF19 exec 619 plan.urls=[finardi], WF20 website_urls=[finardi] (not 3 presets). Mixed
+"…https://finardi.ru и t.me/da_credit" → WF19 exec 628 grouped plan, WF20 exec 630 collection targeted
+website_urls=[finardi]+telegram=[da_credit], real WF04+WF11 ran, report "## Проверенные источники" listed both +
+no-data named them, 0 historical-fallback leak. Deployed WF12/18/19/20 (+restart). NOTE: finardi dedup-skipped in
+WF04 (known domain) — correct behavior; report scoping makes the outcome honest regardless.
+
+**MEMORY-INTENT-001 (a7f4cb7) — DONE + LIVE-PROVEN.** "что ты помнишь"/"покажи память"/"какие предпочтения
+сохранены" routed to competitor-clarify (only /memory worked); coarse action 'manage_memory' wasn't a recognized
+WF22 sub-op. Fixed: intent_router NL pattern + WF22 derives memory op (NL→view). Helpful empty reply. test_memory_intent
+(11). Deployed WF18+WF22 (+restart). LIVE: "что ты помнишь" → WF22 op=view → msg 168. NOTE routeIntent needs
+`{kind:'request',text}` in tests (NL rules skip non-'request' kinds).
+
+**STILL NOT DONE (operator's session-47 asks) — precise handoff:**
+1. **DISCOVERY LAYER (the headline ask) — NOT STARTED.** "найди новых конкурентов" must truly DISCOVER new sources,
+   not check presets. Build: `n8n/lib/discovery_query.js` (deterministic query expansion: niche/product/region →
+   bounded `site:t.me/s …`, `site:vk.com …`, web queries + RU finance synonyms кредитный брокер/ПТС/автоломбард/
+   залог авто/рефинанс/…, 3-5 variants/platform, ≤10 results/query, dedup, budget-gated) + `candidate_classifier.js`
+   (competitor vs content-creator vs lead-source vs news/aggregator, evidence-based) + a **Firecrawl Search adapter**
+   (POST search, sources=["web"], bounded limit, site: include t.me/vk.com; Apify/Telegram-Bot-API NOT for discovery)
+   + `candidate_sources` store (schema in the operator brief) + discovery intent routing (website/telegram/vk
+   discovery vs tracked-check, honest plan text) + a discovery workflow (search→validate via existing WF11/WF26/WF04
+   →classify→present candidates + approve/add, auto-add ONLY on explicit "найди и добавь" + confidence≥85) + bounded
+   live Firecrawl-Search proofs. Firecrawl Search = a real PAID call (bounded). Keep Avito blocked.
+2. **UX A — /status stale-dedup:** live `/status` showed duplicate "Ещё в работе: анализ конкурентов… ; …" +
+   terminal/delivered plans shown as running. request_lifecycle.selectActiveRequest already exists; the leak is the
+   WF18 Command-Lane "others" rendering — collapse duplicate active plans + ignore delivered/terminal + "Сейчас
+   активных запросов нет. Последний отчёт уже отправлен." when none. Live-prove after a completed run.
+3. **UX C — progress double-message:** avoid the "✅ Принято! …" + instant "✅ Анализ завершён" pair; one edited
+   message. 4. **UX D/E — no-data actionable buttons + XLSX polish** (omit empty sheets, Evidence URLs, no raw IDs)
+   + **XLSX reflect supplied sources** (thread supplied_sources into the WF12 report_bundle + WF24 Summary).
+5. Disposable-driver cleanup still operator-gated (no n8n delete CLI/API key). New disposable drivers this session:
+   msdrvurl001, msdrvmix001 (+prior list in scratchpad/backup/disposable_driver_ids.txt).
+
+Injector `docker exec n8n-n8n-1 node /tmp/inject.js "<text>"`. Deterministic WF20 driver pattern: msdrvmix001 (plan_id
++ enable_llm_summary/analysis=false). splice helper recreated each session (scratchpad clears): scratchpad/splice_general.js.
+
+---
+
 ## Session: 2026-07-12 (session 46) — pre-Stage-E: monitored-source registry NL ops fixed + live-proven (SOURCE-OP-001)
 
 Branch `fix/stage4-live-final-acceptance`. **$0.** Continued pre-Stage-E after Items 1-4 (progress/summary/XLSX/follow-up).
