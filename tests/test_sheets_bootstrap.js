@@ -30,16 +30,16 @@ function planOn(model, config) { return P.plan({ resolved: resolved, config: con
 function markerValue() { return { contract_hash: resolved.contract_hash, fmt_version: resolved.fmt_version, validation_version: resolved.validation_version, applied_at: 't' }; }
 
 // =============================================================================================================
-A.section('1. resolver — exactly 41 resolved sheets, ordered, non-empty unique headers');
-A.eq('DECLARED_TABS=41', resolved.summary.DECLARED_TABS, 41);
-A.eq('RESOLVED_HEADER_SETS=41', resolved.summary.RESOLVED_HEADER_SETS, 41);
+A.section('1. resolver — exactly 42 resolved sheets, ordered, non-empty unique headers');
+A.eq('DECLARED_TABS=42', resolved.summary.DECLARED_TABS, 42);
+A.eq('RESOLVED_HEADER_SETS=42', resolved.summary.RESOLVED_HEADER_SETS, 42);
 A.eq('UNRESOLVED_HEADER_SETS=0', resolved.summary.UNRESOLVED_HEADER_SETS, 0);
-A.eq('sheet_count=41', resolved.sheet_count, 41);
+A.eq('sheet_count=42', resolved.sheet_count, 42);
 A.ok('every sheet has a non-empty header set', resolved.sheets.every(function (s) { return s.headers.length > 0; }));
 A.ok('no empty header token anywhere', resolved.sheets.every(function (s) { return s.headers.every(function (h) { return String(h).trim() !== ''; }); }));
 A.ok('no duplicate header within any sheet', resolved.sheets.every(function (s) { return new Set(s.headers).size === s.headers.length; }));
-A.ok('sheet names are unique', new Set(resolved.sheets.map(function (s) { return s.sheet_name; })).size === 41);
-A.ok('sheet_order is 1..41 contiguous', resolved.sheets.every(function (s, i) { return s.sheet_order === i + 1; }));
+A.ok('sheet names are unique', new Set(resolved.sheets.map(function (s) { return s.sheet_name; })).size === 42);
+A.ok('sheet_order is 1..42 contiguous', resolved.sheets.every(function (s, i) { return s.sheet_order === i + 1; }));
 A.ok('required_columns are a subset of headers', resolved.sheets.every(function (s) { return s.required_columns.every(function (rc) { return s.headers.indexOf(rc) >= 0; }); }));
 A.ok('contract_hash is deterministic + stable', resolved.contract_hash === R.resolveOrThrow().contract_hash && /^h/.test(resolved.contract_hash));
 
@@ -76,7 +76,7 @@ A.section('5. planner — fresh empty staging spreadsheet (only __qa_connection)
 function freshModel() { return { sheets: [makeSheet(777, '__qa_connection', 0, ['check', 'ts', 'ok'], 0)], marker: null }; }
 var dry = planOn(freshModel(), { apply_changes: false });
 A.ok('dry-run sets dry_run=true', dry.dry_run === true);
-A.eq('dry-run plans 41 creates (preview)', dry.summary.CREATED_TABS, 41);
+A.eq('dry-run plans 42 creates (preview)', dry.summary.CREATED_TABS, 42);
 A.eq('extra __qa_connection recognised + preserved', dry.summary.EXTRA_PRESERVED_TABS, ['__qa_connection']);
 A.eq('helper validation sheet not required', dry.summary.HELPER_VALIDATION_SHEET_CREATED, false);
 
@@ -84,10 +84,10 @@ A.section('6/7/10/11. planner — first apply creates, inits headers, freezes, f
 var m1 = freshModel();
 var a1 = planOn(m1, { apply_changes: true, now: 't1' });
 A.ok('first apply plans required mutations', a1.mutations_planned > 0 && a1.requests.length === a1.mutations_planned);
-A.eq('creates exactly the 41 missing contract sheets', a1.create_requests.length, 41);
+A.eq('creates exactly the 42 missing contract sheets', a1.create_requests.length, 42);
 A.ok('every created sheet is frozen at row 1 via addSheet', a1.create_requests.every(function (r) { return r.addSheet.properties.gridProperties.frozenRowCount === 1; }));
 A.ok('created sheets assigned real (non-negative) sheetIds', a1.create_requests.every(function (r) { return r.addSheet.properties.sheetId > 0; }));
-A.eq('one basic filter per contract sheet', a1.requests.filter(function (r) { return r.setBasicFilter; }).length, 41);
+A.eq('one basic filter per contract sheet', a1.requests.filter(function (r) { return r.setBasicFilter; }).length, 42);
 A.ok('a dropdown count > 0 and matches resolver totals', a1.summary.DROPDOWN_COLUMNS_CONFIGURED === 163);
 A.ok('a checkbox count > 0 and matches resolver totals', a1.summary.CHECKBOX_COLUMNS_CONFIGURED === 33);
 A.ok('marker write is included on first apply', !!a1.marker_request);
@@ -145,7 +145,7 @@ var DESTRUCTIVE = ['deleteSheet', 'deleteRange', 'deleteDimension', 'deleteDimen
 A.ok('first apply contains no destructive request type', a1.requests.every(function (r) { return DESTRUCTIVE.every(function (k) { return !(k in r); }); }));
 A.ok('no updateCells ever targets a body row (only header row 0)', a1.requests.filter(function (r) { return r.updateCells; }).every(function (r) { return r.updateCells.start.rowIndex === 0; }));
 
-A.section('3b/5b. order — contract sheets occupy first 41, extras preserved AFTER in relative order');
+A.section('3b/5b. order — contract sheets occupy first 42, extras preserved AFTER in relative order');
 // two extras besides __qa_connection, in a deliberate order
 var mExtras = { sheets: [makeSheet(50, 'zeta_extra', 0, ['a'], 1), makeSheet(51, '__qa_connection', 1, ['c'], 1), makeSheet(52, 'alpha_extra', 2, ['b'], 1)], marker: null };
 var aExtras = planOn(mExtras, { apply_changes: true, now: 't' });
@@ -154,8 +154,8 @@ A.eq('all three extras preserved', aExtras.summary.EXTRA_PRESERVED_TABS.slice().
 var sim = { sheets: mExtras.sheets.map(function (s) { return Object.assign({}, s); }), marker: null };
 P.simulateApply(sim, aExtras.requests, markerValue());
 var ordered = sim.sheets.slice().sort(function (a, b) { return a.index - b.index; }).map(function (s) { return s.title; });
-A.ok('first 41 visible sheets are the contract sheets in contract order', JSON.stringify(ordered.slice(0, 41)) === JSON.stringify(resolved.sheets.map(function (s) { return s.sheet_name; })));
-A.eq('extras follow contract sheets, original relative order preserved', ordered.slice(41), ['zeta_extra', '__qa_connection', 'alpha_extra']);
+A.ok('first 42 visible sheets are the contract sheets in contract order', JSON.stringify(ordered.slice(0, 42)) === JSON.stringify(resolved.sheets.map(function (s) { return s.sheet_name; })));
+A.eq('extras follow contract sheets, original relative order preserved', ordered.slice(42), ['zeta_extra', '__qa_connection', 'alpha_extra']);
 A.ok('__qa_connection content untouched after bootstrap', JSON.stringify(sim.sheets.find(function (s) { return s.title === '__qa_connection'; }).headerRow) === JSON.stringify(['c']));
 
 A.section('12/19/21. idempotency — full apply then a second apply plans ZERO mutations');
@@ -174,7 +174,7 @@ A.eq('IDEMPOTENCY=PASS', keys.IDEMPOTENCY, 'PASS');
 A.eq('second apply has zero requests', second.requests.length, 0);
 A.ok('a re-dry-run on a correct sheet also plans nothing', planOn(model, { apply_changes: false }).mutations_planned === 0);
 // the post-apply model is fully correct
-A.ok('all 41 contract sheets exist, frozen, ordered, with exact headers', resolved.sheets.every(function (cs, i) {
+A.ok('all 42 contract sheets exist, frozen, ordered, with exact headers', resolved.sheets.every(function (cs, i) {
   var sh = model.sheets.find(function (s) { return s.title === cs.sheet_name; });
   return sh && sh.index === i && sh.frozenRowCount === 1 && JSON.stringify(sh.headerRow) === JSON.stringify(cs.headers);
 }));
@@ -185,7 +185,7 @@ var SUMMARY_KEYS = ['DECLARED_TABS', 'EXISTING_CONTRACT_TABS', 'CREATED_TABS', '
   'DROPDOWN_COLUMNS_CONFIGURED', 'CHECKBOX_COLUMNS_CONFIGURED', 'VALIDATION_MISMATCHES', 'EXTRA_PRESERVED_TABS',
   'HELPER_VALIDATION_SHEET_CREATED', 'CHANGES_APPLIED', 'CONTRACT_HASH', 'RESULT'];
 A.ok('every required summary key is present', SUMMARY_KEYS.every(function (k) { return k in a1.summary; }));
-A.eq('CONTRACT_TABS_ORDERED=41', a1.summary.CONTRACT_TABS_ORDERED, 41);
+A.eq('CONTRACT_TABS_ORDERED=42', a1.summary.CONTRACT_TABS_ORDERED, 42);
 A.eq('summary CONTRACT_HASH matches resolver', a1.summary.CONTRACT_HASH, resolved.contract_hash);
 A.eq('second-run FORMATTED_SHEETS=0 (gated by marker)', second.summary.FORMATTED_SHEETS, 0);
 A.eq('second-run DROPDOWN_COLUMNS_CONFIGURED=0', second.summary.DROPDOWN_COLUMNS_CONFIGURED, 0);

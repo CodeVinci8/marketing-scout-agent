@@ -1,7 +1,7 @@
 {
   "generated_by": "tools/gen_workflow_manifest.js",
   "purpose": "Single source of truth for capability/archive classification AND the production deployment plan (runtime closure, import order, sub-workflow binding edges, activation policy). Derived from the workflow Execute Sub-workflow graph + the POLICY block in the generator; the deploy/smoke tooling consumes deployment.* so the runtime set is defined in exactly one place.",
-  "workflow_count": 31,
+  "workflow_count": 32,
   "capability_classes": [
     "production_entrypoint",
     "production_dependency",
@@ -288,7 +288,8 @@
       "07_manual_touchpoint_intake.json",
       "13_public_discussion_or_reviews_connector_foundation.json",
       "14_public_lead_signal_triage.json",
-      "15_live_source_run_logger.json"
+      "15_live_source_run_logger.json",
+      "27_competitor_discovery.json"
     ]
   },
   "runtime_identity": {
@@ -610,7 +611,9 @@
   "trigger_workflows_when_weekly_digest": [
     "25_weekly_digest.json"
   ],
-  "archive_safe_candidates": [],
+  "archive_safe_candidates": [
+    "27_competitor_discovery.json"
+  ],
   "workflows": [
     {
       "file": "00_healthcheck_manual_test.json",
@@ -1016,7 +1019,7 @@
       "file": "09_avito_classifieds_listing_connector.json",
       "wf_number": "WF09",
       "name": "09 - Avito Classifieds Listing Connector",
-      "node_count": 22,
+      "node_count": 24,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1084,7 +1087,7 @@
       "file": "11_social_source_connector_foundation.json",
       "wf_number": "WF11",
       "name": "11 - Social Source Connector Foundation (Telegram Public Channel Preview)",
-      "node_count": 24,
+      "node_count": 26,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1118,7 +1121,7 @@
       "file": "12_market_intelligence_report_builder.json",
       "wf_number": "WF12",
       "name": "12 - Market Intelligence Report Builder (Stakeholder v0.3)",
-      "node_count": 24,
+      "node_count": 26,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1182,13 +1185,15 @@
       "file": "14_public_lead_signal_triage.json",
       "wf_number": "WF14",
       "name": "14 - Lead Scout Triage & Scoring (Deterministic, Stage 3.5)",
-      "node_count": 15,
+      "node_count": 16,
       "active": false,
       "trigger_classes": [
-        "manualTrigger"
+        "manualTrigger",
+        "executeWorkflowTrigger"
       ],
       "classification": [
-        "manual-only"
+        "callable",
+        "manual-diagnostic"
       ],
       "capability_class": "legacy_referenced",
       "deployment_role": "manual_diagnostic",
@@ -1306,7 +1311,7 @@
       "file": "18_telegram_agent_gateway.json",
       "wf_number": "WF18",
       "name": "18 — Telegram Agent Gateway (secure dispatcher)",
-      "node_count": 55,
+      "node_count": 64,
       "active": false,
       "trigger_classes": [
         "webhook"
@@ -1397,7 +1402,7 @@
       "file": "20_agent_orchestrator.json",
       "wf_number": "WF20",
       "name": "20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)",
-      "node_count": 42,
+      "node_count": 56,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1664,7 +1669,7 @@
       "file": "26_vk_public_community_collector.json",
       "wf_number": "WF26",
       "name": "26 — VK Public Community Collector (bounded, official API)",
-      "node_count": 24,
+      "node_count": 31,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1694,6 +1699,38 @@
       "archive_safe_candidate": false,
       "retain_reason": "called_by:20_agent_orchestrator.json,23_scheduled_source_monitor.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
+    },
+    {
+      "file": "27_competitor_discovery.json",
+      "wf_number": "WF27",
+      "name": "27 — Cross-Source Competitor Discovery (Firecrawl Search, bounded)",
+      "node_count": 13,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "manual_diagnostic",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
+      "called_by": [],
+      "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
+      "referenced_by_test": false,
+      "archive_safe_candidate": true,
+      "retain_reason": "",
+      "action": "review_for_archive"
     }
   ]
 }

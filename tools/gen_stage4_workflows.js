@@ -31,6 +31,22 @@ function credGoogle() { return { googleApi: { id: 'PASTE_CREDENTIAL_ID_HERE', na
 // generic name "HTTP Header Auth - Marketing Scout" matched no production credential and, with >1 httpHeaderAuth
 // credential present (Claude + Firecrawl + Apify), made the WF19 reference unresolvable/ambiguous on a real VPS.
 function credClaude() { return { httpHeaderAuth: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'Claude API - Marketing Scout' } }; }
+function credFirecrawl() { return { httpHeaderAuth: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'Firecrawl API - Marketing Scout' } }; }
+// Firecrawl Search HTTP node (DISCOVERY-003): POST /v2/search per query item; body from discovery_query. Tolerant
+// (a failed/blocked search degrades to a user-safe no-candidates message, never aborts the discovery run).
+function httpFirecrawlSearch(id, name, pos) {
+  return {
+    parameters: {
+      method: 'POST', url: 'https://api.firecrawl.dev/v2/search',
+      authentication: 'predefinedCredentialType', nodeCredentialType: 'httpHeaderAuth',
+      sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.search_body) }}',
+      options: { timeout: 25000 }
+    },
+    onError: 'continueRegularOutput',
+    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name,
+    credentials: credFirecrawl()
+  };
+}
 function credHttpQuery() { return { httpQueryAuth: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'HTTP Query Auth - VK Access Token' } }; }
 
 // Extract a lib's embeddable core: strip the leading 'use strict'; and the trailing module.exports, and drop
@@ -1612,6 +1628,39 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),statu
   ['Shape VK Change Events', 'Append source_change_events'],
   ['Append source_change_events', 'Build VK Alert'],
   ['Build VK Alert', 'Send VK Alert']
+]));
+
+// ===================== WF27 — Cross-Source Competitor Discovery (DISCOVERY-003) =========================
+// "найди новых конкурентов [по ПТС] [в Telegram/VK/на сайтах]" -> bounded Firecrawl Search per expanded query ->
+// normalize + classify candidates -> present top competitors with an approve/add prompt -> persist candidate_sources.
+// Paid (Firecrawl Search) but strictly bounded + budget-gated + fail-closed. NO Claude. Avito is never a target.
+write('27_competitor_discovery.json', wf('27 — Cross-Source Competitor Discovery (Firecrawl Search, bounded)', [
+  manual('wf27-trig', 'Manual Start', [-820, -160]),
+  subTrigger('wf27-sub', 'When Called by Agent', [-820, 60], ['agent_request_id', 'chat_id', 'owner_user_id', 'text', 'platform', 'region', 'niche', 'data_mode', 'auto_add']),
+  code('wf27-cfg', 'Resolve Agent Config', [-600, 0], ['agent_config'], ENV + "\nreturn [{json:resolveConfig(__env)}];"),
+  sheetsRead('wf27-readtracked', 'Read tracked_sources', [-600, 200], 'tracked_sources'),
+  code('wf27-queries', 'Build Discovery Queries', [-380, 0], ['discovery_query', 'agent_config'], CALLER + "\nvar cfg=$('Resolve Agent Config').first().json;\nvar ci=callerInput();\nvar text=String(ci.text||'');\nvar canSearch=paidCallsAllowed(cfg)&&cfg.enable_firecrawl===true;\n// discovery is web-search based (site:t.me/s | site:vk.com | web) — never Avito. VK is discoverable even if the\n// VK API collector is off, because search is public web. Bound the run tightly.\nvar queries=buildDiscoveryQueries({text:text,region:cfg.default_region,platform:ci.platform,allowlist:['website','telegram','vk'],max_variants:3,max_results:6,cost_search_usd:cfg.cost_firecrawl_page_usd});\nvar CAP=Number(cfg.discovery_max_searches)||4;queries=queries.slice(0,CAP);\nvar proj=projectDiscoveryCost(queries,cfg);\nvar withinBudget=(proj.projected_cost_usd==null)||(proj.projected_cost_usd<=Number(cfg.source_budget_usd||5));\nvar ctx={chat_id:String(ci.chat_id||''),owner_user_id:String(ci.owner_user_id||''),agent_request_id:String(ci.agent_request_id||'req'),text:text,auto_add:String(ci.auto_add||'')==='true',discovery_run_id:'disc_'+String(ci.agent_request_id||'req')};\nif(!queries.length||!canSearch||!withinBudget){return [{json:Object.assign({allowed:false,reason:(!queries.length?'no_queries':(!canSearch?'search_disabled':'over_budget'))},ctx)}];}\nreturn queries.map(function(q){return {json:Object.assign({allowed:true,search_body:buildFirecrawlSearchBody(q),query_meta:q},ctx)};});"),
+  ifNode('wf27-if', 'Discovery Allowed?', [-160, 0], '={{ $json.allowed }}'),
+  httpFirecrawlSearch('wf27-search', 'Firecrawl Search', [60, -80]),
+  code('wf27-classify', 'Classify Candidates', [280, -80], ['discovery_query', 'candidate_classifier', 'tracked_sources', 'telegram_io'], "var qmeta=[];try{qmeta=$('Build Discovery Queries').all().map(function(i){return i.json;});}catch(e){}\nvar first=qmeta[0]||{};var chat=String(first.chat_id||'');\nvar tracked=[];try{tracked=$('Read tracked_sources').all().map(function(i){return i.json;});}catch(e){}\nvar trackedKeys={};tracked.forEach(function(s){if(String(s.owner_user_id)===String(first.owner_user_id)&&s.key&&s.status!=='removed')trackedKeys[String(s.key).toLowerCase()]=1;});\nvar items=[];try{items=$input.all();}catch(e){items=[];}\nvar cands=[];\nitems.forEach(function(it,idx){var meta=qmeta[idx]||first;var results=parseFirecrawlSearchResults(it.json);var pt=(meta.query_meta&&meta.query_meta.platform_target)||'website';var c=candidatesFromResults(results,{platform_target:pt},normalizeSourceRef);c.forEach(function(x){x.query_text=(meta.query_meta&&meta.query_meta.query_text)||'';x.product=(meta.query_meta&&meta.query_meta.product)||'';cands.push(x);});});\nvar seen={},uniq=[];cands.forEach(function(x){var k=String(x.normalized_key).toLowerCase();if(!k||seen[k])return;seen[k]=1;x.already_tracked=trackedKeys[k]===1;var cl=classifyCandidate({title:x.title,description:x.description,platform:x.platform});x.is_competitor=cl.is_competitor;x.is_lead_source=cl.is_lead_source;x.is_content_creator=cl.is_content_creator;x.is_news_or_aggregator=cl.is_news_or_aggregator;x.category=cl.category;x.confidence=cl.confidence;x.relevance_score=cl.relevance_score;x.classification_reason=cl.classification_reason;uniq.push(x);});\nvar ranked=rankCandidates(uniq);\nvar comps=ranked.competitors.filter(function(c){return !c.already_tracked;}).slice(0,5);\nvar leads=ranked.lead_sources.slice(0,2);\nvar lines=[];\nif(!uniq.length){lines.push('Новых источников-кандидатов по запросу не найдено. Можно расширить регион, изменить формулировку или проверить другие площадки.');}else{lines.push('Нашёл '+uniq.length+' источник(ов)-кандидатов. Похожи на конкурентов: '+ranked.competitors.length+'.');lines.push('');comps.forEach(function(c,i){lines.push((i+1)+'. '+c.display_name+' — вероятный конкурент, confidence '+c.confidence);lines.push('   Почему: '+c.classification_reason);if(c.source_url)lines.push('   Источник: '+c.source_url);});leads.forEach(function(c){lines.push('• '+c.display_name+' — сообщество с аудиторией (не конкурент), confidence '+c.confidence);});if(comps.length){lines.push('');lines.push('Добавить '+Math.min(comps.length,3)+' лучших в мониторинг?');}}\nvar kb=comps.length?{inline_keyboard:[[{text:'Добавить лучших в мониторинг',callback_data:'disc_add:'+first.discovery_run_id}],[{text:'Показать всех кандидатов',callback_data:'disc_all:'+first.discovery_run_id}],[{text:'Не добавлять',callback_data:'disc_none:'+first.discovery_run_id}]]}:null;\nvar body={chat_id:chat,text:lines.join('\\n')};if(kb)body.reply_markup=kb;\nvar ts=(new Date()).toISOString();\nvar rows=uniq.map(function(c){return {candidate_id:String(first.discovery_run_id)+'::'+c.normalized_key,owner_user_id:String(first.owner_user_id||''),chat_id:chat,discovery_run_id:String(first.discovery_run_id||''),platform:c.platform,source_url:c.source_url,normalized_key:c.normalized_key,display_name:c.display_name,title:String(c.title).slice(0,200),description:String(c.description).slice(0,300),region:String(cfgRegion()),niche:c.product||'',query_text:c.query_text,provider:'firecrawl_search',is_competitor:c.is_competitor,is_lead_source:c.is_lead_source,is_content_creator:c.is_content_creator,is_news_or_aggregator:c.is_news_or_aggregator,confidence:c.confidence,relevance_score:c.relevance_score,quality_status:'candidate',classification_reason:c.classification_reason,dedup_status:'unique',already_tracked:c.already_tracked?'true':'',status:'candidate',created_at:ts,collected_at:ts,source_run_id:String(first.agent_request_id||''),cost_usd:''};});\nfunction cfgRegion(){try{return $('Resolve Agent Config').first().json.default_region;}catch(e){return '';}}\nreturn [{json:{telegram_send_body:JSON.stringify(body),candidate_rows:rows,candidate_count:uniq.length,competitor_count:ranked.competitors.length}}];"),
+  code('wf27-shaperows', 'Shape Candidate Rows', [500, 20], [], "var j=$('Classify Candidates').first().json;return (j.candidate_rows||[]).map(function(r){return {json:r};});"),
+  Object.assign(sheetsAppend('wf27-appendcand', 'Append candidate_sources', [720, 20], 'candidate_sources'), { onError: 'continueRegularOutput' }),
+  httpTelegram('wf27-send', 'Send Discovery Reply', [500, -140]),
+  code('wf27-blocked', 'Build Blocked Reply', [60, 180], [], "var j=$json||{};var chat=String(j.chat_id||'');var reason=String(j.reason||'');var msg=(reason==='search_disabled')?'Поиск новых источников сейчас недоступен: внешний поиск отключён. Могу проанализировать уже отслеживаемые источники или источники, которые вы пришлёте ссылками.':((reason==='over_budget')?'Поиск новых источников сейчас недоступен из-за лимита бюджета. Попробуйте позже или уточните площадку.':'Не удалось составить поисковый запрос. Уточните нишу, продукт (например «ПТС») и регион.');return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:msg})}}];"),
+  httpTelegram('wf27-sendblocked', 'Send Blocked Reply', [280, 180])
+], [
+  ['Manual Start', 'Resolve Agent Config'],
+  ['When Called by Agent', 'Resolve Agent Config'],
+  ['Resolve Agent Config', 'Read tracked_sources'],
+  ['Read tracked_sources', 'Build Discovery Queries'],
+  ['Build Discovery Queries', 'Discovery Allowed?'],
+  ['Discovery Allowed?', 'Firecrawl Search', 0],
+  ['Discovery Allowed?', 'Build Blocked Reply', 1],
+  ['Firecrawl Search', 'Classify Candidates'],
+  ['Classify Candidates', 'Send Discovery Reply'],
+  ['Classify Candidates', 'Shape Candidate Rows'],
+  ['Shape Candidate Rows', 'Append candidate_sources'],
+  ['Build Blocked Reply', 'Send Blocked Reply']
 ]));
 
 if (require.main === module) console.log('Stage 4 workflows generated.');

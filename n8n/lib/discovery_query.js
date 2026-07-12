@@ -117,7 +117,61 @@ function projectDiscoveryCost(queries, cfg) {
   return { search_calls: calls, cost_status: per == null ? 'unknown' : 'estimated', projected_cost_usd: per == null ? null : Math.round(per * calls * 1000) / 1000 };
 }
 
+// ---- Firecrawl Search provider glue (bounded; POST https://api.firecrawl.dev/v2/search) -------------------
+// Request body for one query. sources=["web"], small limit, tight timeout. Never a crawl.
+function buildFirecrawlSearchBody(query) {
+  query = query || {};
+  return {
+    query: str(query.query_text || query),
+    limit: clamp(query.max_results, 3, 10),
+    sources: ['web'],
+    timeout: 20000
+  };
+}
+// Parse a Firecrawl /v2/search response into flat results [{url,title,description}]. Handles both
+// { data:{ web:[...] } } and { data:[...] } shapes; fails safe to [].
+function parseFirecrawlSearchResults(body) {
+  let j = body;
+  if (typeof body === 'string') { try { j = JSON.parse(body); } catch (e) { return []; } }
+  if (!j || typeof j !== 'object' || j.success === false) return [];
+  const data = j.data || j.results || [];
+  const arr = Array.isArray(data) ? data : (Array.isArray(data.web) ? data.web : (Array.isArray(data.results) ? data.results : []));
+  return arr.map(function (d) { d = d || {}; return { url: str(d.url || d.link || (d.metadata && d.metadata.sourceURL)), title: str(d.title || d.metadata && d.metadata.title), description: str(d.description || d.snippet || d.markdown || d.content) }; })
+    .filter(function (r) { return r.url; });
+}
+// Turn raw search results into normalized candidate rows for a platform: derive the canonical key/handle, drop
+// off-platform URLs (a t.me/s query can still return non-t.me links), dedup. `normalizeRef` is an injected
+// function (tracked_sources.normalizeSourceRef) so keys match the source registry exactly.
+function candidatesFromResults(results, ctx, normalizeRef) {
+  ctx = ctx || {};
+  const platform = low(ctx.platform_target || ctx.platform) || 'website';
+  const out = [], seen = {};
+  (results || []).forEach(function (r) {
+    let url = str(r.url);
+    let key = '', display = url, plat = platform;
+    if (platform === 'telegram') {
+      const m = url.match(/(?:t|telegram)\.me\/(?:s\/)?(\+?[a-z0-9_]{3,64})/i);
+      if (!m || /^\+/.test(m[1]) || /joinchat/i.test(url)) return;   // off-platform or invite-only
+      display = '@' + m[1].toLowerCase(); key = 'telegram_channel::' + m[1].toLowerCase(); plat = 'telegram';
+    } else if (platform === 'vk') {
+      const m = url.match(/vk\.com\/([a-z0-9_.]{2,64})/i);
+      if (!m || /^(away|share|widget|search|feed|im)$/i.test(m[1])) return;
+      display = 'vk.com/' + m[1].toLowerCase(); key = 'vk_community::' + m[1].toLowerCase(); plat = 'vk';
+    } else {
+      if (/(^|\.)(t\.me|telegram\.me|vk\.com)$/i.test(url.replace(/^https?:\/\//, '').split('/')[0])) return; // exclude socials in website mode
+      if (normalizeRef) { const n = normalizeRef(url); key = n.key || ''; display = n.label || url; }
+      else { const host = url.replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, ''); key = 'website::' + host.toLowerCase(); display = host; }
+      plat = 'website';
+    }
+    if (!key || seen[key]) return; seen[key] = 1;
+    out.push({ platform: plat, source_url: url, normalized_key: key, display_name: display, title: str(r.title), description: str(r.description) });
+  });
+  return out;
+}
+
 module.exports = {
   PRODUCT_PHRASES, detectProduct, detectPlatforms, regionToken, siteFilter,
-  buildDiscoveryQueries, projectDiscoveryCost, str, low, num
+  buildDiscoveryQueries, projectDiscoveryCost,
+  buildFirecrawlSearchBody, parseFirecrawlSearchResults, candidatesFromResults,
+  str, low, num
 };

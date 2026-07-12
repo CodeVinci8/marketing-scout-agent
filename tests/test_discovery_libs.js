@@ -76,4 +76,29 @@ A.eq('competitor ranked first', ranked.ranked[0].category, 'competitor');
 A.eq('competitors bucket has the competitor', ranked.competitors.length, 1);
 A.eq('lead_sources bucket has the lead source', ranked.lead_sources.length, 1);
 
+A.section('discovery_query — Firecrawl Search request/response glue + candidate normalization');
+const TS = require('../n8n/lib/tracked_sources.js');
+const body = Q.buildFirecrawlSearchBody({ query_text: 'site:t.me/s "кредит под ПТС" Москва', max_results: 8 });
+A.eq('search body query', body.query, 'site:t.me/s "кредит под ПТС" Москва');
+A.eq('search body limit clamped', body.limit, 8);
+A.eq('search body sources=web', body.sources.join(','), 'web');
+const resp = { success: true, data: { web: [
+  { url: 'https://t.me/s/broker_pts', title: 'Кредит под ПТС', description: 'Автоломбард' },
+  { url: 'https://t.me/s/broker_pts', title: 'dup', description: 'dup' },
+  { url: 'https://example.com/x', title: 'off-platform', description: 'web' },
+  { url: 'https://t.me/+secretinvite', title: 'invite', description: 'private' }
+] } };
+const results = Q.parseFirecrawlSearchResults(resp);
+A.eq('parses 4 raw results', results.length, 4);
+const cands = Q.candidatesFromResults(results, { platform_target: 'telegram' }, TS.normalizeSourceRef);
+A.eq('telegram candidates: dedup + drop off-platform + drop invite = 1', cands.length, 1);
+A.eq('normalized handle', cands[0].display_name, '@broker_pts');
+A.eq('key matches tracked_sources', cands[0].normalized_key, 'telegram_channel::broker_pts');
+const webResp = [{ url: 'https://finardi.ru/', title: 'Финарди', description: 'брокер' }, { url: 'https://t.me/s/x', title: 'tg', description: '' }];
+const webCands = Q.candidatesFromResults(Q.parseFirecrawlSearchResults({ success: true, data: webResp }), { platform_target: 'website' }, TS.normalizeSourceRef);
+A.eq('website mode drops t.me, keeps finardi', webCands.length, 1);
+A.ok('website candidate key is website::', webCands[0].normalized_key.indexOf('website::finardi.ru') === 0, webCands[0].normalized_key);
+A.eq('malformed search response -> [] (fail safe)', Q.parseFirecrawlSearchResults('not json').length, 0);
+A.eq('success:false -> [] ', Q.parseFirecrawlSearchResults({ success: false }).length, 0);
+
 A.report('discovery-libs');
