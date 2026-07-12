@@ -25,6 +25,7 @@ function runReport(opts) {
   if (opts.env) run.env = opts.env;
   const cfg = H.runCodeNode(run, wf12, 'Set Report Config', [])[0].json;
   Object.assign(cfg, { niche_id: NICHE, region: REGION, agent_request_id: REQ });
+  if (opts.supplied) cfg.supplied_sources = JSON.stringify(opts.supplied);
   run.outputs['Set Report Config'] = [{ json: cfg }];
   H.inject(run, 'Read competitor_profiles', [
     Object.assign({ competitor_id: 'c1', competitor_name: 'Кредитный брокер💲 Банки', platforms: 'telegram', offers: 'competitor channel ad copy', prices_terms: '', evidence_count: 1, source_confidence_score: 45, notes: 'run wf10_' + STAMP }, LIN),
@@ -115,5 +116,19 @@ A.ok('no-data counts are not self-contradictory (no "Профили конкур
 A.ok('no-data separates saved snapshots as "вне текущего окна"', /сохранённых веб-снапшотов сайтов:\s*1\s*\(вне текущего окна\)/.test(ndmd), 'snapshot labeling missing');
 A.ok('no-data report still leaks nothing internal', !/WF\d|rows_after|source_run_id|review_queue|report_2\d/.test(ndmd), 'internal leak in no-data');
 A.ok('no-data notes column keeps the internal diagnostic (not user-facing)', String(nd.notes || '').indexOf('no_data_notice') >= 0, 'notes diagnostic lost');
+
+A.section('URL-INTAKE-002 — report is SCOPED to explicit supplied sources ("Проверенные источники")');
+const supRep = runReport({ noData: true, supplied: { websites: ['https://finardi.ru'], telegram: ['@da_credit'], vk: [], explicit: true }, snaps: [{ domain: 'lioncredit.ru', company_name: 'LionCredit', offer_summary: 'x', change_type: 'baseline', created_at: '2026-07-08', quality_status: 'healthy', report_eligible: true }] });
+const smd = String(supRep.report_markdown || '');
+A.ok('has "## Проверенные источники"', smd.indexOf('## Проверенные источники') >= 0, smd);
+A.ok('lists the supplied website finardi.ru', /finardi\.ru — /.test(smd), smd);
+A.ok('lists the supplied telegram channel (redaction-safe, no @)', /Telegram-канал «da_credit» — проверен/.test(smd) && smd.indexOf('[PUBLIC CONTACT REDACTED]') < 0, smd);
+A.ok('no-data message names the exact supplied sources', /Проверил указанные источники:.*finardi\.ru/.test(smd), smd);
+A.ok('no-data does NOT present historical snapshots as the result', smd.indexOf('в текущее окно отчёта не вошли') < 0, smd);
+A.ok('no-data explains historical snapshots are not this request result', /не использовались как результат этого запроса/.test(smd), smd);
+A.ok('no leakage in scoped report', !/WF\d|source_run_id|review_queue|no_data|NO DATA/.test(smd), smd);
+// non-explicit report is unchanged (no Проверенные источники section)
+const plain = runReport({ noData: true });
+A.ok('no scoped section without supplied sources', String(plain.report_markdown).indexOf('## Проверенные источники') < 0);
 
 A.report('report-quality-v2');

@@ -1142,6 +1142,7 @@
           "value": {
             "agent_request_id": "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
             "data_mode": "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}",
+            "supplied_sources": "={{ JSON.stringify($('Resolve Collection Set').first().json.supplied_sources || {}) }}",
             "enable_llm_summary": "={{ $('Approval & Budget Gate').first().json.cfg.enable_llm_summary === false ? 'false' : 'true' }}",
             "llm_approval_token": "I_APPROVE_CLAUDE_REPORT_SUMMARY"
           },
@@ -1157,6 +1158,14 @@
             {
               "id": "data_mode",
               "displayName": "data_mode",
+              "required": false,
+              "type": "string",
+              "display": true,
+              "removed": false
+            },
+            {
+              "id": "supplied_sources",
+              "displayName": "supplied_sources",
               "required": false,
               "type": "string",
               "display": true,

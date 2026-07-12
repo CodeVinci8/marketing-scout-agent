@@ -953,6 +953,8 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   execWf('wf20-wf12', 'Run WF12 Report', [1280, -160], 'WF12 report builder', {
     agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
     data_mode: "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}",
+    // URL-INTAKE-002: pass the user-supplied sources so the report is scoped to them ("Проверенные источники").
+    supplied_sources: "={{ JSON.stringify($('Resolve Collection Set').first().json.supplied_sources || {}) }}",
     // Plan approval covers the guarded Claude RU summary; WF12 still enforces its own budget/endpoint guards.
     enable_llm_summary: "={{ $('Approval & Budget Gate').first().json.cfg.enable_llm_summary === false ? 'false' : 'true' }}",
     llm_approval_token: 'I_APPROVE_CLAUDE_REPORT_SUMMARY'
