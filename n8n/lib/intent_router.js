@@ -41,6 +41,9 @@ const TEXT_RULES = [
   ['generate_ideas', /иде[ия]|придум|адаптир|adapt|what ideas|ideas (we|to)|контент-?план/i],
   ['add_source', /(добав|подключ|включ|add|track|мониторинг).{0,30}(сайт|канал|сообществ|источник|telegram|телеграм|vk|вконтакте|http|url)|добавь (их|это|этот)/i],
   ['manage_sources', /(покажи|список|list|какие).{0,20}источник|tracked sources|пауз|останов|возобнов|resume|pause|убери источник|удали источник|проверь источник|поставь.{0,10}паузу/i],
+  // MEMORY-INTENT-001: natural-language memory questions ("что ты помнишь", "покажи память", "какие предпочтения
+  // сохранены") must reach the memory view — NOT fall through to competitor clarification.
+  ['manage_memory', /что\s+(ты\s+)?(обо\s+мне\s+)?(помн|знаешь\s+обо\s+мне)|покажи\s*(мою\s*)?памят|мою\s*памят|очисти\s*памят|забудь\s+(всё|все)|какие\s*(мои\s*)?предпочтени|что\s*(у\s*тебя\s*)?сохранен|что\s*ты\s*запомнил/i],
   ['rerun_request', /запусти.{0,10}снова|повтор|сделай снова|again|rerun|перезапус|next week|на след/i],
   ['report_followup', /(что по|расскажи (о|про)|объясни|подробнее о|поясни|explain|what about|tell me about).{0,40}(конкурент|перв|втор|компан|first|second|them|их)/i],
   ['competitor_search', /найд|поищ|ищ[уи]|подбери|find|search|конкурент|competitor|рынок|market/i],

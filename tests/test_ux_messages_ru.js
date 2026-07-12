@@ -257,7 +257,7 @@ A.section('UX-RU-002 — real WF22 node: tracked-source list/check/ops answer in
   const check = H.runCodeNode(run, WF22, 'Apply Control Command', [{ json: { domain: 'source', op: 'check', arg: 's2', owner_user_id: '111', chat_id: '555' } }])[0].json;
   A.ok('check humanized', check.reply.indexOf('на паузе') >= 0 && check.reply.indexOf('[') < 0);
   const empty = H.runCodeNode(run, WF22, 'Apply Control Command', [{ json: { domain: 'memory', op: 'view', owner_user_id: '999', chat_id: '555' } }])[0].json;
-  A.ok('empty memory answered plainly (no JSON dump)', empty.reply.indexOf('Пока я ничего не запомнил') === 0);
+  A.ok('empty memory answered plainly (no JSON dump)', empty.reply.indexOf('Пока я не сохранил явных предпочтений') === 0);
 }
 
 A.section('UX-RU-002 — approval message single-block invariant still holds (no duplication regression)');
