@@ -391,6 +391,11 @@ if(kind==='callback'){
   if(/^approve:/.test(String(p.callback_data||''))){
     return [{json:{lane:'approve_ack',continue_heavy:true,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:'✅ Принято! Запускаю анализ — прогресс покажу здесь.'}),answer_callback_body:JSON.stringify(answerCallbackBody(String(gate.callback_query_id||''),'Принято'))}}];
   }
+  // DISCOVERY-004: candidate buttons (disc_add/disc_all/disc_more/disc_none) — clear the spinner instantly with a
+  // short toast; WF22 (domain=discovery) sends the real reply on the heavy path.
+  var __dcb=String(p.callback_data||'').match(/^disc_(add|all|more|none):/);
+  if(__dcb){var __t={add:'Добавляю…',all:'Показываю кандидатов…',more:'Ищу ещё…',none:'Хорошо'}[__dcb[1]]||'Готово';
+    return [{json:{lane:'disc_ack',continue_heavy:true,has_reply:false,answer_callback_body:JSON.stringify(answerCallbackBody(String(gate.callback_query_id||''),__t))}}];}
   return [{json:{lane:'none',continue_heavy:true,has_reply:false}}];
 }
 if(kind==='request'){
@@ -482,6 +487,10 @@ var action=intent.requested_action||'clarify';
 var isCallback=p.kind==='callback';
 var boundArid=(r.freetext_approval&&r.freetext_approval.bound_request_id)||'';
 if(!boundArid&&isCallback&&p.callback_data){var m=String(p.callback_data).match(/^(approve|reject|cancel):(.+)$/);if(m)boundArid=m[2];}
+// DISCOVERY-004: candidate-management callbacks (disc_add/disc_all/disc_more/disc_none:<run_id>) map to the
+// WF22 'discovery' domain. disc_all -> list, others pass through. Overrides whatever routeIntent guessed.
+var __disc=isCallback&&p.callback_data?String(p.callback_data).match(/^disc_(add|all|more|none):(.+)$/):null;
+if(__disc){var __op=__disc[1]==='all'?'list':__disc[1];action='manage_discovery';intent={intent:'competitor_discovery',requested_action:'manage_discovery',entities:{disc_op:__op,run_id:__disc[2]}};}
 var isLifecycle=(action==='approve'||action==='reject');
 var arid=((isLifecycle||action==='cancel')&&boundArid)?boundArid:('req_'+(p.update_id||p.message_id||stamp.replace(/[^0-9]/g,'')));
 var rec={agent_request_id:arid,update_id:p.update_id,chat_id:p.chat_id,user_id:p.user_id,owner_user_id:p.user_id,request_text:p.text||p.callback_data,kind:p.kind,intent:intent.intent,requested_action:action,idempotency_key:p.idempotency_key,plan_source:'',data_mode:cfg.report_data_mode||'live',created_at:stamp,state:'received'};
@@ -499,7 +508,7 @@ else if(action==='approve'){
   else{dispatch_target='local';dispatch_reason='approval_invalid:'+v.reason;}
 }
 else if(action==='reject'){dispatch_target='wf22';dispatch_reason='reject';}
-else if(action==='cancel'||action==='status'||action==='manage_memory'||action==='manage_sources'){dispatch_target='wf22';}
+else if(action==='cancel'||action==='status'||action==='manage_memory'||action==='manage_sources'||action==='manage_discovery'){dispatch_target='wf22';}
 else if(action==='discovery'){dispatch_target='wf27';}
 else if(['export_report','show_chart','show_evidence','filter_report','compare_periods'].indexOf(intent.intent)>=0){dispatch_target='wf24';}
 else{dispatch_target='local';}
@@ -615,9 +624,9 @@ return [{json:{telegram_send_body:$('Handle Plan Result').first().json.telegram_
   }),
   ifNode('wf18-d22', 'Dispatch WF22?', [2340, 360], "={{ $('Build Intake Decision').first().json.dispatch_target === 'wf22' }}"),
   execWf('wf18-wf22', 'Run WF22 (Control)', [2560, 320], 'WF22 conversation control', {
-    domain: "={{ ($('Build Intake Decision').first().json.action === 'manage_memory') ? 'memory' : (($('Build Intake Decision').first().json.action === 'manage_sources') ? 'source' : 'request') }}",
-    op: "={{ $('Build Intake Decision').first().json.action }}",
-    arg: "={{ (($('Build Intake Decision').first().json.routed.intent || {}).entities || {}).arg || '' }}",
+    domain: "={{ ($('Build Intake Decision').first().json.action === 'manage_memory') ? 'memory' : (($('Build Intake Decision').first().json.action === 'manage_sources') ? 'source' : (($('Build Intake Decision').first().json.action === 'manage_discovery') ? 'discovery' : 'request')) }}",
+    op: "={{ ($('Build Intake Decision').first().json.action === 'manage_discovery') ? (($('Build Intake Decision').first().json.intent.entities || {}).disc_op || 'list') : $('Build Intake Decision').first().json.action }}",
+    arg: "={{ (($('Build Intake Decision').first().json.intent.entities || {}).run_id) || (($('Build Intake Decision').first().json.routed.intent || {}).entities || {}).arg || '' }}",
     text: "={{ $('Build Intake Decision').first().json.request.request_text }}",
     owner_user_id: "={{ $('Build Intake Decision').first().json.request.user_id }}",
     chat_id: "={{ $('Build Intake Decision').first().json.request.chat_id }}",
@@ -750,6 +759,7 @@ write('22_conversation_control.json', wf('22 — Conversation Control & Sources'
   sheetsRead('wf22-readmem', 'Read durable_memories', [-340, -160], 'durable_memories'),
   sheetsRead('wf22-readsrc', 'Read tracked_sources', [-340, 0], 'tracked_sources'),
   sheetsRead('wf22-readplans', 'Read execution_plans', [-340, 160], 'execution_plans'),
+  sheetsRead('wf22-readcand', 'Read candidate_sources', [-340, 320], 'candidate_sources'),
   code('wf22-apply', 'Apply Control Command', [-120, 0], ['conversation_memory', 'tracked_sources', 'plan_render_ru', 'request_lifecycle'], CALLER + `
 var cfg=$('Resolve Agent Config').first().json;
 var inp=callerInput();var owner=String(inp.owner_user_id||'');
@@ -757,6 +767,8 @@ var ts=(new Date()).toISOString();
 var memories=[];try{memories=($('Read durable_memories').all()||[]).map(function(r){return r.json;});}catch(e){}
 var sources=[];try{sources=($('Read tracked_sources').all()||[]).map(function(r){return r.json;});}catch(e){}
 var plans=[];try{plans=($('Read execution_plans').all()||[]).map(function(r){return r.json;});}catch(e){}
+var candidates=[];try{candidates=($('Read candidate_sources').all()||[]).map(function(r){return r.json;});}catch(e){}
+function truthy(v){return v===true||String(v).toLowerCase()==='true';}
 // SOURCE-OP-001: WF18 dispatches the COARSE action ('manage_sources'); resolve the concrete sub-op (+arg) from the
 // user's text so list/add/pause/resume/remove/check actually run instead of falling through to "not recognized".
 if(inp.domain==='source'&&['add','list','pause','resume','remove','check'].indexOf(String(inp.op))<0){var __so=parseSourceOp(String(inp.text||inp.arg||''));inp.op=__so.op;if(!inp.arg)inp.arg=__so.arg;}
@@ -803,6 +815,34 @@ if(inp.domain==='memory'){
   out.reply=ruStatusReport({status:p0.status,sources:srcs});
   if(__selStatus.active_count>1){out.reply+='\\n\\nЕщё в работе: '+__selStatus.others.map(planStatusLineRu).join('; ')+'.';}}
  }else{out.reply='Команда не распознана.';}
+}else if(inp.domain==='discovery'){
+ // DISCOVERY-004: candidate buttons — add best competitors to monitoring / list all / dismiss / search-more guidance.
+ var rid=String(inp.arg||'');
+ var mine=candidates.filter(function(c){return String(c.owner_user_id)===owner&&String(c.discovery_run_id)===rid;});
+ if(inp.op==='none'){out.reply=mine.length?('Хорошо, ничего не добавляю. '+mine.length+' кандидат(ов) сохранены — можно вернуться к ним позже.'):'Хорошо, ничего не добавляю.';}
+ else if(inp.op==='more'){var q=(mine[0]&&mine[0].query_text)||'';out.reply='Чтобы расширить поиск, отправьте запрос ещё раз или уточните нишу/регион/площадку'+(q?(' (например: «'+q+'»)'):'')+'.';}
+ else if(inp.op==='list'){
+  if(!mine.length){out.reply='Кандидатов по этому запросу не найдено.';}
+  else{var comp=mine.filter(function(c){return truthy(c.is_competitor);});var lead=mine.filter(function(c){return truthy(c.is_lead_source);});var oth=mine.filter(function(c){return !truthy(c.is_competitor)&&!truthy(c.is_lead_source);});
+   function fmtc(c){return '• '+String(c.display_name||c.normalized_key)+(c.confidence?(' (уверенность '+c.confidence+')'):'')+(c.classification_reason?(' — '+String(c.classification_reason).slice(0,70)):'');}
+   var L=['Кандидаты по запросу ('+mine.length+'):'];
+   if(comp.length){L.push('');L.push('Похожи на конкурентов:');comp.slice(0,10).forEach(function(c){L.push(fmtc(c));});}
+   if(lead.length){L.push('');L.push('Сообщества с аудиторией:');lead.slice(0,5).forEach(function(c){L.push(fmtc(c));});}
+   if(oth.length){L.push('');L.push('Прочее:');oth.slice(0,5).forEach(function(c){L.push(fmtc(c));});}
+   out.reply=L.join('\\n');}
+ }
+ else if(inp.op==='add'){
+  var thr=Number((cfg&&cfg.discovery_add_min_confidence)||60);
+  var pick=mine.filter(function(c){return truthy(c.is_competitor)&&Number(c.confidence||0)>=thr&&!truthy(c.already_tracked);});
+  pick.sort(function(a,b){return (Number(b.confidence)||0)-(Number(a.confidence)||0);});
+  var sk={};pick=pick.filter(function(c){var k=String(c.normalized_key).toLowerCase();if(!k||sk[k])return false;sk[k]=1;return true;}).slice(0,3);
+  if(!pick.length){out.reply='Пока нечего добавить: среди кандидатов нет проверенных конкурентов с достаточной уверенностью. Можно посмотреть всех кандидатов («Показать всех кандидатов») или уточнить поиск.';}
+  else{var sources0=sources.slice();var added=[],failed=[];
+   pick.forEach(function(c){var ref=c.source_url||c.normalized_key||c.display_name;var a=addSource(sources,ref,{owner_user_id:owner,cfg:cfg,ts:ts});if(a.added){sources=a.sources;if(a.audit)out.source_audit.push(a.audit);added.push(a.source.label||c.display_name);}else{failed.push(String(c.display_name||ref)+(a.reason==='platform_unavailable'?' (площадка недоступна)':(a.reason==='duplicate'?' (уже отслеживается)':'')));}});
+   out.changed_sources=diff(sources0,sources,'source_id');
+   out.reply=added.length?('Добавил в мониторинг: '+added.join(', ')+'. Буду проверять их на новые публикации.'+(failed.length?('\\nНе удалось: '+failed.join(', ')+'.'):'')):('Не удалось добавить: '+(failed.join(', ')||'нет подходящих кандидатов')+'.');}
+ }
+ else{out.reply='Команда по кандидатам не распознана.';}
 }else{out.reply='Неизвестный домен команды.';}
 return [{json:out}];`),
   // ---- mutation branches (write to the canonical store BEFORE the audit) ----
@@ -833,7 +873,8 @@ return [{json:out}];`),
   ['Resolve Agent Config', 'Read durable_memories'],
   ['Read durable_memories', 'Read tracked_sources'],
   ['Read tracked_sources', 'Read execution_plans'],
-  ['Read execution_plans', 'Apply Control Command'],
+  ['Read execution_plans', 'Read candidate_sources'],
+  ['Read candidate_sources', 'Apply Control Command'],
   ['Apply Control Command', 'Shape Memory Upserts'],
   ['Shape Memory Upserts', 'Upsert durable_memories'],
   ['Upsert durable_memories', 'Shape Memory Audit'],

@@ -43,4 +43,43 @@ const run27 = node('18_telegram_agent_gateway.json', 'Run WF27 (Discovery)');
 A.ok('WF18 has a Run WF27 executeWorkflow node', !!run27 && run27.type === 'n8n-nodes-base.executeWorkflow');
 A.ok('auto_add flagged only on explicit "найди и добавь"', String(run27.parameters.workflowInputs.value.auto_add).indexOf('добав') >= 0);
 
+A.section('DISCOVERY-004 — WF18 routes candidate buttons (disc_*) to the WF22 discovery domain');
+A.ok('Build Intake Decision maps disc_* callbacks to manage_discovery', /disc_\(add\|all\|more\|none\)/.test(intake) && /action='manage_discovery'/.test(intake));
+A.ok("manage_discovery dispatches to wf22", /action==='manage_discovery'\)\{dispatch_target='wf22'/.test(intake) || /manage_discovery'\)\{dispatch_target='wf22'/.test(intake));
+const cmd = node('18_telegram_agent_gateway.json', 'Command Lane').parameters.jsCode;
+A.ok('Command Lane clears the spinner for disc_* callbacks', /disc_\(add\|all\|more\|none\)/.test(cmd) && /answer_callback_body/.test(cmd));
+const run22 = node('18_telegram_agent_gateway.json', 'Run WF22 (Control)');
+A.ok('Run WF22 passes domain=discovery for manage_discovery', String(run22.parameters.workflowInputs.value.domain).indexOf('discovery') >= 0);
+
+A.section('DISCOVERY-004 — WF22 discovery domain: add best / list / none / more (real node execution)');
+const H = require('./wf_harness');
+const CFG = require('../n8n/lib/agent_config.js').resolveConfig({ MS_SPREADSHEET_ID: 'S', MS_TELEGRAM_ALLOWED_USER_IDS: '111', MS_SOURCE_ALLOWLIST: 'website,telegram' });
+const WF22 = H.loadWorkflow('22_conversation_control.json');
+const CANDS = [
+  { candidate_id: 'r1::website::zalog24h.ru', owner_user_id: '111', discovery_run_id: 'r1', platform: 'website', source_url: 'https://zalog24h.ru', normalized_key: 'website::zalog24h.ru', display_name: 'zalog24h.ru', is_competitor: true, confidence: 64, already_tracked: '', classification_reason: 'поставщик услуги: автоломбард', query_text: 'автоломбард Москва' },
+  { candidate_id: 'r1::website::autolombardn1.ru', owner_user_id: '111', discovery_run_id: 'r1', platform: 'website', source_url: 'https://autolombardn1.ru', normalized_key: 'website::autolombardn1.ru', display_name: 'autolombardn1.ru', is_competitor: true, confidence: 64, already_tracked: '', classification_reason: 'поставщик услуги: автоломбард', query_text: 'автоломбард Москва' },
+  { candidate_id: 'r1::website::sravni.ru', owner_user_id: '111', discovery_run_id: 'r1', platform: 'website', source_url: 'https://sravni.ru', normalized_key: 'website::sravni.ru', display_name: 'sravni.ru', is_competitor: false, is_news_or_aggregator: true, confidence: 55, already_tracked: '', classification_reason: 'агрегатор/каталог/СМИ', query_text: 'автоломбард Москва' }
+];
+function discRun(op, cands) {
+  const run = H.makeRun();
+  H.inject(run, 'Resolve Agent Config', [CFG]);
+  H.inject(run, 'Read durable_memories', []);
+  H.inject(run, 'Read tracked_sources', []);
+  H.inject(run, 'Read execution_plans', []);
+  H.inject(run, 'Read candidate_sources', cands || CANDS);
+  return H.runCodeNode(run, WF22, 'Apply Control Command', [{ json: { domain: 'discovery', op: op, arg: 'r1', owner_user_id: '111', chat_id: '555' } }])[0].json;
+}
+const addOut = discRun('add');
+A.ok('add persists the top competitors to tracked_sources', addOut.changed_sources.length === 2, 'changed=' + addOut.changed_sources.length);
+A.ok('add reply confirms in Russian', addOut.reply.indexOf('Добавил в мониторинг') === 0, addOut.reply);
+A.ok('aggregator (sravni.ru) is NOT added', !/sravni/.test(JSON.stringify(addOut.changed_sources)));
+const listOut = discRun('list');
+A.ok('list shows the competitor breakdown', listOut.reply.indexOf('Похожи на конкурентов:') >= 0 && listOut.reply.indexOf('zalog24h.ru') >= 0);
+const noneOut = discRun('none');
+A.ok('none dismisses without adding', noneOut.reply.indexOf('ничего не добавляю') >= 0 && noneOut.changed_sources.length === 0);
+const moreOut = discRun('more');
+A.ok('more gives actionable guidance (no paid call)', /расширить поиск/.test(moreOut.reply) && moreOut.changed_sources.length === 0);
+const emptyAdd = discRun('add', [{ candidate_id: 'r1::website::x', owner_user_id: '111', discovery_run_id: 'r1', platform: 'website', source_url: 'https://x.ru', normalized_key: 'website::x.ru', display_name: 'x.ru', is_competitor: false, confidence: 30, already_tracked: '' }]);
+A.ok('add with no qualifying competitor adds nothing (fail-safe)', emptyAdd.changed_sources.length === 0 && /нечего добавить/.test(emptyAdd.reply));
+
 A.report('discovery-routing');
