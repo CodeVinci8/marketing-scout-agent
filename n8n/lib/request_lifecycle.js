@@ -52,6 +52,16 @@ function selectActiveRequest(plans, opts) {
     var d = rlTime(b.created_at) - rlTime(a.created_at);
     return d !== 0 ? d : rlStr(b.plan_id).localeCompare(rlStr(a.plan_id));
   });
+  // STATUS-DEDUP-001: one request can leave several active plan rows (a stale awaiting_approval row + a newer
+  // collecting row, or append-history) — collapse to the NEWEST row per agent_request_id (mine is newest-first)
+  // so /status never counts or lists the same request twice in "Ещё в работе".
+  var seenReq = {}, deduped = [];
+  for (var i = 0; i < mine.length; i++) {
+    var rk = rlStr(mine[i].agent_request_id) || rlStr(mine[i].plan_id) || ('#' + i);
+    if (seenReq[rk]) continue;
+    seenReq[rk] = 1; deduped.push(mine[i]);
+  }
+  mine = deduped;
   var chosen = mine.length ? mine[0] : null;
   return { found: !!chosen, request: chosen, active_count: mine.length, others: mine.slice(1), stale_ignored: staleIgnored };
 }

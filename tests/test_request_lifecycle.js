@@ -46,6 +46,19 @@ A.ok('no plans -> not found', RL.selectActiveRequest([], { owner_user_id: OWNER,
 A.ok('rlIsTerminal / rlIsActive consistent', RL.rlIsTerminal('cancelled') && RL.rlIsActive('collecting') && !RL.rlIsActive('completed'), 'state helpers wrong');
 A.ok('rlIsQaOwner catches non-numeric owners', RL.rlIsQaOwner('stage_d_owner') && !RL.rlIsQaOwner('1188830082'), 'qa owner detection wrong');
 
+A.section('STATUS-DEDUP-001 — one request with several active rows is counted/listed once');
+// same agent_request_id leaves a stale awaiting_approval row AND a newer collecting row (append history).
+const dupRows = [
+  { plan_id: 'p1', agent_request_id: 'rDup', owner_user_id: OWNER, chat_id: CHAT, status: 'awaiting_approval', created_at: iso(10) },
+  { plan_id: 'p2', agent_request_id: 'rDup', owner_user_id: OWNER, chat_id: CHAT, status: 'collecting', created_at: iso(3) },
+  { plan_id: 'p3', agent_request_id: 'rOther', owner_user_id: OWNER, chat_id: CHAT, status: 'collecting', created_at: iso(1) }
+];
+const selDup = RL.selectActiveRequest(dupRows, { owner_user_id: OWNER, chat_id: CHAT, now_iso: NOW });
+A.eq('active_count dedups by agent_request_id (2 requests, not 3 rows)', selDup.active_count, 2);
+A.eq('chosen is the newest DISTINCT request (rOther)', selDup.request.agent_request_id, 'rOther');
+A.eq('"others" lists rDup exactly once', selDup.others.map(o => o.agent_request_id).join(','), 'rDup');
+A.eq('the newest row wins within rDup (collecting p2, not stale p1)', selDup.others[0].plan_id, 'p2');
+
 A.section('WF18 /status and WF22 /cancel embed the SAME canonical selector (no drift)');
 const gen = require('../tools/gen_stage4_workflows.js');
 function node(file, name) { const w = (gen.generated || []).find(g => g.file === file).workflow; return w.nodes.find(n => n.name === name); }

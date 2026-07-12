@@ -245,6 +245,18 @@ function httpTelegram(id, name, pos) {
   };
 }
 // editMessageText reuses the SAME message (progress edits). Body carries chat_id + message_id + text.
+// Like httpTelegram but the Bot API method is chosen at runtime ($json.tg_method: 'sendMessage'|'editMessageText'),
+// so one node can either post a new message or edit an existing one. Body is the matching JSON payload.
+function httpTelegramDynamic(id, name, pos) {
+  return {
+    parameters: {
+      method: 'POST', url: '=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/{{ $json.tg_method }}',
+      sendBody: true, specifyBody: 'json', jsonBody: '={{ $json.telegram_send_body }}', options: {}
+    },
+    onError: 'continueRegularOutput',
+    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
+  };
+}
 function httpTelegramEdit(id, name, pos) {
   return {
     parameters: {
@@ -609,7 +621,11 @@ return [{json:{telegram_send_body:$('Handle Plan Result').first().json.telegram_
     plan_id: "={{ ($('Build Intake Decision').first().json.approval.plan || {}).plan_id || '' }}",
     plan_hash: "={{ ($('Build Intake Decision').first().json.approval.plan || {}).plan_hash || '' }}",
     data_mode: "={{ $('Build Intake Decision').first().json.request.data_mode }}",
-    state: 'approved'
+    state: 'approved',
+    // PROGRESS-UNIFY-001: the "✅ Принято!" ack (sent upstream on this same branch) becomes WF20's ONE progress
+    // message — WF20 edits it through stages instead of posting a second message. Empty on a failed ack -> WF20
+    // falls back to sending its own progress message.
+    progress_message_id: "={{ (($('Send Command Reply').first().json || {}).result || {}).message_id || '' }}"
   }),
   ifNode('wf18-d21', 'Dispatch WF21?', [2340, 220], "={{ $('Build Intake Decision').first().json.dispatch_target === 'wf21' }}"),
   execWf('wf18-wf21', 'Run WF21 (Deep Analysis)', [2560, 180], 'WF21 deep competitor analysis', {
@@ -927,7 +943,7 @@ write('19_request_planner.json', wf('19 — Request Planner (deterministic + gua
 // =========================================================================================== WF20 orchestrator
 write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)', [
   manual('wf20-trig', 'Manual Start', [-940, -180]),
-  subTrigger('wf20-sub', 'When Called by Agent', [-940, 60], ['agent_request_id', 'chat_id', 'owner_user_id', 'conversation_id', 'plan_id', 'plan_hash', 'data_mode', 'state', 'enable_llm_summary', 'enable_llm_analysis']),
+  subTrigger('wf20-sub', 'When Called by Agent', [-940, 60], ['agent_request_id', 'chat_id', 'owner_user_id', 'conversation_id', 'plan_id', 'plan_hash', 'data_mode', 'state', 'enable_llm_summary', 'enable_llm_analysis', 'progress_message_id']),
   code('wf20-cfg', 'Resolve Agent Config', [-720, 0], ['agent_config'],
     ENV + "\n" + CALLER + "\n// DETERMINISTIC-RUN-001: a caller may force the paid LLM features OFF (fail-safe direction ONLY) for a bounded / deterministic run. It can NEVER enable an LLM feature and NEVER touches the allowlist, budgets, approval or any fail-closed gate — resolveConfig also independently pins llm off when enable_claude is false.\nvar __ci=callerInput();var __ov={};\nif(String(__ci.enable_llm_summary)==='false')__ov.enable_llm_summary=false;\nif(String(__ci.enable_llm_analysis)==='false')__ov.enable_llm_analysis=false;\nreturn [{json:resolveConfig(__env,__ov)}];"),
   // Stage 5 (PLAN-EXEC-001): the orchestrator executes the STORED approved plan, not a caller-supplied shape.
@@ -1069,9 +1085,13 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
   httpTelegram('wf20-sendblock', 'Send Blocked Reply', [400, 160]),
   // one progress message per request (created here; later stages EDIT the same message id; final report is a
   // SEPARATE idempotent delivery via the outbox). Runs as a parallel branch off the allowed gate.
+  // PROGRESS-UNIFY-001: WF18 already posted the "✅ Принято!" ack and passes its message_id. When present we EDIT
+  // that same message into the progress line (one chat message end-to-end, ending "✅ Анализ завершён"); when
+  // absent (manual run / ack send failed) we fall back to sending a NEW progress message — worst case = prior
+  // behaviour, never worse. The method is chosen dynamically so a single Send Progress node handles both.
   code('wf20-progress', 'Build Progress Update', [180, -300], ['progress_tracker'],
-    "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nvar up=advance(st,2,{now:(new Date()).toISOString()});\nvar body={chat_id:chat,text:up.text};\nreturn [{json:{telegram_send_body:JSON.stringify(body),progress_state:up.state,progress_action:up.action,is_final_delivery:up.is_final_delivery}}];"),
-  Object.assign(httpTelegram('wf20-sendprogress', 'Send Progress', [400, -300]), { onError: 'continueRegularOutput' }),
+    "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar seedMid='';try{seedMid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nif(seedMid)st=setMessageId(st,seedMid);\nvar up=advance(st,2,{now:(new Date()).toISOString()});\nvar body=seedMid?{chat_id:chat,message_id:Number(seedMid),text:up.text}:{chat_id:chat,text:up.text};\nvar method=seedMid?'editMessageText':'sendMessage';\nreturn [{json:{telegram_send_body:JSON.stringify(body),tg_method:method,seed_message_id:seedMid,progress_state:up.state,progress_action:up.action,is_final_delivery:up.is_final_delivery}}];"),
+  Object.assign(httpTelegramDynamic('wf20-sendprogress', 'Send Progress', [400, -300]), { onError: 'continueRegularOutput' }),
   // §9 PROGRESS-EDIT-001: the ONE progress message (created above) is EDITED at each real stage transition.
   // Each editor rebuilds the tracker state (init + setMessageId from the Send Progress response) and advances
   // to a hardcoded distinct stage — advance() throttles any repeat, so there is never per-item spam. A missing
@@ -1082,7 +1102,7 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
     var slug = label.toLowerCase().replace(/[^a-z]+/g, '');
     return [
       code('wf20-prog' + slug, 'Progress: ' + label, [x, -340], ['progress_tracker'],
-        "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=" + (stage - 1) + ";st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st," + stage + ",{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:" + stage + ",telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:" + (stage === 10 ? "'✅ Анализ завершён. Отчёт отправлен ниже.'" : 'up.text') + "})}}];"),
+        "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}\nif(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=" + (stage - 1) + ";st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st," + stage + ",{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:" + stage + ",telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:" + (stage === 10 ? "'✅ Анализ завершён. Отчёт отправлен ниже.'" : 'up.text') + "})}}];"),
       Object.assign(httpTelegramEdit('wf20-editprog' + slug, 'Edit Progress (' + label + ')', [x + 110, -340]), { onError: 'continueRegularOutput' })
     ];
   })

@@ -114,4 +114,30 @@ A.section('WF20 §9 — the ONE progress message is edited on the real main line
   for (const stg of PT.STAGES) A.ok('stage «' + stg + '» leaks no internals', !/wf\d|workflow|adapter|env|error|exec/i.test(stg));
 }
 
+A.section('PROGRESS-UNIFY-001 — WF20 reuses the WF18 ack as its ONE message (no "Принято!"+"завершён" pair)');
+{
+  function buildProgress(callerJson) {
+    const run = H.makeRun();
+    H.inject(run, 'Approval & Budget Gate', [{ request: { agent_request_id: 'r1', chat_id: 'c1' } }]);
+    H.inject(run, 'When Called by Agent', [callerJson]);
+    return H.runCodeNode(run, WF20, 'Build Progress Update', [{ json: {} }])[0].json;
+  }
+  // WF18 passed the ack message_id -> WF20 EDITS that message (no second message)
+  const seeded = buildProgress({ agent_request_id: 'r1', chat_id: 'c1', progress_message_id: 4242 });
+  A.eq('seeded run edits (not sends)', seeded.tg_method, 'editMessageText');
+  A.eq('seeded run targets the WF18 ack message_id', JSON.parse(seeded.telegram_send_body).message_id, 4242);
+  A.eq('Send Progress node method is dynamic ($json.tg_method)', WF20.nodes.find(n => n.name === 'Send Progress').parameters.url.indexOf('{{ $json.tg_method }}') >= 0, true);
+  // no ack passed (manual run / ack send failed) -> WF20 falls back to sending its own message (never worse)
+  const unseeded = buildProgress({ agent_request_id: 'r1', chat_id: 'c1', progress_message_id: '' });
+  A.eq('unseeded run sends a new message (fallback)', unseeded.tg_method, 'sendMessage');
+  A.ok('unseeded new-message body has no message_id', JSON.parse(unseeded.telegram_send_body).message_id === undefined);
+  // editors prefer the caller ack id over the Send Progress response, so the SAME message is edited throughout
+  const run = H.makeRun();
+  H.inject(run, 'Approval & Budget Gate', [{ request: { agent_request_id: 'r1', chat_id: 'c1' } }]);
+  H.inject(run, 'When Called by Agent', [{ progress_message_id: 4242 }]);
+  H.inject(run, 'Send Progress', [{ ok: true, result: { message_id: 4242 } }]);
+  const ed = H.runCodeNode(run, WF20, 'Progress: Analysis', [{ json: {} }])[0].json;
+  A.eq('stage editor edits the SAME ack message id', JSON.parse(ed.telegram_edit_body).message_id, 4242);
+}
+
 A.report('progress-lifecycle');
