@@ -101,4 +101,38 @@ A.ok('website candidate key is website::', webCands[0].normalized_key.indexOf('w
 A.eq('malformed search response -> [] (fail safe)', Q.parseFirecrawlSearchResults('not json').length, 0);
 A.eq('success:false -> [] ', Q.parseFirecrawlSearchResults({ success: false }).length, 0);
 
+A.section('discovery_query — candidate URL hygiene (clean canonical source_url, no query/fragment/mobile prefix)');
+const tgDirty = Q.candidatesFromResults([{ url: 'https://t.me/s/avtosebe?before=23717', title: 'Автоломбард', description: 'займ под ПТС' }], { platform_target: 'telegram' }, TS.normalizeSourceRef);
+A.eq('telegram source_url stripped of /s/ and ?before=', tgDirty[0].source_url, 'https://t.me/avtosebe');
+const vkDirty = Q.candidatesFromResults([{ url: 'https://m.vk.com/rosavtodengi?offset=10&own=0', title: 'Автоденьги', description: 'займ под ПТС' }], { platform_target: 'vk' }, TS.normalizeSourceRef);
+A.eq('vk source_url normalized (no m. / no query)', vkDirty[0].source_url, 'https://vk.com/rosavtodengi');
+
+A.section('discovery_query — VK junk paths rejected (wall/photo/personal id are not communities)');
+const vkJunk = Q.candidatesFromResults([
+  { url: 'https://vk.com/wall-154046029_18261', title: 'x', description: 'кредит под ПТС' },
+  { url: 'https://m.vk.com/photo-162799537_456239017?rev=1', title: 'x', description: 'автоломбард' },
+  { url: 'https://vk.com/id535931446', title: 'x', description: 'займ под ПТС' },
+  { url: 'https://vk.com/ptszaim1', title: 'ПТС Займ', description: 'автоломбард' }
+], { platform_target: 'vk' }, TS.normalizeSourceRef);
+A.eq('only the real community survives (wall/photo/id dropped)', vkJunk.map(c => c.normalized_key).join(','), 'vk_community::ptszaim1');
+
+A.section('discovery_query — search/marketplace/Avito hosts dropped in website mode');
+const webDrop = Q.candidatesFromResults([
+  { url: 'https://yandex.ru/search/?text=автоломбард', title: 'Яндекс', description: 'автоломбард Москва' },
+  { url: 'https://2gis.ru/moscow/автоломбард', title: '2ГИС', description: 'автоломбард' },
+  { url: 'https://www.avito.ru/moskva/avtomobili', title: 'Авито', description: 'автоломбард' },
+  { url: 'https://carmoney.ru/', title: 'CarMoney', description: 'займ под ПТС автоломбард' }
+], { platform_target: 'website' }, TS.normalizeSourceRef);
+A.eq('yandex/2gis/avito dropped, carmoney kept', webDrop.map(c => c.host).join(','), 'carmoney.ru');
+A.ok('Avito never appears as a candidate', webDrop.every(c => !/avito/i.test(c.source_url + c.normalized_key)));
+
+A.section('candidate_classifier — aggregator/media host is never a competitor (snippet has query terms)');
+const aggr = C.classifyCandidate({ title: 'Автоломбард Москва — рейтинг', description: 'Поможем получить кредит под ПТС, автоломбард, оставьте заявку', platform: 'website', host: 'moskva.vbr.ru' });
+A.eq('vbr.ru forced to news_or_aggregator (not competitor)', aggr.is_competitor, false);
+A.eq('vbr.ru category', aggr.category, 'news_or_aggregator');
+const aggr2 = C.classifyCandidate({ title: 'Автоломбарды — отзывы', description: 'помощь в получении кредита, автоломбард, оставьте заявку', platform: 'website', url: 'https://www.banki.ru/products/' });
+A.eq('banki.ru (via url) not a competitor', aggr2.is_competitor, false);
+const realComp = C.classifyCandidate({ title: 'Автоломбард', description: 'Поможем получить кредит под ПТС без предоплаты, оставьте заявку', platform: 'website', host: 'carmoney.ru' });
+A.eq('a real provider host still classifies as competitor', realComp.is_competitor, true);
+
 A.report('discovery-libs');

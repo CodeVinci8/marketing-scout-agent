@@ -33,6 +33,13 @@ const EDU = ['как получить', 'как взять', 'как оформ�
 const AUDIENCE = ['подскажите', 'помогите', 'кто сталкивался', 'нужен совет', 'посоветуйте', 'ищу кредит', 'ищу займ', 'где взять', 'кто брал', 'реально ли получить', 'вопрос по кредит', 'обсуждение'];
 // hard-negative / spam.
 const SPAM = ['ставки на спорт', 'казино', 'crypto pump', 'binary options', 'заработок в интернете без вложений', 'пирамид'];
+// KNOWN media / directory / bank-rating / comparison hosts. A SERP snippet from these contains the query terms
+// ("автоломбард …") but the site itself is an aggregator, NOT a provider — it must NEVER be scored a competitor.
+const AGGREGATOR_HOSTS = ['banki.ru', 'sravni.ru', 'vbr.ru', 'kp.ru', 'rbc.ru', 'rambler.ru', 'mail.ru',
+  'lenta.ru', 'ria.ru', 'tass.ru', 'dzen.ru', 'zen.yandex.ru', 'vc.ru', 'journal.tinkoff.ru', 'irecommend.ru',
+  'otzovik.com', 'zoon.ru', 'flamp.ru', 'spr.ru', 'rusprofile.ru', 'list-org.com'];
+function hostOf(url) { return low(url).replace(/^https?:\/\//i, '').split(/[\/?#]/)[0].replace(/^m\./i, '').replace(/^www\./i, ''); }
+function isAggregatorHost(host) { host = low(host); return AGGREGATOR_HOSTS.some(function (d) { return host === d || host.endsWith('.' + d); }); }
 
 function countHits(blob, list) { let n = 0, hit = []; for (let i = 0; i < list.length; i++) { if (blob.indexOf(list[i]) >= 0) { n++; if (hit.length < 4) hit.push(list[i]); } } return { n: n, hit: hit }; }
 
@@ -69,6 +76,15 @@ function classifyCandidate(input) {
     return base;
   }
   base.evidence = finance.hit.slice();
+
+  // 1b. KNOWN aggregator/media/directory host — never a competitor regardless of snippet terms.
+  const host = low(input.host) || hostOf(input.url);
+  if (host && isAggregatorHost(host)) {
+    base.is_news_or_aggregator = true; base.category = 'news_or_aggregator';
+    base.confidence = 55; base.relevance_score = 35;
+    base.classification_reason = 'агрегатор/каталог/СМИ (' + host + ') — не поставщик услуги';
+    return base;
+  }
 
   // 2. COMPETITOR — a service PROVIDER: provider framing present and stronger than audience framing.
   //    A provider identity (broker/autolombard) or a real provider-action offer — not just a product noun.
@@ -133,4 +149,4 @@ function rankCandidates(cands) {
   };
 }
 
-module.exports = { classifyCandidate, rankCandidates, str, low };
+module.exports = { classifyCandidate, rankCandidates, isAggregatorHost, AGGREGATOR_HOSTS, str, low };

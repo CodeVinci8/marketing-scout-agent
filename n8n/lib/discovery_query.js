@@ -139,32 +139,46 @@ function parseFirecrawlSearchResults(body) {
   return arr.map(function (d) { d = d || {}; return { url: str(d.url || d.link || (d.metadata && d.metadata.sourceURL)), title: str(d.title || d.metadata && d.metadata.title), description: str(d.description || d.snippet || d.markdown || d.content) }; })
     .filter(function (r) { return r.url; });
 }
+// Search engines / marketplaces / maps / video — a SERP snippet from these contains the query terms but the
+// domain itself is never a competitor candidate. Dropped entirely in website mode (Avito is NEVER a candidate).
+const DROP_HOSTS = ['avito.ru', 'yandex.ru', 'ya.ru', 'google.com', 'google.ru', '2gis.ru', '2gis.com',
+  'ozon.ru', 'wildberries.ru', 'youtube.com', 'youtu.be', 'aliexpress.ru', 'market.yandex.ru'];
+// VK path prefixes that are NOT a community (personal profiles, wall posts, media, service pages).
+const VK_NON_COMMUNITY = /^(id\d+|wall|photo|video|album|topic|market|away|share|widget|search|feed|im|login|apps|support|dev|blog|page|about|help)$/i;
+
+function hostOf(url) { return str(url).replace(/^https?:\/\//i, '').split(/[\/?#]/)[0].replace(/^m\./i, '').replace(/^www\./i, '').toLowerCase(); }
+function hostMatches(host, list) { return list.some(function (d) { return host === d || host.endsWith('.' + d); }); }
+
 // Turn raw search results into normalized candidate rows for a platform: derive the canonical key/handle, drop
-// off-platform URLs (a t.me/s query can still return non-t.me links), dedup. `normalizeRef` is an injected
-// function (tracked_sources.normalizeSourceRef) so keys match the source registry exactly.
+// off-platform URLs (a t.me/s query can still return non-t.me links) + non-community VK paths + search/marketplace
+// hosts, produce a CLEAN canonical source_url (no query/fragment/mobile prefix), dedup. `normalizeRef` is an
+// injected function (tracked_sources.normalizeSourceRef) so keys match the source registry exactly.
 function candidatesFromResults(results, ctx, normalizeRef) {
   ctx = ctx || {};
   const platform = low(ctx.platform_target || ctx.platform) || 'website';
   const out = [], seen = {};
   (results || []).forEach(function (r) {
     let url = str(r.url);
-    let key = '', display = url, plat = platform;
+    let key = '', display = url, plat = platform, cleanUrl = url, host = hostOf(url);
     if (platform === 'telegram') {
       const m = url.match(/(?:t|telegram)\.me\/(?:s\/)?(\+?[a-z0-9_]{3,64})/i);
       if (!m || /^\+/.test(m[1]) || /joinchat/i.test(url)) return;   // off-platform or invite-only
-      display = '@' + m[1].toLowerCase(); key = 'telegram_channel::' + m[1].toLowerCase(); plat = 'telegram';
+      const h = m[1].toLowerCase();
+      display = '@' + h; key = 'telegram_channel::' + h; plat = 'telegram'; cleanUrl = 'https://t.me/' + h;
     } else if (platform === 'vk') {
       const m = url.match(/vk\.com\/([a-z0-9_.]{2,64})/i);
-      if (!m || /^(away|share|widget|search|feed|im)$/i.test(m[1])) return;
-      display = 'vk.com/' + m[1].toLowerCase(); key = 'vk_community::' + m[1].toLowerCase(); plat = 'vk';
+      if (!m || VK_NON_COMMUNITY.test(m[1])) return;                 // service page / personal profile / wall post
+      const s = m[1].toLowerCase();
+      display = 'vk.com/' + s; key = 'vk_community::' + s; plat = 'vk'; cleanUrl = 'https://vk.com/' + s;
     } else {
-      if (/(^|\.)(t\.me|telegram\.me|vk\.com)$/i.test(url.replace(/^https?:\/\//, '').split('/')[0])) return; // exclude socials in website mode
-      if (normalizeRef) { const n = normalizeRef(url); key = n.key || ''; display = n.label || url; }
-      else { const host = url.replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, ''); key = 'website::' + host.toLowerCase(); display = host; }
-      plat = 'website';
+      if (/(^|\.)(t\.me|telegram\.me|vk\.com)$/i.test(host)) return;  // exclude socials in website mode
+      if (hostMatches(host, DROP_HOSTS)) return;                      // search engine / marketplace / map — never a candidate
+      if (normalizeRef) { const n = normalizeRef(url); key = n.key || ''; display = n.label || host; }
+      else { key = 'website::' + host; display = host; }
+      plat = 'website'; cleanUrl = 'https://' + host;
     }
     if (!key || seen[key]) return; seen[key] = 1;
-    out.push({ platform: plat, source_url: url, normalized_key: key, display_name: display, title: str(r.title), description: str(r.description) });
+    out.push({ platform: plat, source_url: cleanUrl, host: host, normalized_key: key, display_name: display, title: str(r.title), description: str(r.description) });
   });
   return out;
 }
@@ -173,5 +187,6 @@ module.exports = {
   PRODUCT_PHRASES, detectProduct, detectPlatforms, regionToken, siteFilter,
   buildDiscoveryQueries, projectDiscoveryCost,
   buildFirecrawlSearchBody, parseFirecrawlSearchResults, candidatesFromResults,
+  DROP_HOSTS, hostOf, hostMatches,
   str, low, num
 };
