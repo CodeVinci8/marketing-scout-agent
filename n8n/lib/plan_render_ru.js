@@ -230,6 +230,7 @@ function ruCapabilityGroups(annotatedCaps) {
 // own Russian name, so a NEW capability is advertised automatically and can never be hidden by this map.
 var RU_CAP_LABEL = {
   competitor_search: 'найти и сравнить конкурентов',
+  competitor_discovery: 'найти новых конкурентов (Telegram, VK, сайты)',
   deep_competitor_analysis: 'изучить конкурента подробнее',
   compare_periods: 'сравнить с прошлым периодом',
   rerun_request: 'повторить предыдущий запрос',
@@ -248,7 +249,7 @@ var RU_CAP_LABEL = {
 };
 // Goal group per capability id. 'commands' render as /commands; 'hidden' = the help capability itself.
 var RU_CAP_GROUP = {
-  competitor_search: 'analysis', deep_competitor_analysis: 'analysis', compare_periods: 'analysis',
+  competitor_search: 'analysis', competitor_discovery: 'analysis', deep_competitor_analysis: 'analysis', compare_periods: 'analysis',
   rerun_request: 'analysis', refresh_sources: 'analysis',
   report_followup: 'reports', generate_ideas: 'reports', filter_report: 'reports',
   export_report: 'reports', show_chart: 'reports', show_evidence: 'reports',

@@ -500,6 +500,7 @@ else if(action==='approve'){
 }
 else if(action==='reject'){dispatch_target='wf22';dispatch_reason='reject';}
 else if(action==='cancel'||action==='status'||action==='manage_memory'||action==='manage_sources'){dispatch_target='wf22';}
+else if(action==='discovery'){dispatch_target='wf27';}
 else if(['export_report','show_chart','show_evidence','filter_report','compare_periods'].indexOf(intent.intent)>=0){dispatch_target='wf24';}
 else{dispatch_target='local';}
 return [{json:{decision:'accepted',is_new_request:!isLifecycle,is_lifecycle:isLifecycle,request:request,intent:intent,action:action,event:t.event,dispatch_target:dispatch_target,dispatch_reason:dispatch_reason,approval:approval,routed:r,conversation_id:r.conversation_id}}];`),
@@ -632,6 +633,19 @@ return [{json:{telegram_send_body:$('Handle Plan Result').first().json.telegram_
     filter_text: "={{ $('Build Intake Decision').first().json.request.request_text }}",
     data_mode: "={{ $('Build Intake Decision').first().json.request.data_mode }}"
   }),
+  // DISCOVERY-003: a discovery intent ("найди новых конкурентов …") dispatches to WF27 (Firecrawl Search).
+  ifNode('wf18-d27', 'Dispatch WF27?', [2340, 640], "={{ $('Build Intake Decision').first().json.dispatch_target === 'wf27' }}"),
+  execWf('wf18-wf27', 'Run WF27 (Discovery)', [2560, 600], 'WF27 competitor discovery', {
+    agent_request_id: "={{ $('Build Intake Decision').first().json.request.agent_request_id }}",
+    chat_id: "={{ $('Build Intake Decision').first().json.request.chat_id }}",
+    owner_user_id: "={{ $('Build Intake Decision').first().json.request.user_id }}",
+    text: "={{ $('Build Intake Decision').first().json.request.request_text }}",
+    platform: "={{ (($('Build Intake Decision').first().json.routed.intent || {}).entities || {}).platform || '' }}",
+    region: "={{ (($('Build Intake Decision').first().json.routed.intent || {}).entities || {}).region || '' }}",
+    niche: "={{ (($('Build Intake Decision').first().json.routed.intent || {}).entities || {}).niche || '' }}",
+    data_mode: "={{ $('Build Intake Decision').first().json.request.data_mode }}",
+    auto_add: "={{ /(найди?\\s*и\\s*добав|добавь\\s*найден)/i.test($('Build Intake Decision').first().json.request.request_text || '') ? 'true' : '' }}"
+  }),
   // local answer (help / clarify / answer-from-context / unavailable / invalid-approval) — WF18 owns this delivery
   code('wf18-reply', 'Build Conversational Reply', [2560, 620], ['conversation_response', 'agent_charter', 'plan_render_ru'], `
 var d=$('Build Intake Decision').first().json;var r=d.routed;var cfg=r.cfg;
@@ -716,7 +730,9 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),inten
   ['Dispatch WF22?', 'Run WF22 (Control)', 0],
   ['Dispatch WF22?', 'Dispatch WF24?', 1],
   ['Dispatch WF24?', 'Run WF24 (Reporting)', 0],
-  ['Dispatch WF24?', 'Build Conversational Reply', 1],
+  ['Dispatch WF24?', 'Dispatch WF27?', 1],
+  ['Dispatch WF27?', 'Run WF27 (Discovery)', 0],
+  ['Dispatch WF27?', 'Build Conversational Reply', 1],
   ['Build Conversational Reply', 'Send Telegram Reply']
 ]));
 

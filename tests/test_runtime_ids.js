@@ -20,8 +20,8 @@ function localWith(entries) {
   return m;
 }
 
-A.section('manifest identity is the 17-key logical source of truth (no real ids committed)');
-A.eq('runtime_identity has 17 keys', KEYS.length, 17);
+A.section('manifest identity is the 18-key logical source of truth (no real ids committed)');
+A.eq('runtime_identity has 18 keys', KEYS.length, 18);
 A.ok('WF18 present with exact name + null canonical_id', !!identity.WF18 && identity.WF18.canonical_id === null && identity.WF18.id_source === 'operator_local');
 A.ok('callable WF08 declares an executeWorkflowTrigger expectation', identity.WF08.callable === true && /executeWorkflowTrigger/.test(identity.WF08.expected_target_trigger));
 
@@ -97,13 +97,13 @@ A.section('decision: CREATE_WITH_LOCAL_ID when local id reserved but workflow ab
   A.eq('id preserved', d.id, 'RESERVED');
 }
 
-A.section('resolveAll: fresh install generates all 17, idempotent on second run');
+A.section('resolveAll: fresh install generates all 18, idempotent on second run');
 {
   const idx = idxFrom([]);
   const r1 = R.resolveAll(identity, R.emptyMap(), idx);
   A.ok('first pass ok', r1.ok && r1.mutated);
-  A.eq('coverage 17/17', r1.report.coverage, '17/17');
-  A.eq('all actions generate', r1.decisions.filter(d => d.action === R.ACTIONS.GENERATE).length, 17);
+  A.eq('coverage 18/18', r1.report.coverage, '18/18');
+  A.eq('all actions generate', r1.decisions.filter(d => d.action === R.ACTIONS.GENERATE).length, 18);
   // second run with the persisted map: all reserved ids -> create_with_local_id (still empty export), no aborts
   const r2 = R.resolveAll(identity, r1.nextMap, idx);
   A.ok('second pass ok (idempotent, fail-closed clean)', r2.ok);
@@ -117,9 +117,9 @@ A.section('resolveAll: real-export discovery persists ids and is then VERIFIED')
   const idx = idxFrom(pairs);
   const r1 = R.resolveAll(identity, R.emptyMap(), idx);
   A.ok('discovery pass ok', r1.ok);
-  A.eq('all discovered', r1.decisions.filter(d => d.action === R.ACTIONS.DISCOVER).length, 17);
+  A.eq('all discovered', r1.decisions.filter(d => d.action === R.ACTIONS.DISCOVER).length, 18);
   const r2 = R.resolveAll(identity, r1.nextMap, idx);
-  A.eq('all verified on re-resolve', r2.decisions.filter(d => d.action === R.ACTIONS.VERIFIED).length, 17);
+  A.eq('all verified on re-resolve', r2.decisions.filter(d => d.action === R.ACTIONS.VERIFIED).length, 18);
   A.ok('verified pass ok', r2.ok);
 }
 
@@ -160,10 +160,10 @@ A.section('validateMap: name match + id uniqueness + schema');
   A.ok('name mismatch rejected', R.validateMap(identity, badName).ok === false);
 }
 
-A.section('scaffold: skeleton from manifest has all 17 keys with null ids and correct names');
+A.section('scaffold: skeleton from manifest has all 18 keys with null ids and correct names');
 {
   const sk = R.scaffold(identity);
-  A.eq('scaffold has 17 keys', Object.keys(sk.workflows).length, 17);
+  A.eq('scaffold has 18 keys', Object.keys(sk.workflows).length, 18);
   A.ok('all ids null', Object.keys(sk.workflows).every(k => sk.workflows[k].id === null));
   A.ok('names match manifest', Object.keys(sk.workflows).every(k => sk.workflows[k].name === identity[k].name));
 }

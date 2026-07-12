@@ -93,10 +93,11 @@ A.ok('9. approval -> WF20 orchestrator path exists', !!nodeByName(WF18, 'Run WF2
 A.ok('10. deep approval -> WF21 path exists', !!nodeByName(WF18, 'Run WF21 (Deep Analysis)'));
 A.ok('11. control/memory/source/cancel -> WF22 path exists', !!nodeByName(WF18, 'Run WF22 (Control)'));
 A.ok('12. report operations -> WF24 path exists', !!nodeByName(WF18, 'Run WF24 (Reporting)'));
+A.ok('12b. discovery -> WF27 path exists', !!nodeByName(WF18, 'Run WF27 (Discovery)'));
 // 13: every WF18 executeWorkflow is a declared manifest binding edge (resolvable post-import, not a silent gap)
 const manifest = require('../config/workflow_manifest.json');
 const wf18Edges = manifest.deployment.binding_edges.filter(e => e.caller_workflow === '18_telegram_agent_gateway.json');
-A.eq('13. all 5 WF18 dispatch edges are declared in the manifest (resolvable)', wf18Edges.length, 5);
+A.eq('13. all 6 WF18 dispatch edges are declared in the manifest (resolvable)', wf18Edges.length, 6);
 
 A.section('§19.14-16 — durable plan before approval + real approval identifiers + callback ack');
 const planAppend = nodeByName(WF18, 'Append execution_plans');

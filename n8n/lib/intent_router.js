@@ -14,12 +14,12 @@ function num(v, d) { const n = Number(v); return isFinite(n) ? n : d; }
 // The ONLY routable intent IDs (mirrors agent_charter capability IDs + the request-lifecycle callbacks). A
 // contract test asserts this set stays in sync with the capability registry.
 const INTENT_IDS = [
-  'competitor_search', 'deep_competitor_analysis', 'clarify_request', 'report_followup', 'generate_ideas',
+  'competitor_search', 'competitor_discovery', 'deep_competitor_analysis', 'clarify_request', 'report_followup', 'generate_ideas',
   'add_source', 'manage_sources', 'compare_periods', 'rerun_request', 'status', 'cancel', 'help', 'manage_memory',
   // reporting UX intents (operate on the last report / stored data)
   'export_report', 'show_chart', 'show_evidence', 'filter_report', 'refresh_sources', 'weekly_digest', 'manage_digest'
 ];
-const REQUESTED_ACTIONS = ['build_plan', 'answer_from_context', 'manage_sources', 'manage_memory', 'approve', 'reject', 'status', 'cancel', 'help', 'clarify'];
+const REQUESTED_ACTIONS = ['build_plan', 'discovery', 'answer_from_context', 'manage_sources', 'manage_memory', 'approve', 'reject', 'status', 'cancel', 'help', 'clarify'];
 const APPROVAL_INTENTS = ['competitor_search', 'deep_competitor_analysis', 'rerun_request', 'refresh_sources'];
 const CONTEXT_INTENTS = ['deep_competitor_analysis', 'report_followup', 'generate_ideas', 'compare_periods', 'add_source', 'manage_sources', 'rerun_request',
   'export_report', 'show_chart', 'show_evidence', 'filter_report'];
@@ -104,7 +104,8 @@ function buildIntent(intentId, conf, entities, ctx) {
   const requiresContext = CONTEXT_INTENTS.indexOf(intentId) >= 0;
   const requiresApproval = APPROVAL_INTENTS.indexOf(intentId) >= 0;
   let action = 'answer_from_context';
-  if (APPROVAL_INTENTS.indexOf(intentId) >= 0) action = 'build_plan';
+  if (intentId === 'competitor_discovery') action = 'discovery';
+  else if (APPROVAL_INTENTS.indexOf(intentId) >= 0) action = 'build_plan';
   else if (intentId === 'add_source' || intentId === 'manage_sources') action = 'manage_sources';
   else if (intentId === 'manage_memory') action = 'manage_memory';
   else if (intentId === 'status') action = 'status';
@@ -159,6 +160,29 @@ function deterministicIntent(parsed, ctx) {
   // "compare the first two (more deeply)" -> deep analysis using prior report
   if ((ent.competitor_refs.length && /подробн|глубж|детальн|deep|more detail/i.test(text))) {
     return Object.assign(buildIntent('deep_competitor_analysis', 0.9, ent, ctx), { from: 'rule' });
+  }
+  // URL-INTAKE-002: a pasted PUBLIC source (website URL / t.me / vk.com) is an explicit-source ANALYSIS request —
+  // route to competitor_search (the plan path extracts + targets exactly those sources), never discovery.
+  if (/https?:\/\/[^\s]+|(^|\s)t\.me\/[a-z0-9_]|(^|\s)vk\.com\/[a-z0-9_]/i.test(text)) {
+    return Object.assign(buildIntent('competitor_search', 0.9, ent, ctx), { from: 'rule' });
+  }
+  // DISCOVERY-003: a "find/поищи ..." request routes to DISCOVERY (new-source search via WF27) ONLY on an explicit
+  // discovery signal — "новых", "telegram-каналы/vk-сообщества/сайты конкурентов", an explicit platform ("в тг/vk"),
+  // or "найди и добавь". A PLAIN "найди конкурентов" stays competitor_search (the analysis/plan path). A pasted
+  // URL/@channel is explicit-source analysis (handled above); "проверь отслеживаемые …" is a tracked-source check.
+  const __discoverySignal =
+    /нов[а-яё]*\s+(источник|конкурент|канал|сообществ|сайт)/i.test(text)
+    || /(telegram|телеграм|(^|\s)tg(\s|$))\s*-?\s*канал/i.test(text)
+    || /(vk|вк|вконтакте)\s*-?\s*сообществ/i.test(text)
+    || /канал[а-яё]*\s+(кредитн|брокер|конкурент|мфо|займ)/i.test(text)
+    || /сообществ[а-яё]*\s+(кредитн|брокер|конкурент|по\s+кредит|по\s+займ)/i.test(text)
+    || /сайт[а-яё]*\s+конкурент/i.test(text)
+    || /(в|во)\s+(тг|телеграм|telegram|вк|vk|вконтакте)(\s|$|,|\.)/i.test(text)
+    || /найди?\s*и\s*добав|добавь\s*найден/i.test(text);
+  if (/(найд|поищ|ищ[уи]|подбер|собери|find|search)/i.test(text)
+    && __discoverySignal
+    && !/отслеживаем|в\s+мониторинг[еа]|мои\s+источник|уже\s+добавл/i.test(text)) {
+    return Object.assign(buildIntent('competitor_discovery', 0.9, ent, ctx), { from: 'rule' });
   }
   for (const [intentId, rx] of TEXT_RULES) {
     if (rx.test(text)) {

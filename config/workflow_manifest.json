@@ -40,9 +40,10 @@
       "23_scheduled_source_monitor.json",
       "24_report_export_delivery.json",
       "25_weekly_digest.json",
-      "26_vk_public_community_collector.json"
+      "26_vk_public_community_collector.json",
+      "27_competitor_discovery.json"
     ],
-    "runtime_workflow_count": 17,
+    "runtime_workflow_count": 18,
     "import_order": [
       "17_agent_settings_config.json",
       "04_firecrawl_url_list_resilient.json",
@@ -58,6 +59,7 @@
       "24_report_export_delivery.json",
       "26_vk_public_community_collector.json",
       "20_agent_orchestrator.json",
+      "27_competitor_discovery.json",
       "18_telegram_agent_gateway.json",
       "23_scheduled_source_monitor.json",
       "25_weekly_digest.json"
@@ -75,7 +77,8 @@
       "21_deep_competitor_analysis.json",
       "22_conversation_control.json",
       "24_report_export_delivery.json",
-      "26_vk_public_community_collector.json"
+      "26_vk_public_community_collector.json",
+      "27_competitor_discovery.json"
     ],
     "binding_edges": [
       {
@@ -124,6 +127,16 @@
         "caller_node": "Run WF24 (Reporting)",
         "target_workflow": "24_report_export_delivery.json",
         "target_wf": "WF24",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "18_telegram_agent_gateway.json",
+        "caller_wf": "WF18",
+        "caller_node": "Run WF27 (Discovery)",
+        "target_workflow": "27_competitor_discovery.json",
+        "target_wf": "WF27",
         "expected_caller_type": "n8n-nodes-base.executeWorkflow",
         "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
         "required": true
@@ -239,7 +252,7 @@
         "required": true
       }
     ],
-    "binding_edge_count": 16,
+    "binding_edge_count": 17,
     "activation": {
       "always": [
         "18_telegram_agent_gateway.json"
@@ -263,9 +276,10 @@
         "21_deep_competitor_analysis.json",
         "22_conversation_control.json",
         "24_report_export_delivery.json",
-        "26_vk_public_community_collector.json"
+        "26_vk_public_community_collector.json",
+        "27_competitor_discovery.json"
       ],
-      "callable_trigger_count": 13
+      "callable_trigger_count": 14
     },
     "requires_runtime": {
       "xlsx_zlib": [
@@ -288,8 +302,7 @@
       "07_manual_touchpoint_intake.json",
       "13_public_discussion_or_reviews_connector_foundation.json",
       "14_public_lead_signal_triage.json",
-      "15_live_source_run_logger.json",
-      "27_competitor_discovery.json"
+      "15_live_source_run_logger.json"
     ]
   },
   "runtime_identity": {
@@ -513,6 +526,19 @@
       "canonical_id": null,
       "id_source": "operator_local"
     },
+    "WF27": {
+      "wf": "WF27",
+      "file": "27_competitor_discovery.json",
+      "name": "27 — Cross-Source Competitor Discovery (Firecrawl Search, bounded)",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
     "WF18": {
       "wf": "WF18",
       "file": "18_telegram_agent_gateway.json",
@@ -542,6 +568,10 @@
         {
           "caller_node": "Run WF24 (Reporting)",
           "target_wf": "WF24"
+        },
+        {
+          "caller_node": "Run WF27 (Discovery)",
+          "target_wf": "WF27"
         }
       ],
       "canonical_id": null,
@@ -598,6 +628,7 @@
     "24_report_export_delivery.json",
     "26_vk_public_community_collector.json",
     "20_agent_orchestrator.json",
+    "27_competitor_discovery.json",
     "18_telegram_agent_gateway.json",
     "23_scheduled_source_monitor.json",
     "25_weekly_digest.json"
@@ -611,9 +642,7 @@
   "trigger_workflows_when_weekly_digest": [
     "25_weekly_digest.json"
   ],
-  "archive_safe_candidates": [
-    "27_competitor_discovery.json"
-  ],
+  "archive_safe_candidates": [],
   "workflows": [
     {
       "file": "00_healthcheck_manual_test.json",
@@ -1311,7 +1340,7 @@
       "file": "18_telegram_agent_gateway.json",
       "wf_number": "WF18",
       "name": "18 — Telegram Agent Gateway (secure dispatcher)",
-      "node_count": 64,
+      "node_count": 66,
       "active": false,
       "trigger_classes": [
         "webhook"
@@ -1330,7 +1359,8 @@
         "20_agent_orchestrator.json",
         "21_deep_competitor_analysis.json",
         "22_conversation_control.json",
-        "24_report_export_delivery.json"
+        "24_report_export_delivery.json",
+        "27_competitor_discovery.json"
       ],
       "binding_nodes": [
         {
@@ -1352,6 +1382,10 @@
         {
           "node": "Run WF24 (Reporting)",
           "target": "WF24"
+        },
+        {
+          "node": "Run WF27 (Discovery)",
+          "target": "WF27"
         }
       ],
       "requires_runtime": [],
@@ -1714,23 +1748,25 @@
         "callable",
         "manual-diagnostic"
       ],
-      "capability_class": "manual_diagnostic",
-      "deployment_role": "manual_diagnostic",
-      "runtime": false,
-      "activation_flag": "n/a",
+      "capability_class": "production_dependency",
+      "deployment_role": "callable_dependency",
+      "runtime": true,
+      "activation_flag": "never",
       "expected_active": false,
-      "called_by": [],
+      "called_by": [
+        "18_telegram_agent_gateway.json"
+      ],
       "calls": [],
       "binding_nodes": [],
       "requires_runtime": [],
-      "imported_by_deploy": false,
+      "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
       "trigger_when_weekly_digest": false,
       "referenced_by_test": false,
-      "archive_safe_candidate": true,
-      "retain_reason": "",
-      "action": "review_for_archive"
+      "archive_safe_candidate": false,
+      "retain_reason": "called_by:18_telegram_agent_gateway.json; in_runtime_closure",
+      "action": "retain"
     }
   ]
 }

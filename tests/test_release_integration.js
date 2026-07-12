@@ -75,7 +75,7 @@ A.section('§13.4 — apply REFUSES runtime-id coverage 0/15 unless ids can be r
   A.ok('cleanup still runs on abort (evidence + rollback + unlock)', stepStatus(p, 'persist_evidence') === 'planned' && stepStatus(p, 'rollback_command') === 'ok' && stepStatus(p, 'release_lock') === 'planned');
   // a disposable/fresh install CAN resolve by generating ids (coverage 17/17) -> ok
   const fresh = PLAN.plan({ identity, localMap: RID.emptyMap(), exportProvided: false, exportIdx: { byName: {}, byId: {} }, env: {}, options: { target: 'disposable', mode: 'apply' } });
-  A.ok('disposable fresh install resolves 17/17 by generation', fresh.ok && fresh.coverage === '17/17');
+  A.ok('disposable fresh install resolves 18/18 by generation', fresh.ok && fresh.coverage === '18/18');
 }
 
 // ------------------------------------------------------------------------------------------------------------
@@ -164,7 +164,7 @@ A.section('§13.14/15 — release evidence carries rollback data and NO secrets 
   A.ok('rollback command present', /rollback/i.test(p.rollback_command) && p.evidence_attempt.rollback_command);
   const rendered = PLAN.render(p) + JSON.stringify(p);
   A.ok('rendered plan never leaks a raw production id', rendered.indexOf('RAW_PROD_ID_WF18') < 0);
-  A.ok('coverage reported as a count, id map as a checksum (not raw)', p.coverage === '17/17' && /^[0-9a-f]{16}$/.test(p.id_map_checksum));
+  A.ok('coverage reported as a count, id map as a checksum (not raw)', p.coverage === '18/18' && /^[0-9a-f]{16}$/.test(p.id_map_checksum));
 }
 
 // ------------------------------------------------------------------------------------------------------------

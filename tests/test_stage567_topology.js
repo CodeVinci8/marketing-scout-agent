@@ -98,12 +98,12 @@ A.section('Stage 7 — the manifest activation policy gates the schedules (they 
   A.eq('expected_active_after_import is empty (no workflow active after import)', (M.deployment.expected_active_after_import || []).length, 0);
 }
 
-A.section('Stage 7 — the 13 manifest binding edges include the scheduled-monitor collector calls');
+A.section('Stage 7 — the 17 manifest binding edges include the scheduled-monitor collector calls');
 {
   const edges = M.deployment.binding_edges.map(e => e.caller_wf + '->' + e.target_wf);
   A.ok('WF23 -> WF26 (VK) edge present', edges.indexOf('WF23->WF26') >= 0);
   A.ok('WF23 -> WF04 (website) edge present', edges.indexOf('WF23->WF04') >= 0);
-  A.eq('binding edge count is 16', M.deployment.binding_edges.length, 16);
+  A.eq('binding edge count is 17', M.deployment.binding_edges.length, 17);
 }
 
 A.report('stage567-topology');
