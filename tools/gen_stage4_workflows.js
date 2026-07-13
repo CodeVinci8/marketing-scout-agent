@@ -395,6 +395,13 @@ return [{json:{gate:gate,parsed:dec.parsed,cfg:cfg}}];`),
 var g=$('Ingress Security Gate').first().json;var cfg=g.cfg;var p=g.parsed||{};
 var d=fastLaneDecision(p);
 if(!d.fast){return [{json:{fast:false}}];}
+// UPDATE-DEDUP-001 (DEFECT-2): the fast lane runs BEFORE the durable claim, so a double-delivered update_id would
+// reply twice (observed: same /help update processed twice). Dedup via workflow staticData — concurrency=1 makes
+// this race-free; entries older than 10 min are pruned so it never grows.
+var __sd=$getWorkflowStaticData('global');var __seen=__sd.fast_seen||{};var __uid=String(p.update_id||p.message_id||'');var __now=Date.now();
+Object.keys(__seen).forEach(function(k){if(__now-__seen[k]>600000)delete __seen[k];});
+if(__uid&&__seen[__uid]){__sd.fast_seen=__seen;return [{json:{fast:false,duplicate:true}}];}
+if(__uid)__seen[__uid]=__now;__sd.fast_seen=__seen;
 var text='';
 if(d.kind==='start'){text=ruStartMessage();}
 else if(d.kind==='whoami'){text=ruWhoAmIMessage();}
@@ -426,6 +433,12 @@ if(kind==='callback'){
   return [{json:{lane:'none',continue_heavy:true,has_reply:false}}];
 }
 if(kind==='request'){
+  // DEFECT-11: quick deterministic commands (memory view, source list/add/pause/remove/check) resolve to an
+  // instant local reply — the "⏳ Принял запрос" ack is just noise there. Suppress it; the heavy path still sends
+  // the real reply. The processing ack stays for genuine long-running analysis/discovery requests.
+  var __qt=String(p.text||'');
+  var __quick=/что\s+ты\s+помнишь|покажи\s+память|какие\s+(мои\s+)?предпочтен|(мои|покажи|список|убери|удали|проверь|добавь|поставь|возобнов).{0,20}(источник|канал|сообществ|мониторинг|паузу)|проверь\s+отслеживаем|отслеживаем[а-яё]*\s+(сайт|канал|источник|сообществ)/i.test(__qt);
+  if(__quick){return [{json:{lane:'quick',continue_heavy:true,has_reply:false}}];}
   return [{json:{lane:'request_ack',continue_heavy:true,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:'⏳ Принял запрос, обрабатываю…'})}}];
 }
 if(kind!=='status'){return [{json:{lane:'none',continue_heavy:true,has_reply:false}}];}
@@ -1094,6 +1107,20 @@ b.owner_user_id=String(req.owner_user_id||'');
 if(!b.created_at)b.created_at=(new Date()).toISOString();
 return [{json:{report_id:b.report_id,owner_user_id:b.owner_user_id,agent_request_id:b.agent_request_id,created_at:String(b.created_at),report_type:String(rep.report_type||''),bundle:JSON.stringify(b),notes:'wf20 run bundle (export/digest source)'}}];`),
   sheetsAppend('wf20-apbundle', 'Append report_bundles', [2160, 60], 'report_bundles'),
+  // DEFECT-5: the plan promises "таблица Excel" — auto-deliver the XLSX right after the report for an approved
+  // analysis run (only when the run has data; an empty workbook is never sent). Same bundle -> counts agree.
+  code('wf20-xlsx', 'Build Report XLSX', [2380, 160], ['report_export', 'xlsx_writer', 'report_package'], `
+var sb=$('Shape Report Bundle').first().json;
+var b={};try{b=JSON.parse(String(sb.bundle||'{}'));}catch(e){b={};}
+var s=$('Build Execution Summary').first().json;var summary=s.summary||{};
+var records=Number(summary.records_reported||0);
+var hasContent=(b.competitors&&b.competitors.length)||(b.offers&&b.offers.length)||(b.evidence&&b.evidence.length)||records>0;
+if(!hasContent||!b.report_id){return [];}
+var chat=String((s.request&&s.request.chat_id)||b.owner_user_id||'');
+var scope={owner_user_id:String(b.owner_user_id||''),agent_request_id:String(b.agent_request_id||''),report_id:String(b.report_id||'')};
+var pkg;try{pkg=buildReportPackage(b,scope,{omit_empty:true});}catch(e){return [];}
+return [{json:{chat_id:chat,caption:'Таблица Excel по анализу конкурентов',xlsx_filename:pkg.filename,xlsx_sheets:pkg.sheet_names},binary:{attachment:{data:Buffer.from(pkg.buffer).toString('base64'),fileName:pkg.filename,mimeType:pkg.mime}}}];`),
+  Object.assign(httpTelegramFile('wf20-sendxlsx', 'Send Report XLSX', [2600, 160], 'sendDocument', 'document', 'attachment'), { onError: 'continueRegularOutput' }),
   // REPORT-CONTEXT-001: last_report_id was never persisted, so export/followup intents always failed the
   // history gate. Persist it on the conversation state row (same conv_<chat>_<user> key WF18 derives).
   code('wf20-shapectx2', 'Shape Report Context', [2380, 60], [], `
@@ -1184,6 +1211,8 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
   ['Append execution_summaries', 'Shape Report Bundle'],
   ['Shape Report Bundle', 'Append report_bundles'],
   ['Append report_bundles', 'Shape Report Context'],
+  ['Append report_bundles', 'Build Report XLSX'],
+  ['Build Report XLSX', 'Send Report XLSX'],
   ['Shape Report Context', 'Upsert Report Context'],
   ['Build Delivery Outbox', 'Append telegram_outbox'],
   ['Append telegram_outbox', 'Send Telegram Report'],

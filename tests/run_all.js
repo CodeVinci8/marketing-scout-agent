@@ -51,6 +51,7 @@ const JS_SUITES = [
   ['fast-lane', 'test_fast_lane.js'],
   ['progress-lifecycle', 'test_progress_lifecycle.js'],
   ['request-lifecycle', 'test_request_lifecycle.js'],
+  ['live-defects', 'test_live_defects.js'],
   // --- AVITO-BLOCK-001: feature-flagged temporary Avito disablement in the bot/product UX ---
   ['avito-block', 'test_avito_block.js'],
   // --- DETERMINISTIC-RUN-001: WF20 fail-safe caller override to force paid LLM off for a bounded run ---

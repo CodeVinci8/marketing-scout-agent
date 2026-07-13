@@ -129,13 +129,32 @@ function proactiveKeyboard(state, availableCaps) {
 }
 // The full delivery body: IMMUTABLE report facts first (verbatim, never rewritten), then a state-aware
 // proactive continuation. Partial/no-data get an honest one-line status before the continuation.
+// DEFECT-4: the report is authored in GitHub-flavoured Markdown (# headings, ** bold, - lists) which Telegram
+// does NOT render — the user sees raw "# Отчёт" / "**". Convert to clean plain text (no parse_mode, so there is
+// no escaping/formatting failure mode): drop heading hashes, unwrap bold/italic/code, bullets -> •, links ->
+// "text (url)". Structure and facts are preserved; only the markup characters go.
+function plainifyForTelegram(md) {
+  let s = str(md);
+  if (!s) return s;
+  s = s.split('\n').map(function (ln) {
+    let t = ln.replace(/^\s{0,3}#{1,6}\s+/, '');   // headings
+    t = t.replace(/^(\s*)[-*+]\s+/, '$1• ');        // list bullets
+    t = t.replace(/^\s{0,3}>\s?/, '');              // blockquote
+    return t;
+  }).join('\n');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/__([^_]+)__/g, '$1'); // bold
+  s = s.replace(/`([^`]+)`/g, '$1');                                     // inline code
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '$1 ($2)');     // links
+  s = s.replace(/\n{3,}/g, '\n\n');
+  return s.trim();
+}
 function deliveryBody(report, summary, availableCaps) {
   report = report || {}; summary = summary || {};
   const state = str(summary.final_state).toLowerCase() || 'completed';
   const noData = num(summary.records_reported, 0) === 0 && state !== 'completed';
   // UX-RU-002: final_state is an internal enum — the fallback line maps it to Russian, never prints it raw.
   const stateRu = { completed: 'анализ завершён', partial: 'анализ завершён частично', no_data: 'данных не собрано', failed: 'анализ остановлен' };
-  const facts = str(report.report_markdown) || str(report.summary_text) ||
+  const facts = plainifyForTelegram(str(report.report_markdown)) || str(report.summary_text) ||
     ('Итог: ' + (stateRu[state] || 'анализ завершён') + '. Записей в отчёте: ' + num(summary.records_reported, 0) + '.');
   const lines = [facts];
   if (noData || state === 'no_data') lines.push('Подходящих данных не собрано.');
@@ -146,5 +165,5 @@ function deliveryBody(report, summary, availableCaps) {
 
 module.exports = {
   buildConversationalReply, clarificationReply, followupSuggestions, postReportReply,
-  approvalButtons, actionButtons, proactiveActions, proactiveText, proactiveKeyboard, deliveryBody, str, num
+  approvalButtons, actionButtons, proactiveActions, proactiveText, proactiveKeyboard, deliveryBody, plainifyForTelegram, str, num
 };
