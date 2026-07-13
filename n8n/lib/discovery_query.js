@@ -178,7 +178,10 @@ function candidatesFromResults(results, ctx, normalizeRef) {
       plat = 'website'; cleanUrl = 'https://' + host;
     }
     if (!key || seen[key]) return; seen[key] = 1;
-    out.push({ platform: plat, source_url: cleanUrl, host: host, normalized_key: key, display_name: display, title: str(r.title), description: str(r.description) });
+    // STAGE-E-LINEAGE: carry the RAW provider result URL (provenance) + a bounded evidence excerpt from the search
+    // snippet, so the persisted candidate row keeps its evidence lineage even before validation.
+    const excerpt = str(r.description || r.title).slice(0, 300);
+    out.push({ platform: plat, source_url: cleanUrl, provider_result_url: url, evidence_excerpt: excerpt, host: host, normalized_key: key, display_name: display, title: str(r.title), description: str(r.description) });
   });
   return out;
 }

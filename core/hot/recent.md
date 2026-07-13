@@ -4,6 +4,49 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-13 (session 50) — STAGE E1: scoring + Sheets persistence validation (candidate_sources evidence lineage)
+
+Branch `fix/stage4-live-final-acceptance`, HEAD **<this commit>** (ahead ~104, NOT pushed). Stage E1 = map scoring +
+persistence contracts, find first gap, fix in canonical code, add focused tests, full regression, deploy. **Stage F
+still NOT started; no Claude.** $0, 0 external calls.
+
+**Contract map built:** `docs/STAGE_E_PERSISTENCE_CONTRACT_MAP.md` — every Stage-E tab (raw_market_records,
+competitor_profiles, market_angles, audience_activity_signals, public_lead_signals, review_queue, candidate_sources,
+source_health, report_bundles, execution_summaries, tracked_sources, execution_plans): producer WF, append/upsert
+mode, unique/dedup key, owner/run lineage, evidence, score, quality/dedup columns. Join key
+`source_run_id = source_run_id‖run_id‖agent_request_id` (per SOURCE_LINEAGE_CONTRACT). Core pipeline already
+covered by test_lineage_contract/e2e + quality_gate + report_gate + wf10_source_health + wf04_relevance_score +
+sheets_contracts (all green).
+
+**FIRST STAGE-E GAP (found + fixed):** `candidate_sources` (WF27 discovery persistence) was the only Stage-E
+evidence tab with NO persistence test AND it silently emitted only **30/33** contract columns — missing
+`provider_result_url` (raw provider provenance), `evidence_excerpt` (the text justifying the verdict),
+`recent_posts_sample` (TG/VK preview). Persisted candidates carried the verdict but not the evidence. Fixed in
+canonical code: `discovery_query.candidatesFromResults` now carries provider_result_url + evidence_excerpt from the
+snippet; WF27 Finalize enriches evidence_excerpt/recent_posts_sample from the scraped page on validated candidates
+and emits all 33 columns; confidence/relevance_score clamped 0–100. NO schema migration (the tab was created with
+all 33 headers in session 48; the 3 columns were just empty).
+
+**Tests:** new `tests/test_stage_e_persistence.js` (61) — executes the REAL WF27 Finalize node, asserts exact
+contract match (no drift, no missing col), scores 0–100, quality_status (validated/unvalidated)/dedup_status/region
+persisted+valid, evidence + owner/run lineage on every row, unique owner-scoped candidate_id `<run>::<key>`,
+validated candidate persists scraped excerpt + higher confidence, aggregator/region-mismatch never top-competitor.
+Registered in run_all. `make test` ALL PASS ($0).
+
+**Deployed:** WF27 (3 jsCode spliced: Build Queries/Classify/Finalize embed discovery_query), 16 active, callable
+(no restart). candidate_sources will now populate the 3 evidence columns on the next live discovery run.
+
+**E2 NEXT (live-row proof, needs bounded live run + real Sheets read):** run WF27 live → inspect real
+candidate_sources rows (3 new columns populated, source_run_id resolves); inspect competitor_profiles/report_bundles
++ confirm report↔XLSX↔bundle counts agree on prod data (also closes deferred pre-E WF20 report/XLSX live proof);
+confirm no duplicate persistence across 2 runs same source/owner. **Exact next command:** re-audit tracker +
+`docs/STAGE_E_PERSISTENCE_CONTRACT_MAP.md`, then bounded live WF27 discovery run + Google Sheets row inspection.
+
+**MVP backlog (pre-E, non-blocking per operator):** live WF20 report/progress/XLSX proof deferred (Stage-F/
+deterministic-plan); pre-existing mangled WF22 memory-forget inline regexes (`\s`→`s` in backtick templates).
+
+---
+
 ## Session: 2026-07-13 (session 49) — fresh live-Telegram-transcript defects 1-12 fixed + deployed (NOT Stage E)
 
 Branch `fix/stage4-live-final-acceptance`, HEAD **4e87e5a** (ahead ~103, NOT pushed). Operator provided a fresh
