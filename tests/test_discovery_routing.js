@@ -112,4 +112,17 @@ A.section('E2-ROUTE-001 — single-source report requests (incl bare domain) rou
 A.eq('"найди сайты конкурентов" still -> discovery (no specific domain)', route('найди сайты конкурентов по ПТС').intent, 'competitor_discovery');
 A.eq('"что ты помнишь" still -> memory', route('что ты помнишь').intent, 'manage_memory');
 
+A.section('E2-ROUTE-001 guard — a source-MANAGEMENT command carrying a domain never falls into analysis/discovery');
+// The E2-critical case: "убери источник <domain>" must reach manage_sources so the remove actually executes
+// (the task-0 bare-domain analysis rule had been intercepting it). add/refresh are their own source intents.
+['убери источник autolombardn1.ru', 'убери источник https://autolombardn1.ru', 'удали источник zalog24h.ru',
+ 'проверь источник zalog24h.ru', 'поставь на паузу источник autolombardn1.ru'].forEach(function (t) {
+  A.eq('"' + t + '" -> manage_sources', route(t).intent, 'manage_sources');
+});
+['добавь источник autolombardn1.ru', 'возобнови источник zalog24h.ru'].forEach(function (t) {
+  const i = route(t).intent;
+  A.ok('"' + t + '" stays a source op (not analysis/discovery), got=' + i, ['manage_sources', 'add_source', 'refresh_sources'].indexOf(i) >= 0);
+});
+A.eq('"дай отчет по autolombardn1.ru" still -> analysis (not a source-op)', route('дай отчет по autolombardn1.ru').intent, 'competitor_search');
+
 A.report('discovery-routing');

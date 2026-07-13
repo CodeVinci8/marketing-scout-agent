@@ -166,7 +166,11 @@ function deterministicIntent(parsed, ctx) {
   // Covers a pasted URL, t.me / vk.com, AND a BARE domain ("дай отчёт по autolombardn1.ru") — the latter used to
   // fall through to a source-add clarification. A bare domain needs a real TLD so ordinary text never trips it.
   const BARE_DOMAIN = /(^|[\s(«"'“„])([a-z0-9][a-z0-9-]{0,62}\.)+(ru|рф|com|net|org|io|su|by|kz|ua|info|biz|pro|site|online|store|shop|club|team|app)\b/i;
-  if (/https?:\/\/[^\s]+|(^|\s)t\.me\/[a-z0-9_]|(^|\s)vk\.com\/[a-z0-9_]/i.test(text) || BARE_DOMAIN.test(text)) {
+  // E2-ROUTE-001 guard: a source-MANAGEMENT command ("убери/добавь/проверь/поставь на паузу/возобнови источник X",
+  // "добавь X в мониторинг", "убери отслеживаемый …") keeps its domain/URL but is NOT an analysis request — let it
+  // fall through to the manage_sources rule instead of being intercepted as single-source analysis.
+  const __isSourceOp = /(убери|удали|добав|подключ|включ|проверь|поставь|возобнов|пауз|останов|track|отслеж)[а-яё\s]{0,25}(источник|канал|сообществ|мониторинг)|в\s+мониторинг/i.test(text);
+  if (!__isSourceOp && (/https?:\/\/[^\s]+|(^|\s)t\.me\/[a-z0-9_]|(^|\s)vk\.com\/[a-z0-9_]/i.test(text) || BARE_DOMAIN.test(text))) {
     return Object.assign(buildIntent('competitor_search', 0.9, ent, ctx), { from: 'rule' });
   }
   // DISCOVERY-003: a "find/поищи ..." request routes to DISCOVERY (new-source search via WF27) ONLY on an explicit
