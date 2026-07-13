@@ -20,6 +20,13 @@ A.section('discovery intents route to competitor_discovery / discovery');
   A.eq('  action=discovery', r.action, 'discovery');
 });
 
+A.section('DEFECT-8 — "найди ... сайты" routes to website discovery (not old analysis/no-data)');
+['найди кредитных брокеров сайты', 'найди сайты конкурентов', 'найди новые сайты кредитных брокеров', 'найди сайты кредитных брокеров в Москве'].forEach(function (t) {
+  A.eq('"' + t + '" -> competitor_discovery', route(t).intent, 'competitor_discovery');
+});
+A.eq('"проверь отслеживаемые сайты" -> manage_sources (tracked check, not discovery)', route('проверь отслеживаемые сайты').intent, 'manage_sources');
+A.eq('"проанализируй эти сайты: https://finardi.ru" -> competitor_search (explicit analysis)', route('проанализируй эти сайты: https://finardi.ru').intent, 'competitor_search');
+
 A.section('non-discovery intents stay on their own path');
 A.eq('explicit pasted sources -> competitor_search (analysis)', route('проверь https://finardi.ru t.me/da_credit').intent, 'competitor_search');
 A.eq('single pasted url -> competitor_search', route('https://finardi.ru').intent, 'competitor_search');

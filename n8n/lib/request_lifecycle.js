@@ -42,10 +42,11 @@ function selectActiveRequest(plans, opts) {
     if (owner && rlStr(r.owner_user_id) !== owner) return false;          // owner isolation
     if (chat && rlStr(r.chat_id) !== '' && rlStr(r.chat_id) !== chat) return false; // chat scope (tolerate blank)
     if (!rlIsActive(r.status)) return false;                              // ignore terminal + unknown states
-    if (rlLow(r.status) === 'awaiting_approval') {                        // TTL-expire abandoned approvals
-      var created = rlTime(r.created_at);
-      if (created > 0 && (nowMs - created) > ttlMs) { staleIgnored++; return false; }
-    }
+    // STATUS-TTL-002: TTL-expire ANY stale active row, not just awaiting_approval. A real run finishes in minutes,
+    // so a plan left 'approved'/'collecting'/… beyond the TTL is abandoned or a crashed/never-marked-terminal run
+    // (WF20 also marks the plan terminal on delivery — this is the safety net for the ones that slip through).
+    var activeSince = rlTime(r.updated_at) || rlTime(r.decided_at) || rlTime(r.created_at);
+    if (activeSince > 0 && (nowMs - activeSince) > ttlMs) { staleIgnored++; return false; }
     return true;
   });
   mine.sort(function (a, b) {                                             // newest first (created_at, plan_id tiebreak)
@@ -63,7 +64,16 @@ function selectActiveRequest(plans, opts) {
   }
   mine = deduped;
   var chosen = mine.length ? mine[0] : null;
-  return { found: !!chosen, request: chosen, active_count: mine.length, others: mine.slice(1), stale_ignored: staleIgnored };
+  // has this owner ever completed a run? (a delivered/completed/no_data plan) — lets /status say "последний отчёт
+  // уже отправлен" instead of a first-run prompt when there is simply no ACTIVE work right now.
+  var deliveredStates = ['completed', 'done', 'delivered', 'no_data'];
+  var hasDelivered = rows.some(function (r) {
+    if (rlIsQaOwner(r.owner_user_id)) return false;
+    if (owner && rlStr(r.owner_user_id) !== owner) return false;
+    if (chat && rlStr(r.chat_id) !== '' && rlStr(r.chat_id) !== chat) return false;
+    return deliveredStates.indexOf(rlLow(r.status)) >= 0;
+  });
+  return { found: !!chosen, request: chosen, active_count: mine.length, others: mine.slice(1), stale_ignored: staleIgnored, has_delivered_report: hasDelivered };
 }
 
 module.exports = { selectActiveRequest, rlIsActive, rlIsTerminal, rlIsQaOwner, RL_ACTIVE, RL_TERMINAL, RL_DEFAULT_TTL_MIN };

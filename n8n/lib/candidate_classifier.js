@@ -40,6 +40,11 @@ const AGGREGATOR_HOSTS = ['banki.ru', 'sravni.ru', 'vbr.ru', 'kp.ru', 'rbc.ru', 
   'otzovik.com', 'zoon.ru', 'flamp.ru', 'spr.ru', 'rusprofile.ru', 'list-org.com'];
 function hostOf(url) { return low(url).replace(/^https?:\/\//i, '').split(/[\/?#]/)[0].replace(/^m\./i, '').replace(/^www\./i, ''); }
 function isAggregatorHost(host) { host = low(host); return AGGREGATOR_HOSTS.some(function (d) { return host === d || host.endsWith('.' + d); }); }
+// DEFECT-9: media/news handle markers (Telegram/VK) — smi_rf_moskva, news_*, novosti_*, *_tv, gazeta_*, vesti_*,
+// rbc/tass/ria/lenta/interfax/kommersant/vedomosti. Such a channel that merely reposts a finance ad is NOT a
+// direct competitor. Matched at word/segment boundaries in the handle so "avtolombard" etc. never trip it.
+const MEDIA_HANDLE_RX = /(^|[\s_.\/:@-])(smi|news|novost[iy]|media|mass?media|tv|telekanal|radio|gazet[ay]|vesti|pressa?|zhurnal|magazine|afisha|rbc|rbk|tass|ria|lenta|interfax|kommersant|vedomosti|readovka|mash|baza)([\s_.\/:@0-9-]|$)/i;
+function isMediaHandle(handle) { return MEDIA_HANDLE_RX.test(low(handle)); }
 
 // ---- region fit (DISCOVERY-005) --------------------------------------------------------------------------
 // Region groups: substrings that identify a Russian city/region in candidate evidence. Moscow includes МО
@@ -181,6 +186,17 @@ function classifyCandidate(input) {
     base.is_news_or_aggregator = true; base.category = 'news_or_aggregator';
     base.confidence = 55; base.relevance_score = 35;
     base.classification_reason = 'агрегатор/каталог/СМИ (' + host + ') — не поставщик услуги';
+    return base;
+  }
+
+  // 1c. DEFECT-9: a media/news HANDLE (smi_rf_moskva, news_*, *_tv, gazeta_*, …) is news/content, not a competitor,
+  //     unless it is VALIDATED and shows strong direct-provider evidence (it actually sells the service). One
+  //     finance phrase in a search snippet is not enough to top-rank a city-news channel as a competitor.
+  const mediaHandle = low(input.normalized_key) + ' ' + low(input.display_name);
+  if (isMediaHandle(mediaHandle) && !(validated && providerScore >= 4)) {
+    base.is_news_or_aggregator = true; base.category = 'news_or_aggregator';
+    base.confidence = clamp(45 + news.n * 5, 0, 68); base.relevance_score = clamp(25 + news.n * 5, 0, 60);
+    base.classification_reason = 'СМИ/новостной канал — не поставщик услуги напрямую' + (validated ? '' : ' (по данным из результатов поиска, не подтверждено)');
     return base;
   }
 

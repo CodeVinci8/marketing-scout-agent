@@ -135,6 +135,16 @@ A.eq('banki.ru (via url) not a competitor', aggr2.is_competitor, false);
 const realComp = C.classifyCandidate({ title: 'Автоломбард', description: 'Поможем получить кредит под ПТС без предоплаты, оставьте заявку', platform: 'website', host: 'carmoney.ru' });
 A.eq('a real provider host still classifies as competitor', realComp.is_competitor, true);
 
+A.section('DEFECT-9 — media/news Telegram handles are not competitors from a snippet phrase');
+const smi = C.classifyCandidate({ title: 'СМИ РФ Москва', description: 'помощь в получении кредита под ПТС', platform: 'telegram', normalized_key: 'telegram_channel::smi_rf_moskva', display_name: '@smi_rf_moskva', query_region: 'Москва' });
+A.eq('@smi_rf_moskva -> news_or_aggregator (not competitor)', smi.is_competitor, false);
+A.eq('@smi_rf_moskva category', smi.category, 'news_or_aggregator');
+A.eq('@news_msk not a competitor', C.classifyCandidate({ title: 'x', description: 'автоломбард, оставьте заявку', platform: 'telegram', normalized_key: 'telegram_channel::news_msk', display_name: '@news_msk', query_region: 'Москва' }).is_competitor, false);
+const realBroker = C.classifyCandidate({ title: 'Кредитный брокер', description: 'Поможем получить кредит под ПТС без предоплаты. Оставьте заявку, звоните, консультация.', platform: 'telegram', normalized_key: 'telegram_channel::broker_pts', display_name: '@broker_pts', query_region: 'Москва' });
+A.eq('a real broker channel with offer+CTA stays competitor', realBroker.is_competitor, true);
+A.eq('"smilebroker" is NOT tripped by the smi_ media rule', C.classifyCandidate({ title: 'Брокер', description: 'поможем получить кредит, оставьте заявку, звоните', platform: 'telegram', normalized_key: 'telegram_channel::smilebroker', display_name: '@smilebroker', query_region: 'Москва' }).is_competitor, true);
+A.eq('"avtolombard38" is NOT tripped by any media token', C.classifyCandidate({ title: 'Автоломбард', description: 'займ под ПТС, оставьте заявку', platform: 'vk', normalized_key: 'vk_community::avtolombard38', display_name: 'vk.com/avtolombard38', query_region: 'Москва' }).is_competitor, true);
+
 A.section('DISCOVERY-005 — region fit (Moscow query penalizes other cities)');
 A.eq('normalizeQueryRegion Москва -> moscow', C.normalizeQueryRegion('Москва'), 'moscow');
 A.eq('normalizeQueryRegion МО -> moscow', C.normalizeQueryRegion('МО'), 'moscow');

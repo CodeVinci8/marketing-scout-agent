@@ -42,6 +42,14 @@ A.section('AVITO-BLOCK-001 — Avito platform is not addable to the registry whi
 A.ok('avito platform not available while blocked', !TS.sourceAvailable(cfg, 'avito'));
 A.ok('website + telegram_channel available (allowlisted)', TS.sourceAvailable(cfg, 'website') && (cfg.source_allowlist.indexOf('telegram') >= 0));
 
+A.section('DEFECT-10 — long platform names alias to the short allowlist (telegram_channel->telegram, vk_community->vk)');
+A.ok('telegram_channel available when telegram allowlisted', TS.sourceAvailable({ source_allowlist: ['website', 'telegram'] }, 'telegram_channel'));
+A.ok('vk_community NOT available when vk not allowlisted', !TS.sourceAvailable({ source_allowlist: ['website', 'telegram'] }, 'vk_community'));
+A.ok('vk_community available when vk allowlisted', TS.sourceAvailable({ source_allowlist: ['website', 'vk'] }, 'vk_community'));
+// a real Telegram add now succeeds under a telegram allowlist (was falsely "площадка недоступна")
+const tgAdd = TS.addSource([], 't.me/broker_pts', { owner_user_id: '111', cfg: TS && require('../n8n/lib/agent_config.js').resolveConfig({ MS_SPREADSHEET_ID: 'S', MS_TELEGRAM_ALLOWED_USER_IDS: '111', MS_SOURCE_ALLOWLIST: 'website,telegram', MS_ENABLE_TELEGRAM_COLLECTOR: 'true' }), ts: 't1' });
+A.ok('adding a Telegram channel succeeds when telegram is allowlisted', tgAdd.added, tgAdd.reason);
+
 A.section('WF22 wires parseSourceOp (generator drift-proof)');
 const gen = require('../tools/gen_stage4_workflows.js');
 function node(file, name) { const w = (gen.generated || []).find(g => g.file === file).workflow; return w.nodes.find(n => n.name === name); }

@@ -31,9 +31,15 @@ function normalizeSourceRef(raw) {
   return { platform: 'website', ref: 'https://' + low(host) + '/', label: low(host), key: 'website::' + low(host) };
 }
 
+// DEFECT-10: the source allowlist uses SHORT platform names (website/telegram/vk) while normalizeSourceRef emits
+// LONG forms (telegram_channel/vk_community/website). Map long->short so an addable Telegram/VK source is not
+// falsely reported "площадка недоступна".
+function platformAlias(p) { p = low(p); if (p === 'telegram_channel') return 'telegram'; if (p === 'vk_community') return 'vk'; return p; }
 function sourceAvailable(cfg, platform) {
   const allow = ((cfg && cfg.source_allowlist) || []).map(low);
-  return allow.indexOf(low(platform)) >= 0;
+  // accept the allowlist in EITHER form — real config uses short names (telegram/vk), some fixtures use the long
+  // normalizeSourceRef form (telegram_channel/vk_community).
+  return allow.indexOf(low(platform)) >= 0 || allow.indexOf(platformAlias(platform)) >= 0;
 }
 
 // SOURCE-OP-001: classify a free-text source command into a concrete sub-op (+arg) so WF22 can act on it. The

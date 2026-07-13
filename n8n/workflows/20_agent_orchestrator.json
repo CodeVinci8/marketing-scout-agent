@@ -1349,6 +1349,63 @@
     },
     {
       "parameters": {
+        "jsCode": "\n\n// --- node driver ---\nvar pr=null;try{pr=$('Resolve Approved Plan').first().json;}catch(e){}\nif(!pr||!pr.plan_row||pr.plan_blocked){return [];}\nvar s=$('Build Execution Summary').first().json;var st=String((s.summary&&s.summary.final_state)||'completed');\nvar term=(st==='no_data')?'no_data':((st==='failed'||st==='error')?'failed':'completed');\nvar ts=(new Date()).toISOString();\nreturn [{json:Object.assign({},pr.plan_row,{status:term,decided_at:ts,decided_by:String(pr.plan_row.owner_user_id||'')})}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1940,
+        60
+      ],
+      "id": "wf20-planclose",
+      "name": "Shape Plan Completion"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "execution_plans",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": null,
+          "matchingColumns": [
+            "plan_id"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2160,
+        60
+      ],
+      "id": "wf20-markcomplete",
+      "name": "Mark Plan Complete",
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
         "jsCode": "\n\n// --- node driver ---\n\nvar s=$('Build Execution Summary').first().json;\nvar rep=s.report||{};var req=s.request||{};\nvar b={};try{b=JSON.parse(String(rep.report_bundle||'{}'));}catch(e){b={};}\nb.report_id=String(rep.report_id||b.report_id||'');\nb.agent_request_id=String(req.agent_request_id||b.agent_request_id||'');\nb.owner_user_id=String(req.owner_user_id||'');\nif(!b.created_at)b.created_at=(new Date()).toISOString();\nreturn [{json:{report_id:b.report_id,owner_user_id:b.owner_user_id,agent_request_id:b.agent_request_id,created_at:String(b.created_at),report_type:String(rep.report_type||''),bundle:JSON.stringify(b),notes:'wf20 run bundle (export/digest source)'}}];"
       },
       "type": "n8n-nodes-base.code",
@@ -2175,6 +2232,22 @@
           },
           {
             "node": "Shape Execution Summary Row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Shape Plan Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Plan Completion": {
+      "main": [
+        [
+          {
+            "node": "Mark Plan Complete",
             "type": "main",
             "index": 0
           }

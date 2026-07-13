@@ -37,7 +37,21 @@ A.eq('stale awaiting_approval TTL-expired -> fresh chosen', selStale.request.pla
 A.eq('one stale ignored', selStale.stale_ignored, 1);
 const onlyStale = RL.selectActiveRequest([stale[0]], { owner_user_id: OWNER, chat_id: CHAT, now_iso: NOW });
 A.ok('a lone stale approval => no active request', onlyStale.found === false, 'stale returned as active');
-A.ok('a collecting run is NOT TTL-expired even if old', RL.selectActiveRequest([{ plan_id: 'c', owner_user_id: OWNER, chat_id: CHAT, status: 'collecting', created_at: iso(500) }], { owner_user_id: OWNER, now_iso: NOW }).found === true, 'collecting wrongly expired');
+// STATUS-TTL-002: a stale active run (any state) beyond the TTL is treated as abandoned/crashed and NOT shown.
+A.ok('a stale collecting run (500 min) IS TTL-expired', RL.selectActiveRequest([{ plan_id: 'c', owner_user_id: OWNER, chat_id: CHAT, status: 'collecting', created_at: iso(500) }], { owner_user_id: OWNER, now_iso: NOW }).found === false, 'stale collecting not expired');
+A.ok('a recent collecting run stays active', RL.selectActiveRequest([{ plan_id: 'c2', owner_user_id: OWNER, chat_id: CHAT, status: 'collecting', created_at: iso(3) }], { owner_user_id: OWNER, now_iso: NOW }).found === true, 'recent collecting wrongly expired');
+A.ok('a stale approved run IS TTL-expired (the live defect)', RL.selectActiveRequest([{ plan_id: 'ap', owner_user_id: OWNER, chat_id: CHAT, status: 'approved', created_at: iso(3000), decided_at: iso(3000) }], { owner_user_id: OWNER, now_iso: NOW }).found === false, 'stale approved not expired');
+// the EXACT live defect: 3 different-agent_request_id approved plans from 1-2 days ago -> none active, and since
+// the owner has a completed run, /status says "последний отчёт уже отправлен".
+const liveStale = [
+  { plan_id: 'p1', agent_request_id: 'r1', owner_user_id: OWNER, chat_id: CHAT, status: 'approved', created_at: iso(2880), decided_at: iso(2880) },
+  { plan_id: 'p2', agent_request_id: 'r2', owner_user_id: OWNER, chat_id: CHAT, status: 'approved', created_at: iso(2000), decided_at: iso(2000) },
+  { plan_id: 'p3', agent_request_id: 'r3', owner_user_id: OWNER, chat_id: CHAT, status: 'completed', created_at: iso(1500) }
+];
+const liveSel = RL.selectActiveRequest(liveStale, { owner_user_id: OWNER, chat_id: CHAT, now_iso: NOW });
+A.eq('3 stale approved plans -> 0 active (no "ещё в работе")', liveSel.active_count, 0);
+A.ok('owner has a delivered report -> has_delivered_report true', liveSel.has_delivered_report === true);
+A.ok('no delivered report on a fresh owner -> false', RL.selectActiveRequest([{ plan_id: 'n', owner_user_id: OWNER, chat_id: CHAT, status: 'awaiting_approval', created_at: iso(3) }], { owner_user_id: OWNER, now_iso: NOW }).has_delivered_report === false);
 
 A.section('selectActiveRequest — chat scope + empty / no-match');
 A.ok('foreign chat excluded', RL.selectActiveRequest([{ plan_id: 'x', owner_user_id: OWNER, chat_id: '777', status: 'collecting', created_at: iso(1) }], { owner_user_id: OWNER, chat_id: CHAT, now_iso: NOW }).found === false, 'foreign chat leaked');
@@ -85,9 +99,12 @@ function control(input, plansArr) {
   H.inject(run, 'Read execution_plans', plansArr || []);
   return H.runCodeNode(run, WF22, 'Apply Control Command', [{ json: input }])[0].json;
 }
+// WF22 Apply Control Command uses REAL new Date() for the selector's "now", so these fixtures must be recent
+// relative to real time (the all-states TTL now expires stale active plans regardless of state).
+function recentIso(minAgo) { return new Date(Date.now() - minAgo * 60000).toISOString(); }
 const activePlans = [
-  { plan_id: 'pA', agent_request_id: 'rA', owner_user_id: '111', chat_id: '555', status: 'approved', sources: 'website', created_at: iso(5) },
-  { plan_id: 'pB', agent_request_id: 'rB', owner_user_id: '111', chat_id: '555', status: 'collecting', sources: 'vk', created_at: iso(30) }
+  { plan_id: 'pA', agent_request_id: 'rA', owner_user_id: '111', chat_id: '555', status: 'approved', sources: 'website', created_at: recentIso(5), decided_at: recentIso(5) },
+  { plan_id: 'pB', agent_request_id: 'rB', owner_user_id: '111', chat_id: '555', status: 'collecting', sources: 'vk', created_at: recentIso(30) }
 ];
 // text /cancel: the dispatch passes the command's own update id, which matches no plan -> newest active (pA) cancelled
 const cText = control({ domain: 'request', op: 'cancel', owner_user_id: '111', chat_id: '555', agent_request_id: 'req_1783753557665' }, activePlans);
