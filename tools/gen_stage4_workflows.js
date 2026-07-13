@@ -407,8 +407,11 @@ if(d.kind==='start'){text=ruStartMessage();}
 else if(d.kind==='whoami'){text=ruWhoAmIMessage();}
 else {text=ruHelpMessage(availableCapabilities(cfg));}
 return [{json:{fast:true,fast_kind:d.kind,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:text})}}];`),
-  ifNode('wf18-iffast', 'Fast Static Reply?', [-560, -220], '={{ $json.fast }}'),
-  httpTelegram('wf18-sendfast', 'Send Fast Reply', [-380, -300]),
+  // DEFECT-2: a fast-lane duplicate (same update_id already answered) must STOP — not fall through to the heavy
+  // path (which would re-send the static reply). Only non-duplicates continue to Fast Static Reply?.
+  ifNode('wf18-ifdup', 'Duplicate Update?', [-620, -220], '={{ $json.duplicate === true }}'),
+  ifNode('wf18-iffast', 'Fast Static Reply?', [-460, -220], '={{ $json.fast }}'),
+  httpTelegram('wf18-sendfast', 'Send Fast Reply', [-280, -300]),
   // ---- §8 command lane: /status renders from the ALREADY-READ batch (no context assembly, no persistence
   //      chain, no WF22 dispatch); /cancel gets an immediate ack and CONTINUES to the real WF22 cancel. Both
   //      run AFTER the durable claim (Resolve Winner), so idempotency is intact. ----
@@ -437,7 +440,7 @@ if(kind==='request'){
   // instant local reply — the "⏳ Принял запрос" ack is just noise there. Suppress it; the heavy path still sends
   // the real reply. The processing ack stays for genuine long-running analysis/discovery requests.
   var __qt=String(p.text||'');
-  var __quick=/что\s+ты\s+помнишь|покажи\s+память|какие\s+(мои\s+)?предпочтен|(мои|покажи|список|убери|удали|проверь|добавь|поставь|возобнов).{0,20}(источник|канал|сообществ|мониторинг|паузу)|проверь\s+отслеживаем|отслеживаем[а-яё]*\s+(сайт|канал|источник|сообществ)/i.test(__qt);
+  var __quick=/что\\s+ты\\s+помнишь|покажи\\s+память|какие\\s+(мои\\s+)?предпочтен|(мои|покажи|список|убери|удали|проверь|добавь|поставь|возобнов).{0,20}(источник|канал|сообществ|мониторинг|паузу)|проверь\\s+отслеживаем|отслеживаем[а-яё]*\\s+(сайт|канал|источник|сообществ)/i.test(__qt);
   if(__quick){return [{json:{lane:'quick',continue_heavy:true,has_reply:false}}];}
   return [{json:{lane:'request_ack',continue_heavy:true,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:'⏳ Принял запрос, обрабатываю…'})}}];
 }
@@ -723,7 +726,8 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),inten
   ['Respond 200', 'Ingress Security Gate'],
   ['Ingress Security Gate', 'Ingress Accepted?'],
   ['Ingress Accepted?', 'Fast Static Lane', 0],
-  ['Fast Static Lane', 'Fast Static Reply?'],
+  ['Fast Static Lane', 'Duplicate Update?'],
+  ['Duplicate Update?', 'Fast Static Reply?', 1],
   ['Fast Static Reply?', 'Send Fast Reply', 0],
   ['Fast Static Reply?', 'Batch Read Sheets', 1],
   ['Ingress Accepted?', 'Terminate Safely', 1],

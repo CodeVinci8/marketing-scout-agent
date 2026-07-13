@@ -30,11 +30,25 @@ A.section('DEFECT-2 — Fast Static Lane dedups duplicate update_id (idempotent 
 const fast = node('18_telegram_agent_gateway.json', 'Fast Static Lane').parameters.jsCode;
 A.ok('fast lane reads workflow staticData', /getWorkflowStaticData/.test(fast));
 A.ok('fast lane keys on update_id and returns duplicate', /fast_seen/.test(fast) && /duplicate:true/.test(fast));
+// a fast-lane duplicate must TERMINATE, not fall through to the heavy path (which would re-send the static reply).
+const w18 = wf('18_telegram_agent_gateway.json');
+A.ok('WF18 has a Duplicate Update? gate', !!node('18_telegram_agent_gateway.json', 'Duplicate Update?'));
+A.ok('duplicate (true) branch is a dead end (no heavy path)', (w18.connections['Duplicate Update?'].main[0] || []).length === 0);
+A.ok('non-duplicate (false) continues to Fast Static Reply?', JSON.stringify(w18.connections['Duplicate Update?'].main[1]).indexOf('Fast Static Reply?') >= 0);
 
 A.section('DEFECT-11 — quick commands skip the "Принял запрос" processing ack');
 const cmd = node('18_telegram_agent_gateway.json', 'Command Lane').parameters.jsCode;
 A.ok('Command Lane detects quick commands and skips the ack', /__quick/.test(cmd) && /lane:'quick'/.test(cmd));
 A.ok('genuine requests still get the ack', /request_ack/.test(cmd));
+// eval the ACTUAL generated regex (not just presence) — catches the backtick-template "\\s" -> "s" mangling.
+const qm = cmd.match(/var __quick=(\/[\s\S]*?\/i)\.test/);
+A.ok('quick-command regex literal is present', !!qm, 'no __quick regex found');
+if (qm) {
+  const qrx = eval(qm[1]); // eslint-disable-line no-eval
+  A.ok('regex MATCHES "что ты помнишь" (\\s not mangled to s)', qrx.test('что ты помнишь'));
+  A.ok('regex MATCHES "покажи мои источники"', qrx.test('покажи мои источники'));
+  A.ok('regex does NOT match a genuine analysis request', !qrx.test('проанализируй конкурентов по ПТС в Москве'));
+}
 
 A.section('DEFECT-5 — WF20 auto-delivers the XLSX after the report (only when data exists)');
 const w20 = wf('20_agent_orchestrator.json');
