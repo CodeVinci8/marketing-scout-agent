@@ -62,6 +62,11 @@ const DEFAULTS = {
   enable_apify: false,
   enable_firecrawl: false,
   enable_vk: false,
+  // DISCOVERY: evidence validation (Firecrawl Scrape of top candidates) is ON by default; LLM enrichment of the
+  // top validated candidates is Stage F and OFF by default (no Claude call until Stage F is explicitly authorized).
+  enable_discovery_validation: true,
+  discovery_llm_enrichment: false,
+  discovery_validate_max: 5,
   // AVITO-BLOCK-001: Avito is an OPTIONAL source that is operator-infra-blocked until a Residential proxy is
   // provisioned on a paid Apify plan (AVITO_SOURCE_QUALITY=BLOCKED_OPTIONAL_OPERATOR_INFRA_PREREQUISITE). The
   // WF09 implementation + tests + evidence stay in the repo, but the bot must NOT offer/plan/select/run Avito
@@ -118,6 +123,9 @@ function resolveConfig(env, overrides) {
     enable_apify: bool(env.MS_ENABLE_APIFY, DEFAULTS.enable_apify),
     enable_firecrawl: bool(env.MS_ENABLE_FIRECRAWL, DEFAULTS.enable_firecrawl),
     enable_vk: bool(env.MS_ENABLE_VK, DEFAULTS.enable_vk),
+    enable_discovery_validation: bool(env.MS_ENABLE_DISCOVERY_VALIDATION, DEFAULTS.enable_discovery_validation),
+    discovery_llm_enrichment: bool(env.MS_DISCOVERY_LLM_ENRICHMENT, DEFAULTS.discovery_llm_enrichment),
+    discovery_validate_max: num(env.MS_DISCOVERY_VALIDATE_MAX, DEFAULTS.discovery_validate_max),
     avito_enabled: bool(env.MS_AVITO_ENABLED, DEFAULTS.avito_enabled),
     enable_telegram_collector: bool(env.MS_ENABLE_TELEGRAM_COLLECTOR, DEFAULTS.enable_telegram_collector),
     monitoring_enabled: bool(env.MS_MONITORING_ENABLED, DEFAULTS.monitoring_enabled),
