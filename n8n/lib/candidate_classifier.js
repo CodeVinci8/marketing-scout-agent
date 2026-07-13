@@ -46,22 +46,24 @@ function isAggregatorHost(host) { host = low(host); return AGGREGATOR_HOSTS.some
 // (Московская область) satellite cities. Used to score region fit against the region the user asked for.
 // Each group lists Cyrillic AND transliterated (Latin) fragments — VK/Telegram handles are usually Latin
 // ("...barnaul", "nsk", "spb"), so the handle/title can name the city even when the page body says otherwise.
+// Cyrillic fragments + LONG, distinctive Latin transliterations only. Short abbreviations (nsk/spb/msk/perm/omsk/
+// ufa/ekb) are deliberately omitted — as bare substrings they false-match ordinary words ("permanent", "amsk…").
 const REGION_GROUPS = {
   moscow: ['москв', 'московск', 'подмосков', 'зеленоград', 'химк', 'балаших', 'мытищ', 'подольск', 'люберц', 'красногорск', 'одинцов', 'домодедов', 'королёв', 'королев', 'реутов', 'щёлков', 'щелков', 'moskva', 'moscow'],
-  spb: ['санкт-петербург', 'петербург', 'ленинградск', 'ленобласт', 'питер', 'peterburg', 'spb'],
-  novosibirsk: ['новосибирск', 'novosibirsk', 'nsk'],
-  barnaul: ['барнаул', 'алтайск', 'barnaul', 'altay'],
-  ekb: ['екатеринбург', 'свердловск', 'ekaterinburg', 'ekb'],
+  spb: ['санкт-петербург', 'петербург', 'ленинградск', 'ленобласт', 'питер', 'peterburg', 'sankt-peterburg'],
+  novosibirsk: ['новосибирск', 'novosibirsk'],
+  barnaul: ['барнаул', 'алтайск', 'barnaul'],
+  ekb: ['екатеринбург', 'свердловск', 'ekaterinburg'],
   kazan: ['казан', 'татарстан', 'kazan'],
-  nnovgorod: ['нижн новгород', 'нижегородск', 'нижнего новгород', 'novgorod', 'nnov'],
+  nnovgorod: ['нижн новгород', 'нижегородск', 'нижнего новгород', 'nizhny'],
   rostov: ['ростов-на-дону', 'ростовск', 'rostov'],
   krasnodar: ['краснодар', 'кубан', 'krasnodar'],
   samara: ['самар', 'тольятт', 'samara', 'tolyatti'],
   chelyabinsk: ['челябинск', 'chelyabinsk'],
-  omsk: ['омск', 'omsk'],
-  ufa: ['уфа', 'башкорт', 'ufa'],
+  omsk: ['омск'],
+  ufa: ['уфа', 'башкорт'],
   krasnoyarsk: ['красноярск', 'krasnoyarsk'],
-  perm: ['перм', 'perm'],
+  perm: ['перм'],
   voronezh: ['воронеж', 'voronezh'],
   volgograd: ['волгоград', 'volgograd'],
   tyumen: ['тюмен', 'tyumen'],
