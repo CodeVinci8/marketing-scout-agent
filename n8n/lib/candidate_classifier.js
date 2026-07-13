@@ -92,20 +92,29 @@ function regionFit(queryRegionKey, blob) {
   if (found.length) return { region_match: 'mismatch', region_reason: 'указан другой регион: ' + found.slice(0, 2).map(regionLabel).join(', ') };
   return { region_match: 'unknown', region_reason: 'регион на странице не указан' };
 }
-// regionFitPrioritized: the IDENTITY (handle/title/description) is authoritative; a foreign city in the identity
-// is a mismatch even if the noisy page BODY mentions the query city. Body text is only trusted when it is
-// unambiguous (query region present and no other city). This stops "…barnaul" VK handles reading as Moscow.
-function regionFitPrioritized(queryRegionKey, strongText, weakText) {
+function labelMismatch(keys) { return { region_match: 'mismatch', region_reason: 'указан другой регион: ' + keys.slice(0, 2).map(regionLabel).join(', ') }; }
+function labelMatch(k) { return { region_match: 'match', region_reason: 'регион соответствует: ' + regionLabel(k) }; }
+// regionDecide: THREE tiers of trust. The handle/identity (tier 0) is decisive — a foreign city there is a
+// mismatch even when the search snippet or scraped page also mentions the query city (a "…barnaul" VK handle is
+// Barnaul, full stop). The short snippet (tier 1) still flags a foreign-only city. The long scraped body (tier 2)
+// is weak: it can confirm the query city, but a foreign mention there only makes the city "unconfirmed".
+function regionDecide(queryRegionKey, handleText, snippetText, bodyText) {
   if (!queryRegionKey) return { region_match: 'unknown', region_reason: 'регион запроса не задан' };
-  const s = detectRegions(strongText);
-  if (s.indexOf(queryRegionKey) >= 0) return { region_match: 'match', region_reason: 'регион соответствует: ' + regionLabel(queryRegionKey) };
-  if (s.length) return { region_match: 'mismatch', region_reason: 'указан другой регион: ' + s.slice(0, 2).map(regionLabel).join(', ') };
-  const w = detectRegions(weakText);
-  const wOther = w.filter(function (k) { return k !== queryRegionKey; });
-  if (w.indexOf(queryRegionKey) >= 0 && wOther.length === 0) return { region_match: 'match', region_reason: 'регион соответствует: ' + regionLabel(queryRegionKey) };
-  if (w.indexOf(queryRegionKey) >= 0 && wOther.length) return { region_match: 'unknown', region_reason: 'на странице упоминаются разные регионы, город не подтверждён' };
-  if (wOther.length) return { region_match: 'unknown', region_reason: 'город не подтверждён' };
+  const h = detectRegions(handleText), hOther = h.filter(function (k) { return k !== queryRegionKey; });
+  if (hOther.length) return labelMismatch(hOther);              // handle names another city -> decisive
+  if (h.indexOf(queryRegionKey) >= 0) return labelMatch(queryRegionKey);
+  const s = detectRegions(snippetText), sOther = s.filter(function (k) { return k !== queryRegionKey; });
+  if (s.indexOf(queryRegionKey) >= 0) return labelMatch(queryRegionKey);
+  if (sOther.length) return labelMismatch(sOther);             // snippet names only a foreign city
+  const b = detectRegions(bodyText), bOther = b.filter(function (k) { return k !== queryRegionKey; });
+  if (b.indexOf(queryRegionKey) >= 0 && bOther.length === 0) return labelMatch(queryRegionKey);
+  if (b.indexOf(queryRegionKey) >= 0) return { region_match: 'unknown', region_reason: 'на странице упоминаются разные регионы, город не подтверждён' };
+  if (bOther.length) return { region_match: 'unknown', region_reason: 'город не подтверждён' };
   return { region_match: 'unknown', region_reason: 'регион на странице не указан' };
+}
+// Back-compat 2-tier wrapper (identity/snippet as strong, body as weak).
+function regionFitPrioritized(queryRegionKey, strongText, weakText) {
+  return regionDecide(queryRegionKey, '', strongText, weakText);
 }
 
 function countHits(blob, list) { let n = 0, hit = []; for (let i = 0; i < list.length; i++) { if (blob.indexOf(list[i]) >= 0) { n++; if (hit.length < 4) hit.push(list[i]); } } return { n: n, hit: hit }; }
@@ -136,9 +145,10 @@ function classifyCandidate(input) {
   const host = low(input.host) || hostOf(input.url);
   const validated = input.validated === true;
   // region: identity (handle/title/description/url) is authoritative; the fetched page body is only a weak signal.
-  const strongText = low([input.title, input.description, input.display_name, input.normalized_key, input.url, input.host].map(str).join(' '));
-  const weakText = low([input.content, posts].map(str).join(' '));
-  const rf = regionFitPrioritized(normalizeQueryRegion(input.query_region), strongText, weakText);
+  const handleText = low([input.display_name, input.normalized_key, input.url, input.host].map(str).join(' '));
+  const snippetText = low([input.title, input.description].map(str).join(' '));
+  const bodyText = low([input.content, posts].map(str).join(' '));
+  const rf = regionDecide(normalizeQueryRegion(input.query_region), handleText, snippetText, bodyText);
   const aggregator = !!host && isAggregatorHost(host);
   // components (0-anchored; summed then clamped 0..100 for competitors)
   const comp = {
@@ -262,5 +272,5 @@ function addEligible(c, opts) {
 
 module.exports = {
   classifyCandidate, rankCandidates, addEligible, isAggregatorHost, AGGREGATOR_HOSTS,
-  regionFit, regionFitPrioritized, detectRegions, normalizeQueryRegion, regionLabel, REGION_GROUPS, str, low
+  regionFit, regionFitPrioritized, regionDecide, detectRegions, normalizeQueryRegion, regionLabel, REGION_GROUPS, str, low
 };

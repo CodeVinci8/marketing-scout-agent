@@ -154,6 +154,12 @@ A.ok('barnaul reason names the real city', /Барнаул/.test(barnaulHandle.r
 A.eq('regionFitPrioritized trusts identity over body', C.regionFitPrioritized('moscow', 'avtolombard nsk novosibirsk', 'москва москва').region_match, 'mismatch');
 A.eq('regionFitPrioritized: clean body match', C.regionFitPrioritized('moscow', 'autolombard', 'москва подольск').region_match, 'match');
 A.eq('regionFitPrioritized: ambiguous body -> unknown', C.regionFitPrioritized('moscow', 'autolombard', 'москва новосибирск').region_match, 'unknown');
+// the handle is DECISIVE: a foreign city in the handle is a mismatch even when the snippet AND body say Moscow
+// (the real live case — the search query itself contained "Москва", so every snippet mentions it).
+A.eq('regionDecide: handle Barnaul beats Moscow snippet+body', C.regionDecide('moscow', 'vk.com/...barnaul', 'займ под птс москва', 'москва оставьте заявку').region_match, 'mismatch');
+A.eq('regionDecide: no city in handle, Moscow snippet -> match', C.regionDecide('moscow', 'vk.com/autolombard38', 'автоломбард москва', 'москва').region_match, 'match');
+const barnaulReal = C.classifyCandidate({ title: 'Займы под ПТС Москва', description: 'автоломбард Москва', content: 'Москва. Оставьте заявку.', platform: 'vk', normalized_key: 'vk_community::zaimypodzalogavtoiptsbarnaul', display_name: 'vk.com/zaimypodzalogavtoiptsbarnaul', url: 'https://vk.com/zaimypodzalogavtoiptsbarnaul', query_region: 'Москва', validated: true });
+A.eq('classify: barnaul handle wins over Moscow snippet+scraped body', barnaulReal.region_match, 'mismatch');
 
 A.section('DISCOVERY-005 — component scoring produces varied confidence (not flat 64)');
 A.ok('confidence is 0..100', inMsk.confidence >= 0 && inMsk.confidence <= 100);
