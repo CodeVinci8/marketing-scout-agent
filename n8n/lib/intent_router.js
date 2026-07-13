@@ -161,9 +161,12 @@ function deterministicIntent(parsed, ctx) {
   if ((ent.competitor_refs.length && /подробн|глубж|детальн|deep|more detail/i.test(text))) {
     return Object.assign(buildIntent('deep_competitor_analysis', 0.9, ent, ctx), { from: 'rule' });
   }
-  // URL-INTAKE-002: a pasted PUBLIC source (website URL / t.me / vk.com) is an explicit-source ANALYSIS request —
-  // route to competitor_search (the plan path extracts + targets exactly those sources), never discovery.
-  if (/https?:\/\/[^\s]+|(^|\s)t\.me\/[a-z0-9_]|(^|\s)vk\.com\/[a-z0-9_]/i.test(text)) {
+  // URL-INTAKE-002 / E2-ROUTE-001: a named PUBLIC source is an explicit-source ANALYSIS request — route to
+  // competitor_search (the plan path extracts + targets exactly those sources), never source-add or discovery.
+  // Covers a pasted URL, t.me / vk.com, AND a BARE domain ("дай отчёт по autolombardn1.ru") — the latter used to
+  // fall through to a source-add clarification. A bare domain needs a real TLD so ordinary text never trips it.
+  const BARE_DOMAIN = /(^|[\s(«"'“„])([a-z0-9][a-z0-9-]{0,62}\.)+(ru|рф|com|net|org|io|su|by|kz|ua|info|biz|pro|site|online|store|shop|club|team|app)\b/i;
+  if (/https?:\/\/[^\s]+|(^|\s)t\.me\/[a-z0-9_]|(^|\s)vk\.com\/[a-z0-9_]/i.test(text) || BARE_DOMAIN.test(text)) {
     return Object.assign(buildIntent('competitor_search', 0.9, ent, ctx), { from: 'rule' });
   }
   // DISCOVERY-003: a "find/поищи ..." request routes to DISCOVERY (new-source search via WF27) ONLY on an explicit

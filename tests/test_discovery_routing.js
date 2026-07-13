@@ -105,4 +105,11 @@ const UNVAL = [{ candidate_id: 'r3::website::u.ru', owner_user_id: '111', discov
 const uvAdd = H.runCodeNode((function () { const run = H.makeRun(); H.inject(run, 'Resolve Agent Config', [CFG]); H.inject(run, 'Read durable_memories', []); H.inject(run, 'Read tracked_sources', []); H.inject(run, 'Read execution_plans', []); H.inject(run, 'Read candidate_sources', UNVAL); return run; })(), WF22, 'Apply Control Command', [{ json: { domain: 'discovery', op: 'add', arg: 'r3', owner_user_id: '111', chat_id: '555' } }])[0].json;
 A.ok('unvalidated competitor NOT added (validated-only policy)', uvAdd.changed_sources.length === 0 && /нечего добавить/.test(uvAdd.reply));
 
+A.section('E2-ROUTE-001 — single-source report requests (incl bare domain) route to analysis, not source-add/discovery');
+['дай отчет по этому сайту autolombardn1.ru', 'сделай отчет по autolombardn1.ru', 'проанализируй этот сайт autolombardn1.ru', 'разбери autolombardn1.ru', 'отчет по сайту https://autolombardn1.ru'].forEach(function (t) {
+  A.eq('"' + t + '" -> competitor_search', route(t).intent, 'competitor_search');
+});
+A.eq('"найди сайты конкурентов" still -> discovery (no specific domain)', route('найди сайты конкурентов по ПТС').intent, 'competitor_discovery');
+A.eq('"что ты помнишь" still -> memory', route('что ты помнишь').intent, 'manage_memory');
+
 A.report('discovery-routing');

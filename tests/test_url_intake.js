@@ -89,4 +89,13 @@ A.ok('Resolve Collection Set prefers supplied Telegram channels', /plan\.telegra
 A.ok('Resolve Collection Set prefers supplied VK communities', /plan\.vk_communities&&plan\.vk_communities\.length/.test(colset));
 A.ok('Resolve Approved Plan reads telegram_channels + vk_communities from the row', /telegram_channels:String\(row\.telegram_channels/.test(planres) && /vk_communities:String\(row\.vk_communities/.test(planres));
 
+A.section('E2-ROUTE-001 — a BARE domain (no scheme) is extracted as an explicit website source');
+const P = require('../n8n/lib/request_planner.js');
+A.eq('"дай отчёт по autolombardn1.ru" -> website', P.extractExplicitSources('дай отчёт по этому сайту autolombardn1.ru').websites.join(','), 'https://autolombardn1.ru');
+A.eq('"разбери autolombardn1.ru" -> website', P.extractExplicitSources('разбери autolombardn1.ru').websites.join(','), 'https://autolombardn1.ru');
+A.eq('mixed https + bare domain both extracted', P.extractExplicitSources('проанализируй https://finardi.ru и mkbkfin.ru').websites.join(','), 'https://finardi.ru,https://mkbkfin.ru');
+A.eq('an email host is NOT a source', P.extractExplicitSources('напиши на me@finardi.ru').websites.length, 0);
+A.eq('discovery text without a domain extracts nothing', P.extractExplicitSources('найди сайты конкурентов по ПТС').websites.length, 0);
+A.eq('bare domain deduped against its https form', P.extractExplicitSources('отчёт по https://autolombardn1.ru и autolombardn1.ru').websites.length, 1);
+
 A.report('url-intake');

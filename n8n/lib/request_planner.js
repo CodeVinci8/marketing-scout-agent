@@ -106,6 +106,17 @@ function extractExplicitSources(text, maxTotal) {
     if (/(^|\.)(t\.me|telegram\.me|vk\.com)$/i.test(host)) return;
     add(websites, u);
   });
+  // E2-ROUTE-001: also accept a BARE domain typed without a scheme ("дай отчёт по autolombardn1.ru") — normalize to
+  // https://<domain>. Real TLD required so ordinary text never trips it; email hosts (preceded by @) and t.me/vk.com
+  // are excluded; deduped against the https websites above.
+  const bareRx = /(^|[\s(«"'“„])(([a-z0-9][a-z0-9-]{0,62}\.)+(ru|рф|com|net|org|io|su|by|kz|ua|info|biz|pro|site|online|store|shop|club|team|app))\b/gi;
+  let bm;
+  while ((bm = bareRx.exec(raw)) !== null && total() < cap) {
+    const dom = bm[2].toLowerCase();
+    if (/(^|\.)(t\.me|telegram\.me|vk\.com)$/i.test(dom)) continue;              // handled as tg/vk above
+    if (websites.some(function (w) { return w.slice(8).split('/')[0] === dom; })) continue; // already captured as https
+    add(websites, 'https://' + dom);
+  }
   return { websites: websites, telegram_channels: telegram, vk_sources: vk, rejected: rejected };
 }
 
