@@ -4,6 +4,43 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-13 (session 49) — fresh live-Telegram-transcript defects 1-12 fixed + deployed (NOT Stage E)
+
+Branch `fix/stage4-live-final-acceptance`, HEAD **4e87e5a** (ahead ~103, NOT pushed). Operator provided a fresh
+live transcript contradicting prior "pre-Stage-E complete" claims. Root-caused against ACTUAL prod data + code.
+4 commits (eee0159 defects 1/8/9/10 · 48043d6 defects 2/4/5/6/7/11 · 4e87e5a defect-2/11 live-fix · +continuity).
+
+**LIVE-PROVEN on prod (Claude-free):** D1 /status — TTL now expires ANY stale active state (not just
+awaiting_approval); the 3 live stuck-'approved' plans (July11-12, real prod data) now hidden; WF20 marks plan
+terminal (completed/no_data/failed) after report; empty msg "Последний отчёт уже отправлен". D2 /help doubled =
+fast-lane ran BEFORE the claim → same update_id (76722057) processed 2×; fixed via staticData dedup + a
+**Duplicate Update? gate that TERMINATES** (was falling through to heavy path); live 2× update_id → exactly 1 send.
+D8 "найди кредитных брокеров сайты" → website discovery (WF27), not analysis. D9 media handles (smi_/news_/*_tv/…)
+→ news_or_aggregator (@smi_rf_moskva no longer competitor). D10 platform alias telegram_channel→telegram /
+vk_community→vk (@rusipoteka/@uzaograd ADDED live, was "площадка недоступна"); add button only for addable
+platforms. D11 quick commands (memory/source) skip "⏳ Принял запрос" (lane=quick live).
+
+**GOTCHA — backtick-template `\s`→`s`:** regexes written INLINE in generator backtick templates lose `\s` (→ "s")
+at generation; must write `\\s`. Caught D11 regex silently broken in prod; test now EVALs the generated regex. NB:
+a PRE-EXISTING batch of inline WF22 memory-forget regexes are similarly mangled (out of scope, noted).
+
+**FIXED + offline-proven + DEPLOYED, live WF20 run DEFERRED:** D3 progress single-message (WF18 ack msg_id →
+WF20 edits it, PROGRESS-UNIFY-001); D4 report plainified for Telegram (conversation_response.plainifyForTelegram —
+strip #/**/`code`, bullets→•, links→"text (url)"); D5 WF20 auto-delivers XLSX (Build Report XLSX + Send Report
+XLSX sendDocument, gated on content, cred-bound); D6 WF12 "Социальных профилей конкурентов: N" + points to сайты;
+D7 WF12 comparison only claimed on real up/down deltas. **Live WF20 full run blocked**: normal approve path calls
+Claude (Stage F, unauthorized); disposable drivers reference terminal plans; a clean deterministic WF20 run needs a
+freshly-seeded non-terminal plan + LLM-off caller override + container→Telegram egress (disproportionate). D12 LLM
+transparency = DISCOVERY-007 doc + flag off + no false AI promise (verified).
+
+**Deployed:** WF18(+restart ×3), WF20(+4 nodes cred-bound), WF22, WF27, WF12. 16 active, webhook healthy, prod
+registry clean after QA add/remove. Tests: new test_live_defects.js(27) + request-lifecycle 37 + discovery-routing 47
++ discovery-libs 91 + source-registry 27. `make test` ALL PASS ($0). **STAGE-E GATE: NOT clean on live proofs —
+D3/D4/D5/D6/D7 are deploy+offline-proven only. Do NOT start Stage E until operator authorizes / a deterministic
+WF20 live proof is arranged.**
+
+---
+
 ## Session: 2026-07-13 (session 48) — Cross-source competitor DISCOVERY layer BUILT + LIVE-PROVEN (WF27) + candidate approve/add/remove flow
 
 Branch `fix/stage4-live-final-acceptance`, HEAD **339f16b** (ahead ~87, NOT pushed). Real paid Firecrawl Search
