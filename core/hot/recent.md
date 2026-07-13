@@ -41,8 +41,35 @@ inputs + Run WF27 workflowId=`mslocwf27disc`). `docker restart n8n-n8n-1` ×2 fo
 webhook `ms-telegram-agent` healthy. `make test` ALL SUITES PASS ($0, 0 calls). Helpers in scratchpad:
 merge_wf.js, inject_discovery.js, inject_callback.js.
 
-**STILL pending pre-Stage-E:** UX defects A (/status stale-dedup) / B (progress double-message) / D (XLSX polish);
-Item 7+8 (remove disposable QA drivers + final boundary verification). Do NOT start Stage E.
+**UX defects A/B/C/D — DONE + deployed.** A `/status` duplicate-active dedup (STATUS-DEDUP-001: selectActiveRequest
+collapses newest-per-agent_request_id) ce392f4; B progress double-message (PROGRESS-UNIFY-001: WF18 passes ack
+message_id → WF20 EDITS the "✅ Принято!" message via dynamic sendMessage/editMessageText, fail-safe fallback; live
+full-analysis proof DEFERRED = would need Stage-F Claude, offline-proven+deployed) ce392f4; C no-data report offers
+"Найти новые источники" discovery pivot (intent:competitor_discovery) 61ba7d7; D XLSX omit_empty (opt-in, keeps
+Summary+Run_Metadata) 348e4fd/e199f44. Deployed WF18/20/22/24 (+restart).
+
+**DISCOVERY-005/006/007 candidate-QUALITY upgrade — DONE + LIVE-PROVEN (operator addendum).** 005 (2516451):
+region-fit (regionDecide match/mismatch/unknown, Barnaul/Novosibirsk penalized -30 for Moscow), component
+confidence 0-100 (service_evidence+cta+region+validation+platform−aggregator_penalty−dup), reply "уверенность
+N/100" + "Не в вашем регионе" + "Прочее" aggregator note + Evidence URL, WF22 add-policy region/aggregator gated.
+006 (d8140b7 + 4c9299d/c4ddfce/156fa82 region fixes): WF27 validation stage Classify→Select Validation Targets→
+[Validate Candidates? IF]→**Firecrawl Scrape** (top in-region non-aggregator competitors, sentinel path so Finalize
+always runs)→Finalize re-classify on fetched page (validated=true, recomputed confidence); add-policy = VALIDATED
+in-region non-aggregator only. **3-TIER region trust** (handle decisive > snippet > scraped body) fixes the live
+Barnaul-as-Moscow bug (search query contains "Москва" so every snippet mentions it); dropped substring-risky latin
+tokens (nsk/spb/perm…), kept long (barnaul/novosibirsk). 007 (537c742): LLM enrichment = Stage F, flag
+MS_DISCOVERY_LLM_ENRICHMENT default false + enable_claude required (fail-closed, NO Claude call), design doc
+docs/DISCOVERY_LLM_ENRICHMENT_STAGE_F.md. **LIVE proofs (real Firecrawl Search+Scrape, bounded):** Website (conf
+61→83 after scrape, CTA from page), Telegram (@avtosebe scraped t.me/s, 83/100), VK (Barnaul/Novosibirsk→mismatch
+conf11 EXCLUDED from top, autolombard38/ptszaim1→match validated); validated-add live (2 sources)→registry list→
+remove→**prod restored clean**. candidate_sources rows carry region_match+quality_status(validated/unvalidated)+
+confidence+evidence_url. Tests discovery-libs 85 + discovery-routing 41.
+
+**Item 7+8 — verified.** 16 active prod workflows = correct runtime set (WF04/08/09/10/11/12/14/16/18/19/20/21/22/24/
+26/27); WF17/23/25 inactive per policy; **57 disposable QA drivers ALL inactive** (0 active, never execute) — ids in
+scratchpad/backup/disposable_driver_ids.txt; deletion OPERATOR-GATED (no n8n 2.23.3 delete CLI; REST needs owner key;
+destructive prod-data boundary). Webhook ms-telegram-agent registered; WF27 Firecrawl Scrape cred bound. `make test`
+ALL PASS ($0, 0 calls). Branch ahead 114, NOT pushed. **Pre-Stage-E COMPLETE. Do NOT start Stage E.**
 
 ---
 
