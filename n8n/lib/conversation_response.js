@@ -143,6 +143,10 @@ function plainifyForTelegram(md) {
     return t;
   }).join('\n');
   s = s.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/__([^_]+)__/g, '$1'); // bold
+  // B5: strip single-underscore italics (_текст_) that Telegram would otherwise render literally, WITHOUT
+  // touching snake_case identifiers — the opening _ must follow start/space/punct and the closing _ must be
+  // followed by end/space/punct, so source_run_id / min_lead_score stay intact.
+  s = s.replace(/(^|[\s(])_([^_\n]{1,300}?)_(?=$|[\s.,;:!?)])/g, '$1$2');
   s = s.replace(/`([^`]+)`/g, '$1');                                     // inline code
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '$1 ($2)');     // links
   s = s.replace(/\n{3,}/g, '\n\n');
