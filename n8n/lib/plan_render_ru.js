@@ -89,14 +89,36 @@ function planApprovalMessageRu(plan, opts) {
   var exTg = (Array.isArray(plan.telegram_channels) ? plan.telegram_channels : []).map(String);
   var exVk = (Array.isArray(plan.vk_communities) ? plan.vk_communities : []).map(String);
   var hasExplicit = plan.explicit_sources === true || exSites.length || exTg.length || exVk.length;
-  var explicitBlock = null;
-  if (hasExplicit) {
+  // PLAN-SHAPE-001 (B2): the scope + volume wording must match the request SHAPE. A single website is not
+  // "до N результатов с каждого источника" and a single source is not a "сравнение". Source-specific collection
+  // units; a comparison is claimed only for ≥2 sources (or a real historical baseline).
+  var maxItems = Math.max(1, ruNum(plan.max_items, 10));
+  var nExplicit = exSites.length + exTg.length + exVk.length;
+  var isDiscovery = /discovery/.test(ruText(plan.intent));
+  var explicitBlock = null, scopeBlock = null, comparison = false;
+  if (hasExplicit && nExplicit === 1 && exSites.length === 1) {
+    scopeBlock = ['Проверю сайт ' + exSites[0] + ' и релевантные страницы:',
+      '• услуги и позиционирование;', '• офферы и цены;', '• CTA и точки обращения;', '• сильные и слабые стороны.'].join('\n');
+  } else if (hasExplicit && nExplicit === 1 && exTg.length === 1) {
+    scopeBlock = 'Проверю публичный Telegram-канал ' + exTg[0] + ' и до ' + maxItems + ' последних доступных публикаций.';
+  } else if (hasExplicit && nExplicit === 1 && exVk.length === 1) {
+    scopeBlock = 'Проверю публичное VK-сообщество ' + exVk[0] + ' и до ' + maxItems + ' доступных записей.';
+  } else if (hasExplicit && nExplicit >= 2) {
     var eb = ['Проверю указанные источники:'];
     if (exSites.length) eb.push('• сайт' + (exSites.length > 1 ? 'ы' : '') + ': ' + exSites.slice(0, 3).join(', '));
     if (exTg.length) eb.push('• Telegram: ' + exTg.slice(0, 3).join(', '));
     if (exVk.length) eb.push('• VK: ' + exVk.slice(0, 3).join(', '));
     explicitBlock = eb.join('\n');
+    scopeBlock = 'Сравню ' + nExplicit + ' указанны' + (nExplicit >= 5 ? 'х' : 'е') + ' источник' + (nExplicit >= 5 ? 'ов' : 'а') + '.';
+    comparison = true;
+  } else if (isDiscovery) {
+    scopeBlock = 'Найду новых конкурентов в выбранной нише и оценю релевантные источники (до ' + maxItems + ' кандидатов).';
+  } else {
+    // niche competitor scan across the configured sources — many competitors, comparison is meaningful.
+    scopeBlock = 'Объём: до ' + maxItems + ' результатов с каждого источника.';
+    comparison = true;
   }
+  if (ruText(plan.intent) === 'compare_periods') comparison = true; // real historical baseline
   var lines = [
     '🔎 План анализа',
     '',
@@ -104,21 +126,34 @@ function planApprovalMessageRu(plan, opts) {
     'Регион: ' + ruRegion(plan.region),
     (hasExplicit ? null : ('Источники: ' + ruSources(plan.sources, dataMode))),
     explicitBlock,
-    'Объём: до ' + Math.max(1, ruNum(plan.max_items, 10)) + ' результатов с каждого источника',
+    scopeBlock,
     '',
     'Что будет подготовлено:',
     '• краткий отчёт в Telegram;',
     '• таблица Excel;',
-    '• сравнение и основные выводы.'
+    (comparison ? '• сравнение и основные выводы.' : '• основные выводы.')
   ];
   // §7 COST-UX-001: est_source/est_llm carry the request's BUDGET CAPS (e.g. $5+$3) — presenting their sum as
   // the expected price of one request was wrong. Show a dollar amount ONLY when the caller supplies a real
   // projection computed from the planned provider calls (cost_model.projectRequestCost) and marks it reliable;
   // otherwise omit the line. The technical hard cap is NEVER rendered here — it stays in rows/diagnostics.
   var pc = ruNum(opts.projected_cost_usd, NaN);
-  if (isFinite(pc) && pc > 0 && opts.projected_reliable !== false) {
+  var cost = (opts.cost && typeof opts.cost === 'object') ? opts.cost : null;
+  var d2 = function (v) { return (Math.round(ruNum(v, 0) * 100) / 100).toFixed(2); };
+  if (cost && ruNum(cost.projected_cost_usd, 0) >= 0 && cost.reliable !== false) {
+    // B3: a deterministic per-work band + breakdown. AI enrichment is EXCLUDED and named as off until Stage F,
+    // so the user is never quoted a Claude cost for work that will not run. The hard cap is the run ceiling.
+    var lo = ruNum(cost.cost_low_usd, cost.projected_cost_usd), hi = ruNum(cost.cost_high_usd, cost.projected_cost_usd);
+    var bd = cost.breakdown || {};
     lines.push('');
-    lines.push('💰 Ориентировочная стоимость: около $' + (Math.round(pc * 100) / 100).toFixed(2) + '.');
+    lines.push('💰 Оценка стоимости: $' + d2(lo) + '–' + d2(hi));
+    if (ruNum(bd.firecrawl_usd, 0) > 0) lines.push('• сбор данных: ~$' + d2(bd.firecrawl_usd));
+    if (ruNum(bd.apify_usd, 0) > 0) lines.push('• объявления: ~$' + d2(bd.apify_usd));
+    lines.push(cost.llm_enabled ? ('• AI-анализ: ~$' + d2(bd.claude_usd)) : '• AI-анализ: пока выключен (до Stage F)');
+    if (ruNum(cost.hard_cap_usd, 0) > 0) lines.push('• максимальный лимит запуска: $' + d2(cost.hard_cap_usd));
+  } else if (isFinite(pc) && pc > 0 && opts.projected_reliable !== false) {
+    lines.push('');
+    lines.push('💰 Ориентировочная стоимость: около $' + d2(pc) + '.');
   }
   lines.push('');
   lines.push('Запустить анализ?');

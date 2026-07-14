@@ -43,7 +43,7 @@ A.eq('row.urls persisted', String(row.urls), 'https://lioncredit.ru');
 
 A.section('approval message names the supplied site (grouped explicit-source block)');
 const rend = RU.planApprovalMessageRu(p, {});
-A.ok('mentions "Проверю указанные источники" + the site host', rend.text.indexOf('Проверю указанные источники:') >= 0 && rend.text.indexOf('lioncredit.ru') >= 0, rend.text);
+A.ok('single site: source-specific wording "Проверю сайт <host>" (B2, not "до N с каждого источника")', rend.text.indexOf('Проверю сайт lioncredit.ru') >= 0 && rend.text.indexOf('результатов с каждого источника') < 0, rend.text);
 const rend0 = RU.planApprovalMessageRu(p0, {});
 A.ok('no explicit-source block when no url', rend0.text.indexOf('Проверю указанные') < 0);
 A.ok('generic "Источники:" shown when no explicit source', rend0.text.indexOf('Источники:') >= 0);
