@@ -32,6 +32,10 @@ A.section('planned provider calls derive from the plan sources + configured targ
   A.eq('telegram-only plan needs no Apify', noweb.apify_searches, 0);
   const nollm = CM.plannedProviderCalls(plan, Object.assign({}, cfg, { enable_claude: false, enable_llm_analysis: true }));
   A.eq('enable_claude=false master switch => zero Claude calls even if enrichment asked', nollm.claude_calls, 0);
+  // COST-LLM-001: pre-Stage-F there is no Claude key, so an enrichment flag alone must NOT quote an AI cost.
+  const noKey = CM.plannedProviderCalls(plan, Object.assign({}, cfg, { enable_llm_analysis: true, claude_key_present: false }));
+  A.eq('enrichment flag but NO Claude key => zero Claude calls (pre-Stage-F)', noKey.claude_calls, 0);
+  A.eq('no Claude key => llm_enabled=false', noKey.llm_enabled, false);
   // B3: a single supplied website is ONE page, not the operator preset count of 3.
   const oneSite = CM.plannedProviderCalls({ sources: ['website'], urls: ['https://autolombardn1.ru'] }, cfg);
   A.eq('one supplied website => 1 Firecrawl page (not preset 3)', oneSite.firecrawl_pages, 1);

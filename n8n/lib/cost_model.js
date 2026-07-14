@@ -43,7 +43,11 @@ function plannedProviderCalls(plan, cfg) {
   // every enrichment flag is false, so Claude does NOT run and MUST NOT appear in the estimate (B3). Note this is
   // gated on the *enrichment* flags, not the coarse enable_claude master switch (which may be true while Stage F
   // is still off).
-  var llmOn = cfg.enable_claude !== false && (
+  // Claude is a real planned call ONLY when: the master switch is on, an enrichment flag is set, AND a Claude API
+  // key is actually present (cfg.claude_key_present). Pre-Stage-F there is no key, so even MS_ENABLE_LLM_SUMMARY=true
+  // must NOT quote an AI cost — the enrichment cannot run (COST-LLM-001). When claude_key_present is omitted (unit
+  // tests / callers that don't resolve it) it is treated as present, so the flag alone still models Stage-F cost.
+  var llmOn = cfg.enable_claude !== false && cfg.claude_key_present !== false && (
     cfg.enable_llm_analysis === true || cfg.enable_llm_summary === true ||
     plan.enable_llm_analysis === true || plan.enable_llm_summary === true);
   var claude_calls = 0;

@@ -59,6 +59,7 @@ const DEFAULTS = {
   enable_telegram: false,
   enable_external_actions: false,   // master switch for any paid collection/analysis
   enable_claude: false,             // Claude (planner/summary) only when explicitly enabled
+  claude_key_present: false,        // no Claude API key until Stage F is provisioned (cost_model gates on this)
   enable_apify: false,
   enable_firecrawl: false,
   enable_vk: false,
@@ -120,6 +121,10 @@ function resolveConfig(env, overrides) {
     enable_telegram: bool(env.MS_ENABLE_TELEGRAM, DEFAULTS.enable_telegram),
     enable_external_actions: bool(env.MS_ENABLE_EXTERNAL_ACTIONS, DEFAULTS.enable_external_actions),
     enable_claude: bool(env.MS_ENABLE_CLAUDE, DEFAULTS.enable_claude),
+    // COST-LLM-001: whether a Claude API key is actually present. Pre-Stage-F there is none, so even when the
+    // enrichment flags are on, Claude cannot run — the cost estimate must not quote an AI cost for work that
+    // will not execute. Consumed by cost_model to decide whether Claude is a real planned call.
+    claude_key_present: str(env.MS_CLAUDE_API_KEY) !== '',
     enable_apify: bool(env.MS_ENABLE_APIFY, DEFAULTS.enable_apify),
     enable_firecrawl: bool(env.MS_ENABLE_FIRECRAWL, DEFAULTS.enable_firecrawl),
     enable_vk: bool(env.MS_ENABLE_VK, DEFAULTS.enable_vk),
