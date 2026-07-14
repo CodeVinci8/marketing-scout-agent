@@ -822,7 +822,7 @@ function truthy(v){return v===true||String(v).toLowerCase()==='true';}
 if(inp.domain==='source'&&['add','list','pause','resume','remove','check'].indexOf(String(inp.op))<0){var __so=parseSourceOp(String(inp.text||inp.arg||''));inp.op=__so.op;if(!inp.arg)inp.arg=__so.arg;}
 // MEMORY-INTENT-001: same for memory — the coarse action 'manage_memory' must resolve to a concrete op. NL memory
 // questions default to 'view'; explicit forget/reset/new are detected from the text. (Slash commands already carry op.)
-if(inp.domain==='memory'&&['memory','view','forget','forget_all','new','context'].indexOf(String(inp.op))<0){var __mt=String(inp.text||'').toLowerCase();inp.op=(/забудь\s+(всё|все)|очисти\s*памят|сотри\s*всё|forget[_ ]?all/.test(__mt))?'forget_all':((/новый\s+контекст|начн[иё]м\s+заново|\bnew\b/.test(__mt))?'new':((/забудь\b|удали\s+из\s+памяти/.test(__mt))?'forget':'view'));}
+if(inp.domain==='memory'&&['memory','view','forget','forget_all','new','context'].indexOf(String(inp.op))<0){var __mt=String(inp.text||'').toLowerCase();inp.op=(/забудь\\s+(всё|все)|очисти\\s*памят|сотри\\s*всё|forget[_ ]?all/.test(__mt))?'forget_all':((/новый\\s+контекст|начн[иё]м\\s+заново|\\bnew\\b/.test(__mt))?'new':((/забудь(?:\\s|$)|удали\\s+из\\s+памяти/.test(__mt))?'forget':'view'));}
 var out={domain:inp.domain,op:inp.op,owner_user_id:owner,chat_id:String(inp.chat_id||''),agent_request_id:String(inp.agent_request_id||''),reply:'',memory_audit:[],source_audit:[],changed_memories:[],changed_sources:[],changed_plans:[],request_event:null};
 function diff(before,after,key){var b={};before.forEach(function(x){b[x[key]]=JSON.stringify(x);});return after.filter(function(x){return b[x[key]]!==JSON.stringify(x);});}
 if(inp.domain==='memory'){
