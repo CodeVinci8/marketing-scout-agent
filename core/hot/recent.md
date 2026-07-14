@@ -4,6 +4,58 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-14 (session 51) — STAGE E2 live-proven + pre-F backlog (B1/B2/B3/B5/B8) + F/F.5 contracts
+
+Branch `fix/stage4-live-final-acceptance` (ahead ~110, NOT pushed). **Stage F still NOT started; no Claude call this
+session.** Real live n8n executions + real Google Sheets reads. Cost ≈ $0 (no new paid collection; WF12/WF27 reads
+only; no Firecrawl/Claude call this session).
+
+**Commits:** b540e8e (B1/B5/B6 report scoping+terminology) · ccd46a5 (B2/B3 plan wording + cost band) · 7c8eecd
+(COST-LLM-001) · 6a6a762 (B8 memory regex) · + docs/continuity.
+
+**B1/B5/B6 — single-source report scoping (LIVE-PROVEN, exec 812).** WF12 Build Deterministic Report now scopes the
+"Сайты конкурентов" block + count to the CURRENT request's sites only (supplied hosts ∪ this-run profile domains);
+historical snapshots go to a labeled "## Исторический контекст" and never inflate current counts. Fixes the live
+defect (`autolombardn1.ru` reported mkbkfin/finardi/lioncredit as current). Falls back to prior behaviour when no
+current-run signal (never blanks a legit report). Before exec 805: "сайты конкурентов: **4**"; after exec 812:
+"сайты конкурентов: **1**" + historical block naming the 3 others + offers/prices flow from the snapshot + bundle
+`source_mix: current: веб-сайты (+historical context)`. B5: "evidence/conf N"→"уверенность N/100 + N подтверждающих
+источников", CONTACT_AND_OUTREACH_POLICY id removed, change_type enum translated, single `_italics_` stripped for
+Telegram (snake_case preserved). New `test_single_source_scope.js` (18). Deployed WF12 (surgical jsCode splice, 10
+Sheets creds preserved, active).
+
+**B2/B3 + COST-LLM-001 — plan wording + honest cost (LIVE-PROVEN, WF19 exec 816→818).** Plan text matches request
+SHAPE: one site → "Проверю сайт <host>… услуги/офферы/CTA/сильные-слабые" (no "до N с каждого", no false "сравнение");
+one TG/VK → source-specific units; ≥2 → "Сравню N источников". Cost = deterministic per-work band + breakdown; a
+single supplied site is 1 Firecrawl page (not 3); discovery = Firecrawl Search + bounded Scrape. **COST-LLM-001:**
+Claude cost counted ONLY when master switch + enrichment flag + a real API key all hold; pre-F (no key) shows
+"AI-анализ: пока выключен (до Stage F)". Live: exec 816 quoted "~$0.24 AI"; after deploy exec 818 shows "пока
+выключен". Deployed WF19/WF20/WF18 (WF18 needed `docker restart` for webhook — re-registered, healthz OK, webhook
+POST→200, 16 active).
+
+**B8 — mangled WF22 memory regexes fixed.** `\s` eaten by backtick template ("забудьs+") → doubled to `\\s`; Cyrillic
+`забудь\b` → `забудь(?:\s|$)`. Test now EVALs the generated regex. Deployed WF22.
+
+**Stage E2 persistence proofs (real rows):** candidate_sources WF27 exec 767 = 10 rows, **33/33 contract cols**,
+`provider_result_url`+`evidence_excerpt` populated (E1 lineage live), candidate_id `disc_<req>::website::<key>`,
+scores/quality(unvalidated)/dedup(unique) valid. Stage-D sample (exec 812): competitor_profiles 20 (conf 45, evidence,
+`source_run_ids` lineage, source_urls), source_health 45 (healthy, report_eligible, score 85-86), site_snapshots
+**1009** (why scoping matters). XLSX from the real bundle812: opens (valid OOXML, 10 zip parts), Summary/Competitors/
+Source_Quality/Run_Metadata, empty sheets omitted, Competitors=1 == report == bundle competitors_found=1.
+
+**Docs:** `docs/STAGE_F_EVIDENCE_BOUND_LLM_ANALYSIS.md` + `docs/STAGE_F5_OPPORTUNITY_RADAR_AGENT.md` (contracts only).
+
+**INFRA INCIDENT (operator):** VPS root `/dev/vda2` hit **100% full** (containerd 2.6G + /usr 4.0G + journal 329M).
+Freed ~510M of my own stale Claude CLI binaries to proceed (96% now). n8n writes can fail at 100% — operator must
+reclaim disk (docker/journal/system, outside agent bounds).
+
+**REMAINING fixable debt (documented, not done):** B4 pending-plan fingerprint dedup (repeat request creates a 2nd
+awaiting_approval — reproduced live: plans 816+818); B6 partial-state driven by requested (not optional) sources; B7
+Russian sheet names (English names kept — high test blast radius); ~58 inactive QA drivers + `msdrvscope12` (all
+inactive, none prod-callable — operator-gated delete). **Next:** B4 → B6-partial → B7-RU-names, then Stage F.
+
+---
+
 ## Session: 2026-07-13 (session 50) — STAGE E1: scoring + Sheets persistence validation (candidate_sources evidence lineage)
 
 Branch `fix/stage4-live-final-acceptance`, HEAD **<this commit>** (ahead ~104, NOT pushed). Stage E1 = map scoring +

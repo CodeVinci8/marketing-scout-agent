@@ -4,7 +4,32 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-26, session 28) — Stage 8 release-path INTEGRATION REPAIR done (DISPOSABLE_DEPLOY=PASS) → WF18 rearchitecture next
+## CURRENT PRIORITY (2026-07-14, session 51) — Stage E2 live-proven + pre-F backlog closed → Stage F is READY (do not start without approval)
+
+Stage E2 closed with real n8n execs + real Sheets. Pre-Stage-F user-facing defects fixed, deployed and LIVE-PROVEN:
+**B1** single-source report scoping (exec 812: "сайты конкурентов: 1" + historical block, was 4); **B2/B3** request-
+shaped plan wording + honest deterministic cost band; **COST-LLM-001** AI cost shown only with a real key (exec 818:
+"AI-анализ: пока выключен"); **B5** terminology/italics; **B8** memory-forget regexes. Contracts written:
+`docs/STAGE_F_EVIDENCE_BOUND_LLM_ANALYSIS.md`, `docs/STAGE_F5_OPPORTUNITY_RADAR_AGENT.md`. `make test` ALL SUITES PASS
+($0). Prod: 16 active, WF18 webhook healthy, WF12/19/20/22 deployed.
+
+**Do the remaining fixable debt, then Stage F:**
+1. **B4** — pending-plan fingerprint dedup (a repeat identical request must reuse/supersede, not create a 2nd
+   `awaiting_approval`; `/status` shows one logical pending). Reproduced live (plans 816+818). Touch `request_lifecycle`
+   + WF18/WF19 plan upsert + a fingerprint over owner/chat/intent/normalized sources/platform/niche/region/scope/flags.
+2. **B6-partial** — partial/completed state must be driven by the REQUESTED sources, not optional/preset branches
+   (`source_adapter.rollupCollection` + WF20 state); name which source failed.
+3. **B7-RU-names** — Russian sheet names (Сводка/Конкуренты/…) + a hidden Технические-данные sheet (high test blast
+   radius — update the XLSX asserters together).
+4. **Operator/infra:** reclaim VPS disk (root was 100% full — containerd/journal/usr), then Stage F.
+5. `docker restart n8n-n8n-1` re-registers the WF18 webhook (needed after any WF18 re-import).
+
+**Then Stage F** per its contract doc — evidence-bound Claude, strict JSON, one repair, fail-closed, budget-gated.
+**Do not start Stage F without explicit operator approval.**
+
+---
+
+## PRIOR PRIORITY (2026-06-26, session 28) — Stage 8 release-path INTEGRATION REPAIR done (DISPOSABLE_DEPLOY=PASS) → WF18 rearchitecture next
 
 Branch `fix/stage8-release-integration` off `main` @ `2ee4a71`. The first release-core session's standalone tools
 were **not wired into the real deploy path**; this repair connected them into ONE shared, ordered, fail-closed,
