@@ -4,7 +4,38 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-07-16, session 53) — pre-F debt CLOSED → Stage F PRODUCTION INTEGRATION next
+## CURRENT PRIORITY (2026-07-16, session 54) — WF28 Claude Analyst LIVE-PROVEN → wire it into the bot next
+
+WF28 — Claude Analyst is built, deployed (id `mswf28claudeanalyst`, active), and LIVE-PROVEN through n8n: real
+Claude call via the credential, tool_use, 1 bounded repair, deterministic fallback path, persistence to
+`llm_analysis_results` + `llm_analysis_telemetry` (both live in the prod sheet), and reuse-by-hash ($0). Details:
+`docs/STAGE_F_ACCEPTANCE.md`. `make test` ALL SUITES PASS. Prod: 17 active, healthy.
+
+**Continue Stage F (nothing needs re-deriving — WF28 is the working call primitive):**
+1. **WF20 → WF28 wiring** — after the deterministic per-source collection+quality gate, WF20 builds the evidence
+   package (evidence_package input shape: {request, source, current_run_facts, evidence[], deterministic_scores,
+   limitations, historical_context}) and calls WF28 (execWf, id mswf28claudeanalyst) per source; store the returned
+   analysis_id + typed analysis on the run.
+2. **Report/XLSX enrichment** — WF12 renders «Подтверждённые факты / Аналитические выводы / Рекомендации /
+   Доказательства и ограничения» from the WF28 analysis (fact vs inference vs recommendation via item.kind); add
+   Stage-F XLSX sheets (Аналитические выводы / Рекомендации / Боли и сигналы / Доказательства) ONLY when populated.
+   Deterministic report + XLSX must still ship if WF28 returns enriched=false.
+3. **Multi-source synthesis** (ccSynthesisTool) + **discovery enrichment** (WF27, top 3–5) + **public lead
+   interpretation** — same WF28 pattern with the other analysis_type + tool.
+4. **CodeVinci AI Pilot** conversational agent — analyst_agent/analyst_tools, read-only tool auto-select,
+   approval-gated mutations; `/status`/`/cancel`/`/help` stay deterministic.
+5. **Enable in prod:** set `MS_ENABLE_LLM_ANALYSIS=true` in the container env (env/recreate — operator/infra), then
+   a full Telegram E2E. For controlled proofs: `docker exec -e MS_ENABLE_LLM_ANALYSIS=true -e N8N_RUNNERS_BROKER_PORT=5690 n8n-n8n-1 n8n execute --id=<driver>` (WF28 must be active; CLI can't call an inactive sub-wf).
+6. **§15 live scenarios** remaining: #2 TG, #3 VK, #4 3-source, #5/#6 discovery enrich, #7 lead, #8 no-data, #10
+   repair-fail→fallback, #11 context-too-long, #12-16 conversational, #18 report/XLSX consistency.
+7. **Cleanup disposable QA drivers:** msqawf28proof, msqamktabs, msdrvscope12 (all inactive/callable; operator-gated delete).
+8. **Operator/infra:** harden SSH (brute-force flood) + reclaim VPS disk.
+
+**Do NOT start Stage F.5 (Opportunity Radar) or Stage G.**
+
+---
+
+## PRIOR PRIORITY (2026-07-16, session 53) — pre-F debt CLOSED → Stage F PRODUCTION INTEGRATION next
 
 All fixable pre-Stage-F deterministic debt is CLOSED, deployed and (B4) live-proven: **B4** plan-fingerprint dedup
 (efe0daf), **B6** requested-source terminal status (00bc4bf), **B7** Russian XLSX + hidden technical sheet (e67ece1).
