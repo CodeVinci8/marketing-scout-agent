@@ -106,7 +106,7 @@ const fromWF19 = reachable(WF18, 'Run WF19 (Planner)');
 A.ok('14. plan is persisted on the WF19 result path (after planner, before approval send)', fromWF19.has('Append execution_plans'));
 A.ok('14. awaiting_approval state is set only AFTER the plan append', reachable(WF18, 'Append execution_plans').has('Shape Awaiting State'));
 const planRes = nodeByName(WF18, 'Handle Plan Result');
-A.ok('15. approval keyboard is built from the REAL agent_request_id', /approvalKeyboard\(req\.agent_request_id\)/.test(planRes.parameters.jsCode));
+A.ok('15. approval keyboard is built from the REAL (or B4 canonical-reused) agent_request_id', /approvalKeyboard\(__arid\)/.test(planRes.parameters.jsCode) && /__arid\s*=\s*String\(req\.agent_request_id\)/.test(planRes.parameters.jsCode));
 A.ok('16. callback acknowledgement (answerCallbackQuery) node exists', (WF18.nodes || []).some(isTelegramAnswer));
 
 A.section('§19.17 — reject/cancel route to control (WF22) and make zero PAID external calls');
@@ -118,7 +118,10 @@ A.section('§19.18 — every Sheets write is fed by an explicit shape/code node 
 const writes = (WF18.nodes || []).filter(isSheetsWrite);
 A.ok('18. WF18 has multiple shaped Sheets writes', writes.length >= 5);
 for (const w of writes) {
-  const preds = predecessors(WF18, w.name).map(n => nodeByName(WF18, n));
+  let preds = predecessors(WF18, w.name).map(n => nodeByName(WF18, n));
+  // A pure IF gate that only ROUTES a single already-shaped item (e.g. B4 "Persist New Plan?") is transparent for
+  // this check — traverse through it to its own feeder, which must be the explicit shape/code node.
+  preds = preds.reduce((acc, p) => acc.concat((p && p.type === 'n8n-nodes-base.if') ? predecessors(WF18, p.name).map(n => nodeByName(WF18, n)) : [p]), []);
   A.ok('18. ' + w.name + ' is fed by a Code/shape node', preds.length > 0 && preds.every(p => p && p.type === 'n8n-nodes-base.code'));
 }
 

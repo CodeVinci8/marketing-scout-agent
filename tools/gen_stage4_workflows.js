@@ -624,17 +624,24 @@ if(status!=='plan_ready'||!res.plan){
   var ctext=res.user_message||res.clarification||'Не удалось построить план. Уточните запрос, пожалуйста.';
   return [{json:{plan_ready:false,status:status,telegram_send_body:JSON.stringify({chat_id:chat,text:ctext}),plan_row:null}}];
 }
-var plan=res.plan;var ident=planIdentity(plan,req.agent_request_id,1);
-var planRow=buildPlanRow(plan,ident,{agent_request_id:req.agent_request_id,owner_user_id:owner,chat_id:chat,ts:(new Date()).toISOString()});
-var kb=approvalKeyboard(req.agent_request_id);
+var plan=res.plan;
+// B4: an EQUIVALENT non-terminal request must reuse the existing plan, not create a duplicate awaiting_approval.
+var __existPlans=[];try{__existPlans=($('Read execution_plans').all()||[]).map(function(x){return x.json;});}catch(e){}
+var __reuse=findReusablePlan(__existPlans,plan,{owner_user_id:owner,chat_id:chat},{ttl_min:30});
+var __arid=String(req.agent_request_id),__planReused=false,ident;
+if(__reuse.reused){__arid=String(__reuse.plan.agent_request_id||req.agent_request_id);__planReused=true;ident={plan_id:String(__reuse.plan.plan_id),plan_hash:String(__reuse.plan.plan_hash),plan_version:Number(__reuse.plan.plan_version)||1};}
+else{ident=planIdentity(plan,req.agent_request_id,1);}
+var planRow=buildPlanRow(plan,ident,{agent_request_id:__arid,owner_user_id:owner,chat_id:chat,ts:(new Date()).toISOString()});
+var kb=approvalKeyboard(__arid);
 // UX-RU-001: exactly ONE plan block — WF19's humanized text verbatim (fallback renders the same format), no suffix.
 var cfg18=(d.routed&&d.routed.cfg)||{};
 var proj18=projectRequestCost(plan,cfg18);
 var text=res.approval_text||planApprovalMessageRu(plan,{data_mode:String(req.data_mode||''),projected_cost_usd:proj18.projected_cost_usd,projected_reliable:proj18.reliable,cost:proj18}).text;
-return [{json:{plan_ready:true,status:'plan_ready',plan:plan,plan_id:ident.plan_id,plan_hash:ident.plan_hash,plan_row:planRow,agent_request_id:req.agent_request_id,telegram_send_body:JSON.stringify({chat_id:chat,text:text,reply_markup:kb})}}];`),
+return [{json:{plan_ready:true,plan_reused:__planReused,status:'plan_ready',plan:plan,plan_id:ident.plan_id,plan_hash:ident.plan_hash,plan_row:planRow,agent_request_id:__arid,telegram_send_body:JSON.stringify({chat_id:chat,text:text,reply_markup:kb})}}];`),
   ifNode('wf18-ifplan', 'Plan Ready?', [3000, -200], '={{ $json.plan_ready }}'),
   code('wf18-shapeplan', 'Shape Plan Row', [3220, -300], [], `
 return [{json:$('Handle Plan Result').first().json.plan_row}];`),
+  ifNode('wf18-ifnewplan', 'Persist New Plan?', [3330, -300], "={{ $('Handle Plan Result').first().json.plan_reused !== true }}"),
   sheetsAppend('wf18-applan', 'Append execution_plans', [3440, -300], 'execution_plans'),
   code('wf18-shapeawait', 'Shape Awaiting State', [3660, -300], [], `
 var c=$('Build Conversation Context').first().json;var h=$('Handle Plan Result').first().json;var base=c.state_row||{};
@@ -775,7 +782,9 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),inten
   ['Handle Plan Result', 'Plan Ready?'],
   ['Plan Ready?', 'Shape Plan Row', 0],
   ['Plan Ready?', 'Send Plan Reply', 1],
-  ['Shape Plan Row', 'Append execution_plans'],
+  ['Shape Plan Row', 'Persist New Plan?'],
+  ['Persist New Plan?', 'Append execution_plans', 0],
+  ['Persist New Plan?', 'Shape Awaiting State', 1],
   ['Append execution_plans', 'Shape Awaiting State'],
   ['Shape Awaiting State', 'Upsert Awaiting State'],
   ['Upsert Awaiting State', 'Plan Reply Body'],

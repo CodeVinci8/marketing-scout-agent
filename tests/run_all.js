@@ -61,6 +61,8 @@ const JS_SUITES = [
   ['report-quality-v2', 'test_report_quality_v2.js'],
   // --- B1/B6: explicit single-website report scoping (current-run vs historical context) ---
   ['single-source-scope', 'test_single_source_scope.js'],
+  // --- B4: owner-scoped plan-fingerprint dedup (equivalent request reuses one awaiting_approval plan) ---
+  ['plan-dedup', 'test_plan_dedup.js'],
   // --- Stage F core: Claude adapter (tool_use transport), contracts/validators, evidence package, cost, analysis
   //     orchestration (validate -> one repair -> deterministic fallback). Offline, injected fetchFn, $0. ---
   ['stage-f-core', 'test_stage_f_core.js'],

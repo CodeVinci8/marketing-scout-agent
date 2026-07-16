@@ -260,6 +260,61 @@ function planIdentity(plan, agentRequestId, version) {
   const v = num(version, 1) || 1;
   return { plan_id: ['plan', str(agentRequestId) || 'req', hash].join('_'), plan_hash: hash, plan_version: v };
 }
+// --- B4: owner-scoped plan fingerprint + reuse selector -----------------------------------------------------
+// A LOGICAL request identity independent of agent_request_id, so two equivalent requests do not create two
+// awaiting_approval plans. Covers owner+chat, intent, normalized (order-independent) sources, niche/service,
+// region, window/scope and output. Derived on the fly from either an in-memory plan (arrays) OR a stored plan
+// row (comma/space-joined strings) — no new sheet column is needed. Cost estimates are excluded (they are
+// derived and may drift); the logical request is what matters.
+function planNormList(v) {
+  if (Array.isArray(v)) return v.map(low).filter(Boolean).sort();
+  return low(v).split(/[,\s]+/).map(function (x) { return x.trim(); }).filter(Boolean).sort();
+}
+function planFingerprint(planOrRow, ctx) {
+  planOrRow = planOrRow || {}; ctx = ctx || {};
+  var owner = str(ctx.owner_user_id) || str(planOrRow.owner_user_id);
+  var chat = str(ctx.chat_id) || str(planOrRow.chat_id);
+  var canon = JSON.stringify([
+    'fp1', owner, chat,
+    low(planOrRow.intent), low(planOrRow.niche), low(planOrRow.service), low(planOrRow.region),
+    planNormList(planOrRow.sources),
+    planNormList(planOrRow.urls),
+    planNormList(planOrRow.telegram_channels),
+    planNormList(planOrRow.vk_communities),
+    num(planOrRow.max_items, 0), low(planOrRow.expected_output)
+    // NB: data_mode is intentionally excluded — it is not persisted on the execution_plans row, so including it
+    // would make a stored row and its originating in-memory plan hash differently and break reuse detection.
+  ]);
+  var h = 5381;
+  for (var i = 0; i < canon.length; i++) h = ((h << 5) + h + canon.charCodeAt(i)) >>> 0;
+  return 'fp' + h.toString(16);
+}
+// Among existing execution_plans rows, find the newest NON-TERMINAL plan for THIS owner whose fingerprint equals
+// the new plan's — the canonical plan to REUSE instead of creating a duplicate. Terminal plans never block. TTL:
+// an awaiting_approval row older than ttlMin is abandoned and does not count (mirrors request_lifecycle).
+var PLAN_TERMINAL = ['completed', 'done', 'delivered', 'failed', 'error', 'cancelled', 'canceled', 'rejected', 'expired', 'no_data', 'superseded'];
+function planIsTerminal(s) { return PLAN_TERMINAL.indexOf(low(s)) >= 0; }
+function findReusablePlan(existingRows, newPlan, ctx, opts) {
+  ctx = ctx || {}; opts = opts || {};
+  var fp = planFingerprint(newPlan, ctx);
+  var owner = str(ctx.owner_user_id);
+  var ttlMs = (num(opts.ttl_min, 30) || 30) * 60000;
+  var nowMs = num(opts.now_ms, Date.now());
+  var best = null, bestT = -1;
+  (Array.isArray(existingRows) ? existingRows : []).forEach(function (r) {
+    if (!r) return;
+    if (str(r.owner_user_id) !== owner) return;
+    if (planIsTerminal(r.status)) return;
+    if (low(r.status) === 'awaiting_approval') {
+      var t = Date.parse(str(r.created_at)); if (!isNaN(t) && (nowMs - t) > ttlMs) return; // stale prompt abandoned
+    }
+    if (planFingerprint(r, { owner_user_id: str(r.owner_user_id), chat_id: str(r.chat_id) }) !== fp) return;
+    var ct = Date.parse(str(r.created_at)); if (isNaN(ct)) ct = 0;
+    if (ct >= bestT) { bestT = ct; best = r; }
+  });
+  return best ? { plan: best, fingerprint: fp, reused: true } : { plan: null, fingerprint: fp, reused: false };
+}
+
 // One flat durable row for the execution_plans tab (the canonical plan store). Status starts awaiting_approval.
 function buildPlanRow(plan, identity, ctx) {
   plan = plan || {}; identity = identity || {}; ctx = ctx || {};
@@ -303,5 +358,6 @@ function pendingPlansForOwner(planRows, ownerUserId) {
 module.exports = {
   deterministicPlan, normalizePlan, validatePlanJSON, planToApprovalText,
   planHash, planIdentity, buildPlanRow, validateApproval, pendingPlansForOwner,
-  blockedRequestedSources, extractSafeUrls, extractExplicitSources
+  blockedRequestedSources, extractSafeUrls, extractExplicitSources,
+  planFingerprint, findReusablePlan, planIsTerminal
 };
