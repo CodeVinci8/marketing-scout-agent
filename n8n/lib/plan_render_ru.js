@@ -166,6 +166,12 @@ function planApprovalMessageRu(plan, opts) {
     lines.push('');
     lines.push('💰 Ориентировочная стоимость: около $' + d2(pc) + '.');
   }
+  // SOURCE-EXEC-001: a refresh spends money on a source we already have. Say so BEFORE the user approves — an
+  // approval must never hide a repeated paid collection.
+  if (plan.force_reprocess === true || ruText(plan.force_reprocess) === 'true') {
+    lines.push('');
+    lines.push('♻️ Это повторный сбор: данные по источнику уже есть, но вы попросили обновить их — платный сбор запустится заново.');
+  }
   lines.push('');
   lines.push('Запустить анализ?');
   return { ok: true, status: 'plan_ready', text: lines.filter(function (l) { return l !== null; }).join('\n') };

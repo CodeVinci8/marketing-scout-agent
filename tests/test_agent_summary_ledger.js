@@ -158,7 +158,11 @@ A.section('WF16 write_result is caller-controllable; WF20 passes the gating inpu
   const d08 = wf20.nodes.find(x => x.name === 'Run WF08 Analyzer');
   const v08 = JSON.stringify(d08.parameters.workflowInputs);
   A.ok('WF20 passes llm_enabled to WF08', v08.indexOf('llm_enabled') >= 0);
-  A.ok('WF20 llm_enabled follows cfg.enable_llm_analysis (config-gated, default on)', v08.indexOf('enable_llm_analysis') >= 0);
+  // WF08-LLM-GATE-001: WF08's LEGACY per-record classifier (one 16-28s Claude call PER RECORD, ~12/run, on the
+  // pre-Stage-F transport) no longer rides on enable_llm_analysis — cost_model only QUOTES it when enable_wf08_llm
+  // is set, so the flag that quotes it must be the flag that arms it.
+  A.ok('WF20 llm_enabled follows cfg.enable_wf08_llm (its own default-OFF gate)', v08.indexOf('enable_wf08_llm') >= 0);
+  A.ok('WF20 never arms the legacy WF08 LLM from the Stage-F flag', v08.indexOf('enable_llm_analysis') < 0);
   A.ok('WF20 passes the WF08 LLM approval token', v08.indexOf('WF08_LLM_APPROVED') >= 0);
   const wf08 = JSON.parse(fs.readFileSync(path.join(WFD, '08_touchpoint_analyzer.json'), 'utf8'));
   const cfg08 = wf08.nodes.find(x => x.name === 'Set Analyzer Config');

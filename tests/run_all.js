@@ -70,6 +70,8 @@ const JS_SUITES = [
   ['wf28-claude-analyst', 'test_wf28_claude_analyst.js'],
   ['stage-f-integration', 'test_stage_f_integration.js'],
   ['stage-f-report', 'test_stage_f_report.js'],
+  ['error-sanitizer', 'test_error_sanitizer.js'],
+  ['source-execution-policy', 'test_source_execution_policy.js'],
   // --- WF24 XLSX export/delivery fixes (EXPORT-CHAT-001 caller scope + EXPORT-CHART-001 chart tolerance) ---
   ['wf24-export', 'test_wf24_export.js'],
   // --- SOURCE-OP-001: NL monitored-source registry (parseSourceOp -> list/add/pause/resume/remove/check) ---

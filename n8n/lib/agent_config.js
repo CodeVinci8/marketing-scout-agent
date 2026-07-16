@@ -48,6 +48,11 @@ const DEFAULTS = {
   // costs one 16-28s call PER RECORD (~12/run). Enabling the Stage-F role must not silently arm it too, so it now
   // has its OWN default-OFF gate instead of riding on enable_llm_analysis. Set MS_ENABLE_WF08_LLM=true to opt in.
   enable_wf08_llm: false,
+  // SOURCE-EXEC-001: how long a collected snapshot stays "current" before we pay to collect it again. The old
+  // url_registry check was PERMANENT (no time component), so a source could never be re-analyzed. The product's
+  // cadence is weekly (WF25 digest, WF23 monitor) and a competitor's public positioning moves on a weeks-to-months
+  // scale, so 7 days is current without re-paying for every repeat question. Override: MS_SOURCE_FRESHNESS_DAYS.
+  source_freshness_days: 7,
   // Stage F: how many logical sources one approved run may send to WF28. Bounds the analysis fan-out (and its
   // cost) — never a per-row call explosion.
   llm_max_analyses_per_run: 5,
@@ -134,6 +139,7 @@ function resolveConfig(env, overrides) {
     enable_llm_summary: bool(env.MS_ENABLE_LLM_SUMMARY, DEFAULTS.enable_llm_summary),
     enable_llm_analysis: bool(env.MS_ENABLE_LLM_ANALYSIS, DEFAULTS.enable_llm_analysis),
     enable_wf08_llm: bool(env.MS_ENABLE_WF08_LLM, DEFAULTS.enable_wf08_llm),
+    source_freshness_days: num(env.MS_SOURCE_FRESHNESS_DAYS, DEFAULTS.source_freshness_days),
     llm_max_analyses_per_run: num(env.MS_LLM_MAX_ANALYSES_PER_RUN, DEFAULTS.llm_max_analyses_per_run),
     cost_claude_analysis_usd: num(env.MS_COST_CLAUDE_ANALYSIS_USD, DEFAULTS.cost_claude_analysis_usd),
     report_data_mode: str(env.MS_REPORT_DATA_MODE) || DEFAULTS.report_data_mode,

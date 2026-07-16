@@ -29,7 +29,7 @@ const FMT_VERSION = 'fmt-v1';
 const VALIDATION_VERSION = 'val-v1';
 const CONTRACT_VERSION = 'bootstrap-contract-v1';
 
-const EXPECTED_TAB_COUNT = 46; // +llm_analysis_results/_telemetry (Stage F) +technical_errors/skipped_log (WF04-ROUTE-001)
+const EXPECTED_TAB_COUNT = 47; // +llm_analysis_results/_telemetry (Stage F) +technical_errors/skipped_log/results (WF04-ROUTE-001)
 
 function readJSON(p) { return JSON.parse(fs.readFileSync(p, 'utf8')); }
 

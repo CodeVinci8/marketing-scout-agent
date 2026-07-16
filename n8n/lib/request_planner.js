@@ -120,6 +120,20 @@ function extractExplicitSources(text, maxTotal) {
   return { websites: websites, telegram_channels: telegram, vk_sources: vk, rejected: rejected };
 }
 
+// SOURCE-EXEC-001: an explicit "collect it again" request. Kept in sync with source_execution_policy.SX_REFRESH_RE
+// (test asserts equality) — this lib must stay require-free to remain embeddable in a Code node.
+// Cyrillic \b/\w never fire in JS, so the boundaries are explicit [а-яё] classes. Deliberately narrow: an
+// accidental refresh spends the user's money on a repeat scrape.
+const PLAN_REFRESH_RE = /(^|[^а-яёa-z])(обнови(ть|те)?|переобнови(ть|те)?|пересобери|пересобрать|пересоберите|заново|повтори(ть|те)? сбор|повторный сбор|принудительн(о|ый|ая)|ещё раз собери|еще раз собери|свеж(ие|их) данн(ые|ых)|актуализируй|перепроверь)([^а-яёa-z]|$)/i;
+// "обнови отчёт" alone = rebuild the report from stored data; NOT a paid re-collection.
+const PLAN_REPORT_ONLY_RE = /обнови(ть|те)?\s+отч[её]т/i;
+function planWantsRefresh(text) {
+  const t = str(text);
+  if (!t) return false;
+  if (PLAN_REPORT_ONLY_RE.test(t) && !/данн|сбор|источник|сайт/i.test(t)) return false;
+  return PLAN_REFRESH_RE.test(t);
+}
+
 function deterministicPlan(text, cfg) {
   cfg = cfg || {};
   const t = str(text);
@@ -165,6 +179,11 @@ function deterministicPlan(text, cfg) {
     est_source_cost_usd: Number(cfg.source_budget_usd || 0.20),
     est_llm_cost_usd: Number(cfg.llm_budget_usd || 0.50),
     expected_output: 'competitor_market_report',
+    // SOURCE-EXEC-001: an explicit refresh re-collects an already-registered source. It bypasses ONLY the freshness
+    // check — approval, budget, quality and global dedup all still apply, and the approval text says so.
+    source_execution_mode: planWantsRefresh(t) ? 'refresh' : 'auto',
+    force_reprocess: planWantsRefresh(t),
+    refresh_reason: planWantsRefresh(t) ? 'user_requested_refresh' : '',
     requires_approval: cfg.require_approval !== false,
     plan_source: 'deterministic'
   }, cfg);
@@ -194,6 +213,9 @@ function normalizePlan(p, cfg) {
     est_source_cost_usd: Math.min(num(p.est_source_cost_usd, num(cfg.source_budget_usd, 0.20)), num(cfg.source_budget_usd, 0.20)),
     est_llm_cost_usd: Math.min(num(p.est_llm_cost_usd, num(cfg.llm_budget_usd, 0.50)), num(cfg.llm_budget_usd, 0.50)),
     expected_output: str(p.expected_output) || 'competitor_market_report',
+    source_execution_mode: ['refresh', 'reuse', 'collect'].indexOf(str(p.source_execution_mode)) >= 0 ? str(p.source_execution_mode) : 'auto',
+    force_reprocess: p.force_reprocess === true || str(p.force_reprocess) === 'true',
+    refresh_reason: str(p.refresh_reason),
     requires_approval: p.requires_approval === false ? false : (cfg.require_approval !== false),
     plan_source: str(p.plan_source) || 'deterministic'
   };
@@ -281,7 +303,12 @@ function planFingerprint(planOrRow, ctx) {
     planNormList(planOrRow.urls),
     planNormList(planOrRow.telegram_channels),
     planNormList(planOrRow.vk_communities),
-    num(planOrRow.max_items, 0), low(planOrRow.expected_output)
+    num(planOrRow.max_items, 0), low(planOrRow.expected_output),
+    // SOURCE-EXEC-001: refresh semantics are part of the request's IDENTITY. "обнови carmoney.ru" asks for a paid
+    // re-collection and must NOT silently reuse an awaiting-approval non-refresh plan for the same site (the user
+    // would approve a refresh and get a dedup skip). Derived identically from a plan OR a stored row: the row
+    // persists force_reprocess as the string 'true'.
+    (planOrRow.force_reprocess === true || low(planOrRow.force_reprocess) === 'true') ? 'refresh' : 'auto'
     // NB: data_mode is intentionally excluded — it is not persisted on the execution_plans row, so including it
     // would make a stored row and its originating in-memory plan hash differently and break reuse detection.
   ]);
@@ -332,6 +359,10 @@ function buildPlanRow(plan, identity, ctx) {
     max_items: num(plan.max_items, 0), max_external_calls: num(plan.max_external_calls, 0),
     est_source_cost_usd: num(plan.est_source_cost_usd, 0), est_llm_cost_usd: num(plan.est_llm_cost_usd, 0),
     expected_output: str(plan.expected_output), plan_source: str(plan.plan_source),
+    // SOURCE-EXEC-001: the refresh decision MUST survive approval — WF20 reads it off the stored row.
+    source_execution_mode: str(plan.source_execution_mode) || 'auto',
+    force_reprocess: plan.force_reprocess === true ? 'true' : '',
+    refresh_reason: str(plan.refresh_reason),
     status: 'awaiting_approval', created_at: str(ctx.ts), decided_at: '', decided_by: ''
   };
 }

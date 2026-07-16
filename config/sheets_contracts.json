@@ -15,8 +15,7 @@
     "outbox": "delivery queue; unsent entries are protected"
   },
   "dynamic_tab_allowlist": [
-    "={{ $json.route }}",
-    "results"
+    "={{ $json.route }}"
   ],
   "$bootstrap_note": "sheet_order + headers + identity_columns below are the SINGLE SOURCE OF TRUTH for the Stage 3 staging bootstrap (tools/gen_sheets_bootstrap_workflow.js, n8n/lib/sheets_contract_resolver.js). Header order is canonical and sourced from the repository schema docs / library row shapes (provenance in config/sheets_ui_contracts.json `_provenance`). headers[tab] is always a superset of tabs[tab].required_columns. Tabs written by more than one workflow generation carry the UNION of every writer's columns (n8n Google Sheets append maps by header NAME, so a tab missing a writer's column silently drops that field). Add a new tab by appending its name to sheet_order and an ordered list to headers; no engine change is required.",
   "sheet_order": [
@@ -63,6 +62,7 @@
     "review_queue",
     "skipped_log",
     "technical_errors",
+    "results",
     "candidate_sources",
     "llm_analysis_results",
     "llm_analysis_telemetry"
@@ -215,6 +215,9 @@
       "source_url"
     ],
     "skipped_log": [
+      "source_url"
+    ],
+    "results": [
       "source_url"
     ]
   },
@@ -377,7 +380,10 @@
       "status",
       "created_at",
       "decided_at",
-      "decided_by"
+      "decided_by",
+      "source_execution_mode",
+      "force_reprocess",
+      "refresh_reason"
     ],
     "execution_summaries": [
       "agent_request_id",
@@ -1408,6 +1414,62 @@
       "quoted_claims",
       "negated_claims",
       "taxonomy_version"
+    ],
+    "results": [
+      "created_at",
+      "source_type",
+      "platform",
+      "source_url",
+      "parsed_at",
+      "published_at",
+      "freshness_status",
+      "entity_type",
+      "company_name",
+      "profile_name",
+      "profile_url",
+      "region",
+      "service_type",
+      "offer_text",
+      "terms",
+      "contact_public",
+      "text_context",
+      "detected_need",
+      "competitor_strength",
+      "lead_signal_score",
+      "content_idea_score",
+      "quality_score",
+      "reason",
+      "recommended_action",
+      "status",
+      "processing_status",
+      "parse_method",
+      "parse_error",
+      "raw_response_preview",
+      "route",
+      "needs_manual_review",
+      "repair_used",
+      "repair_status",
+      "run_id",
+      "batch_index",
+      "source_run_id",
+      "data_mode",
+      "quality_status",
+      "report_eligible",
+      "review_status",
+      "quality_flags",
+      "schema_version",
+      "record_type",
+      "activity_subtype",
+      "service_primary",
+      "service_secondary",
+      "raw_model_service_type",
+      "normalized_service_type",
+      "candidate_entity_type",
+      "confidence_reasons",
+      "evidence_completeness_score",
+      "quoted_claims",
+      "negated_claims",
+      "taxonomy_version"
     ]
   },
   "tabs": {
@@ -2114,7 +2176,12 @@
       "retention_class": "operational",
       "retention_days": 90,
       "required_columns": [],
-      "writers": [],
+      "writers": [
+        "02",
+        "03",
+        "04",
+        "08"
+      ],
       "readers": [
         "10"
       ]
@@ -2126,7 +2193,12 @@
       "retention_class": "operational",
       "retention_days": 90,
       "required_columns": [],
-      "writers": [],
+      "writers": [
+        "02",
+        "03",
+        "04",
+        "08"
+      ],
       "readers": [
         "10"
       ]
@@ -2138,7 +2210,12 @@
       "retention_class": "operational",
       "retention_days": 90,
       "required_columns": [],
-      "writers": [],
+      "writers": [
+        "02",
+        "03",
+        "04",
+        "08"
+      ],
       "readers": [
         "10",
         "14"
@@ -2222,7 +2299,10 @@
         "processing_status"
       ],
       "writers": [
-        "04"
+        "02",
+        "03",
+        "04",
+        "08"
       ],
       "readers": []
     },
@@ -2238,7 +2318,30 @@
         "processing_status"
       ],
       "writers": [
-        "04"
+        "02",
+        "03",
+        "04",
+        "08"
+      ],
+      "readers": []
+    },
+    "results": {
+      "purpose": "WF02/WF03/WF04/WF08 route: an accepted record that needs no queue triage (e.g. a lead_signal). Same 54-column record family as the other route tabs. Completes the route contract — every value Normalize+Route can emit now maps to a declared tab (WF04-ROUTE-001).",
+      "owner_scoped": false,
+      "request_scoped": false,
+      "retention_class": "operational",
+      "retention_days": 90,
+      "required_columns": [
+        "source_url",
+        "route",
+        "processing_status"
+      ],
+      "writers": [
+        "01",
+        "02",
+        "03",
+        "04",
+        "08"
       ],
       "readers": []
     }
