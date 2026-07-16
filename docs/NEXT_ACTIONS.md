@@ -4,7 +4,34 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-07-14, session 51) — Stage E2 live-proven + pre-F backlog closed → Stage F is READY (do not start without approval)
+## CURRENT PRIORITY (2026-07-16, session 52) — Stage F CORE built + live-proven → continue Stage F integration
+
+Stage F is authorized and STARTED (commit d5ea56e). The Claude adapter + contracts + evidence package + analysis
+engine are built, unit-tested (77), and LIVE-PROVEN (single-source analysis on the real endpoint, one bounded repair,
+Russian, evidence-bound). Full status + what remains: `docs/STAGE_F_ACCEPTANCE.md`. How to operate/extend:
+`docs/STAGE_F_RUNBOOK.md`. Measured endpoint behavior: `docs/STAGE_F_API_CAPABILITY_MATRIX.md`.
+
+**Continue Stage F in this order (nothing else needs re-deriving):**
+1. **WF28 — Claude Analyst** callable workflow per the runbook topology (Build Evidence Package → Claude HTTP w/ cred
+   OEen8Vl1tdWtv7v4 → Parse+Validate → ≤1 repair → merge/fallback → persist telemetry). Feature-flag on
+   `enable_llm_analysis && claude_key_present`, default OFF.
+2. **Report + XLSX integration** — «Подтверждённые факты / Аналитические выводы / Рекомендации / Доказательства и
+   ограничения»; deterministic report+XLSX still ship on LLM failure.
+3. **llm_telemetry lib + `llm_analysis_telemetry` Sheets tab** (schema/prompt version, model, package hash, tokens,
+   cache, repair, cost).
+4. **Multi-source synthesis** (ccSynthesisTool exists) + **candidate enrichment** (ccCandidateTool exists, top 3–5
+   only) + **public lead interpretation**.
+5. **Conversational analyst agent** — `analyst_agent` / `analyst_tools` (CodeVinci AI Pilot), read-only tool
+   auto-selection, approval-gated mutations, bounded loop; `/status`/`/cancel`/`/help` stay deterministic.
+6. **§14 live scenario matrix** (only #1 website analysis proven so far).
+7. **Still-open pre-F debt B4 / B6 / B7** (below) — deterministic-path polish, does not block Stage F.
+8. **Operator/infra:** harden SSH (brute-force flood was filling logs) + reclaim VPS disk.
+
+**Do NOT start Stage F.5 (Opportunity Radar) or Stage G.**
+
+---
+
+## PRIOR PRIORITY (2026-07-14, session 51) — Stage E2 live-proven + pre-F backlog closed → Stage F is READY (do not start without approval)
 
 Stage E2 closed with real n8n execs + real Sheets. Pre-Stage-F user-facing defects fixed, deployed and LIVE-PROVEN:
 **B1** single-source report scoping (exec 812: "сайты конкурентов: 1" + historical block, was 4); **B2/B3** request-

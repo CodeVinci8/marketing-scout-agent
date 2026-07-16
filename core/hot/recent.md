@@ -4,6 +4,46 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-16 (session 52) — STAGE F core BUILT + LIVE-PROVEN (adapter, contracts, evidence, analysis)
+
+Branch `fix/stage4-live-final-acceptance` (ahead ~112, NOT pushed). Commit **d5ea56e**. Stage F **authorized** and
+STARTED; **not complete** (see docs/STAGE_F_ACCEPTANCE.md). ~23 bounded live Claude calls this session (~$0.20 total).
+
+**DISK INCIDENT (resolved):** root `/dev/vda2` was **100% (0 free)** at session start. Root cause = a **brute-force
+SSH login flood** filling `/var/log/{btmp,auth.log,syslog}` (btmp alone 63M, growing ~fast). Truncated those logs +
+`journalctl --vacuum-size=50M` + cleared my own `/root/.cache` + old CLI transcript → **~782M free (93%)**. n8n + all
+prod containers healthy. **OPERATOR MUST HARDEN SSH/firewall** (fail2ban / restrict 22 — out of agent bounds) or logs
+refill; and reclaim real disk (/usr 4G, docker images 2.7G active, containerd 2.6G — all legitimately large).
+
+**API CHARACTERIZED (21 live probes → docs/STAGE_F_API_CAPABILITY_MATRIX.md):** endpoint `aiprimetech.io/v1/messages`,
+auth `Authorization: Bearer` (cred `Claude API - Marketing Scout` id OEen8Vl1tdWtv7v4), model `claude-sonnet-4-6`. It
+is a **Claude-Code-wrapped proxy**: extended thinking ALWAYS ON (responses carry thinking/text blocks); **forced
+tool_choice unreliable → `tool_choice:auto` + one submit_* tool is the ONLY robust structured transport** (returns a
+real JSON object → zero JSON-syntax repairs); native structured output + max_tokens IGNORED; ~500–2200 hidden injected
+input tokens; caching ineffective (0); latency 16–28s/call; count_tokens works; 401/400/timeout mapped.
+
+**BUILT (n8n/lib, pure+embeddable+tested):** claude_adapter · claude_contracts (versioned schemas + validateStructured
++ validateEvidenceIds no-invention gate) · evidence_package (bounded/deduped/PII-scrubbed/current-vs-historical/hash) ·
+llm_cost · claude_analysis (build→call→validate→ONE repair→deterministic fallback, fail-closed). `test_stage_f_core.js`
+77 checks. **make test ALL SUITES PASS ($0).**
+
+**LIVE-PROVEN single-source analysis** (real endpoint, real autolombardn1.ru evidence, request_id 448ee09a): tool_use;
+a REAL model error (`text_ю` Cyrillic key instead of text_ru) caught by local validation → **ONE bounded repair →
+success, no fallback**; 10307 in / 2139 out tokens; **$0.063**; 90s; professional Russian; 15 evidence-grounded items
+with fact/inference/recommendation separated; confidence 90.
+
+**Also fixed 3 PRE-EXISTING time-bomb test fixtures** (fixed 2026-06-15 dates aged past WF10's 30-day freshness window
+/ WF14 recency band since last session — NOT a Stage F regression): wf10-source-health, lineage-e2e, lead_scout WF14
+triage now anchor fixture dates relative to now.
+
+**NOT DONE (remaining Stage F — next session):** WF28/workflow wiring + Claude HTTP node; report+XLSX integration
+(Факты/Выводы/Рекомендации sections); multi-source synthesis + candidate enrichment + lead interpretation wiring;
+conversational analyst agent (analyst_agent/analyst_tools, CodeVinci AI Pilot); llm_telemetry + Sheets tab;
+feature-flag rollout; the §14 live scenario matrix (only #1 website done); **pre-F debt B4/B6/B7 still open**. Docs:
+STAGE_F_API_CAPABILITY_MATRIX / STAGE_F_ACCEPTANCE / STAGE_F_RUNBOOK. **Stage F.5 must NOT start.**
+
+---
+
 ## Session: 2026-07-14 (session 51) — STAGE E2 live-proven + pre-F backlog (B1/B2/B3/B5/B8) + F/F.5 contracts
 
 Branch `fix/stage4-live-final-acceptance` (ahead ~110, NOT pushed). **Stage F still NOT started; no Claude call this
