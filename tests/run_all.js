@@ -67,6 +67,7 @@ const JS_SUITES = [
   // --- Stage F core: Claude adapter (tool_use transport), contracts/validators, evidence package, cost, analysis
   //     orchestration (validate -> one repair -> deterministic fallback). Offline, injected fetchFn, $0. ---
   ['stage-f-core', 'test_stage_f_core.js'],
+  ['wf28-claude-analyst', 'test_wf28_claude_analyst.js'],
   // --- WF24 XLSX export/delivery fixes (EXPORT-CHAT-001 caller scope + EXPORT-CHART-001 chart tolerance) ---
   ['wf24-export', 'test_wf24_export.js'],
   // --- SOURCE-OP-001: NL monitored-source registry (parseSourceOp -> list/add/pause/resume/remove/check) ---

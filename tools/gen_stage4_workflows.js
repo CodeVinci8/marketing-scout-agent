@@ -32,6 +32,24 @@ function credGoogle() { return { googleApi: { id: 'PASTE_CREDENTIAL_ID_HERE', na
 // credential present (Claude + Firecrawl + Apify), made the WF19 reference unresolvable/ambiguous on a real VPS.
 function credClaude() { return { httpHeaderAuth: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'Claude API - Marketing Scout' } }; }
 function credFirecrawl() { return { httpHeaderAuth: { id: 'PASTE_CREDENTIAL_ID_HERE', name: 'Firecrawl API - Marketing Scout' } }; }
+// Stage F Claude call node (WF28). Measured gateway: latency 16-28s (90s timeout), fullResponse+neverError so a
+// 4xx/5xx/timeout returns {statusCode,headers,body} to the parser as a provider error instead of aborting the run.
+// Body is the tool-transport Messages request built by claude_adapter.buildToolRequest (tool_choice:auto).
+// NB: distinct from the legacy httpClaude (WF19 planner, $json.claude_request_body) — this one reads claude_body.
+function httpClaudeMsg(id, name, pos) {
+  return {
+    parameters: {
+      method: 'POST', url: 'https://aiprimetech.io/v1/messages',
+      authentication: 'predefinedCredentialType', nodeCredentialType: 'httpHeaderAuth',
+      sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }] },
+      sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.claude_body) }}',
+      options: { timeout: 90000, response: { response: { neverError: true, fullResponse: true } } }
+    },
+    onError: 'continueRegularOutput',
+    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name,
+    credentials: credClaude()
+  };
+}
 // Firecrawl Search HTTP node (DISCOVERY-003): POST /v2/search per query item; body from discovery_query. Tolerant
 // (a failed/blocked search degrades to a user-safe no-candidates message, never aborts the discovery run).
 function httpFirecrawlSearch(id, name, pos) {
@@ -1815,6 +1833,101 @@ write('27_competitor_discovery.json', wf('27 — Cross-Source Competitor Discove
   ['Finalize Discovery', 'Shape Candidate Rows'],
   ['Shape Candidate Rows', 'Append candidate_sources'],
   ['Build Blocked Reply', 'Send Blocked Reply']
+]));
+
+// =========================================================================================== WF28 Claude Analyst
+// Stage F production Claude call. Callable child. Fail-closed + feature-gated + budget-gated + reuse-by-hash.
+// Transport: tool_choice:auto submit tool (the measured gateway contract). Deterministic fallback always yields a
+// usable typed result. Persists llm_analysis_results + llm_analysis_telemetry with full lineage; NO secret, NO
+// thinking block ever leaves the node. Max 2 Claude calls (primary + at most one repair) — no loops.
+var WF28_LIBS_FULL = ['agent_config', 'claude_adapter', 'claude_contracts', 'evidence_package', 'llm_cost', 'claude_analysis', 'llm_telemetry'];
+var WF28_LIBS_PARSE = ['claude_adapter', 'claude_contracts', 'evidence_package', 'llm_cost', 'claude_analysis'];
+write('28_claude_analyst.json', wf('28 — Claude Analyst (Stage F, evidence-bound, feature-gated)', [
+  subTrigger('wf28-trigger', 'When Called by Agent', [-60, 0],
+    ['agent_request_id', 'source_run_id', 'report_id', 'owner_user_id', 'chat_id', 'analysis_type', 'evidence_input', 'niche', 'region']),
+  sheetsRead('wf28-readres', 'Read llm_analysis_results', [160, -180], 'llm_analysis_results'),
+  code('wf28-prep', 'Prepare Analysis', [160, 0], WF28_LIBS_FULL, CALLER + ENV + `
+var inp=callerInput();
+var cfg=resolveConfig(__env);
+var evIn={};try{evIn=(typeof inp.evidence_input==='string')?JSON.parse(inp.evidence_input||'{}'):(inp.evidence_input||{});}catch(e){evIn={};}
+var pkgRes=buildEvidencePackage(evIn,{});
+var model=(cfg.llm_model||'claude-sonnet-4-6');
+var ctx={owner_user_id:String(inp.owner_user_id||''),chat_id:String(inp.chat_id||''),agent_request_id:String(inp.agent_request_id||''),source_run_id:String(inp.source_run_id||''),report_id:String(inp.report_id||''),analysis_type:String(inp.analysis_type||'single_source'),evidence_package_hash:pkgRes.package_hash,source_scope:(evIn.source||{}),schema_version:CC_SCHEMA_VERSION,prompt_version:CC_PROMPT_VERSION,model:model};
+var enabled=(cfg.enable_claude!==false)&&(cfg.claude_key_present!==false)&&(cfg.enable_llm_analysis===true||cfg.enable_llm_summary===true);
+var haveEvidence=(pkgRes.allowed_evidence_ids||[]).length>0;
+var reuseRows=[];try{reuseRows=($('Read llm_analysis_results').all()||[]).map(function(x){return x.json;});}catch(e){}
+var reuse=findReusableAnalysis(reuseRows,ctx);
+var base={ctx:ctx,pkg:{package:pkgRes.package,allowed_evidence_ids:pkgRes.allowed_evidence_ids,package_hash:pkgRes.package_hash}};
+if(reuse){base.mode='reuse';base.do_call=false;base.reuse_analysis=reuse.analysis;}
+else if(!enabled){base.mode='disabled';base.do_call=false;}
+else if(!haveEvidence){base.mode='no_evidence';base.do_call=false;}
+else{var built=buildSourceAnalysisCall(base.pkg,{llm_model:model});base.mode='call';base.do_call=true;base.claude_body=built.body;base.allowed_ids=built.allowed_evidence_ids;base.ctx.estimated_cost_usd=estimateCost((evIn.evidence||[]).length*200,700,cfg).est_cost_usd;}
+return [{json:base}];`),
+  ifNode('wf28-ifcall', 'Call Claude?', [400, 0], '={{ $json.do_call }}'),
+  httpClaudeMsg('wf28-http1', 'Claude Primary', [620, -120]),
+  code('wf28-parse1', 'Parse Primary', [840, -120], WF28_LIBS_PARSE, `
+var prep=$('Prepare Analysis').first().json;var raw=$json;
+var http={status:Number(raw.statusCode||raw.status||0)||(raw.body?200:0),body:raw.body||raw,headers:raw.headers||{}};
+var res=parseClaudeResponse(http,{model:prep.ctx.model});
+function lr(r){return {usage:r.usage,request_id:r.request_id,stop_reason:r.stop_reason,schema_mode:r.schema_mode,latency_ms:r.latency_ms,provider:r.provider,error_category:r.error_category};}
+var out={prep:prep,res1:lr(res)};
+if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,CC_ANALYSIS_SCHEMA);if(v.ok){out.status='valid';out.analysis=res.content;}else{out.status='repair';out.errors=v.errors;out.rejected=res.content;var rep=buildRepairCall(res.content,v.errors,prep.allowed_ids,{llm_model:prep.ctx.model});out.claude_body=rep.body;}}
+else{out.status='fail';out.error_category=res.error_category;}
+return [{json:out}];`),
+  ifNode('wf28-ifrep', 'Need Repair?', [1060, -120], "={{ $json.status === 'repair' }}"),
+  httpClaudeMsg('wf28-http2', 'Claude Repair', [1280, -220]),
+  code('wf28-parse2', 'Parse Repair', [1500, -220], WF28_LIBS_PARSE, `
+var pp=$('Parse Primary').first().json;var prep=pp.prep;var raw=$json;
+var http={status:Number(raw.statusCode||raw.status||0)||(raw.body?200:0),body:raw.body||raw,headers:raw.headers||{}};
+var res=parseClaudeResponse(http,{model:prep.ctx.model});
+function lr(r){return {usage:r.usage,request_id:r.request_id,stop_reason:r.stop_reason,schema_mode:r.schema_mode,latency_ms:r.latency_ms,provider:r.provider,error_category:r.error_category};}
+var out={prep:prep,res1:pp.res1,res2:lr(res),repair_used:true,prev_errors:pp.errors||[]};
+if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,CC_ANALYSIS_SCHEMA);if(v.ok){out.status='repaired';out.analysis=res.content;out.repair_success=true;}else{out.status='fallback';out.repair_success=false;out.errors=v.errors;}}
+else{out.status='fallback';out.repair_success=false;out.error_category=res.error_category;}
+return [{json:out}];`),
+  code('wf28-fin', 'Finalize Analysis', [1720, 0], WF28_LIBS_FULL, `
+var prep=$('Prepare Analysis').first().json;var ctx=prep.ctx;var now=(new Date()).toISOString();
+var pkgRes={package:prep.pkg.package,allowed_evidence_ids:prep.pkg.allowed_evidence_ids,package_hash:prep.pkg.package_hash};
+var pp=null,pr=null;try{pp=$('Parse Primary').first().json;}catch(e){}try{pr=$('Parse Repair').first().json;}catch(e){}
+function agg(cs){return {input_tokens:cs.reduce(function(a,c){return a+((c&&c.input_tokens)||0);},0),output_tokens:cs.reduce(function(a,c){return a+((c&&c.output_tokens)||0);},0)};}
+function mk(analysis,meta){return {ok:!meta.fallback_used,analysis:analysis,schema_mode:meta.schema_mode||'',repair_used:!!meta.repair_used,repair_success:!!meta.repair_success,fallback_used:!!meta.fallback_used,validation_errors:meta.validation_errors||[],usage:meta.usage||{input_tokens:0,output_tokens:0},cost_usd:meta.cost_usd||0,request_id:meta.request_id||'',stop_reason:meta.stop_reason||'',error_category:meta.error_category||'',provider:'aiprimetech',latency_ms:meta.latency_ms||0};}
+var result,persist=false,enriched=false;
+if(prep.mode==='reuse'){result=mk(prep.reuse_analysis,{schema_mode:'reuse',stop_reason:'reuse'});enriched=true;}
+else if(prep.mode==='disabled'||prep.mode==='no_evidence'){result=mk(deterministicAnalysisFallback(pkgRes),{fallback_used:true,error_category:prep.mode});}
+else if(pr){var cs=[costFromUsage((pp&&pp.res1&&pp.res1.usage)||{},{}),costFromUsage((pr.res2&&pr.res2.usage)||{},{})];if(pr.status==='repaired'){result=mk(pr.analysis,{schema_mode:(pr.res2&&pr.res2.schema_mode)||'tool_use',repair_used:true,repair_success:true,validation_errors:pr.prev_errors||[],usage:agg(cs),cost_usd:sumCosts(cs),request_id:(pr.res2&&pr.res2.request_id),stop_reason:(pr.res2&&pr.res2.stop_reason),latency_ms:(pr.res2&&pr.res2.latency_ms)});enriched=true;}else{result=mk(deterministicAnalysisFallback(pkgRes),{schema_mode:(pr.res2&&pr.res2.schema_mode)||'',repair_used:true,repair_success:false,fallback_used:true,validation_errors:pr.errors||[pr.error_category],usage:agg(cs),cost_usd:sumCosts(cs),request_id:(pr.res2&&pr.res2.request_id),stop_reason:(pr.res2&&pr.res2.stop_reason),error_category:pr.error_category||'validation_failed'});}persist=true;}
+else if(pp){var c1=[costFromUsage((pp.res1&&pp.res1.usage)||{},{})];if(pp.status==='valid'){result=mk(pp.analysis,{schema_mode:(pp.res1&&pp.res1.schema_mode)||'tool_use',usage:agg(c1),cost_usd:sumCosts(c1),request_id:(pp.res1&&pp.res1.request_id),stop_reason:(pp.res1&&pp.res1.stop_reason),latency_ms:(pp.res1&&pp.res1.latency_ms)});enriched=true;}else{result=mk(deterministicAnalysisFallback(pkgRes),{fallback_used:true,usage:agg(c1),cost_usd:sumCosts(c1),request_id:(pp.res1&&pp.res1.request_id),stop_reason:(pp.res1&&pp.res1.stop_reason),error_category:pp.error_category||'no_structured_output'});}persist=true;}
+else{result=mk(deterministicAnalysisFallback(pkgRes),{fallback_used:true,error_category:'unknown'});}
+ctx.estimated_cost_usd=prep.ctx.estimated_cost_usd||0;
+var resultRow=buildAnalysisResultRow(ctx,result,now);
+var telRow=buildTelemetryRow(ctx,result,now);
+var a=result.analysis||{};
+var typedReturn={analysis_id:resultRow.analysis_id,enriched:enriched,quality_status:resultRow.quality_status,mode:prep.mode,analysis:a,overall_confidence:a.overall_confidence||0,repair_used:result.repair_used,repair_success:result.repair_success,fallback_used:result.fallback_used,error_category:result.error_category,cost_usd:result.cost_usd,evidence_package_hash:ctx.evidence_package_hash};
+return [{json:{persist:persist,result_row:resultRow,telemetry_row:telRow,typed_return:typedReturn}}];`),
+  ifNode('wf28-ifpersist', 'Persist?', [1940, 0], '={{ $json.persist }}'),
+  code('wf28-shaperes', 'Shape Result Row', [2160, -120], [], `return [{json:$('Finalize Analysis').first().json.result_row}];`),
+  sheetsAppend('wf28-appres', 'Persist llm_analysis_results', [2380, -120], 'llm_analysis_results'),
+  code('wf28-shapetel', 'Shape Telemetry Row', [2600, -120], [], `return [{json:$('Finalize Analysis').first().json.telemetry_row}];`),
+  sheetsAppend('wf28-apptel', 'Persist llm_analysis_telemetry', [2820, -120], 'llm_analysis_telemetry'),
+  code('wf28-return', 'Return Result', [3040, 0], [], `return [{json:$('Finalize Analysis').first().json.typed_return}];`)
+], [
+  ['When Called by Agent', 'Read llm_analysis_results'],
+  ['Read llm_analysis_results', 'Prepare Analysis'],
+  ['Prepare Analysis', 'Call Claude?'],
+  ['Call Claude?', 'Claude Primary', 0],
+  ['Call Claude?', 'Finalize Analysis', 1],
+  ['Claude Primary', 'Parse Primary'],
+  ['Parse Primary', 'Need Repair?'],
+  ['Need Repair?', 'Claude Repair', 0],
+  ['Need Repair?', 'Finalize Analysis', 1],
+  ['Claude Repair', 'Parse Repair'],
+  ['Parse Repair', 'Finalize Analysis'],
+  ['Finalize Analysis', 'Persist?'],
+  ['Persist?', 'Shape Result Row', 0],
+  ['Persist?', 'Return Result', 1],
+  ['Shape Result Row', 'Persist llm_analysis_results'],
+  ['Persist llm_analysis_results', 'Shape Telemetry Row'],
+  ['Shape Telemetry Row', 'Persist llm_analysis_telemetry'],
+  ['Persist llm_analysis_telemetry', 'Return Result']
 ]));
 
 if (require.main === module) console.log('Stage 4 workflows generated.');

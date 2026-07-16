@@ -29,7 +29,7 @@ const FMT_VERSION = 'fmt-v1';
 const VALIDATION_VERSION = 'val-v1';
 const CONTRACT_VERSION = 'bootstrap-contract-v1';
 
-const EXPECTED_TAB_COUNT = 42;
+const EXPECTED_TAB_COUNT = 44; // +llm_analysis_results +llm_analysis_telemetry (Stage F persistence)
 
 function readJSON(p) { return JSON.parse(fs.readFileSync(p, 'utf8')); }
 

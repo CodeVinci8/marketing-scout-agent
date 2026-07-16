@@ -48,6 +48,11 @@ function buildToolRequest(opts) {
 // Map an HTTP status + parsed body to a stable error category. Never throws.
 function classifyClaudeError(status, body) {
   status = claudeNum(status, 0);
+  // Provider-context leak: the gateway (a Claude-Code-wrapped proxy) may return its own internal message like
+  // "Your conversation is too long. Please use /compact". That is NOT user content — treat it as a provider
+  // error so the caller shrinks the evidence package / falls back, and NEVER surfaces it.
+  var msg = claudeStr((body && body.error && body.error.message) || (body && body.message) || (body && body.__unparsed) || '');
+  if (/conversation is too long|please use \/compact|context (length|window) exceeded|too many tokens/i.test(msg)) return 'context_too_long';
   if (status === 0) return 'timeout';               // client/network timeout or connreset (caller sets 0)
   if (status === 401 || status === 403) return 'auth_error';
   if (status === 429) return 'rate_limited';

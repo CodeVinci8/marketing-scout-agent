@@ -66,7 +66,7 @@ A.section('generator build() output Code nodes compile (in-memory, no disk write
 // gen_stage4_workflows.js records every workflow it builds; requiring it (not main) writes nothing to disk.
 try {
   const stage4 = require('../tools/gen_stage4_workflows.js');
-  A.ok('gen_stage4 builds WF17-27 in memory', Array.isArray(stage4.generated) && stage4.generated.length === 11,
+  A.ok('gen_stage4 builds WF17-27 in memory', Array.isArray(stage4.generated) && stage4.generated.length === 12,
     'generated=' + (stage4.generated ? stage4.generated.length : 'none'));
   for (const g of (stage4.generated || [])) {
     const res = compileWorkflow(g.workflow);

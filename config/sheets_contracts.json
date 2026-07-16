@@ -29,7 +29,8 @@
     "audience_activity_signals", "content_positioning_plan", "market_angles", "analysis_runs",
     "live_source_runs", "raw_market_records", "market_record_registry", "discovery_requests",
     "url_candidates", "url_registry", "public_lead_signals", "source_confidence_rules",
-    "monitor_queue", "content_queue", "review_queue", "candidate_sources"
+    "monitor_queue", "content_queue", "review_queue", "candidate_sources",
+    "llm_analysis_results", "llm_analysis_telemetry"
   ],
   "identity_columns": {
     "agent_requests": ["agent_request_id"],
@@ -73,7 +74,9 @@
     "monitor_queue": ["source_url"],
     "content_queue": ["source_url"],
     "review_queue": ["source_url"],
-    "candidate_sources": ["candidate_id"]
+    "candidate_sources": ["candidate_id"],
+    "llm_analysis_results": ["analysis_id"],
+    "llm_analysis_telemetry": ["telemetry_id"]
   },
   "headers": {
     "agent_requests": [
@@ -318,6 +321,17 @@
       "is_content_creator", "is_news_or_aggregator", "confidence", "relevance_score", "quality_status",
       "classification_reason", "dedup_status", "already_tracked", "status", "created_at", "collected_at",
       "source_run_id", "cost_usd"
+    ],
+    "llm_analysis_results": [
+      "analysis_id", "owner_user_id", "chat_id", "agent_request_id", "source_run_id", "report_id", "analysis_type",
+      "source_scope_json", "evidence_package_hash", "schema_version", "prompt_version", "model",
+      "structured_result_json", "overall_confidence", "quality_status", "created_at", "updated_at"
+    ],
+    "llm_analysis_telemetry": [
+      "telemetry_id", "analysis_id", "owner_user_id", "agent_request_id", "provider", "model", "schema_mode",
+      "stop_reason", "provider_request_id", "input_tokens", "output_tokens", "cache_creation_input_tokens",
+      "cache_read_input_tokens", "latency_ms", "estimated_cost_usd", "actual_cost_usd", "repair_attempted",
+      "repair_success", "repair_reason", "validation_errors", "fallback_used", "error_category", "created_at"
     ]
   },
   "tabs": {
@@ -1073,6 +1087,50 @@
       "readers": [
         "22",
         "27"
+      ]
+    },
+    "llm_analysis_results": {
+      "purpose": "Stage F: persisted evidence-bound Claude analysis results (typed structured_result_json). Reusable by evidence_package_hash.",
+      "owner_scoped": true,
+      "request_scoped": true,
+      "retention_class": "report",
+      "retention_days": 90,
+      "required_columns": [
+        "analysis_id",
+        "owner_user_id",
+        "agent_request_id",
+        "analysis_type",
+        "evidence_package_hash",
+        "structured_result_json"
+      ],
+      "writers": [
+        "28"
+      ],
+      "readers": [
+        "20",
+        "22",
+        "28"
+      ]
+    },
+    "llm_analysis_telemetry": {
+      "purpose": "Stage F: per-call Claude telemetry (tokens, cost, latency, schema_mode, repair/fallback, error_category). No secrets, no chain-of-thought.",
+      "owner_scoped": true,
+      "request_scoped": true,
+      "retention_class": "operational",
+      "retention_days": 30,
+      "required_columns": [
+        "telemetry_id",
+        "analysis_id",
+        "owner_user_id",
+        "agent_request_id",
+        "model",
+        "schema_mode"
+      ],
+      "writers": [
+        "28"
+      ],
+      "readers": [
+        "28"
       ]
     }
   }

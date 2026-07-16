@@ -1,7 +1,7 @@
 {
   "generated_by": "tools/gen_workflow_manifest.js",
   "purpose": "Single source of truth for capability/archive classification AND the production deployment plan (runtime closure, import order, sub-workflow binding edges, activation policy). Derived from the workflow Execute Sub-workflow graph + the POLICY block in the generator; the deploy/smoke tooling consumes deployment.* so the runtime set is defined in exactly one place.",
-  "workflow_count": 32,
+  "workflow_count": 33,
   "capability_classes": [
     "production_entrypoint",
     "production_dependency",
@@ -302,7 +302,8 @@
       "07_manual_touchpoint_intake.json",
       "13_public_discussion_or_reviews_connector_foundation.json",
       "14_public_lead_signal_triage.json",
-      "15_live_source_run_logger.json"
+      "15_live_source_run_logger.json",
+      "28_claude_analyst.json"
     ]
   },
   "runtime_identity": {
@@ -1340,7 +1341,7 @@
       "file": "18_telegram_agent_gateway.json",
       "wf_number": "WF18",
       "name": "18 — Telegram Agent Gateway (secure dispatcher)",
-      "node_count": 66,
+      "node_count": 68,
       "active": false,
       "trigger_classes": [
         "webhook"
@@ -1436,7 +1437,7 @@
       "file": "20_agent_orchestrator.json",
       "wf_number": "WF20",
       "name": "20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)",
-      "node_count": 56,
+      "node_count": 60,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1553,7 +1554,7 @@
       "file": "22_conversation_control.json",
       "wf_number": "WF22",
       "name": "22 — Conversation Control & Sources",
-      "node_count": 21,
+      "node_count": 22,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1738,7 +1739,7 @@
       "file": "27_competitor_discovery.json",
       "wf_number": "WF27",
       "name": "27 — Cross-Source Competitor Discovery (Firecrawl Search, bounded)",
-      "node_count": 13,
+      "node_count": 17,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1763,9 +1764,39 @@
       "trigger_always": false,
       "trigger_when_monitoring": false,
       "trigger_when_weekly_digest": false,
-      "referenced_by_test": false,
+      "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "called_by:18_telegram_agent_gateway.json; in_runtime_closure",
+      "retain_reason": "called_by:18_telegram_agent_gateway.json; referenced_by_test; in_runtime_closure",
+      "action": "retain"
+    },
+    {
+      "file": "28_claude_analyst.json",
+      "wf_number": "WF28",
+      "name": "28 — Claude Analyst (Stage F, evidence-bound, feature-gated)",
+      "node_count": 16,
+      "active": false,
+      "trigger_classes": [
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable"
+      ],
+      "capability_class": "legacy_referenced",
+      "deployment_role": "manual_diagnostic",
+      "runtime": false,
+      "activation_flag": "n/a",
+      "expected_active": false,
+      "called_by": [],
+      "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
+      "imported_by_deploy": false,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "referenced_by_test",
       "action": "retain"
     }
   ]
