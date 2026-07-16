@@ -160,9 +160,18 @@ function deliveryBody(report, summary, availableCaps) {
   const stateRu = { completed: 'анализ завершён', partial: 'анализ завершён частично', no_data: 'данных не собрано', failed: 'анализ остановлен' };
   const facts = plainifyForTelegram(str(report.report_markdown)) || str(report.summary_text) ||
     ('Итог: ' + (stateRu[state] || 'анализ завершён') + '. Записей в отчёте: ' + num(summary.records_reported, 0) + '.');
+  // B6: name the REQUESTED sources that failed (user-safe Russian names; never raw keys/adapter errors).
+  const RU_SRC = { website: 'сайты', telegram: 'Telegram-каналы', vk: 'VK-сообщества', avito: 'Avito' };
+  const failedNames = (Array.isArray(summary.failed_sources) ? summary.failed_sources : [])
+    .map(k => RU_SRC[str(k).toLowerCase()] || str(k)).filter(Boolean);
   const lines = [facts];
-  if (noData || state === 'no_data') lines.push('Подходящих данных не собрано.');
-  else if (state === 'partial') lines.push('Отчёт частичный — часть источников не отработала.');
+  if (state === 'failed') lines.push(failedNames.length
+    ? ('Не удалось собрать данные по запрошенным источникам: ' + failedNames.join(', ') + '. Попробуйте позже или измените источники.')
+    : 'Не удалось собрать данные по запрошенным источникам. Попробуйте позже.');
+  else if (noData || state === 'no_data') lines.push('Подходящих данных не собрано.');
+  else if (state === 'partial') lines.push(failedNames.length
+    ? ('Отчёт частичный — не удалось собрать: ' + failedNames.join(', ') + '.')
+    : 'Отчёт частичный — часть источников не отработала.');
   lines.push(proactiveText(noData ? 'no_data' : state, availableCaps));
   return lines.join('\n\n');
 }

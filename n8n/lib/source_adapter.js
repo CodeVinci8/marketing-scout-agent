@@ -60,24 +60,37 @@ function normalizeAdapterResult(sourceKey, raw, ctx) {
   };
 }
 
-// Roll several adapter results into the request-level collection outcome: completed / partial / no_data.
-function rollupCollection(results) {
+// Roll several adapter results into the request-level collection outcome.
+// B6: the TERMINAL status is decided ONLY by the sources the user actually REQUESTED. Optional/unrequested
+// branches the orchestrator may add (e.g. a preset TG/VK) can neither downgrade a successful requested run to
+// partial nor rescue a failed one. `requestedSources` = the plan's source keys (website/telegram/vk/avito/…);
+// when omitted, behaviour falls back to "all results decide" (legacy). Outcome semantics over the DECIDING set:
+//   complete = every requested source ok · partial = some ok, some failed/quarantined (names the failed) ·
+//   failed = all requested sources errored · no_data = requested sources ran but yielded nothing (no error).
+function rollupCollection(results, requestedSources) {
   results = Array.isArray(results) ? results.filter(Boolean) : [];
-  const ok = results.filter(r => r.status === 'ok');
-  const failed = results.filter(r => r.status === 'failed');
-  const quarantined = results.filter(r => r.quarantined);
-  const written = results.reduce((a, r) => a + num(r.items_written, 0), 0);
+  const req = Array.isArray(requestedSources) ? requestedSources.map(s => str(s).toLowerCase()).filter(Boolean) : null;
+  const deciding = (req && req.length) ? results.filter(r => req.indexOf(str(r.source).toLowerCase()) >= 0) : results;
+  const ok = deciding.filter(r => r.status === 'ok');
+  const failed = deciding.filter(r => r.status === 'failed');
+  const quarantined = deciding.filter(r => r.quarantined);
+  const written = deciding.reduce((a, r) => a + num(r.items_written, 0), 0);
+  const failed_sources = failed.concat(quarantined).map(r => str(r.source).toLowerCase())
+    .filter((v, i, a) => v && a.indexOf(v) === i);
   let outcome;
-  if (results.length === 0) outcome = 'no_data';
-  else if (ok.length === 0) outcome = 'no_data';               // all failed / empty / quarantined
-  else if (failed.length || quarantined.length || ok.length < results.length) outcome = 'partial';
+  if (deciding.length === 0) outcome = 'no_data';                       // nothing requested produced a result
+  else if (ok.length === 0 && failed.length > 0) outcome = 'failed';    // a requested source ERRORED and none ok
+  else if (ok.length === 0) outcome = 'no_data';                        // ran but nothing usable (empty/quarantined), no hard error
+  else if (failed.length || quarantined.length || ok.length < deciding.length) outcome = 'partial';
   else outcome = 'complete';
   return {
     outcome: outcome,
-    sources_total: results.length,
+    sources_total: results.length,                 // everything that ran (incl. optional)
+    sources_requested: deciding.length,            // the requested subset that decides the outcome
     sources_ok: ok.length,
     sources_failed: failed.length,
     sources_quarantined: quarantined.length,
+    failed_sources: failed_sources,                // requested source KEYS that failed (for the user message)
     items_written: written
   };
 }

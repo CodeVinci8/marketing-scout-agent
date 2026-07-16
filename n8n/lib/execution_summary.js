@@ -43,6 +43,8 @@ function buildExecutionSummary(parts) {
     agent_request_id: str(req.agent_request_id),
     final_state: state,
     sources_requested: sourcesRequested.join(', '),
+    // B6: requested source KEYS that failed/quarantined — the delivery layer names them for the user.
+    failed_sources: (Array.isArray(req.failed_sources) ? req.failed_sources : (roll.failed_sources || [])),
     sources_completed: num(roll.sources_ok, adapters.filter(a => a.status === 'ok').length),
     sources_failed: num(roll.sources_failed, adapters.filter(a => a.status === 'failed').length),
     sources_quarantined: num(roll.sources_quarantined, adapters.filter(a => a.quarantined).length),
