@@ -4,7 +4,34 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-07-16, session 52) — Stage F CORE built + live-proven → continue Stage F integration
+## CURRENT PRIORITY (2026-07-16, session 53) — pre-F debt CLOSED → Stage F PRODUCTION INTEGRATION next
+
+All fixable pre-Stage-F deterministic debt is CLOSED, deployed and (B4) live-proven: **B4** plan-fingerprint dedup
+(efe0daf), **B6** requested-source terminal status (00bc4bf), **B7** Russian XLSX + hidden technical sheet (e67ece1).
+Prod: 16 active, webhook ok, `make test` ALL SUITES PASS. The Stage F Claude CORE (adapter/contracts/evidence/analysis)
+is built + live-proven (session 52). **Remaining = wire it into production:**
+
+1. **WF28 — Claude Analyst** callable workflow per `docs/STAGE_F_RUNBOOK.md` §"Wiring into n8n" (Build Evidence Package
+   → Claude HTTP w/ cred OEen8Vl1tdWtv7v4, 90s timeout, retryOnFail → Parse+Validate → ≤1 repair → merge/fallback →
+   persist). Feature-flag `enable_llm_analysis && claude_key_present`, default OFF.
+2. **Sheets tabs** `llm_analysis_results` + `llm_analysis_telemetry` (contracts in the prompt §4) + bootstrap/manifest
+   + tab-count/contract tests.
+3. **Report + XLSX enrichment** — «Подтверждённые факты / Аналитические выводы / Рекомендации / Доказательства и
+   ограничения»; deterministic report+XLSX still ship on LLM failure (now with the Russian sheet names from B7).
+4. **Prompt hardening** — force ASCII English schema keys in CA_SYSTEM_PROMPT (the one live repair was a Cyrillic
+   `text_ю` key) to drive the repair rate toward 0.
+5. **Multi-source synthesis** (ccSynthesisTool) + **candidate enrichment** (ccCandidateTool, top 3–5) + **public lead
+   interpretation**.
+6. **CodeVinci AI Pilot** conversational agent — `analyst_agent`/`analyst_tools`, read-only tool auto-select,
+   approval-gated mutations, bounded loop; `/status`/`/cancel`/`/help` stay deterministic.
+7. **§16 live scenario matrix** (only #1 website analysis proven so far).
+8. **Operator/infra:** harden SSH (brute-force flood) + reclaim VPS disk.
+
+**Do NOT start Stage F.5 (Opportunity Radar) or Stage G.**
+
+---
+
+## PRIOR PRIORITY (2026-07-16, session 52) — Stage F CORE built + live-proven → continue Stage F integration
 
 Stage F is authorized and STARTED (commit d5ea56e). The Claude adapter + contracts + evidence package + analysis
 engine are built, unit-tested (77), and LIVE-PROVEN (single-source analysis on the real endpoint, one bounded repair,

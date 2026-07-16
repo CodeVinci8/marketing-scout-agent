@@ -4,6 +4,46 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-16 (session 53) — pre-F deterministic debt CLOSED (B4/B6/B7) deployed; Stage F integration next
+
+Branch `fix/stage4-live-final-acceptance` (ahead ~118, NOT pushed). Commits b… → **e67ece1**. All fixable pre-F
+deterministic debt is now CLOSED, deployed to prod, and (B4) live-proven. Stage F Claude CORE remains built+proven
+from session 52; the Stage F **production integration** (WF28 + Sheets tabs + agent + live scenarios) is the remaining
+work — see docs/STAGE_F_ACCEPTANCE.md + docs/STAGE_F_RUNBOOK.md. **Stage F.5 must NOT start.**
+
+Disk: root was 100% at session start (**brute-force SSH log flood** again filling btmp/auth/syslog — operator must
+harden SSH/firewall + reclaim disk); truncated logs + journal vacuum + cleared my cache → **769M free (93%)**, stable.
+
+**B4 (efe0daf) — owner-scoped plan fingerprint dedup, LIVE-PROVEN.** request_planner.planFingerprint (owner+chat +
+order-independent normalized sources + niche/region/window/output; derived identically from plan OR stored row, no new
+column) + findReusablePlan (newest non-terminal match; terminal never blocks; ANY non-terminal past the 30-min TTL is
+abandoned — a live bug found+fixed where a 2.5-day-old *approved* plan was reused). WF18 Handle Plan Result reuses the
+canonical plan_id/agent_request_id + a "Persist New Plan?" IF gate skips the duplicate append. Live: "сравни
+autolombardn1.ru за последний месяц" twice → exec 826 reused=false/append=true (creates), exec 827
+reused=true/append=false (reuses same plan). test_plan_dedup (24). Deployed WF18 (structural merge + restart).
+
+**B6 (00bc4bf) — requested-source-driven terminal status.** source_adapter.rollupCollection(results, requestedSources):
+only the sources the user requested decide complete/partial/failed/no_data; an optional preset branch can't downgrade a
+good run; failed_sources named in Russian by conversation_response.deliveryBody (сайты/Telegram-каналы/VK-сообщества/
+Avito), failed line precedes the 0-records line; execution_summary surfaces failed_sources; WF20 passes plan.sources.
+Quarantined→no_data, only errored→failed. test_source_rollup_b6 (18). Deployed WF20.
+
+**B7 (e67ece1) — Russian XLSX + hidden technical sheet.** report_package sheets renamed (Сводка/Конкуренты/Офферы и
+цены/Доказательства/Рекомендации/Качество данных/Изменения) + Run_Metadata→«Технические данные» hidden (xlsx_writer
+emits state="hidden" for non-first hidden sheets). No empty Stage-F sheets added yet. Real bundle XLSX opens with
+["Сводка","Конкуренты","Офферы и цены","Технические данные"]. Deployed WF20/WF24.
+
+Prod: 16 active, WF18 webhook ok, healthz ok, make test ALL SUITES PASS ($0). Also earlier this session: 3 stale
+time-bomb fixtures (wf10/lineage/wf14) already fixed in session 52.
+
+**REMAINING Stage F (production integration — next session):** WF28 Claude Analyst workflow (runbook topology) +
+report/XLSX enrichment (Факты/Выводы/Рекомендации) + llm_analysis_results & llm_analysis_telemetry Sheets tabs +
+multi-source synthesis + candidate enrichment + lead interpretation + CodeVinci AI Pilot conversational agent
+(analyst_agent/analyst_tools) + §16 live scenario matrix. Prompt hardening: force ASCII English schema keys (the one
+live repair was a Cyrillic `text_ю` key). All Stage-F libs + capability matrix already exist.
+
+---
+
 ## Session: 2026-07-16 (session 52) — STAGE F core BUILT + LIVE-PROVEN (adapter, contracts, evidence, analysis)
 
 Branch `fix/stage4-live-final-acceptance` (ahead ~112, NOT pushed). Commit **d5ea56e**. Stage F **authorized** and

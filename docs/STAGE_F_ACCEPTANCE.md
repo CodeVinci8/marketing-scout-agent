@@ -33,7 +33,8 @@ proven vs pending, so the next session can continue without re-deriving anything
 | **llm_telemetry + Sheets tab** | Persist schema/prompt version, model, package hash, tokens, cache, repair, cost per call. Sheets contract tab not added. |
 | **Feature-flag rollout** | MS_ENABLE_LLM_ANALYSIS / _SUMMARY / DISCOVERY_LLM_ENRICHMENT / ANALYST_AGENT gates (default OFF) not wired to the new path. |
 | **Live scenario matrix (§14)** | Only #1 (website analysis) proven. TG/VK/synthesis/enrichment/no-data/max-token/refusal/conversational/reuse pending. |
-| **Pre-F debt B4 / B6 / B7** | Still open from Stage E2 (see `docs/NEXT_ACTIONS.md`): B4 pending-plan fingerprint dedup, B6 requested-source-driven terminal state, B7 Russian XLSX sheet names. |
+| ~~Pre-F debt B4 / B6 / B7~~ | **DONE (session 53)** — B4 plan-fingerprint dedup (live-proven, efe0daf), B6 requested-source terminal status (00bc4bf), B7 Russian XLSX + hidden technical sheet (e67ece1). All deployed; `make test` ALL SUITES PASS. |
+| **Prompt hardening (repair↓)** | The one live repair was a Cyrillic `text_ю` key — add an explicit "use the ASCII English keys exactly; no visually-similar Cyrillic in keys" instruction to CA_SYSTEM_PROMPT before rollout. |
 | **Runbook** | `docs/STAGE_F_RUNBOOK.md`. |
 
 ## Measured repair/cost stats (live so far)
