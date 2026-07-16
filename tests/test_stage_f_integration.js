@@ -65,6 +65,15 @@ A.section('WF08-LLM-GATE-001 — the Stage-F rollout does not silently arm the l
   A.eq('the Claude master switch still pins WF08 LLM off', master.enable_wf08_llm, false);
   A.eq('measured Stage-F analysis price is configured', on.cost_claude_analysis_usd, 0.07);
   A.eq('analysis fan-out per run is bounded', on.llm_max_analyses_per_run, 5);
+
+  // WF08-LLM-GATE-001 (the spend-vs-quote gap): cost_model only QUOTES WF08's per-record calls when
+  // enable_wf08_llm is set, so WF20 must only ARM them on the same flag. If WF20 kept riding on
+  // enable_llm_analysis, an approved Stage-F run would spend ~12 unquoted Claude calls the user never approved.
+  const wf08call = wf20.nodes.find(n => n.name === 'Run WF08 Analyzer');
+  const llmParam = wf08call.parameters.workflowInputs.value.llm_enabled;
+  A.ok('WF20 arms WF08 LLM on enable_wf08_llm', /enable_wf08_llm/.test(llmParam), llmParam);
+  A.ok('WF20 does NOT arm WF08 LLM from the Stage-F flag', !/enable_llm_analysis/.test(llmParam), llmParam);
+  A.ok('WF08 LLM defaults to OFF in the expression (fail-closed)', /=== true \? 'true' : 'false'/.test(llmParam), llmParam);
 }
 
 // A realistic WF12 bundle: one site with positioning + two offers, plus a degraded source.

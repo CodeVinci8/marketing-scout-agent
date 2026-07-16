@@ -1105,7 +1105,10 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
     data_mode: "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}",
     // WF08-LLMAGENT-001: unarmed agent runs degrade every record to review_queue/report_eligible=false and the
     // report is no_data. Plan approval covers this LLM budget; WF08 keeps its own token/budget/kill-switch guards.
-    llm_enabled: "={{ $('Approval & Budget Gate').first().json.cfg.enable_llm_analysis === false ? 'false' : 'true' }}",
+    // WF08-LLM-GATE-001: gated on its OWN default-OFF flag, NOT enable_llm_analysis. WF08's per-record classifier
+    // costs one 16-28s Claude call PER RECORD (~12/run) on the pre-Stage-F transport, and cost_model only quotes it
+    // when enable_wf08_llm is set — so riding on the Stage-F flag would spend materially more than the user approved.
+    llm_enabled: "={{ $('Approval & Budget Gate').first().json.cfg.enable_wf08_llm === true ? 'true' : 'false' }}",
     llm_approval_token: 'WF08_LLM_APPROVED'
   }),
   execWf('wf20-wf10', 'Run WF10 Aggregator', [1060, -160], 'WF10 audience aggregator', {

@@ -1015,7 +1015,7 @@
             "agent_request_id": "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
             "source_run_id": "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
             "data_mode": "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}",
-            "llm_enabled": "={{ $('Approval & Budget Gate').first().json.cfg.enable_llm_analysis === false ? 'false' : 'true' }}",
+            "llm_enabled": "={{ $('Approval & Budget Gate').first().json.cfg.enable_wf08_llm === true ? 'true' : 'false' }}",
             "llm_approval_token": "WF08_LLM_APPROVED"
           },
           "schema": [
