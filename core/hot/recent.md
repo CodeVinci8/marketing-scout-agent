@@ -4,6 +4,46 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-16 (session 54) — STAGE F WF28 Claude Analyst BUILT + DEPLOYED + LIVE-PROVEN through n8n
+
+Branch `fix/stage4-live-final-acceptance` (ahead ~121, NOT pushed). Commits → **add4427** (WF28+contracts+libs) ·
+**cbd5738** (gate). ~3 live Claude calls this session (~$0.17). Disk 767M (93%, log flood held). make test ALL PASS.
+
+**Sheets contracts:** new `llm_analysis_results` + `llm_analysis_telemetry` tabs (config/sheets_contracts.json, 44
+tabs; resolver EXPECTED_TAB_COUNT 44; bootstrap/ops-QA/manifest regenerated; test 42→44). **Both tabs created LIVE**
+in the prod Google Sheet via a one-shot addSheet batchUpdate.
+
+**WF28 — Claude Analyst** (gen_stage4_workflows, 16 nodes, id `mswf28claudeanalyst`, ACTIVE, callable, no public
+trigger): trigger → Read llm_analysis_results (reuse) → Prepare (resolveConfig + gate `enable_claude &&
+enable_llm_analysis` + budget + evidence + reuse-by-hash) → Call Claude? → Claude Primary (httpClaudeMsg: aiprimetech
+cred OEen8Vl1tdWtv7v4, 90s, neverError+fullResponse, onError-continue) → Parse/Validate → Need Repair? → Claude Repair
+→ Parse → Finalize (deterministicAnalysisFallback) → Persist? → Persist results+telemetry → Return typed result. MAX 2
+Claude calls, never loops. new lib `llm_telemetry.js` (result+telemetry row builders + findReusableAnalysis).
+`test_wf28_claude_analyst.js` (45, incl. embed drift). **claude_analysis.js refactored to DESTRUCTURED requires** so
+it embeds into n8n Code nodes (namespace `var X=require` is NOT stripped → would break). Prompt hardened: CA_SYSTEM_
+PROMPT forbids Cyrillic/look-alike keys (the live repairs were a `text_ю` key). claude_adapter detects the gateway
+"conversation too long / /compact" leak → error_category context_too_long (non-transient → fallback, never surfaced).
+
+**LIVE PROOFS (real endpoint + real Google Sheets, controlled `docker exec -e MS_ENABLE_LLM_ANALYSIS=true`):**
+- WF28 exec **834**: all 16 nodes ran, Claude Primary+Repair via n8n cred, **1 repair repair_success=true no
+  fallback**, tool_use, 7285 in/4120 out tok, **$0.084**, req_id 741925a6, enriched=true, 8 evidence-grounded RU items,
+  quality=repaired conf=65. Persisted row `an_b3d48d5f` in llm_analysis_results (owner/arid/model/hash lineage,
+  3150-char validated JSON) + a telemetry row.
+- WF28 exec **836** (identical evidence): **mode=reuse cost=$0**, Claude Primary + Persist did NOT run → reuse-by-hash
+  proven. Covers §15 scenarios #1 (website), #9 (schema-fail→1 repair), #17 (reuse-by-hash).
+
+**Gotchas:** n8n CLI can't call an INACTIVE sub-workflow (WF28 must be active); `n8n execute` needs
+`-e N8N_RUNNERS_BROKER_PORT=5690`; enabling the flag in production needs an env/container-recreate (operator/infra) —
+for proofs use `docker exec -e MS_ENABLE_LLM_ANALYSIS=true`. Two httpClaude defs existed (legacy WF19 planner
+$json.claude_request_body) → new one renamed `httpClaudeMsg` ($json.claude_body).
+
+**REMAINING Stage F (next session):** WF20→WF28 wiring + report/XLSX enrichment (Факты/Выводы/Рекомендации) + Telegram
+delivery of an enriched report; multi-source synthesis; discovery (WF27) candidate enrichment; public lead
+interpretation; CodeVinci AI Pilot conversational agent (analyst_agent/analyst_tools); §15 scenarios #2-8,#10-16,#18;
+enable MS_ENABLE_LLM_ANALYSIS in prod env. Disposable QA drivers to clean: msqawf28proof, msqamktabs, msdrvscope12.
+
+---
+
 ## Session: 2026-07-16 (session 53) — pre-F deterministic debt CLOSED (B4/B6/B7) deployed; Stage F integration next
 
 Branch `fix/stage4-live-final-acceptance` (ahead ~118, NOT pushed). Commits b… → **e67ece1**. All fixable pre-F
