@@ -38,7 +38,7 @@ A.section('WF28 — feature-gated + reuse + budget in Prepare Analysis');
 {
   const prep = node('Prepare Analysis').parameters.jsCode;
   A.ok('resolves agent config from env', prep.indexOf('resolveConfig(__env)') >= 0);
-  A.ok('gate: master switch + key + enrichment flag', prep.indexOf('enable_claude!==false') >= 0 && prep.indexOf('claude_key_present!==false') >= 0 && prep.indexOf('enable_llm_analysis===true') >= 0);
+  A.ok('gate: master switch + key + enrichment flag', prep.indexOf('enable_claude!==false') >= 0 && prep.indexOf('enable_llm_analysis===true') >= 0);
   A.ok('reuse by evidence hash (findReusableAnalysis)', prep.indexOf('findReusableAnalysis') >= 0);
   A.ok('no-evidence short-circuit (no empty Claude call)', prep.indexOf('haveEvidence') >= 0);
   A.ok('conservative cost estimate', prep.indexOf('estimateCost') >= 0);

@@ -1853,7 +1853,10 @@ var evIn={};try{evIn=(typeof inp.evidence_input==='string')?JSON.parse(inp.evide
 var pkgRes=buildEvidencePackage(evIn,{});
 var model=(cfg.llm_model||'claude-sonnet-4-6');
 var ctx={owner_user_id:String(inp.owner_user_id||''),chat_id:String(inp.chat_id||''),agent_request_id:String(inp.agent_request_id||''),source_run_id:String(inp.source_run_id||''),report_id:String(inp.report_id||''),analysis_type:String(inp.analysis_type||'single_source'),evidence_package_hash:pkgRes.package_hash,source_scope:(evIn.source||{}),schema_version:CC_SCHEMA_VERSION,prompt_version:CC_PROMPT_VERSION,model:model};
-var enabled=(cfg.enable_claude!==false)&&(cfg.claude_key_present!==false)&&(cfg.enable_llm_analysis===true||cfg.enable_llm_summary===true);
+// Runtime gate: the dedicated Stage-F rollout flag (default OFF). Auth is enforced by the n8n credential on the
+// HTTP node — a missing/invalid credential simply fails the call and falls back (claude_key_present is a
+// cost-model concern, not a runtime gate).
+var enabled=(cfg.enable_claude!==false)&&(cfg.enable_llm_analysis===true);
 var haveEvidence=(pkgRes.allowed_evidence_ids||[]).length>0;
 var reuseRows=[];try{reuseRows=($('Read llm_analysis_results').all()||[]).map(function(x){return x.json;});}catch(e){}
 var reuse=findReusableAnalysis(reuseRows,ctx);
