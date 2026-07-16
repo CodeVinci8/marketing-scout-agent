@@ -4,52 +4,55 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-07-16, session 55) — wire force_reprocess, then the fresh-site WF28 E2E
+## CURRENT PRIORITY (2026-07-16, session 56) — honest block-vs-no-data, then the fresh-site WF28 E2E
 
-WF20→WF28 is WIRED + DEPLOYED. The §4 honest AI cost + credential capability are LIVE-PROVEN (WF19 exec 840:
-`mode=proven_credential`, message quotes `AI-анализ: ~$0.07–0.11`). WF04-ROUTE-001 is fixed + live-proven (exec 871
-scraped 1 page through the full chain). **But WF28 has never yet been reached from WF20 with real data.**
+Route contract CLOSED (47 tabs, all 6 routes declared, no arbitrary-tab injection possible), error persistence
+SANITIZED (proven on the real node), and the reuse/collect/refresh policy is LIVE-PROVEN (WF04 exec 894 re-scraped a
+permanently-deduped URL). `make test` EXIT=0 / 123 suites / 0 failures. **WF28 still has not been reached from WF20
+with real data — and the reason is now precisely known.**
 
-**THE BLOCKER (and the next task):** `url_registry` dedup is **PERMANENT — no time window**
-(`WF04 > Evaluate Dedup`: `const hit = !force && key !== '' && rows.some(...)`). Every site ever scraped
-(autolombardn1.ru, mkbkfin.ru, carmoney.ru, finardi.ru, lioncredit.ru) is skipped forever, so every approved run
-yields an empty WF12 bundle → `do_analyze=false reason=no_sources` → WF28 never fires. Without a refresh path a user
-can NEVER re-analyze a source.
+**ROOT CAUSE (external + one real defect):** `carmoney.ru` is **Cloudflare-blocked**. The forced re-scrape returned a
+772-char block page. The classifier saw no content → `entity_type=irrelevant / route=skipped_log /
+processing_status=business_skip` → 0 competitors → empty bundle → `do_analyze=false reason=no_sources`. The refresh
+worked; the SITE is unavailable.
 
-**WF04 ALREADY supports it** — `force_reprocess` is a declared callable input (FORCE-REPROCESS-001) and
-`Evaluate Dedup` honours it. It is simply not wired end-to-end. This is ALSO required by spec §3/§5 (offer
-"принудительно обновить источник" on a dedup skip).
+1. **BLOCK-HONESTY-001 (§3/§5/§7) — a block is a FAILURE, not an irrelevant business.** WF20 exec 893 told the user
+   «carmoney.ru — **проверен**, новых релевантных фактов за окно не найдено» + «нужно расширить фильтры или
+   источники». Both false. Fix in `WF04 > Normalize Firecrawl Output`: detect a block/challenge/403 page (Cloudflare
+   / "Just a moment" / "Attention Required" / tiny body + no business terms) → emit a real technical-failure state,
+   NOT business_skip. Then three DISTINCT outcomes: data / no-new-data (dedup) / technical failure — never
+   "источник проверен" and "не удалось собрать" together. Cause-specific actions (blocked → retry / try another
+   source; dedup → open previous report / force refresh). `n8n/lib/error_sanitizer.js` already keeps the block text
+   safe for diagnosis.
+2. **Fresh-site WF28 E2E.** Burned in url_registry (permanent skip on a normal request): autolombardn1.ru,
+   mkbkfin.ru, finardi.ru, lioncredit.ru, carmoney.ru(blocked). Either pick a fresh SCRAPEABLE competitor, or send
+   "обнови данные по <site>" for one of the burned-but-scrapeable sites (refresh now works — that is the supported
+   path and it is live-proven).
+3. **Concise adaptive Telegram renderer (§6).** Measured "before": **2082 chars** (WF20 exec 893). Targets: 700–1200
+   enriched / 300–700 reuse / 250–600 no-data. Drop historical context, other-source lists, duplicated "no data",
+   generic lead/outreach policy; one policy footer only. Full detail stays in XLSX + bundle.
+4. **Reuse mode end-to-end** — `decideSourceExecution` returns `mode=reuse` + the snapshot, but WF20/WF12 do not yet
+   BUILD a report from a saved snapshot (§2 reuse). A fresh dedup hit must not yield an empty bundle when valid
+   saved data exists.
+5. **source_analysis vs change_report (§5)** — "дай отчёт по carmoney.ru" is a profile analysis, not a windowed
+   change report; it must not say "за окно новых фактов нет".
+6. Then: TG + VK single-source; synthesis; WF27 enrichment; lead interpretation; CodeVinci AI Pilot; repair-rate ≥5.
+7. **Cleanup disposable QA drivers:** msqamktetab, msqamkslog, msqamkresults, msqaplancols, msqawf28proof,
+   msqamktabs, msdrvscope12.
+8. **Operator/infra:** harden SSH (brute-force log flood), reclaim VPS disk (~690M free; docker 2.6G all-active).
 
-1. **Wire force_reprocess** (planner → plan row → WF20 → WF04):
-   - `request_planner.deterministicPlan`: detect refresh phrasing (обнови / заново / принудительно / ещё раз /
-     свежие данные) → `plan.force_refresh = true`. NB Cyrillic `\b`/`\w` do not fire — use `[а-яё]` classes.
-   - `config/sheets_contracts.json` → `execution_plans`: add a `force_refresh` column (headers + buildPlanRow in
-     request_planner). Keep it OUT of `planFingerprint` only if it must not split B4 dedup — decide deliberately: a
-     refresh IS a different request, so it SHOULD be in the fingerprint.
-   - WF20 `Resolve Approved Plan`: read `force_refresh` off the row → plan.
-   - WF20 `Resolve Collection Set`: expose `force_reprocess`.
-   - WF20 `Run Website Source (WF04)` execWf: pass `force_reprocess: "={{ ... }}"` (input already declared on WF04).
-   - Cost: a forced refresh DOES cost a Firecrawl page — the plan must quote it (it already does).
-2. **Fresh-site WF28 E2E** — send "Обнови carmoney.ru" (already scraped, so force is required), approve, then verify:
-   a WF28 execution actually runs; report has facts/inferences/recommendations; XLSX has the Stage-F sheets;
-   estimate brackets actual; no WF08 per-record calls.
-3. **Three distinct source outcomes** (currently conflated in one message): data / no-new-data (dedup skip) /
-   technical failure. A dedup skip is NOT a provider failure; no evidence ⇒ no WF28 call ⇒ actual AI cost $0.
-4. **Concise adaptive Telegram renderer** — measured "before": WF20 exec 878 no-data = **2082 chars** (historical
-   context + other-source list + duplicated "no data"). Target 900–1600 enriched / 250–700 no-data; full detail stays
-   in XLSX + bundle. One policy footer only.
-5. **Cause-specific no-data recommendations** — dedup ⇒ open previous report / force refresh; unreachable ⇒ retry;
-   never "запустить сбор" right after a failure without saying why.
-6. Then: TG + VK single-source; multi-source synthesis; WF27 top-candidate enrichment; public lead interpretation;
-   CodeVinci AI Pilot; repair-rate over ≥5 fresh packages.
-7. **Cleanup disposable QA drivers:** msqamktetab, msqamkslog, msqawf28proof, msqamktabs, msdrvscope12.
-8. **Operator/infra:** harden SSH (brute-force log flood), reclaim VPS disk (734M free; docker 2.6G all-active).
+**Lessons that cost time this session — do not repeat:**
+- Run the FULL `make test` before claiming green (HEAD 4c47986 was reported green on focused suites; it had 2 real
+  failures).
+- A new Sheets column MUST be APPENDED at the end (SHEETS-COLUMN-ORDER-001) — the sheet stores values by POSITION.
+- Regenerate (`node tools/gen_stage4_workflows.js`) AFTER the last lib edit and BEFORE deploying, or production gets
+  a stale embedded lib (cost one wasted deploy+restart cycle this session).
 
 **Do NOT start Stage F.5 (Opportunity Radar) or Stage G.**
 
 **Exact next command:**
 ```
-grep -n "force_reprocess" n8n/workflows/04_firecrawl_url_list_resilient.json | head
+python3 -c "import json;wf=json.load(open('n8n/workflows/04_firecrawl_url_list_resilient.json'));n=[x for x in wf['nodes'] if x['name']=='Normalize Firecrawl Output'][0];print(n['parameters']['jsCode'][:3000])"
 ```
 
 ---

@@ -4,6 +4,65 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-16 (session 56) — route contract CLOSED + error sanitizer + refresh policy LIVE-PROVEN
+
+Branch `fix/stage4-live-final-acceptance` (ahead ~126, NOT pushed). Commit → **395a0d9**. Disk ~690M (93%).
+**`make test` EXIT=0, 123 suites, 0 failures** (verified at HEAD).
+
+**FIRST: HEAD 4c47986 was NOT green.** The session-55 close-out reported only focused suites. The full regression
+failed 2 suites (stale assertions for WF08-LLM-GATE-001 and the 17→18 binding edge). Both fixed. **Always run the
+full `make test` before claiming green.**
+
+**WF04-ROUTE-001 CLOSED.** All four routers (WF02/03/04/08) emit six routes; only three were declared. `results` was
+allowlisted as a bare literal but had NO tab — it would have hard-failed exactly like technical_errors. Declared it
+(47 tabs) and created the tab live. **Audited + proven**: the emitted route is always one of OUR OWN six literals
+(`data.route` from the parsed provider payload is only READ in a comparison, never spread) → no arbitrary-tab
+injection from model output. Asserted by test.
+
+**WF04-ROUTE-002 — new `n8n/lib/error_sanitizer.js`.** technical_errors/skipped_log are durable human-readable tabs
+built FROM a provider response. Sanitizer redacts sk-ant-/sk-/AIza/gh*_/JWT/bearer/basic/cookie/generic key:value/
+url-query secrets, strips thinking, scrubs PII, caps at 300 chars. Embedded (drift-tested) at the ONE persistence
+choke point per router. **Proven on the real WF04 node**: `Authorization: Bearer sk-ant-api03-LEAK…` →
+`Authorization: [скрыто] [скрыто]`; `{"api_key":"topsecret12345"}` → `{"api_key": [скрыто]}`; thinking/email/phone
+gone; `"blocked"`/`401` kept for triage.
+
+**SOURCE-EXEC-001 — `n8n/lib/source_execution_policy.js` (reuse | collect | refresh).** The url_registry dedup had
+NO time component → a source could never be re-analyzed. Now a CONFIGURABLE window
+(`MS_SOURCE_FRESHNESS_DAYS`, default 7). Failed snapshots never reusable, never block a retry. Owner-isolated.
+Refresh propagates NL → plan (source_execution_mode/force_reprocess/refresh_reason) → execution_plans row →
+fingerprint → WF20 → WF04 (reuses the existing FORCE-REPROCESS-001 input). Approval states the repeat spend.
+**LIVE-PROVEN** (WF18 **890** → WF20 **893** → WF04 **894**): row `force_reprocess="true" mode=refresh`, approval
+showed «повторный сбор», force reached WF04, dedup bypassed, **urls_scraped=1 primary_calls=1** where every prior
+run was dedup-skipped.
+
+**SHEETS-COLUMN-ORDER-001 (caught before damage):** a new Sheets column MUST be APPENDED at the end. I first
+inserted the 3 execution_plans columns mid-header — the sheet stores values by POSITION and the header only names
+them, so existing rows would have read `status` out of the `source_execution_mode` column. Corrected; header
+rewritten to A1:X1.
+
+**E2E STILL NOT REACHING WF28 — root cause is now EXTERNAL + one real defect.**
+`carmoney.ru` is **Cloudflare-blocked**: the forced re-scrape returned a 772-char block page, not the site. The
+classifier saw no content → `entity_type=irrelevant`, `route=skipped_log`, `processing_status=business_skip` → 0
+competitors → empty bundle → `do_analyze=false reason=no_sources`. Refresh worked perfectly; the SITE is unavailable.
+**DEFECT (§3, not yet fixed):** a Cloudflare/403 block is reported as an *irrelevant business*, not a *collection
+failure*. WF20 exec 893 delivered (2082 chars): «carmoney.ru — **проверен**, новых релевантных фактов за окно не
+найдено» + «нужно расширить фильтры или источники». Both are false: we were blocked, and widening filters won't help.
+Needs: block/error detection in `Normalize Firecrawl Output` → a real technical-failure state distinct from
+no-new-data, + cause-specific next actions.
+
+**Burned (permanently in url_registry, all dedup-skip on a normal request):** autolombardn1.ru, mkbkfin.ru,
+finardi.ru, lioncredit.ru, carmoney.ru(blocked). A fresh SCRAPEABLE competitor site is needed for the enriched E2E,
+OR use refresh on a site that is not Cloudflare-blocked.
+
+**Telegram length (unchanged):** 2082 chars — concise renderer (§6) NOT built.
+
+**REMAINING Stage F:** block-vs-no-data honesty; concise adaptive renderer; cause-specific actions; reuse-mode
+report from a saved snapshot; source_analysis vs change_report; fresh-site WF28 E2E; TG + VK; synthesis; WF27
+enrichment; lead interpretation; CodeVinci AI Pilot; repair-rate ≥5. Disposable QA drivers to remove:
+msqamktetab, msqamkslog, msqamkresults, msqaplancols, msqawf28proof, msqamktabs, msdrvscope12.
+
+---
+
 ## Session: 2026-07-16 (session 55) — WF20→WF28 WIRED + DEPLOYED; honest AI cost LIVE-PROVEN; WF04-ROUTE-001 fixed
 
 Branch `fix/stage4-live-final-acceptance` (ahead ~124, NOT pushed). Commits → **5f49103** (WF20→WF28 integration +
