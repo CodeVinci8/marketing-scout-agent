@@ -98,8 +98,8 @@ try {
   A.ok('headers present (Competitor, Price / rate, Evidence link)', /Competitor/.test(sheetXml) && /Price \/ rate/.test(sheetXml) && /Evidence link/.test(sheetXml));
   A.ok('user text is NOT emitted as an OOXML <f> formula (injection neutralized)', sheetXml.indexOf('<f>') < 0);
   A.ok('numeric score cells are numeric (t="n" or bare number, never a leading-= string)', /HYPERLINK/.test(sheetXml) ? !/<f>=HYPERLINK/.test(sheetXml) : true);
-  A.ok('methodology/calculations representable: Run_Metadata sheet present', pack.sheet_names.indexOf('Run_Metadata') >= 0);
-  A.ok('sources captured in Evidence sheet rows', pack.row_counts.Evidence >= 1);
+  A.ok('methodology/calculations representable: Run_Metadata sheet present', pack.sheet_names.indexOf('Технические данные') >= 0);
+  A.ok('sources captured in Evidence sheet rows', pack.row_counts['Доказательства'] >= 1);
 } finally {
   if (fs.existsSync(tmp)) { fs.unlinkSync(tmp); cleaned = true; }
 }

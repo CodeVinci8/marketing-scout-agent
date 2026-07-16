@@ -32,10 +32,10 @@ P.SHEET_NAMES.forEach(n => A.ok('workbook lists ' + n, wb.indexOf('name="' + n +
 A.eq('package sheet_names', pkg.sheet_names, P.SHEET_NAMES);
 
 A.section('row counts');
-A.eq('Competitors rows', pkg.row_counts.Competitors, 3);
-A.eq('Offers rows', pkg.row_counts.Offers_Prices, 3);
-A.eq('Evidence rows', pkg.row_counts.Evidence, 2);
-A.eq('Summary single row', pkg.row_counts.Summary, 1);
+A.eq('Competitors rows', pkg.row_counts['Конкуренты'], 3);
+A.eq('Offers rows', pkg.row_counts['Офферы и цены'], 3);
+A.eq('Evidence rows', pkg.row_counts['Доказательства'], 2);
+A.eq('Summary single row', pkg.row_counts['Сводка'], 1);
 
 A.section('headers + cell values');
 const comp = parts['xl/worksheets/sheet2.xml'].toString('utf8'); // Competitors
@@ -100,17 +100,17 @@ A.eq('default keeps all sheets', P.buildReportPackage(F.currentReport(), scope).
 // a sparse run: only competitors + source_quality have data; offers/evidence/recs/changes are empty.
 const sparse = Object.assign({}, F.currentReport(), { offers: [], evidence: [], recommendations: [], changes: [] });
 const sp = P.buildReportPackage(sparse, F.scopeOf(sparse), { omit_empty: true });
-A.ok('empty Offers_Prices omitted', sp.sheet_names.indexOf('Offers_Prices') < 0, sp.sheet_names.join(','));
+A.ok('empty Offers_Prices omitted', sp.sheet_names.indexOf('Офферы и цены') < 0, sp.sheet_names.join(','));
 A.ok('empty Evidence omitted', sp.sheet_names.indexOf('Evidence') < 0);
 A.ok('empty Recommendations omitted', sp.sheet_names.indexOf('Recommendations') < 0);
 A.ok('empty Changes omitted', sp.sheet_names.indexOf('Changes') < 0);
-A.ok('non-empty Competitors kept', sp.sheet_names.indexOf('Competitors') >= 0);
-A.ok('Summary always kept (never a contentless file)', sp.sheet_names.indexOf('Summary') >= 0);
-A.ok('Run_Metadata always kept', sp.sheet_names.indexOf('Run_Metadata') >= 0);
+A.ok('non-empty Competitors kept', sp.sheet_names.indexOf('Конкуренты') >= 0);
+A.ok('Summary always kept (never a contentless file)', sp.sheet_names.indexOf('Сводка') >= 0);
+A.ok('Run_Metadata always kept', sp.sheet_names.indexOf('Технические данные') >= 0);
 // a totally empty run still yields a valid, openable workbook (Summary + Run_Metadata only)
 const empty = { report_id: sparse.report_id, agent_request_id: sparse.agent_request_id, owner_user_id: sparse.owner_user_id, created_at: sparse.created_at, summary: {} };
 const ep = P.buildReportPackage(empty, F.scopeOf(empty), { omit_empty: true });
-A.eq('empty run keeps exactly Summary + Run_Metadata', ep.sheet_names.slice().sort().join(','), 'Run_Metadata,Summary');
+A.eq('empty run keeps exactly Сводка + Технические данные', ep.sheet_names.slice().sort().join(','), ['Сводка','Технические данные'].sort().join(','));
 A.ok('empty-run workbook is still a valid ZIP', ep.buffer[0] === 0x50 && ep.buffer[1] === 0x4b);
 
 A.report('xlsx-writer');

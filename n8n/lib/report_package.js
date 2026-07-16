@@ -13,7 +13,7 @@ function str(v) { return v == null ? '' : String(v); }
 function low(v) { return str(v).trim().toLowerCase(); }
 function join(a) { return Array.isArray(a) ? a.join('; ') : str(a); }
 
-const SHEET_NAMES = ['Summary', 'Competitors', 'Offers_Prices', 'Evidence', 'Recommendations', 'Source_Quality', 'Changes', 'Run_Metadata'];
+const SHEET_NAMES = ['Сводка', 'Конкуренты', 'Офферы и цены', 'Доказательства', 'Рекомендации', 'Качество данных', 'Изменения', 'Технические данные'];
 
 // quality/status -> highlight bucket (good/warn/bad). Unknown -> no highlight.
 function qualityHighlight(v) {
@@ -33,7 +33,7 @@ function buildSheets(b) {
 
   return [
     {
-      name: 'Summary', freeze_header: true, autofilter: false,
+      name: 'Сводка', freeze_header: true, autofilter: false,
       columns: [
         { header: 'Request', key: 'request', width: 22 },
         { header: 'Niche', key: 'niche', width: 18 },
@@ -61,7 +61,7 @@ function buildSheets(b) {
       highlight: (r, c) => c.key === 'quality' ? qualityHighlight(r.quality) : null
     },
     {
-      name: 'Competitors', freeze_header: true, autofilter: true,
+      name: 'Конкуренты', freeze_header: true, autofilter: true,
       columns: [
         { header: 'Competitor', key: 'competitor', width: 26 },
         { header: 'Domain', key: 'domain', width: 24 },
@@ -76,7 +76,7 @@ function buildSheets(b) {
       highlight: (r, c) => c.key === 'quality' ? qualityHighlight(r.quality) : null
     },
     {
-      name: 'Offers_Prices', freeze_header: true, autofilter: true,
+      name: 'Офферы и цены', freeze_header: true, autofilter: true,
       columns: [
         { header: 'Competitor', key: 'competitor', width: 26 },
         { header: 'Offer', key: 'offer', width: 44 },
@@ -91,7 +91,7 @@ function buildSheets(b) {
       rows: b.offers || []
     },
     {
-      name: 'Evidence', freeze_header: true, autofilter: true,
+      name: 'Доказательства', freeze_header: true, autofilter: true,
       columns: [
         { header: 'Finding', key: 'finding', width: 40 },
         { header: 'Competitor', key: 'competitor', width: 24 },
@@ -105,7 +105,7 @@ function buildSheets(b) {
       highlight: (r, c) => c.key === 'source_quality' ? qualityHighlight(r.source_quality) : null
     },
     {
-      name: 'Recommendations', freeze_header: true, autofilter: true,
+      name: 'Рекомендации', freeze_header: true, autofilter: true,
       columns: [
         { header: 'Recommendation', key: 'recommendation', width: 50 },
         { header: 'Priority', key: 'priority', width: 12 },
@@ -116,7 +116,7 @@ function buildSheets(b) {
       rows: (b.recommendations || []).map(r => Object.assign({}, r, { linked_finding_ids: join(r.linked_finding_ids) }))
     },
     {
-      name: 'Source_Quality', freeze_header: true, autofilter: true,
+      name: 'Качество данных', freeze_header: true, autofilter: true,
       columns: [
         { header: 'Source', key: 'source', width: 30 },
         { header: 'Platform', key: 'platform', width: 16 },
@@ -130,7 +130,7 @@ function buildSheets(b) {
       highlight: (r, c) => c.key === 'status' ? qualityHighlight(r.status) : null
     },
     {
-      name: 'Changes', freeze_header: true, autofilter: true,
+      name: 'Изменения', freeze_header: true, autofilter: true,
       columns: [
         { header: 'Competitor / source', key: 'entity', width: 28 },
         { header: 'Change category', key: 'change_category', width: 20 },
@@ -142,7 +142,7 @@ function buildSheets(b) {
       rows: b.changes || []
     },
     {
-      name: 'Run_Metadata', freeze_header: true, autofilter: false,
+      name: 'Технические данные', hidden: true, freeze_header: true, autofilter: false,
       columns: [
         { header: 'Agent request ID', key: 'agent_request_id', width: 28 },
         { header: 'Report ID', key: 'report_id', width: 28 },
@@ -172,7 +172,7 @@ function buildSheets(b) {
 
 // buildReportPackage(bundle, scope, opts) -> { filename, mime, buffer, sheet_names, row_counts, size_bytes }
 // XLSX-OMIT-EMPTY-001: sheets that are ALWAYS meaningful even with one row (the run's identity/scope).
-const ALWAYS_KEEP_SHEETS = ['Summary', 'Run_Metadata'];
+const ALWAYS_KEEP_SHEETS = ['Сводка', 'Технические данные'];
 function buildReportPackage(bundle, scope, opts) {
   bundle = bundle || {}; opts = opts || {};
   assertScope(bundle, scope || {});
