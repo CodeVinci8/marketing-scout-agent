@@ -4,55 +4,55 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-07-16, session 56) — honest block-vs-no-data, then the fresh-site WF28 E2E
+## CURRENT PRIORITY (2026-07-16, session 57) — the plan never goes terminal, which blocks re-approval
 
-Route contract CLOSED (47 tabs, all 6 routes declared, no arbitrary-tab injection possible), error persistence
-SANITIZED (proven on the real node), and the reuse/collect/refresh policy is LIVE-PROVEN (WF04 exec 894 re-scraped a
-permanently-deduped URL). `make test` EXIT=0 / 123 suites / 0 failures. **WF28 still has not been reached from WF20
-with real data — and the reason is now precisely known.**
+Two real defects fixed and live-deployed this session: **BLOCK-HONESTY-001** (a blocked page is no longer called an
+irrelevant business) and **ISO-RUNID-001** (run isolation was dropping every row of its own run — the actual reason
+every website report has been empty). `make test` EXIT=0 / 124 suites / 0 failures. WF28 still not reached, and the
+remaining blocker is now ONE precisely-located bug.
 
-**ROOT CAUSE (external + one real defect):** `carmoney.ru` is **Cloudflare-blocked**. The forced re-scrape returned a
-772-char block page. The classifier saw no content → `entity_type=irrelevant / route=skipped_log /
-processing_status=business_skip` → 0 competitors → empty bundle → `do_analyze=false reason=no_sources`. The refresh
-worked; the SITE is unavailable.
+**THE BLOCKER — PLAN-TERMINAL-001.** WF20 exec 904 completed; `Shape Plan Completion` emitted 1 item and
+`Mark Plan Complete` ran with **no error** — yet `plan_req_1784216513_h6ef5737d` is still `status="approved"` in
+execution_plans. So B4 correctly reused it (non-terminal, inside the 30-min TTL), the approve callback found no
+awaiting plan, and WF20 never dispatched (`dispatch_target=local`). Also means /status shows a finished run as
+"готовится запуск" until the TTL.
 
-1. **BLOCK-HONESTY-001 (§3/§5/§7) — a block is a FAILURE, not an irrelevant business.** WF20 exec 893 told the user
-   «carmoney.ru — **проверен**, новых релевантных фактов за окно не найдено» + «нужно расширить фильтры или
-   источники». Both false. Fix in `WF04 > Normalize Firecrawl Output`: detect a block/challenge/403 page (Cloudflare
-   / "Just a moment" / "Attention Required" / tiny body + no business terms) → emit a real technical-failure state,
-   NOT business_skip. Then three DISTINCT outcomes: data / no-new-data (dedup) / technical failure — never
-   "источник проверен" and "не удалось собрать" together. Cause-specific actions (blocked → retry / try another
-   source; dedup → open previous report / force refresh). `n8n/lib/error_sanitizer.js` already keeps the block text
-   safe for diagnosis.
-2. **Fresh-site WF28 E2E.** Burned in url_registry (permanent skip on a normal request): autolombardn1.ru,
-   mkbkfin.ru, finardi.ru, lioncredit.ru, carmoney.ru(blocked). Either pick a fresh SCRAPEABLE competitor, or send
-   "обнови данные по <site>" for one of the burned-but-scrapeable sites (refresh now works — that is the supported
-   path and it is live-proven).
-3. **Concise adaptive Telegram renderer (§6).** Measured "before": **2082 chars** (WF20 exec 893). Targets: 700–1200
-   enriched / 300–700 reuse / 250–600 no-data. Drop historical context, other-source lists, duplicated "no data",
-   generic lead/outreach policy; one policy footer only. Full detail stays in XLSX + bundle.
-4. **Reuse mode end-to-end** — `decideSourceExecution` returns `mode=reuse` + the snapshot, but WF20/WF12 do not yet
-   BUILD a report from a saved snapshot (§2 reuse). A fresh dedup hit must not yield an empty bundle when valid
-   saved data exists.
-5. **source_analysis vs change_report (§5)** — "дай отчёт по carmoney.ru" is a profile analysis, not a windowed
-   change report; it must not say "за окно новых фактов нет".
-6. Then: TG + VK single-source; synthesis; WF27 enrichment; lead interpretation; CodeVinci AI Pilot; repair-rate ≥5.
+1. **Fix PLAN-TERMINAL-001.** Start here:
+   - Did the upsert MATCH? `Mark Plan Complete` is a Sheets upsert on `plan_id`. This session appended 3 columns to
+     execution_plans (21→24: source_execution_mode/force_reprocess/refresh_reason). Check the upsert's
+     matchingColumns/schema still resolve, and that `Shape Plan Completion`'s row (it spreads `pr.plan_row`, which
+     carries `row_number`) does not confuse update-vs-append.
+   - Verify against the SHEET, not the execution log: exec 904 reported success, so the write was attempted and
+     accepted — the row simply did not change. Read the row directly.
+   - Regression test: a completed/no_data run MUST leave the plan terminal, and a terminal plan MUST NOT be reused.
+2. **Then the E2E is one approve away.** Everything upstream is proven: refresh re-scrapes (session 56),
+   `autolombardn1.ru` returns 3500 chars → `entity=competitor / route=monitor_queue / parsed_success` (exec 905),
+   and isolation now keeps it (0→1, proven on the real node). Send "обнови данные и сделай отчёт по
+   autolombardn1.ru", approve, and verify WF28 actually runs.
+3. **Concise adaptive Telegram renderer (§6)** — still **2082 chars**. Targets 700–1200 enriched / 300–700 reuse /
+   250–600 blocked-or-no-data. `source_access.saUserMessageRu` + `saNextActionsRu` already provide the honest
+   blocked/failure sentences and cause-specific actions to render.
+4. **Reuse mode end-to-end** — `decideSourceExecution` returns `mode=reuse` + the snapshot, but WF20/WF12 still do
+   not BUILD a report from a saved snapshot.
+5. **source_analysis vs change_report (§5)** — "дай отчёт по X" must not say «за окно новых фактов нет».
+6. Then: TG + VK; synthesis; WF27 enrichment; lead interpretation; CodeVinci AI Pilot; repair-rate ≥5.
 7. **Cleanup disposable QA drivers:** msqamktetab, msqamkslog, msqamkresults, msqaplancols, msqawf28proof,
    msqamktabs, msdrvscope12.
-8. **Operator/infra:** harden SSH (brute-force log flood), reclaim VPS disk (~690M free; docker 2.6G all-active).
+8. **Operator/infra:** harden SSH (brute-force log flood), reclaim VPS disk (~660M free, 94%).
 
-**Lessons that cost time this session — do not repeat:**
-- Run the FULL `make test` before claiming green (HEAD 4c47986 was reported green on focused suites; it had 2 real
-  failures).
-- A new Sheets column MUST be APPENDED at the end (SHEETS-COLUMN-ORDER-001) — the sheet stores values by POSITION.
-- Regenerate (`node tools/gen_stage4_workflows.js`) AFTER the last lib edit and BEFORE deploying, or production gets
-  a stale embedded lib (cost one wasted deploy+restart cycle this session).
+**Lessons — do not repeat:**
+- Run the FULL `make test` before claiming green.
+- A new Sheets column MUST be APPENDED at the end (SHEETS-COLUMN-ORDER-001) — and re-check any upsert that targets
+  that tab afterwards (this may be exactly what PLAN-TERMINAL-001 is).
+- Regenerate (`node tools/gen_stage4_workflows.js`) AFTER the last lib edit and BEFORE deploying.
+- "Absent" is not "mismatch": ISO-ARID-001, ISO-RUNID-001 and the data_mode guard are all the same bug class. When a
+  filter strict-compares a field the producer may not populate, it silently returns zero rows.
 
 **Do NOT start Stage F.5 (Opportunity Radar) or Stage G.**
 
 **Exact next command:**
 ```
-python3 -c "import json;wf=json.load(open('n8n/workflows/04_firecrawl_url_list_resilient.json'));n=[x for x in wf['nodes'] if x['name']=='Normalize Firecrawl Output'][0];print(n['parameters']['jsCode'][:3000])"
+docker exec n8n-n8n-1 node -e "const{DatabaseSync}=require('node:sqlite');const f=require('/usr/local/lib/node_modules/n8n/node_modules/flatted');const db=new DatabaseSync('/home/node/.n8n/database.sqlite',{readOnly:true});const p=f.parse(db.prepare('SELECT data FROM execution_data WHERE executionId=904').get().data);const rn=(p.resultData||{}).runData||{};console.log(JSON.stringify(rn['Shape Plan Completion'][0].data.main[0][0].json,null,1));"
 ```
 
 ---

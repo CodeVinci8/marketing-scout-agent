@@ -4,6 +4,57 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-16 (session 57) — BLOCK-HONESTY-001 fixed; ISO-RUNID-001 = the real empty-bundle cause
+
+Branch `fix/stage4-live-final-acceptance` (ahead ~129, NOT pushed). Commits → **3c37d14** (block classifier) ·
+**d4b2e83** (run isolation). Disk ~660M (94%). **`make test` EXIT=0, 124 suites, 0 failures** (verified at the
+checkpoint AND after each change). Live Claude spend: **$0** (WF28 still not reached).
+
+**BLOCK-HONESTY-001 FIXED (3c37d14).** New `n8n/lib/source_access.js` decides ACCESS before business relevance:
+accessible_content | blocked_by_waf | robots_or_access_denied | provider_failure | timeout | empty_response |
+unsupported_content (+ valid_but_irrelevant, downstream-only). Wired into WF04 `Normalize Firecrawl Output` BEFORE
+the Claude call. A blocked page is now `entity_type='unknown'` (NEVER 'irrelevant'), routes to technical_errors,
+carries access_outcome + retryability, never becomes a competitor, never reaches Claude (saves the call), and yields
+an honest RU sentence + cause-specific actions that never say «расширьте фильтры». **Proven on the real node with
+the VERBATIM carmoney.ru page from exec 894**; a real lender page mentioning "captcha" still classifies accessible.
++test_source_access (109). Deployed WF04.
+
+**ISO-RUNID-001 — THE REAL REASON EVERY WEBSITE REPORT WAS EMPTY (d4b2e83).** Not blocking, not dedup:
+WF10 exec 908 → `rows_in_window=308, rows_after_isolation=0`. The freshly collected competitor
+(`entity_type=competitor, company_name="Автоломбард №1"`) was in monitor_queue with
+`run_id="req_...::website::a1"` but `source_run_id="" agent_request_id=undefined data_mode=""`.
+WF10's `__isoMatch` resolves the family as `source_run_id || agent_request_id` and `runFamilyMatch('')===false`
+→ **isolation excluded every row of the run that had just produced them.** Same defect family as ISO-ARID-001
+(session 34), one field further along — that fix added the arid→source_run_id fallback but stopped short of
+`run_id`, where WF04 actually writes it. Second instance in the same predicate: `data_mode_filter='live'` strict-
+compared against an empty data_mode. Fixed both (family reads `|| run_id`; absent data_mode is not a mismatch —
+same guard the region filter already had). **Proven on the real node with the verbatim live row: isolation 0 → 1.**
+Deployed WF10 qXq4CFeay6GXWGDC.
+
+**E2E STILL NOT REACHED — one new, precisely-located blocker.** After deploying the isolation fix the re-run could
+not approve: **B4 reused plan `plan_req_1784216513_h6ef5737d`, still `status="approved"` ~13 min after its run
+COMPLETED** (within the 30-min TTL, so reuse was correct) → the approve callback found no awaiting plan →
+`dispatch_target=local`. WF20 exec 904's `Shape Plan Completion` emitted 1 item and `Mark Plan Complete` ran with
+**no error**, yet the row is still `approved` — **the terminal write did not land.** Suspect the execution_plans
+header change (3 columns appended this session, 21→24) vs the upsert's matching, or a row_number/append-vs-update
+mismatch. This is the next thing to chase; it is independent of both fixes above and it also means /status would
+show a finished run as "готовится запуск" until the TTL.
+
+**Progress this session is real:** WF04 now re-scrapes on refresh (force_reprocess proven session 56), the access
+classifier lets a genuine page through (`autolombardn1.ru` → 3500 chars → `entity=competitor, route=monitor_queue,
+parsed_success`), and isolation no longer drops it. The remaining gap between "competitor collected" and "WF28 runs"
+is the plan-terminal-state bug blocking re-approval.
+
+**Telegram length unchanged: 2082 chars.** Concise renderer (§6) NOT built. Reuse mode / source_analysis vs
+change_report NOT built.
+
+**REMAINING Stage F:** plan terminal-marking bug → re-approve → WF28 E2E; concise renderer; reuse mode;
+source_analysis vs change_report; TG + VK; synthesis; WF27 enrichment; lead interpretation; CodeVinci AI Pilot;
+repair-rate ≥5. Disposable QA drivers: msqamktetab, msqamkslog, msqamkresults, msqaplancols, msqawf28proof,
+msqamktabs, msdrvscope12.
+
+---
+
 ## Session: 2026-07-16 (session 56) — route contract CLOSED + error sanitizer + refresh policy LIVE-PROVEN
 
 Branch `fix/stage4-live-final-acceptance` (ahead ~126, NOT pushed). Commit → **395a0d9**. Disk ~690M (93%).
