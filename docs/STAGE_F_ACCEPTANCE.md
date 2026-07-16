@@ -58,4 +58,29 @@ Live repair stats so far (WF28 + session-52 harness): 2 analyses, **0 JSON-synta
 - Fallbacks: **0** live (fallback path proven in unit tests).
 - Cost: $0.063 for the one live analysis; ~$0.01–0.03 expected per single-source call once evidence packages are tighter.
 
+## Session 55 — WF20→WF28 wired + deployed; honest AI cost LIVE-PROVEN; WF04-ROUTE-001 fixed
+
+| Item | Evidence |
+|---|---|
+| **WF20 → WF28 wiring** | DEPLOYED. WF20 `QBNFpiZE_IHKUKkf`, 65 nodes: Run WF12 Report → Build Analysis Inputs → Analyze Sources? → Shape Analysis Targets → Run WF28 → Merge Analyses → Build Execution Summary. Both IF branches converge, so the deterministic report always ships. Structural merge preserved 60 prod node ids + 8 creds + 9 execWf bindings; 0 dropped, 0 placeholders. |
+| **§4 honest AI cost — LIVE** | WF19 exec **840**. Real approval message: `💰 Оценка стоимости: $0.08–0.12` / `• сбор данных: ~$0.01` / `• AI-анализ: ~$0.07–0.11` / `• максимальный лимит запуска: $8.00`. The measured range brackets the real $0.063–$0.084. |
+| **CAP-CLAUDE-001 — LIVE** | Same exec: `claude_capability={"available":true,"mode":"proven_credential","proof_at":"2026-07-16T06:50:14.969Z"}` — availability derived from the system's OWN llm_analysis_telemetry row (written by WF28 exec 834), with **no secret read**. Production has no MS_CLAUDE_API_KEY; auth is the n8n credential. |
+| **Feature flags persisted** | `/opt/n8n/n8n.env` appended only (first 93 lines byte-identical): `MS_ENABLE_LLM_ANALYSIS=true`, `MS_ENABLE_WF08_LLM=false`. Rollback: `cp /opt/n8n/n8n.env.bak-stagef-20260716-141617 /opt/n8n/n8n.env && cd /opt/n8n && docker compose up -d`. |
+| **WF08-LLM-GATE-001** | WF20 armed WF08's legacy per-record Claude from `enable_llm_analysis` (=true in prod) while cost_model no longer quoted it → ~12 unquoted 16-28s calls/run. Now gated on `enable_wf08_llm` (default OFF). |
+| **WF04-ROUTE-001 — fixed + LIVE-PROVEN** | WF02/03/04/08 appended each record to a DYNAMIC route tab on the CRITICAL path; 6 routes emitted, 3 declared → a missing tab killed the run (exec 861/870/873: "Sheet with name technical_errors not found"). All 4 appends now fail-open; `technical_errors` + `skipped_log` declared canonically (46 tabs) and created live. PROOF: WF04 exec **871** ran the full chain `urls_received=1 urls_scraped=1 primary_calls=1`; execs 879/881 succeed. |
+| **Fail-open path — LIVE** | WF20 exec **878**: `do_analyze=false reason=no_sources` → deterministic report still built + delivered, `actual_ai_usd=0`. A disabled/empty analyst never blocks delivery. |
+
+### NOT proven yet (honest)
+
+| Item | Why |
+|---|---|
+| **WF28 reached from WF20 with real data** | Every approved run ended `reason=no_sources`. **`url_registry` dedup is PERMANENT — no time window** (`Evaluate Dedup`: `const hit = !force && rows.some(...)`), so every previously-scraped site yields an empty WF12 bundle. WF04 already accepts `force_reprocess` (FORCE-REPROCESS-001); it is NOT wired planner→plan→WF20. That wiring is the next task and is also required by spec §3/§5. |
+| **Concise Telegram report** | Measured "before": WF20 exec 878 no-data = **2082 chars**. Targets 900–1600 / 250–700 not yet implemented. |
+| **Three distinct source outcomes** | data / no-new-data / technical failure are still conflated in one message. |
+| TG + VK single-source, synthesis, WF27 enrichment, lead interpretation, CodeVinci AI Pilot, repair-rate ≥5 | Not started. |
+
+**Live Claude spend this session: $0** (WF28 never fired — no evidence was ever collected).
+
+**Stage F.5 must NOT start.**
+
 **Stage F.5 must NOT start** — Stage F is not complete.

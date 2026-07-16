@@ -4,34 +4,53 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-07-16, session 54) — WF28 Claude Analyst LIVE-PROVEN → wire it into the bot next
+## CURRENT PRIORITY (2026-07-16, session 55) — wire force_reprocess, then the fresh-site WF28 E2E
 
-WF28 — Claude Analyst is built, deployed (id `mswf28claudeanalyst`, active), and LIVE-PROVEN through n8n: real
-Claude call via the credential, tool_use, 1 bounded repair, deterministic fallback path, persistence to
-`llm_analysis_results` + `llm_analysis_telemetry` (both live in the prod sheet), and reuse-by-hash ($0). Details:
-`docs/STAGE_F_ACCEPTANCE.md`. `make test` ALL SUITES PASS. Prod: 17 active, healthy.
+WF20→WF28 is WIRED + DEPLOYED. The §4 honest AI cost + credential capability are LIVE-PROVEN (WF19 exec 840:
+`mode=proven_credential`, message quotes `AI-анализ: ~$0.07–0.11`). WF04-ROUTE-001 is fixed + live-proven (exec 871
+scraped 1 page through the full chain). **But WF28 has never yet been reached from WF20 with real data.**
 
-**Continue Stage F (nothing needs re-deriving — WF28 is the working call primitive):**
-1. **WF20 → WF28 wiring** — after the deterministic per-source collection+quality gate, WF20 builds the evidence
-   package (evidence_package input shape: {request, source, current_run_facts, evidence[], deterministic_scores,
-   limitations, historical_context}) and calls WF28 (execWf, id mswf28claudeanalyst) per source; store the returned
-   analysis_id + typed analysis on the run.
-2. **Report/XLSX enrichment** — WF12 renders «Подтверждённые факты / Аналитические выводы / Рекомендации /
-   Доказательства и ограничения» from the WF28 analysis (fact vs inference vs recommendation via item.kind); add
-   Stage-F XLSX sheets (Аналитические выводы / Рекомендации / Боли и сигналы / Доказательства) ONLY when populated.
-   Deterministic report + XLSX must still ship if WF28 returns enriched=false.
-3. **Multi-source synthesis** (ccSynthesisTool) + **discovery enrichment** (WF27, top 3–5) + **public lead
-   interpretation** — same WF28 pattern with the other analysis_type + tool.
-4. **CodeVinci AI Pilot** conversational agent — analyst_agent/analyst_tools, read-only tool auto-select,
-   approval-gated mutations; `/status`/`/cancel`/`/help` stay deterministic.
-5. **Enable in prod:** set `MS_ENABLE_LLM_ANALYSIS=true` in the container env (env/recreate — operator/infra), then
-   a full Telegram E2E. For controlled proofs: `docker exec -e MS_ENABLE_LLM_ANALYSIS=true -e N8N_RUNNERS_BROKER_PORT=5690 n8n-n8n-1 n8n execute --id=<driver>` (WF28 must be active; CLI can't call an inactive sub-wf).
-6. **§15 live scenarios** remaining: #2 TG, #3 VK, #4 3-source, #5/#6 discovery enrich, #7 lead, #8 no-data, #10
-   repair-fail→fallback, #11 context-too-long, #12-16 conversational, #18 report/XLSX consistency.
-7. **Cleanup disposable QA drivers:** msqawf28proof, msqamktabs, msdrvscope12 (all inactive/callable; operator-gated delete).
-8. **Operator/infra:** harden SSH (brute-force flood) + reclaim VPS disk.
+**THE BLOCKER (and the next task):** `url_registry` dedup is **PERMANENT — no time window**
+(`WF04 > Evaluate Dedup`: `const hit = !force && key !== '' && rows.some(...)`). Every site ever scraped
+(autolombardn1.ru, mkbkfin.ru, carmoney.ru, finardi.ru, lioncredit.ru) is skipped forever, so every approved run
+yields an empty WF12 bundle → `do_analyze=false reason=no_sources` → WF28 never fires. Without a refresh path a user
+can NEVER re-analyze a source.
+
+**WF04 ALREADY supports it** — `force_reprocess` is a declared callable input (FORCE-REPROCESS-001) and
+`Evaluate Dedup` honours it. It is simply not wired end-to-end. This is ALSO required by spec §3/§5 (offer
+"принудительно обновить источник" on a dedup skip).
+
+1. **Wire force_reprocess** (planner → plan row → WF20 → WF04):
+   - `request_planner.deterministicPlan`: detect refresh phrasing (обнови / заново / принудительно / ещё раз /
+     свежие данные) → `plan.force_refresh = true`. NB Cyrillic `\b`/`\w` do not fire — use `[а-яё]` classes.
+   - `config/sheets_contracts.json` → `execution_plans`: add a `force_refresh` column (headers + buildPlanRow in
+     request_planner). Keep it OUT of `planFingerprint` only if it must not split B4 dedup — decide deliberately: a
+     refresh IS a different request, so it SHOULD be in the fingerprint.
+   - WF20 `Resolve Approved Plan`: read `force_refresh` off the row → plan.
+   - WF20 `Resolve Collection Set`: expose `force_reprocess`.
+   - WF20 `Run Website Source (WF04)` execWf: pass `force_reprocess: "={{ ... }}"` (input already declared on WF04).
+   - Cost: a forced refresh DOES cost a Firecrawl page — the plan must quote it (it already does).
+2. **Fresh-site WF28 E2E** — send "Обнови carmoney.ru" (already scraped, so force is required), approve, then verify:
+   a WF28 execution actually runs; report has facts/inferences/recommendations; XLSX has the Stage-F sheets;
+   estimate brackets actual; no WF08 per-record calls.
+3. **Three distinct source outcomes** (currently conflated in one message): data / no-new-data (dedup skip) /
+   technical failure. A dedup skip is NOT a provider failure; no evidence ⇒ no WF28 call ⇒ actual AI cost $0.
+4. **Concise adaptive Telegram renderer** — measured "before": WF20 exec 878 no-data = **2082 chars** (historical
+   context + other-source list + duplicated "no data"). Target 900–1600 enriched / 250–700 no-data; full detail stays
+   in XLSX + bundle. One policy footer only.
+5. **Cause-specific no-data recommendations** — dedup ⇒ open previous report / force refresh; unreachable ⇒ retry;
+   never "запустить сбор" right after a failure without saying why.
+6. Then: TG + VK single-source; multi-source synthesis; WF27 top-candidate enrichment; public lead interpretation;
+   CodeVinci AI Pilot; repair-rate over ≥5 fresh packages.
+7. **Cleanup disposable QA drivers:** msqamktetab, msqamkslog, msqawf28proof, msqamktabs, msdrvscope12.
+8. **Operator/infra:** harden SSH (brute-force log flood), reclaim VPS disk (734M free; docker 2.6G all-active).
 
 **Do NOT start Stage F.5 (Opportunity Radar) or Stage G.**
+
+**Exact next command:**
+```
+grep -n "force_reprocess" n8n/workflows/04_firecrawl_url_list_resilient.json | head
+```
 
 ---
 

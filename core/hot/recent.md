@@ -4,6 +4,59 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-16 (session 55) — WF20→WF28 WIRED + DEPLOYED; honest AI cost LIVE-PROVEN; WF04-ROUTE-001 fixed
+
+Branch `fix/stage4-live-final-acceptance` (ahead ~124, NOT pushed). Commits → **5f49103** (WF20→WF28 integration +
+report/XLSX + honest cost) · **369cd7c** (WF08-LLM-GATE-001) · **d119b9d** (WF04-ROUTE-001). Disk 734M (93%).
+`make test` ALL PASS at 5f49103; focused suites PASS at d119b9d.
+
+**PRODUCTION ENV CHANGED** (operator-authorized). `/opt/n8n/n8n.env` — appended ONLY (first 93 lines byte-identical,
+md5 35679491d996595173442bc7b012fa26): `MS_ENABLE_LLM_ANALYSIS=true` (was unset → code default true; now explicit +
+auditable), `MS_ENABLE_WF08_LLM=false`. `MS_ENABLE_CLAUDE=true` was already set. **Rollback:** `cp
+/opt/n8n/n8n.env.bak-stagef-20260716-141617 /opt/n8n/n8n.env && cd /opt/n8n && docker compose up -d`.
+
+**DEPLOYED** (structural merge preserving prod ids/creds/bindings; script scratchpad/merge_prod.js; backups in
+scratchpad/backup/): WF20 `QBNFpiZE_IHKUKkf` (65 nodes, 60 ids + 8 creds + 9 execWf bindings preserved, 5 new Stage-F
+nodes), WF19 `d0ffU5QxNb8zpwKW` (11 nodes, +Read llm_analysis_telemetry), WF04 `k4ob2TaXvCx6IDrm`, WF08
+`LyXzme02gAMWK0GB`. 17 active, healthz ok, webhook ok.
+
+**LIVE-PROVEN — §4 honest AI cost + CAP-CLAUDE-001 (the session's biggest win).** WF19 exec **840**:
+`claude_capability={"available":true,"mode":"proven_credential","proof_at":"2026-07-16T06:50:14.969Z"}` — the system
+derived its OWN AI availability from the telemetry row WF28 exec 834 wrote, **without reading any secret**. Real
+approval message: `💰 Оценка стоимости: $0.08–0.12 / • сбор данных: ~$0.01 / • AI-анализ: ~$0.07–0.11 / •
+максимальный лимит запуска: $8.00` — the MEASURED range brackets the real $0.063–$0.084. The old "AI-анализ: пока
+выключен (до Stage F)" fiction is gone.
+
+**WF04-ROUTE-001 — real prod defect found by the E2E and fixed (d119b9d).** WF02/03/04/08 each append every record to
+a DYNAMIC route tab (`{{ $json.route }}`) **on the critical path** (Normalize+Route → append → Build Registry Row →
+url_registry → Loop). 6 routes emitted, only 3 declared/bootstrapped → a technical error hit a missing tab and killed
+the whole run (exec 861/870/873). Fixed: all 4 appends fail-open (onError continue + alwaysOutputData); declared
+`technical_errors` + `skipped_log` canonically (46 tabs, same 54-col family, 30d retention) and **created both tabs
+live**. PROOF: same URL after the fix → WF04 exec **871** ran the FULL chain `urls_received=1 urls_scraped=1
+primary_calls=1` → url_registry + competitor_site_snapshots written; execs 879/881 succeed where 861/873 died.
+
+**WF08-LLM-GATE-001 (369cd7c)** — cost_model stopped QUOTING WF08's legacy per-record Claude, but WF20 still ARMED it
+from `enable_llm_analysis` (=true in prod) → ~12 unquoted 16-28s calls/run. Now armed by `enable_wf08_llm` (default
+OFF): the flag that quotes is the flag that spends.
+
+**NOT YET PROVEN — WF28 has never been reached from WF20 with real data.** Every approved run so far ended
+`do_analyze=false reason=no_sources` (empty WF12 bundle). **Root cause: `url_registry` dedup is PERMANENT — there is
+NO time window** (`Evaluate Dedup`: `const hit = !force && rows.some(...)`). autolombardn1.ru / mkbkfin.ru /
+carmoney.ru are all burned. **WF04 already accepts a canonical `force_reprocess` callable input (FORCE-REPROCESS-001)
+— it is simply NOT wired from planner→plan row→WF20.** Wiring it is BOTH the E2E enabler AND required by spec §3/§5
+("принудительно обновить источник"). That is the next task.
+
+**Telegram length (operator complaint) — "before" evidence captured:** WF20 exec 878 no-data message = **2082 chars**
+with historical context, other-source lists and duplicated "no data" phrasing. Target: 900–1600 enriched / 250–700
+no-data. Renderer not yet built.
+
+**REMAINING Stage F:** force_reprocess wiring → fresh-site WF28 E2E; 3 distinct source outcomes (data / no-new-data /
+technical failure — currently conflated); concise adaptive Telegram renderer; cause-specific no-data recommendations;
+TG + VK single-source; synthesis; WF27 enrichment; lead interpretation; CodeVinci AI Pilot; repair-rate ≥5 samples.
+Disposable QA drivers to remove: msqamktetab, msqamkslog, msqawf28proof, msqamktabs, msdrvscope12.
+
+---
+
 ## Session: 2026-07-16 (session 54) — STAGE F WF28 Claude Analyst BUILT + DEPLOYED + LIVE-PROVEN through n8n
 
 Branch `fix/stage4-live-final-acceptance` (ahead ~121, NOT pushed). Commits → **add4427** (WF28+contracts+libs) ·
