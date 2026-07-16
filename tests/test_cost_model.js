@@ -25,8 +25,20 @@ A.section('planned provider calls derive from the plan sources + configured targ
   A.eq('pre-F (no enrichment flag) => zero Claude calls projected', c.claude_calls, 0);
   A.eq('pre-F => llm_enabled=false', c.llm_enabled, false);
   const withLlm = CM.plannedProviderCalls(plan, Object.assign({}, cfg, { enable_llm_analysis: true }));
-  A.eq('Stage-F (enable_llm_analysis) => per-record (capped 12) + summary + repair', withLlm.claude_calls, 12);
   A.eq('Stage-F => llm_enabled=true', withLlm.llm_enabled, true);
+  // WF08-LLM-GATE-001: WF08's LEGACY per-record classifier no longer rides on enable_llm_analysis — enabling the
+  // Stage-F role must not silently arm (or quote) 12 uncharacterized per-record calls.
+  A.eq('Stage-F alone does NOT arm the WF08 per-record classifier', withLlm.claude_calls, 0);
+  const wf08 = CM.plannedProviderCalls(plan, Object.assign({}, cfg, { enable_llm_analysis: true, enable_wf08_llm: true }));
+  A.eq('explicit MS_ENABLE_WF08_LLM => per-record (capped 12) + summary + repair', wf08.claude_calls, 12);
+  // Stage F: ONE analysis per LOGICAL SOURCE (3 sites + 1 tg + 1 avito = 5, at the default cap) + 1 synthesis.
+  A.eq('Stage-F => one WF28 analysis per logical source, capped', withLlm.claude_analysis_calls, 5);
+  A.eq('Stage-F => one synthesis when >1 source is compared', withLlm.claude_synthesis_calls, 1);
+  const oneSrc = CM.plannedProviderCalls({ sources: ['website'], urls: ['https://autolombardn1.ru'] }, Object.assign({}, cfg, { enable_llm_analysis: true }));
+  A.eq('single source => one analysis', oneSrc.claude_analysis_calls, 1);
+  A.eq('single source => no synthesis (nothing to compare)', oneSrc.claude_synthesis_calls, 0);
+  const capped = CM.plannedProviderCalls(plan, Object.assign({}, cfg, { enable_llm_analysis: true, llm_max_analyses_per_run: 2 }));
+  A.eq('analysis fan-out is hard-capped (no per-row call explosion)', capped.claude_analysis_calls, 2);
   const noweb = CM.plannedProviderCalls({ sources: ['telegram'], max_items: 10 }, cfg);
   A.eq('telegram-only plan needs no Firecrawl', noweb.firecrawl_pages, 0);
   A.eq('telegram-only plan needs no Apify', noweb.apify_searches, 0);
@@ -56,8 +68,13 @@ A.section('projection math + hard cap separation');
   A.eq('cost_high = projected + 50% reserve', p.cost_high_usd, 0.09);
   A.eq('hard_cap_usd = source+llm budgets (technical, separate value)', p.hard_cap_usd, 8);
   A.ok('projection is far below the $8 cap for a normal request', p.projected_cost_usd < 1);
+  // Stage F: collection 0.06 + (5 analyses + 1 synthesis) x $0.07 measured = 0.42 -> 0.48. The AI component is
+  // priced from the MEASURED per-call cost ($0.063-$0.084), never the legacy $0.02 small-call figure.
   const pLlm = CM.projectRequestCost(plan, Object.assign({}, cfg, { enable_llm_analysis: true }));
-  A.eq('Stage-F projection includes Claude (0.06 + 12*0.02 = 0.30)', pLlm.projected_cost_usd, 0.3);
+  A.eq('Stage-F projection includes the measured WF28 analysis cost', pLlm.projected_cost_usd, 0.48);
+  A.eq('collection component is separate', pLlm.breakdown.collection_usd, 0.06);
+  A.eq('AI component is separate', pLlm.breakdown.ai_usd, 0.42);
+  A.ok('Stage-F total is never quoted at the fictional $0.01-0.02', pLlm.projected_cost_usd > 0.02);
   A.eq('Stage-F projection reports llm_enabled=true', pLlm.llm_enabled, true);
   const bad = CM.projectRequestCost(plan, Object.assign({}, cfg, { cost_firecrawl_page_usd: 0 }));
   A.eq('a missing/zero unit price for a planned provider => unreliable', bad.reliable, false);
@@ -93,17 +110,60 @@ A.section('$8 regression — the cap is never shown as the expected request pric
   A.ok("approval message NEVER says 'потратит до'", msg.text.indexOf('потратит до') < 0);
 }
 
-A.section('B3 — cost breakdown band names AI as OFF pre-F, never quotes a Claude cost that will not run');
+A.section('B3 — cost breakdown band names AI as OFF when it is off, never quotes a cost that will not run');
 {
   const proj = CM.projectRequestCost(plan, cfg);
   const msg = R.planApprovalMessageRu(plan, { cost: proj });
   A.ok('shows a low–high band', /Оценка стоимости: \$0\.06–0\.09/.test(msg.text), msg.text);
-  A.ok('names AI enrichment as off until Stage F', msg.text.indexOf('AI-анализ: пока выключен') >= 0, msg.text);
+  A.ok('names AI enrichment as off', msg.text.indexOf('AI-анализ: выключен') >= 0, msg.text);
   A.ok('shows the run hard cap line', msg.text.indexOf('максимальный лимит запуска: $8') >= 0, msg.text);
-  A.ok('breakdown never quotes a Claude $ amount pre-F', msg.text.indexOf('AI-анализ: ~$') < 0, msg.text);
+  A.ok('breakdown never quotes a Claude $ amount when AI is off', msg.text.indexOf('AI-анализ: ~$') < 0, msg.text);
   const projLlm = CM.projectRequestCost(plan, Object.assign({}, cfg, { enable_llm_analysis: true }));
   const msgLlm = R.planApprovalMessageRu(plan, { cost: projLlm });
-  A.ok('Stage-F band quotes the AI cost', msgLlm.text.indexOf('AI-анализ: ~$0.24') >= 0, msgLlm.text);
+  A.ok('Stage-F band quotes the measured AI range', msgLlm.text.indexOf('AI-анализ: ~$0.42–0.63') >= 0, msgLlm.text);
+}
+
+// §4 AI-COST-001 — the plan's AI promise/cost tracks the three real availability states. Production auth lives in
+// an n8n CREDENTIAL, so claude_key_present (env) is false while Claude works: gating on it alone silently dropped
+// the AI component from an estimate for work that WILL run.
+A.section('§4 — AI cost across the three credential-availability states');
+{
+  const onCfg = Object.assign({}, cfg, { enable_llm_analysis: true });
+  // 1. flag OFF -> AI named off, no AI cost.
+  const off = CM.projectRequestCost(plan, Object.assign({}, cfg, { claude_available: true }));
+  A.eq('flag OFF => llm_enabled=false', off.llm_enabled, false);
+  A.eq('flag OFF => zero AI cost', off.breakdown.ai_usd, 0);
+  A.ok('flag OFF => message says AI is off', R.planApprovalMessageRu(plan, { cost: off }).text.indexOf('AI-анализ: выключен') >= 0);
+  // 2. flag ON + credential available -> evidence-based AI range.
+  const on = CM.projectRequestCost(plan, Object.assign({}, onCfg, { claude_available: true }));
+  A.eq('flag ON + credential => llm_enabled=true', on.llm_enabled, true);
+  A.ok('flag ON + credential => real AI cost', on.breakdown.ai_usd > 0);
+  // 3. flag ON + credential missing/failing -> no AI promise, no AI cost, but the run still proceeds.
+  const broken = CM.projectRequestCost(plan, Object.assign({}, onCfg, { claude_available: false }));
+  A.eq('flag ON + no credential => llm_enabled=false (never promise AI that cannot run)', broken.llm_enabled, false);
+  A.eq('flag ON + no credential => zero AI cost', broken.breakdown.ai_usd, 0);
+  A.eq('flag ON + no credential => llm_auth_ok=false', broken.llm_auth_ok, false);
+  A.eq('flag ON + no credential => llm_requested stays true (the user asked)', broken.llm_requested, true);
+  const brokenMsg = R.planApprovalMessageRu(plan, { cost: broken }).text;
+  A.ok('flag ON + no credential => message says AI is unavailable, not "off"', brokenMsg.indexOf('AI-анализ: сейчас недоступен') >= 0, brokenMsg);
+  A.ok('flag ON + no credential => still no AI $ quoted', brokenMsg.indexOf('AI-анализ: ~$') < 0, brokenMsg);
+  // claude_available wins over the legacy env-key signal (production: no env key, working credential).
+  const credOnly = CM.projectRequestCost(plan, Object.assign({}, onCfg, { claude_key_present: false, claude_available: true }));
+  A.eq('n8n credential (no env key) => AI cost IS quoted', credOnly.llm_enabled, true);
+}
+
+A.section('§4 — actual AI cost is captured separately and compared with the estimate');
+{
+  const act = CM.actualRequestCost({ firecrawl_pages: 1, claude_analysis_cost_usd: 0.084 }, cfg);
+  A.eq('actual splits collection', act.actual_collection_usd, 0.01);
+  A.eq('actual splits AI (real WF28 usage-token cost)', act.actual_ai_usd, 0.08);
+  A.eq('actual total = collection + AI', act.actual_cost_usd, 0.09);
+  A.eq('hard cap still bounds the run', act.hard_cap_usd, 8);
+  // The live-measured single-source run ($0.084) must fall inside the quoted band for that plan shape.
+  const oneSitePlan = { sources: ['website'], urls: ['https://autolombardn1.ru'], max_items: 10 };
+  const q = CM.projectRequestCost(oneSitePlan, Object.assign({}, cfg, { enable_llm_analysis: true, claude_available: true }));
+  A.ok('measured $0.084 falls inside the quoted band (' + q.cost_low_usd + '-' + q.cost_high_usd + ')',
+    0.084 >= q.cost_low_usd * 0.5 && 0.084 <= q.cost_high_usd, JSON.stringify(q.breakdown));
 }
 
 A.section('B2 — plan wording matches request shape (no false "сравнение"/"до N с каждого" for one source)');

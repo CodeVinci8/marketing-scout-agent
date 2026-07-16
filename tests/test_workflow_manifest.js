@@ -14,19 +14,22 @@ const EXPECTED_CLOSURE = [
   '16_source_quality_gate_health_score.json', '17_agent_settings_config.json', '18_telegram_agent_gateway.json',
   '19_request_planner.json', '20_agent_orchestrator.json', '21_deep_competitor_analysis.json',
   '22_conversation_control.json', '23_scheduled_source_monitor.json', '24_report_export_delivery.json',
-  '25_weekly_digest.json', '26_vk_public_community_collector.json', '27_competitor_discovery.json'
+  '25_weekly_digest.json', '26_vk_public_community_collector.json', '27_competitor_discovery.json',
+  // STAGE-F-INTEGRATION: WF20 now calls the Claude analyst on the approved-run path, so WF28 is runtime, not an
+  // orphan callable.
+  '28_claude_analyst.json'
 ];
 const TEST_ONLY = ['00_healthcheck_manual_test.json', '01_google_sheets_append_row_test.json', '15_live_source_run_logger.json'];
 
 function freshManifest() { return JSON.parse(JSON.stringify(L.loadManifest())); }
 
-A.section('QA-001 — runtime closure (17) is the single source of truth');
+A.section('QA-001 — the runtime closure is the single source of truth');
 const closure = L.runtimeClosure().slice().sort();
-A.eq('runtime closure is exactly the 18 expected workflows', closure, EXPECTED_CLOSURE.slice().sort());
-A.eq('runtime-count == 17', L.deployment().runtime_workflow_count, 18);
-// 16 = 13 (DEC-161) + Stage 5 fan-out (WF20 -> WF09 Avito / WF11 Telegram / WF26 VK).
-A.eq('binding edges == 16', L.bindingEdges().length, 17);
-A.eq('callable targets == 13', L.callableTargets().length, 14);
+A.eq('runtime closure is exactly the 19 expected workflows', closure, EXPECTED_CLOSURE.slice().sort());
+A.eq('runtime-count == 19', L.deployment().runtime_workflow_count, 19);
+// 18 = 13 (DEC-161) + Stage 5 fan-out (WF20 -> WF09 Avito / WF11 Telegram / WF26 VK) + Stage F (WF20 -> WF28).
+A.eq('binding edges == 18', L.bindingEdges().length, 18);
+A.eq('callable targets == 15', L.callableTargets().length, 15);
 A.eq('expected n8n version', L.expectedN8nVersion(), '2.23.3');
 for (const f of ['04_firecrawl_url_list_resilient.json', '08_touchpoint_analyzer.json', '10_competitor_audience_intelligence_aggregator.json', '12_market_intelligence_report_builder.json', '16_source_quality_gate_health_score.json'])
   A.ok('callable dependency in closure: ' + f, closure.indexOf(f) >= 0);
@@ -35,7 +38,7 @@ for (const f of TEST_ONLY) A.ok('test/manual workflow excluded from runtime: ' +
 A.section('QA-001 — import order is topological (every callable bound before its caller)');
 const order = L.importOrder();
 const posn = {}; order.forEach((f, i) => { posn[f] = i; });
-A.eq('import order is a permutation of the closure (18, unique)', order.length === 18 && new Set(order).size === 18, true);
+A.eq('import order is a permutation of the closure (19, unique)', order.length === 19 && new Set(order).size === 19, true);
 for (const e of L.bindingEdges())
   A.ok('dependency before caller: ' + e.target_wf + ' < ' + e.caller_wf, posn[e.target_workflow] < posn[e.caller_workflow]);
 
@@ -47,7 +50,7 @@ A.ok('weekly digest adds WF25', L.activationPlan({ weeklyDigest: true }).indexOf
 A.ok('WF25 is NOT in the always set', L.deployment().activation.always.indexOf('25_weekly_digest.json') < 0);
 const fullPlan = L.activationPlan({ monitoring: true, weeklyDigest: true });
 A.ok('no callable target ever appears in an activation plan', fullPlan.every(f => !callable.has(f)));
-A.eq('callable_trigger_count == 13', L.deployment().activation.callable_trigger_count, 14);
+A.eq('callable_trigger_count == 15', L.deployment().activation.callable_trigger_count, 15);
 
 A.section('manifest validator passes on the committed manifest');
 A.eq('runChecks(committed) has zero failures', runChecks(freshManifest()).failed, 0);

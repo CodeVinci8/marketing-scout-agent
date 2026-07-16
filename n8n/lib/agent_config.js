@@ -42,12 +42,25 @@ const DEFAULTS = {
   require_source_health: true,
   enable_llm_planner: false,
   enable_llm_summary: false,
-  enable_llm_analysis: true,   // WF08 llm_primary in agent runs (still gated by enable_claude + token + budget)
+  enable_llm_analysis: true,   // Stage-F WF28 evidence-bound analysis (still gated by enable_claude + credential)
+  // WF08-LLM-GATE-001: WF08's LEGACY per-record Claude classifier predates the Stage-F gateway characterization
+  // (it assumes honoured max_tokens / plain-JSON text output — neither of which the measured gateway provides) and
+  // costs one 16-28s call PER RECORD (~12/run). Enabling the Stage-F role must not silently arm it too, so it now
+  // has its OWN default-OFF gate instead of riding on enable_llm_analysis. Set MS_ENABLE_WF08_LLM=true to opt in.
+  enable_wf08_llm: false,
+  // Stage F: how many logical sources one approved run may send to WF28. Bounds the analysis fan-out (and its
+  // cost) — never a per-row call explosion.
+  llm_max_analyses_per_run: 5,
   // §7 provider unit prices (observed 2026-07: Firecrawl ~1 credit/page, Apify ~$0.01/search, small
   // sonnet call ~$0.01-0.02). Overridable: MS_COST_FIRECRAWL_PAGE_USD / MS_COST_APIFY_SEARCH_USD / MS_COST_CLAUDE_CALL_USD.
   cost_firecrawl_page_usd: 0.01,
   cost_apify_search_usd: 0.01,
   cost_claude_call_usd: 0.02,
+  // Stage F MEASURED price of ONE evidence-bound WF28 source analysis. The gateway injects a large hidden context
+  // (~465-2200 tokens) and always runs extended thinking, so a real single-source call measured $0.063 (clean) and
+  // $0.084 (with one repair) — an order of magnitude above cost_claude_call_usd. Quoting $0.02 for it would
+  // understate an approved spend. Overridable: MS_COST_CLAUDE_ANALYSIS_USD.
+  cost_claude_analysis_usd: 0.07,
   report_data_mode: 'live',
   // ---- Stage 4 free-path / zero-paid-call guards (all fail-closed) -------------------------------------------
   // Telegram conversation is allowed; every PAID external action is OFF by default. The free path runs the full
@@ -59,7 +72,11 @@ const DEFAULTS = {
   enable_telegram: false,
   enable_external_actions: false,   // master switch for any paid collection/analysis
   enable_claude: false,             // Claude (planner/summary) only when explicitly enabled
-  claude_key_present: false,        // no Claude API key until Stage F is provisioned (cost_model gates on this)
+  claude_key_present: false,        // MS_CLAUDE_API_KEY in the process env (NOT how production authenticates)
+  // CAP-CLAUDE-001: production Claude auth is an n8n CREDENTIAL bound to the HTTP node, invisible to a Code node.
+  // An operator MAY declare it (MS_CLAUDE_CREDENTIAL_AVAILABLE=true) for a fresh install, but the authoritative
+  // signal is the system's own llm_analysis_telemetry proof — see n8n/lib/llm_capability.js.
+  claude_credential_declared: false,
   enable_apify: false,
   enable_firecrawl: false,
   enable_vk: false,
@@ -116,6 +133,9 @@ function resolveConfig(env, overrides) {
     enable_llm_planner: bool(env.MS_ENABLE_LLM_PLANNER, DEFAULTS.enable_llm_planner),
     enable_llm_summary: bool(env.MS_ENABLE_LLM_SUMMARY, DEFAULTS.enable_llm_summary),
     enable_llm_analysis: bool(env.MS_ENABLE_LLM_ANALYSIS, DEFAULTS.enable_llm_analysis),
+    enable_wf08_llm: bool(env.MS_ENABLE_WF08_LLM, DEFAULTS.enable_wf08_llm),
+    llm_max_analyses_per_run: num(env.MS_LLM_MAX_ANALYSES_PER_RUN, DEFAULTS.llm_max_analyses_per_run),
+    cost_claude_analysis_usd: num(env.MS_COST_CLAUDE_ANALYSIS_USD, DEFAULTS.cost_claude_analysis_usd),
     report_data_mode: str(env.MS_REPORT_DATA_MODE) || DEFAULTS.report_data_mode,
     timezone: str(env.MS_TIMEZONE) || DEFAULTS.timezone,
     enable_telegram: bool(env.MS_ENABLE_TELEGRAM, DEFAULTS.enable_telegram),
@@ -125,6 +145,7 @@ function resolveConfig(env, overrides) {
     // enrichment flags are on, Claude cannot run — the cost estimate must not quote an AI cost for work that
     // will not execute. Consumed by cost_model to decide whether Claude is a real planned call.
     claude_key_present: str(env.MS_CLAUDE_API_KEY) !== '',
+    claude_credential_declared: bool(env.MS_CLAUDE_CREDENTIAL_AVAILABLE, DEFAULTS.claude_credential_declared),
     enable_apify: bool(env.MS_ENABLE_APIFY, DEFAULTS.enable_apify),
     enable_firecrawl: bool(env.MS_ENABLE_FIRECRAWL, DEFAULTS.enable_firecrawl),
     enable_vk: bool(env.MS_ENABLE_VK, DEFAULTS.enable_vk),
@@ -145,7 +166,7 @@ function resolveConfig(env, overrides) {
   }
   // fail-closed reconciliation: Claude master switch gates the LLM features; the external-actions master switch
   // (or a zero call ceiling) forces the effective paid-call budget to zero so no approval can spend.
-  if (!cfg.enable_claude) { cfg.enable_llm_planner = false; cfg.enable_llm_summary = false; cfg.enable_llm_analysis = false; }
+  if (!cfg.enable_claude) { cfg.enable_llm_planner = false; cfg.enable_llm_summary = false; cfg.enable_llm_analysis = false; cfg.enable_wf08_llm = false; }
   // WF19-LLM-001: there is NO in-graph Claude intent-classifier node in WF18, so the intent router's guarded
   // LLM branch is unreachable by construction. Pin enable_llm_intent=false in the resolved config so the router
   // always resolves deterministically or asks ONE clarification — we never advertise a classification path that

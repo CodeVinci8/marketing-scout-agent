@@ -41,9 +41,10 @@
       "24_report_export_delivery.json",
       "25_weekly_digest.json",
       "26_vk_public_community_collector.json",
-      "27_competitor_discovery.json"
+      "27_competitor_discovery.json",
+      "28_claude_analyst.json"
     ],
-    "runtime_workflow_count": 18,
+    "runtime_workflow_count": 19,
     "import_order": [
       "17_agent_settings_config.json",
       "04_firecrawl_url_list_resilient.json",
@@ -58,8 +59,9 @@
       "22_conversation_control.json",
       "24_report_export_delivery.json",
       "26_vk_public_community_collector.json",
-      "20_agent_orchestrator.json",
       "27_competitor_discovery.json",
+      "28_claude_analyst.json",
+      "20_agent_orchestrator.json",
       "18_telegram_agent_gateway.json",
       "23_scheduled_source_monitor.json",
       "25_weekly_digest.json"
@@ -78,7 +80,8 @@
       "22_conversation_control.json",
       "24_report_export_delivery.json",
       "26_vk_public_community_collector.json",
-      "27_competitor_discovery.json"
+      "27_competitor_discovery.json",
+      "28_claude_analyst.json"
     ],
     "binding_edges": [
       {
@@ -214,6 +217,16 @@
       {
         "caller_workflow": "20_agent_orchestrator.json",
         "caller_wf": "WF20",
+        "caller_node": "Run WF28 (Claude Analyst)",
+        "target_workflow": "28_claude_analyst.json",
+        "target_wf": "WF28",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "20_agent_orchestrator.json",
+        "caller_wf": "WF20",
         "caller_node": "Run Website Source (WF04)",
         "target_workflow": "04_firecrawl_url_list_resilient.json",
         "target_wf": "WF04",
@@ -252,7 +265,7 @@
         "required": true
       }
     ],
-    "binding_edge_count": 17,
+    "binding_edge_count": 18,
     "activation": {
       "always": [
         "18_telegram_agent_gateway.json"
@@ -277,9 +290,10 @@
         "22_conversation_control.json",
         "24_report_export_delivery.json",
         "26_vk_public_community_collector.json",
-        "27_competitor_discovery.json"
+        "27_competitor_discovery.json",
+        "28_claude_analyst.json"
       ],
-      "callable_trigger_count": 14
+      "callable_trigger_count": 15
     },
     "requires_runtime": {
       "xlsx_zlib": [
@@ -302,8 +316,7 @@
       "07_manual_touchpoint_intake.json",
       "13_public_discussion_or_reviews_connector_foundation.json",
       "14_public_lead_signal_triage.json",
-      "15_live_source_run_logger.json",
-      "28_claude_analyst.json"
+      "15_live_source_run_logger.json"
     ]
   },
   "runtime_identity": {
@@ -481,6 +494,32 @@
       "canonical_id": null,
       "id_source": "operator_local"
     },
+    "WF27": {
+      "wf": "WF27",
+      "file": "27_competitor_discovery.json",
+      "name": "27 — Cross-Source Competitor Discovery (Firecrawl Search, bounded)",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF28": {
+      "wf": "WF28",
+      "file": "28_claude_analyst.json",
+      "name": "28 — Claude Analyst (Stage F, evidence-bound, feature-gated)",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
     "WF20": {
       "wf": "WF20",
       "file": "20_agent_orchestrator.json",
@@ -520,23 +559,14 @@
           "target_wf": "WF16"
         },
         {
+          "caller_node": "Run WF28 (Claude Analyst)",
+          "target_wf": "WF28"
+        },
+        {
           "caller_node": "Run Website Source (WF04)",
           "target_wf": "WF04"
         }
       ],
-      "canonical_id": null,
-      "id_source": "operator_local"
-    },
-    "WF27": {
-      "wf": "WF27",
-      "file": "27_competitor_discovery.json",
-      "name": "27 — Cross-Source Competitor Discovery (Firecrawl Search, bounded)",
-      "role": "callable_dependency",
-      "callable": true,
-      "trigger_entrypoint": false,
-      "activation_flag": "never",
-      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
-      "binding_calls": [],
       "canonical_id": null,
       "id_source": "operator_local"
     },
@@ -628,8 +658,9 @@
     "22_conversation_control.json",
     "24_report_export_delivery.json",
     "26_vk_public_community_collector.json",
-    "20_agent_orchestrator.json",
     "27_competitor_discovery.json",
+    "28_claude_analyst.json",
+    "20_agent_orchestrator.json",
     "18_telegram_agent_gateway.json",
     "23_scheduled_source_monitor.json",
     "25_weekly_digest.json"
@@ -1403,7 +1434,7 @@
       "file": "19_request_planner.json",
       "wf_number": "WF19",
       "name": "19 — Request Planner (deterministic + guarded Claude)",
-      "node_count": 10,
+      "node_count": 11,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1437,7 +1468,7 @@
       "file": "20_agent_orchestrator.json",
       "wf_number": "WF20",
       "name": "20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)",
-      "node_count": 60,
+      "node_count": 65,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1463,7 +1494,8 @@
         "11_social_source_connector_foundation.json",
         "12_market_intelligence_report_builder.json",
         "16_source_quality_gate_health_score.json",
-        "26_vk_public_community_collector.json"
+        "26_vk_public_community_collector.json",
+        "28_claude_analyst.json"
       ],
       "binding_nodes": [
         {
@@ -1493,6 +1525,10 @@
         {
           "node": "Run WF16 Quality Gate",
           "target": "WF16"
+        },
+        {
+          "node": "Run WF28 (Claude Analyst)",
+          "target": "WF28"
         },
         {
           "node": "Run Website Source (WF04)",
@@ -1781,22 +1817,24 @@
       "classification": [
         "callable"
       ],
-      "capability_class": "legacy_referenced",
-      "deployment_role": "manual_diagnostic",
-      "runtime": false,
-      "activation_flag": "n/a",
+      "capability_class": "production_dependency",
+      "deployment_role": "callable_dependency",
+      "runtime": true,
+      "activation_flag": "never",
       "expected_active": false,
-      "called_by": [],
+      "called_by": [
+        "20_agent_orchestrator.json"
+      ],
       "calls": [],
       "binding_nodes": [],
       "requires_runtime": [],
-      "imported_by_deploy": false,
+      "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
       "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test",
+      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     }
   ]

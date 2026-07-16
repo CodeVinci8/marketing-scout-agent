@@ -1,5 +1,5 @@
 'use strict';
-// test_xlsx_writer.js — real OOXML/XLSX validity: ZIP container, required parts, all 8 sheets, headers, cell
+// test_xlsx_writer.js — real OOXML/XLSX validity: ZIP container, required parts, every sheet, headers, cell
 // values, hyperlinks, styling basics, freeze/filter, formula-injection safety, report isolation, determinism
 // (Sections 3.2 / 21). Re-opens the produced workbook and inspects it.
 const A = require('./_assert.js');
@@ -24,7 +24,7 @@ const parts = W.readZip(buf);
 A.section('required OOXML parts');
 ['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels', 'xl/styles.xml'].forEach(p =>
   A.ok('part ' + p, !!parts[p]));
-for (let i = 1; i <= 8; i++) A.ok('worksheet sheet' + i, !!parts['xl/worksheets/sheet' + i + '.xml']);
+for (let i = 1; i <= P.SHEET_NAMES.length; i++) A.ok('worksheet sheet' + i, !!parts['xl/worksheets/sheet' + i + '.xml']);
 
 A.section('sheet names (fixed order)');
 const wb = parts['xl/workbook.xml'].toString('utf8');
@@ -39,8 +39,8 @@ A.eq('Summary single row', pkg.row_counts['Сводка'], 1);
 
 A.section('headers + cell values');
 const comp = parts['xl/worksheets/sheet2.xml'].toString('utf8'); // Competitors
-A.ok('header Competitor', comp.indexOf('>Competitor<') >= 0);
-A.ok('header Source link', comp.indexOf('>Source link<') >= 0);
+A.ok('header Конкурент (RU headers, Stage F §6)', comp.indexOf('>Конкурент<') >= 0);
+A.ok('header Ссылка на источник', comp.indexOf('>Ссылка на источник<') >= 0);
 A.ok('Cashmotor cell', comp.indexOf('>Cashmotor<') >= 0);
 A.ok('numeric score 8.5 stored as <v>', comp.indexOf('<v>8.5</v>') >= 0);
 A.ok('Москва preserved', comp.indexOf('Москва') >= 0);
@@ -80,10 +80,13 @@ A.ok('no live <f> formula', offers.indexOf('<f>') < 0);
 
 A.section('no fabricated zero / unknown stays empty');
 A.ok('AvtoDengi empty score -> empty cell (no <v>0</v> forced)', true); // score null rendered empty (checked structurally below)
-A.ok('Run_Metadata unknown cost', parts['xl/worksheets/sheet8.xml'].toString('utf8').indexOf('unknown') >= 0);
+// Технические данные is the LAST sheet; Stage F inserted «Аналитические выводы»/«Боли и сигналы» before it, so
+// resolve it by position rather than a frozen sheet number.
+const techIdx = pkg.sheet_names.indexOf('Технические данные') + 1;
+A.ok('Технические данные unknown cost', parts['xl/worksheets/sheet' + techIdx + '.xml'].toString('utf8').indexOf('unknown') >= 0);
 
 A.section('report metadata embedded');
-A.ok('report id in metadata sheet', parts['xl/worksheets/sheet8.xml'].toString('utf8').indexOf('report_20260621_101500') >= 0);
+A.ok('report id in metadata sheet', parts['xl/worksheets/sheet' + techIdx + '.xml'].toString('utf8').indexOf('report_20260621_101500') >= 0);
 
 A.section('report isolation + determinism');
 let threw = false;

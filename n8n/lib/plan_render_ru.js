@@ -149,7 +149,18 @@ function planApprovalMessageRu(plan, opts) {
     lines.push('💰 Оценка стоимости: $' + d2(lo) + '–' + d2(hi));
     if (ruNum(bd.firecrawl_usd, 0) > 0) lines.push('• сбор данных: ~$' + d2(bd.firecrawl_usd));
     if (ruNum(bd.apify_usd, 0) > 0) lines.push('• объявления: ~$' + d2(bd.apify_usd));
-    lines.push(cost.llm_enabled ? ('• AI-анализ: ~$' + d2(bd.claude_usd)) : '• AI-анализ: пока выключен (до Stage F)');
+    // §4 AI-COST-001: three honest states. ON+usable -> quote the MEASURED evidence-based AI range (never the old
+    // $0.01-0.02 fiction). ON but the credential is missing/failing -> we must NOT promise analysis that cannot
+    // run, and must not bill for it. OFF -> say it is off, with no AI cost in the total.
+    var aiUsd = ruNum(bd.ai_usd, ruNum(bd.claude_usd, 0) + ruNum(bd.claude_analysis_usd, 0));
+    if (cost.llm_enabled && aiUsd > 0) {
+      var aiHi = Math.round(aiUsd * (1 + ruNum(cost.reserve_margin, 0.5)) * 100) / 100;
+      lines.push('• AI-анализ: ~$' + d2(aiUsd) + '–' + d2(aiHi));
+    } else if (cost.llm_requested && cost.llm_auth_ok === false) {
+      lines.push('• AI-анализ: сейчас недоступен — отчёт будет собран без него');
+    } else {
+      lines.push('• AI-анализ: выключен');
+    }
     if (ruNum(cost.hard_cap_usd, 0) > 0) lines.push('• максимальный лимит запуска: $' + d2(cost.hard_cap_usd));
   } else if (isFinite(pc) && pc > 0 && opts.projected_reliable !== false) {
     lines.push('');

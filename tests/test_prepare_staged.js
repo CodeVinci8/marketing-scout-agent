@@ -28,8 +28,8 @@ A.section('§8 — staged files carry resolved ids + resolved bindings + reconci
 {
   const r = PS.prepareStaged({ localMap: resolvedMap(), credExport: COMPAT });
   A.ok('staging ok with compatible credentials', r.ok);
-  A.eq('all 18 runtime workflows staged', r.summary.staged_count, 18);
-  A.eq('all 17 binding edges resolved', r.summary.bindings_resolved, 17);
+  A.eq('all 19 runtime workflows staged', r.summary.staged_count, 19);
+  A.eq('all 18 binding edges resolved', r.summary.bindings_resolved, 18);
   A.eq('0 bindings left unresolved', r.summary.bindings_unresolved, 0);
   A.eq('all credential references reconciled', r.summary.credentials_deferred, 0);
   A.ok('every staged workflow inactive', r.summary.all_inactive);
@@ -48,10 +48,10 @@ A.section('§8 — staged output (on disk) has zero placeholders and a resolved 
     if (wf.active === false) inactive++;
     if (wf.id) withId++;
   }
-  A.eq('18 files written', n, 18);
+  A.eq('19 files written', n, 19);
   A.eq('zero placeholders remain (bindings + creds resolved)', placeholders, 0);
-  A.eq('all inactive', inactive, 18);
-  A.eq('every staged workflow has a resolved id', withId, 18);
+  A.eq('all inactive', inactive, 19);
+  A.eq('every staged workflow has a resolved id', withId, 19);
   // staged != raw source: the raw committed file has no id and carries placeholders
   const rawWf08 = JSON.parse(fs.readFileSync(path.join(L.WF_DIR, '08_touchpoint_analyzer.json'), 'utf8'));
   A.ok('raw committed source carries the credential placeholder (proves staged is different)', /PASTE_CREDENTIAL_ID_HERE/.test(JSON.stringify(rawWf08)) && !rawWf08.id);

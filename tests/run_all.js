@@ -68,6 +68,8 @@ const JS_SUITES = [
   //     orchestration (validate -> one repair -> deterministic fallback). Offline, injected fetchFn, $0. ---
   ['stage-f-core', 'test_stage_f_core.js'],
   ['wf28-claude-analyst', 'test_wf28_claude_analyst.js'],
+  ['stage-f-integration', 'test_stage_f_integration.js'],
+  ['stage-f-report', 'test_stage_f_report.js'],
   // --- WF24 XLSX export/delivery fixes (EXPORT-CHAT-001 caller scope + EXPORT-CHART-001 chart tolerance) ---
   ['wf24-export', 'test_wf24_export.js'],
   // --- SOURCE-OP-001: NL monitored-source registry (parseSourceOp -> list/add/pause/resume/remove/check) ---

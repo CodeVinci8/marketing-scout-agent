@@ -175,8 +175,15 @@ A.eq('cancelled => gate blocked', orchGate({ state: 'cancelled', approved: false
 A.eq('not approved => gate blocked', orchGate({ state: 'awaiting_approval', approved: false }).gate.gate_allowed, false);
 // healthy adapter normalize -> summary -> outbox dedupe
 H.runCodeNode(gOk.run, WF20, 'Normalize Website Result', [{ json: { live_source_run: { agent_request_id: 'req_1', source_run_id: 'firecrawl_X', items_received: 4, items_written: 4, items_relevant: 3, external_calls: 4, cost_status: 'unknown', platform: 'website', data_mode: 'live' } } }]);
-const summ = H.runCodeNode(gOk.run, WF20, 'Build Execution Summary', [{ json: { report: { report_id: 'rep1', rows_after_filters: 3, records_unique: 4, records_eligible: 3, records_analyzed: 3, llm_primary_calls: 0, llm_repair_calls: 0 } } }])[0].json;
+// STAGE-F-INTEGRATION: the Stage-F analysis chain now sits between WF12 and the summary, so the summary reads the
+// report from WF12 BY NAME — a Claude result can never displace the deterministic report.
+H.inject(gOk.run, 'Run WF12 Report', [{ report_id: 'rep1', rows_after_filters: 3, records_unique: 4, records_eligible: 3, records_analyzed: 3, llm_primary_calls: 0, llm_repair_calls: 0 }]);
+H.inject(gOk.run, 'Merge Analyses', [{ analysis: { count_enriched: 0, count_reused: 0, count_fallback: 0, analysis_cost_usd: 0, reason: 'disabled' } }]);
+const summ = H.runCodeNode(gOk.run, WF20, 'Build Execution Summary', [{ json: {} }])[0].json;
 A.eq('summary records reported', summ.summary.records_reported, 3);
+// fail-open: with the analyst disabled the deterministic report still reaches the summary intact.
+A.eq('report survives a disabled analyst', summ.report.report_id, 'rep1');
+A.eq('no analyses => no AI cost', summ.summary.actual_ai_usd, 0);
 A.eq('summary source cost stays unknown', summ.summary.source_cost_status, 'unknown');
 const out1 = H.runCodeNode(gOk.run, WF20, 'Build Delivery Outbox', [{ json: {} }])[0].json;
 A.ok('outbox builds a deterministic delivery id', /^dlv_req_1_rep1_/.test(out1.delivery.delivery_id));

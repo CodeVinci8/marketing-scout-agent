@@ -69,17 +69,17 @@ A.section('workflow_inventory.parseListing / numberPrefix');
   A.eq('numberPrefix none', INV.numberPrefix('QA - Stage 3'), null);
 }
 
-A.section('workflow_inventory matches the REAL manifest runtime set (18 workflows, unique names)');
+A.section('workflow_inventory matches the REAL manifest runtime set (19 workflows, unique names)');
 {
   const identity = L.runtimeIdentity();
   const names = Object.keys(identity).map(k => identity[k].name);
-  A.eq('18 runtime workflows', names.length, 18);
-  A.eq('all runtime names unique', new Set(names).size, 18);
+  A.eq('19 runtime workflows', names.length, 19);
+  A.eq('all runtime names unique', new Set(names).size, 19);
   // simulate a clean production where every runtime workflow is present exactly once + 2 legacy
   const entries = names.map((n, i) => ({ id: fakeId(i), name: n, active: false }))
     .concat([{ id: fakeId(90), name: 'QA - Old', active: false }, { id: fakeId(91), name: '03 - Legacy', active: false }]);
   const r = INV.classify(identity, entries);
-  A.eq('matched=18 for a clean install', r.summary.matched, 18);
+  A.eq('matched=19 for a clean install', r.summary.matched, 19);
   A.eq('legacy=2', r.summary.legacy, 2);
   A.eq('missing=0', r.summary.missing, 0);
   A.ok('reconcilable_in_place', r.reconcilable_in_place === true);
@@ -149,7 +149,7 @@ A.section('STATUS-001 e2e — --status classifies a real listing (no false "(not
   const listing = names.map((n, i) => fakeId(i) + '|' + n).concat([fakeId(80) + '|QA - Legacy']).join('\n') + '\n';
   const r = withStubN8n('2.23.3', listing, null);
   A.ok('exit 0', r.code === 0);
-  A.ok('reports 18 exact matches', /INVENTORY_MATCHED=18/.test(r.out));
+  A.ok('reports 19 exact matches', /INVENTORY_MATCHED=19/.test(r.out));
   A.ok('reports 1 legacy', /INVENTORY_LEGACY=1/.test(r.out));
   A.ok('does NOT report every workflow as not imported', !/\(not imported\)/.test(r.out));
   A.ok('WORKFLOW_INVENTORY=PASS', /WORKFLOW_INVENTORY=PASS/.test(r.out));
@@ -165,7 +165,7 @@ A.section('STATUS-001 e2e — a renamed runtime workflow is reported as renamed,
   // rename WF18 in the production listing (different name, same "18" prefix)
   const listing = names.map((n, i) => fakeId(i) + '|' + (n === wf18Name ? '18 — Telegram Agent Gateway (old)' : n)).join('\n') + '\n';
   const r = withStubN8n('2.23.3', listing, null);
-  A.ok('17 exact matches', /INVENTORY_MATCHED=17/.test(r.out));
+  A.ok('18 exact matches', /INVENTORY_MATCHED=18/.test(r.out));
   A.ok('1 renamed', /INVENTORY_RENAMED=1/.test(r.out));
   A.ok('renamed line names WF18', /\[rename\] WF18/.test(r.out));
 }
@@ -185,7 +185,7 @@ A.section('STATUS-001 e2e — an EMPTY listing fails closed (DISCOVERY FAILURE),
 A.section('OPERATOR-REPORT-001 — operator binding counts derive from the manifest, not a hard-coded 8');
 {
   const edges = L.bindingEdges().length;
-  A.eq('manifest binding edge count', edges, 17);
+  A.eq('manifest binding edge count', edges, 18);
   const deployTxt = fs.readFileSync(path.join(ROOT, 'scripts', 'deploy_n8n.sh'), 'utf8');
   A.ok('do_import success line uses ${BINDING_COUNT} (not a hardcoded count)', /\$\{BINDING_COUNT\} sub-workflow edges bound/.test(deployTxt));
   A.ok('no hard-coded "the 8" sub-workflow line', !/the 8"\n\s*say "sub-workflow ids bound/.test(deployTxt));

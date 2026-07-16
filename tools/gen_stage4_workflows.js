@@ -653,6 +653,10 @@ var planRow=buildPlanRow(plan,ident,{agent_request_id:__arid,owner_user_id:owner
 var kb=approvalKeyboard(__arid);
 // UX-RU-001: exactly ONE plan block — WF19's humanized text verbatim (fallback renders the same format), no suffix.
 var cfg18=(d.routed&&d.routed.cfg)||{};
+// CAP-CLAUDE-001: WF19 resolved the real AI capability from telemetry; carry it so this FALLBACK render quotes the
+// same AI cost/promise as WF19's canonical text (a Code node cannot see the n8n credential itself).
+var __cap=res.claude_capability||{};
+if(__cap.available!=null)cfg18=Object.assign({},cfg18,{claude_available:__cap.available===true,claude_auth_mode:String(__cap.mode||'')});
 var proj18=projectRequestCost(plan,cfg18);
 var text=res.approval_text||planApprovalMessageRu(plan,{data_mode:String(req.data_mode||''),projected_cost_usd:proj18.projected_cost_usd,projected_reliable:proj18.reliable,cost:proj18}).text;
 return [{json:{plan_ready:true,plan_reused:__planReused,status:'plan_ready',plan:plan,plan_id:ident.plan_id,plan_hash:ident.plan_hash,plan_row:planRow,agent_request_id:__arid,telegram_send_body:JSON.stringify({chat_id:chat,text:text,reply_markup:kb})}}];`),
@@ -974,8 +978,13 @@ write('19_request_planner.json', wf('19 — Request Planner (deterministic + gua
   subTrigger('wf19-sub', 'When Called by Agent', [-480, 60], ['agent_request_id', 'chat_id', 'owner_user_id', 'conversation_id', 'request_text', 'data_mode']),
   code('wf19-cfg', 'Resolve Agent Config', [-260, 0], ['agent_config'],
     ENV + "\nreturn [{json:resolveConfig(__env)}];"),
-  code('wf19-det', 'Deterministic Plan', [-40, 0], ['request_planner'],
-    CALLER + "\nvar ci=callerInput();\nvar cfg=$('Resolve Agent Config').first().json;\nvar text=String(ci.request_text||ci.text||'');\nvar plan=deterministicPlan(text,cfg);\nreturn [{json:{request_text:text,agent_request_id:String(ci.agent_request_id||''),chat_id:String(ci.chat_id||''),owner_user_id:String(ci.owner_user_id||''),conversation_id:String(ci.conversation_id||''),data_mode:String(ci.data_mode||'live'),plan:plan,cfg:cfg}}];"),
+  // CAP-CLAUDE-001: production Claude auth is an n8n CREDENTIAL, invisible to a Code node — so the plan's AI cost
+  // cannot be decided from MS_CLAUDE_API_KEY. The authoritative signal is our OWN telemetry: a recent call that
+  // reached the provider proves the bound credential works; the newest auth_error proves it does not. Reads only
+  // provider-outcome columns, never a secret and never another owner's analysis content.
+  sheetsRead('wf19-readtel', 'Read llm_analysis_telemetry', [-260, 200], 'llm_analysis_telemetry'),
+  code('wf19-det', 'Deterministic Plan', [-40, 0], ['request_planner', 'llm_capability'],
+    CALLER + "\nvar ci=callerInput();\nvar cfg0=$('Resolve Agent Config').first().json;\nvar tel=[];try{tel=($('Read llm_analysis_telemetry').all()||[]).map(function(x){return x.json;});}catch(e){tel=[];}\n// Fold the observed AI capability into the config so cost_model + the RU renderer tell the same truth.\nvar cfg=withClaudeCapability(cfg0,tel,{});\nvar text=String(ci.request_text||ci.text||'');\nvar plan=deterministicPlan(text,cfg);\nreturn [{json:{request_text:text,agent_request_id:String(ci.agent_request_id||''),chat_id:String(ci.chat_id||''),owner_user_id:String(ci.owner_user_id||''),conversation_id:String(ci.conversation_id||''),data_mode:String(ci.data_mode||'live'),plan:plan,cfg:cfg,claude_capability:{available:cfg.claude_available,mode:cfg.claude_auth_mode,proof_at:cfg.claude_proof_at}}}];"),
   code('wf19-guard', 'Planner LLM Guard', [180, 0], ['approval_gate'],
     "var j=$('Deterministic Plan').first().json;var cfg=j.cfg;\nvar approvalTok=String(($json&&$json.planner_approval_token)||'');\nvar enabled=cfg.enable_llm_planner===true;\nvar tokOk=approvalTok==='WF19_PLANNER_APPROVED';\nvar budgetOk=Number(cfg.llm_budget_usd)>=0.01;\nvar call_llm=enabled&&tokOk&&budgetOk;\nvar reason=!enabled?'planner_llm_disabled':(!tokOk?'planner_token_invalid':(!budgetOk?'over_llm_budget':'ok'));\nreturn [{json:Object.assign({},j,{call_llm:call_llm,llm_guard_reason:reason})}];"),
   ifNode('wf19-if', 'LLM Planner Enabled?', [400, 0], '={{ $json.call_llm }}'),
@@ -987,11 +996,12 @@ write('19_request_planner.json', wf('19 — Request Planner (deterministic + gua
   // Canonical planner RESULT (WF19-PLAN-002): one of plan_ready / clarification_required / planning_failed.
   // WF19 NEVER sends Telegram directly — WF18 owns the approval-message delivery and the durable plan persistence.
   code('wf19-approval', 'Build Approval Message', [840, 120], ['request_planner', 'telegram_io', 'scope_preview', 'plan_render_ru', 'cost_model'],
-    "var src;try{src=$('Validate Plan').first().json;}catch(e){src=$('Deterministic Plan').first().json;}\nvar dp=$('Deterministic Plan').first().json;\nvar plan=src.plan;var cfg=src.cfg||{};\nif(!plan||!(plan.sources&&plan.sources.length)){return [{json:{status:'clarification_required',clarification:'Уточните нишу/регион и источник для поиска конкурентов.',user_message:'Уточните нишу/регион и источник для поиска конкурентов.',plan:null}}];}\nvar arid=String(dp.agent_request_id||'req_pending');\n// UX-RU-001: ONE humanized Russian approval block; internal enums/counters stay in plan rows + scope_preview (logs only).\n// §7 COST-UX-001: projection from the ACTUAL planned provider calls; the hard cap is never rendered.\nvar proj=projectRequestCost(plan,cfg);\nvar rend=planApprovalMessageRu(plan,{data_mode:String(dp.data_mode||''),projected_cost_usd:proj.projected_cost_usd,projected_reliable:proj.reliable,cost:proj});\nif(!rend.ok){return [{json:{status:rend.status,clarification:rend.text,user_message:rend.text,plan:null,agent_request_id:arid,chat_id:String(dp.chat_id||''),owner_user_id:String(dp.owner_user_id||'')}}];}\n// AVITO-BLOCK-001: if the user explicitly named a currently-blocked source (Avito), tell them honestly instead of silently dropping it.\nvar blockedReq=blockedRequestedSources(String(dp.request_text||''),cfg);\nif(blockedReq.indexOf('avito')>=0){rend.text=ruAvitoUnavailableMessage()+'\\n\\n'+rend.text;}\nvar kb=approvalKeyboard(arid);\n// structured scope+cost preview kept for logs/evidence — NEVER concatenated into the user message\nvar preview=buildScopePreview({goal:plan.intent||plan.expected_output,niche:plan.niche,region:plan.region,competitors:plan.competitors||[],platforms:plan.sources||['website'],cfg:cfg,refresh_plan:{expected_calls:Number(plan.max_external_calls)||0},expected_llm_calls:0,max_items:Number(plan.max_items)||undefined,outputs:{telegram_summary:true,xlsx:true,charts:true,evidence:true}});\nreturn [{json:{status:'plan_ready',plan:plan,plan_source:plan.plan_source,approval_text:rend.text,projected_cost_usd:proj.projected_cost_usd,projected_cost_reliable:proj.reliable,hard_cap_usd:proj.hard_cap_usd,cost_breakdown:proj.breakdown,scope_preview:preview,scope_preview_text:preview.text,approval_keyboard:kb,state_transition:'awaiting_approval',agent_request_id:arid,chat_id:String(dp.chat_id||''),owner_user_id:String(dp.owner_user_id||'')}}];")
+    "var src;try{src=$('Validate Plan').first().json;}catch(e){src=$('Deterministic Plan').first().json;}\nvar dp=$('Deterministic Plan').first().json;\nvar plan=src.plan;var cfg=src.cfg||{};\nif(!plan||!(plan.sources&&plan.sources.length)){return [{json:{status:'clarification_required',clarification:'Уточните нишу/регион и источник для поиска конкурентов.',user_message:'Уточните нишу/регион и источник для поиска конкурентов.',plan:null}}];}\nvar arid=String(dp.agent_request_id||'req_pending');\n// UX-RU-001: ONE humanized Russian approval block; internal enums/counters stay in plan rows + scope_preview (logs only).\n// §7 COST-UX-001: projection from the ACTUAL planned provider calls; the hard cap is never rendered.\nvar proj=projectRequestCost(plan,cfg);\nvar rend=planApprovalMessageRu(plan,{data_mode:String(dp.data_mode||''),projected_cost_usd:proj.projected_cost_usd,projected_reliable:proj.reliable,cost:proj});\nif(!rend.ok){return [{json:{status:rend.status,clarification:rend.text,user_message:rend.text,plan:null,agent_request_id:arid,chat_id:String(dp.chat_id||''),owner_user_id:String(dp.owner_user_id||'')}}];}\n// AVITO-BLOCK-001: if the user explicitly named a currently-blocked source (Avito), tell them honestly instead of silently dropping it.\nvar blockedReq=blockedRequestedSources(String(dp.request_text||''),cfg);\nif(blockedReq.indexOf('avito')>=0){rend.text=ruAvitoUnavailableMessage()+'\\n\\n'+rend.text;}\nvar kb=approvalKeyboard(arid);\n// structured scope+cost preview kept for logs/evidence — NEVER concatenated into the user message\nvar preview=buildScopePreview({goal:plan.intent||plan.expected_output,niche:plan.niche,region:plan.region,competitors:plan.competitors||[],platforms:plan.sources||['website'],cfg:cfg,refresh_plan:{expected_calls:Number(plan.max_external_calls)||0},expected_llm_calls:0,max_items:Number(plan.max_items)||undefined,outputs:{telegram_summary:true,xlsx:true,charts:true,evidence:true}});\nreturn [{json:{status:'plan_ready',plan:plan,plan_source:plan.plan_source,approval_text:rend.text,projected_cost_usd:proj.projected_cost_usd,projected_cost_reliable:proj.reliable,hard_cap_usd:proj.hard_cap_usd,cost_breakdown:proj.breakdown,scope_preview:preview,scope_preview_text:preview.text,approval_keyboard:kb,state_transition:'awaiting_approval',agent_request_id:arid,chat_id:String(dp.chat_id||''),owner_user_id:String(dp.owner_user_id||''),claude_capability:dp.claude_capability||{}}}];")
 ], [
   ['Manual Start', 'Resolve Agent Config'],
   ['When Called by Agent', 'Resolve Agent Config'],
-  ['Resolve Agent Config', 'Deterministic Plan'],
+  ['Resolve Agent Config', 'Read llm_analysis_telemetry'],
+  ['Read llm_analysis_telemetry', 'Deterministic Plan'],
   ['Deterministic Plan', 'Planner LLM Guard'],
   ['Planner LLM Guard', 'LLM Planner Enabled?'],
   ['LLM Planner Enabled?', 'Build Planner Prompt', 0],
@@ -1112,10 +1122,55 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
     enable_llm_summary: "={{ $('Approval & Budget Gate').first().json.cfg.enable_llm_summary === false ? 'false' : 'true' }}",
     llm_approval_token: 'I_APPROVE_CLAUDE_REPORT_SUMMARY'
   }),
-  code('wf20-summary', 'Build Execution Summary', [1500, -160], ['source_adapter', 'execution_summary', 'cost_model'],
-    "var g=$('Approval & Budget Gate').first().json;\nvar adapters=[];\n['Normalize Website Result','Normalize Avito Result','Normalize Telegram Result','Normalize VK Result'].forEach(function(nm){try{var a=$(nm).first().json;if(a&&a.adapter)adapters.push(a.adapter);}catch(e){}});\nvar rs=null;try{rs=$('Resolve Collection Set').first().json;}catch(e){rs=null;}\n((rs&&rs.unavailable_sources)||[]).forEach(function(sk){adapters.push({agent_request_id:g.request.agent_request_id,source:sk,source_family:'unknown',platform:sk,status:'failed',errors:['collector_unavailable'],items_written:0,items_received:0,quarantined:false});});\nvar n={adapter:adapters[0]||null,plan:g.plan,request:g.request,cfg:g.cfg};\nvar roll=rollupCollection(adapters,(n.plan&&n.plan.sources)||[]);\nvar rep=($json&&$json.report)?$json.report:($json||{});\nvar summary=buildExecutionSummary({config_complete:(n.cfg&&n.cfg.config_complete),request:Object.assign({},n.request,{state:roll.outcome==='complete'?'reporting':(roll.outcome==='failed'?'failed':'partial'),failed_sources:roll.failed_sources||[]}),plan:n.plan,collection:roll,adapters:adapters,analysis:{records_unique:rep.records_unique,records_eligible:rep.records_eligible,records_analyzed:rep.records_analyzed,llm_primary_calls:rep.llm_primary_calls,llm_repair_calls:rep.llm_repair_calls,llm_cost_status:rep.llm_cost_status||'unknown'},aggregation:{rows_after_filters:rep.rows_after_filters},report:rep,delivery:{}});\n// §7: persist projected/actual cost + remaining budget (best-available: observed provider calls x configured unit prices).\nvar usage={firecrawl_pages:0,apify_searches:0,claude_calls:0};\nadapters.forEach(function(a){var c=Number(a.external_calls)||0;if(a.source==='website')usage.firecrawl_pages+=c;if(a.source==='avito')usage.apify_searches+=c;});\nusage.claude_calls=(Number(rep.llm_primary_calls)||0)+(Number(rep.llm_repair_calls)||0)+(Number(rep.llm_cost_usd)>0?1:0);\nif(Number(rep.llm_cost_usd)>0)usage.measured_llm_cost_usd=(Number(rep.llm_cost_usd)||0)+((Number(rep.llm_primary_calls)||0)+(Number(rep.llm_repair_calls)||0))*(Number(n.cfg&&n.cfg.cost_claude_call_usd)||0.02);\nvar proj=projectRequestCost(g.plan,n.cfg);\nvar act=actualRequestCost(usage,n.cfg);\nsummary=Object.assign({},summary,{projected_cost_usd:proj.projected_cost_usd,hard_cap_usd:act.hard_cap_usd,actual_cost_usd:act.actual_cost_usd,remaining_budget_usd:act.remaining_budget_usd});\nreturn [{json:{summary:summary,report:rep,request:n.request,cfg:n.cfg}}];"),
-  code('wf20-outbox', 'Build Delivery Outbox', [1720, -160], ['telegram_io', 'conversation_response', 'agent_charter'],
-    "var s=$('Build Execution Summary').first().json;\nvar cfg=s.cfg||{};\nvar caps=availableCapabilities(cfg);\nvar chat=String((s.request&&s.request.chat_id)||'');\nvar state=String((s.summary&&s.summary.final_state)||'completed');\nvar noData=Number((s.summary&&s.summary.records_reported)||0)===0&&state!=='completed';\nvar stateForActions=noData?'no_data':state;\nvar report=s.report||{};\nvar body=deliveryBody({report_markdown:report.report_markdown,summary_text:report.summary_text},s.summary,caps);\nvar ptxt=proactiveText(stateForActions,caps);\nvar dlv=makeDelivery((s.request&&s.request.agent_request_id)||'req',(report.report_id)||'rep',chat,body);\nvar chunks=chunkMessage(body);\nvar kb=proactiveKeyboard(stateForActions,caps);\nvar bodies=chunks.map(function(t,i){var b={chat_id:chat,text:t};if(i===chunks.length-1&&kb)b.reply_markup=kb;return b;});\nreturn [{json:{delivery:dlv,telegram_send_body:JSON.stringify(bodies[0]),telegram_send_bodies:JSON.stringify(bodies),final_keyboard:kb?JSON.stringify(kb):'',chunk_count:chunks.length,proactive_text:ptxt,summary:s.summary}}];"),
+  // ---- Stage F: evidence-bound Claude analysis of the deterministic result (STAGE-F-INTEGRATION) --------------
+  // Placed AFTER collection + WF16 quality gate + WF08/WF10 + WF12, so Claude only ever sees bounded, quality-gated,
+  // request-scoped CURRENT-RUN facts — never raw pages and never the whole Sheets history. Fail-open by
+  // construction: every downstream node reads WF12 by NAME, so a disabled/empty/failed analysis still delivers the
+  // full deterministic report + XLSX.
+  code('wf20-anainputs', 'Build Analysis Inputs', [1500, -320], ['analysis_bridge', 'agent_config'], `
+var g=$('Approval & Budget Gate').first().json;var cfg=g.cfg||{};
+var rep={};try{rep=$('Run WF12 Report').first().json||{};}catch(e){rep={};}
+var b={};try{b=JSON.parse(String(rep.report_bundle||'{}'));}catch(e){b={};}
+var rs={};try{rs=$('Resolve Collection Set').first().json||{};}catch(e){rs={};}
+var plan=g.plan||{};var req=g.request||{};
+// Stage-F rollout gate (default OFF). WF28 re-checks it independently — this only avoids a pointless child call.
+var enabled=(cfg.enable_claude!==false)&&(cfg.enable_llm_analysis===true);
+var ctx={agent_request_id:String(req.agent_request_id||''),owner_user_id:String(req.owner_user_id||''),chat_id:String(req.chat_id||''),
+  report_id:String(rep.report_id||b.report_id||''),niche:String(plan.niche||b.niche||''),region:String(plan.region||b.region||''),
+  data_mode:String(req.data_mode||'live'),requested_sources:(plan.sources||[])};
+var built=buildAnalysisTargets(b,ctx,{max_targets:Number(cfg.llm_max_analyses_per_run)||5});
+var targets=enabled?built.targets:[];
+return [{json:{do_analyze:targets.length>0,analysis_reason:enabled?built.reason:'disabled',
+  targets:targets.map(function(t){return {source_key:t.source_key,source_kind:t.source_kind,
+    evidence_input:JSON.stringify(t.evidence_input),agent_request_id:ctx.agent_request_id,owner_user_id:ctx.owner_user_id,
+    chat_id:ctx.chat_id,report_id:ctx.report_id,niche:ctx.niche,region:ctx.region,
+    source_run_id:String(g.idempotency_key||'')+'::'+t.source_key};}),
+  targets_considered:built.considered}}];`),
+  ifNode('wf20-ifana', 'Analyze Sources?', [1720, -320], '={{ $json.do_analyze }}'),
+  code('wf20-anashape', 'Shape Analysis Targets', [1940, -400], [],
+    "return ($('Build Analysis Inputs').first().json.targets||[]).map(function(t){return {json:t};});"),
+  // One WF28 call per LOGICAL SOURCE (the executeWorkflow node runs once per input item — same fan-out the VK
+  // collector already uses). tolerant: a crashed analyst degrades to the deterministic report, never aborts the run.
+  execWf('wf20-wf28', 'Run WF28 (Claude Analyst)', [2160, -400], 'WF28 claude analyst', {
+    agent_request_id: '={{ $json.agent_request_id }}',
+    source_run_id: '={{ $json.source_run_id }}',
+    report_id: '={{ $json.report_id }}',
+    owner_user_id: '={{ $json.owner_user_id }}',
+    chat_id: '={{ $json.chat_id }}',
+    analysis_type: 'single_source',
+    evidence_input: '={{ $json.evidence_input }}',
+    niche: '={{ $json.niche }}',
+    region: '={{ $json.region }}'
+  }, { tolerant: true }),
+  code('wf20-anamerge', 'Merge Analyses', [2380, -320], ['analysis_bridge'], `
+var rets=[];try{rets=($('Run WF28 (Claude Analyst)').all()||[]).map(function(i){return i.json;});}catch(e){rets=[];}
+var ai={};try{ai=$('Build Analysis Inputs').first().json||{};}catch(e){ai={};}
+var col=collectAnalyses(rets);
+return [{json:{analysis:Object.assign({},col,{reason:String(ai.analysis_reason||'disabled'),requested:(ai.targets||[]).length})}}];`),
+  code('wf20-summary', 'Build Execution Summary', [2600, -320], ['source_adapter', 'execution_summary', 'cost_model'],
+    "var g=$('Approval & Budget Gate').first().json;\nvar adapters=[];\n['Normalize Website Result','Normalize Avito Result','Normalize Telegram Result','Normalize VK Result'].forEach(function(nm){try{var a=$(nm).first().json;if(a&&a.adapter)adapters.push(a.adapter);}catch(e){}});\nvar rs=null;try{rs=$('Resolve Collection Set').first().json;}catch(e){rs=null;}\n((rs&&rs.unavailable_sources)||[]).forEach(function(sk){adapters.push({agent_request_id:g.request.agent_request_id,source:sk,source_family:'unknown',platform:sk,status:'failed',errors:['collector_unavailable'],items_written:0,items_received:0,quarantined:false});});\nvar n={adapter:adapters[0]||null,plan:g.plan,request:g.request,cfg:g.cfg};\nvar roll=rollupCollection(adapters,(n.plan&&n.plan.sources)||[]);\n// STAGE-F-INTEGRATION: the Stage-F analysis chain now sits between WF12 and here, so $json is the merged analysis.\n// Read the report from WF12 BY NAME — the deterministic report must never depend on what the analyst returned.\nvar rep={};try{rep=$('Run WF12 Report').first().json||{};}catch(e){rep={};}\nvar ana={};try{ana=($('Merge Analyses').first().json||{}).analysis||{};}catch(e){ana={};}\nvar summary=buildExecutionSummary({config_complete:(n.cfg&&n.cfg.config_complete),request:Object.assign({},n.request,{state:roll.outcome==='complete'?'reporting':(roll.outcome==='failed'?'failed':'partial'),failed_sources:roll.failed_sources||[]}),plan:n.plan,collection:roll,adapters:adapters,analysis:{records_unique:rep.records_unique,records_eligible:rep.records_eligible,records_analyzed:rep.records_analyzed,llm_primary_calls:rep.llm_primary_calls,llm_repair_calls:rep.llm_repair_calls,llm_cost_status:rep.llm_cost_status||'unknown'},aggregation:{rows_after_filters:rep.rows_after_filters},report:rep,delivery:{}});\n// §7: persist projected/actual cost + remaining budget (best-available: observed provider calls x configured unit prices).\nvar usage={firecrawl_pages:0,apify_searches:0,claude_calls:0};\nadapters.forEach(function(a){var c=Number(a.external_calls)||0;if(a.source==='website')usage.firecrawl_pages+=c;if(a.source==='avito')usage.apify_searches+=c;});\nusage.claude_calls=(Number(rep.llm_primary_calls)||0)+(Number(rep.llm_repair_calls)||0)+(Number(rep.llm_cost_usd)>0?1:0);\nif(Number(rep.llm_cost_usd)>0)usage.measured_llm_cost_usd=(Number(rep.llm_cost_usd)||0)+((Number(rep.llm_primary_calls)||0)+(Number(rep.llm_repair_calls)||0))*(Number(n.cfg&&n.cfg.cost_claude_call_usd)||0.02);\n// Stage F: WF28's REAL per-call cost (from response usage tokens) is its own actual component (§4).\nusage.claude_analysis_cost_usd=Number(ana.analysis_cost_usd)||0;\nvar proj=projectRequestCost(g.plan,n.cfg);\nvar act=actualRequestCost(usage,n.cfg);\nsummary=Object.assign({},summary,{projected_cost_usd:proj.projected_cost_usd,hard_cap_usd:act.hard_cap_usd,actual_cost_usd:act.actual_cost_usd,remaining_budget_usd:act.remaining_budget_usd,actual_collection_usd:act.actual_collection_usd,actual_ai_usd:act.actual_ai_usd,llm_analyses:Number(ana.count_enriched)||0,llm_analyses_reused:Number(ana.count_reused)||0,llm_analyses_fallback:Number(ana.count_fallback)||0});\nreturn [{json:{summary:summary,report:rep,request:n.request,cfg:n.cfg,analysis:ana}}];"),
+  code('wf20-outbox', 'Build Delivery Outbox', [2820, -320], ['telegram_io', 'conversation_response', 'agent_charter', 'analysis_report_ru'],
+    "var s=$('Build Execution Summary').first().json;\nvar cfg=s.cfg||{};\nvar caps=availableCapabilities(cfg);\nvar chat=String((s.request&&s.request.chat_id)||'');\nvar state=String((s.summary&&s.summary.final_state)||'completed');\nvar noData=Number((s.summary&&s.summary.records_reported)||0)===0&&state!=='completed';\nvar stateForActions=noData?'no_data':state;\nvar report=s.report||{};\n// Stage F §5: EXTEND the deterministic report with «Подтверждённые факты / Аналитические выводы / Рекомендации /\n// Доказательства и ограничения». Ungrounded claims are dropped by the renderer; a failed/disabled analyst yields\n// no sections (or one honest note) and the deterministic markdown ships unchanged — delivery is never blocked.\nvar __md=String(report.report_markdown||'');\ntry{var __b={};try{__b=JSON.parse(String(report.report_bundle||'{}'));}catch(e){__b={};}\nvar __rend=renderAnalysisSectionsRu(((s.analysis||{}).analyses)||[],__b,{});\n__md=appendAnalysisToReportRu(__md,__rend);}catch(e){}\nvar body=deliveryBody({report_markdown:__md,summary_text:report.summary_text},s.summary,caps);\nvar ptxt=proactiveText(stateForActions,caps);\nvar dlv=makeDelivery((s.request&&s.request.agent_request_id)||'req',(report.report_id)||'rep',chat,body);\nvar chunks=chunkMessage(body);\nvar kb=proactiveKeyboard(stateForActions,caps);\nvar bodies=chunks.map(function(t,i){var b={chat_id:chat,text:t};if(i===chunks.length-1&&kb)b.reply_markup=kb;return b;});\nreturn [{json:{delivery:dlv,telegram_send_body:JSON.stringify(bodies[0]),telegram_send_bodies:JSON.stringify(bodies),final_keyboard:kb?JSON.stringify(kb):'',chunk_count:chunks.length,proactive_text:ptxt,summary:s.summary}}];"),
   sheetsAppend('wf20-apout', 'Append telegram_outbox', [1940, -160], 'telegram_outbox'),
   httpTelegram('wf20-send', 'Send Telegram Report', [2160, -160]),
   code('wf20-shapesum', 'Shape Execution Summary Row', [1500, 60], [],
@@ -1128,7 +1183,7 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   sheetsUpsert('wf20-markcomplete', 'Mark Plan Complete', [2160, 60], 'execution_plans', 'plan_id'),
   // EXPORT-BUNDLE-001: nothing wrote report_bundles, so WF24 export/XLSX had no report to select. WF20 is
   // the producer: persist the WF12-built structured bundle (owner-stamped) after each run.
-  code('wf20-shapebundle', 'Shape Report Bundle', [1940, 60], [], `
+  code('wf20-shapebundle', 'Shape Report Bundle', [1940, 60], ['analysis_report_ru'], `
 var s=$('Build Execution Summary').first().json;
 var rep=s.report||{};var req=s.request||{};
 var b={};try{b=JSON.parse(String(rep.report_bundle||'{}'));}catch(e){b={};}
@@ -1136,6 +1191,15 @@ b.report_id=String(rep.report_id||b.report_id||'');
 b.agent_request_id=String(req.agent_request_id||b.agent_request_id||'');
 b.owner_user_id=String(req.owner_user_id||'');
 if(!b.created_at)b.created_at=(new Date()).toISOString();
+// Stage F §6: the bundle is the single source for BOTH the live XLSX and WF24's later export, so the analysis
+// rows live here. Grounded rows only; analysis_id/telemetry are consumed exclusively by the HIDDEN technical sheet.
+try{var __ana=s.analysis||{};var __rend=renderAnalysisSectionsRu(__ana.analyses||[],b,{});
+var __x=analysisXlsxData(__ana.analyses||[],__rend);
+if((__x.inferences||[]).length||(__x.recommendations||[]).length||(__x.pains||[]).length||(__x.evidence||[]).length){
+  b.analysis=Object.assign({},__x,{analysis_ids:__ana.analysis_ids||[],count_enriched:Number(__ana.count_enriched)||0,
+    count_reused:Number(__ana.count_reused)||0,count_fallback:Number(__ana.count_fallback)||0,
+    analysis_cost_usd:Number(__ana.analysis_cost_usd)||0,model:String((s.cfg&&s.cfg.llm_model)||'claude-sonnet-4-6')});
+}}catch(e){}
 return [{json:{report_id:b.report_id,owner_user_id:b.owner_user_id,agent_request_id:b.agent_request_id,created_at:String(b.created_at),report_type:String(rep.report_type||''),bundle:JSON.stringify(b),notes:'wf20 run bundle (export/digest source)'}}];`),
   sheetsAppend('wf20-apbundle', 'Append report_bundles', [2160, 60], 'report_bundles'),
   // DEFECT-5: the plan promises "таблица Excel" — auto-deliver the XLSX right after the report for an approved
@@ -1145,7 +1209,9 @@ var sb=$('Shape Report Bundle').first().json;
 var b={};try{b=JSON.parse(String(sb.bundle||'{}'));}catch(e){b={};}
 var s=$('Build Execution Summary').first().json;var summary=s.summary||{};
 var records=Number(summary.records_reported||0);
-var hasContent=(b.competitors&&b.competitors.length)||(b.offers&&b.offers.length)||(b.evidence&&b.evidence.length)||records>0;
+var __an=b.analysis||{};
+var hasContent=(b.competitors&&b.competitors.length)||(b.offers&&b.offers.length)||(b.evidence&&b.evidence.length)||records>0
+  ||((__an.inferences||[]).length+(__an.recommendations||[]).length+(__an.pains||[]).length)>0;
 if(!hasContent||!b.report_id){return [];}
 var chat=String((s.request&&s.request.chat_id)||b.owner_user_id||'');
 var scope={owner_user_id:String(b.owner_user_id||''),agent_request_id:String(b.agent_request_id||''),report_id:String(b.report_id||'')};
@@ -1233,7 +1299,15 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
   ['Run WF10 Aggregator', 'Progress: Report'],
   ['Progress: Report', 'Edit Progress (Report)'],
   ['Edit Progress (Report)', 'Run WF12 Report'],
-  ['Run WF12 Report', 'Build Execution Summary'],
+  // Stage F: the analysis chain sits between the report build and the summary. BOTH branches of "Analyze Sources?"
+  // converge on Merge Analyses, so the run always reaches Build Execution Summary — with or without Claude.
+  ['Run WF12 Report', 'Build Analysis Inputs'],
+  ['Build Analysis Inputs', 'Analyze Sources?'],
+  ['Analyze Sources?', 'Shape Analysis Targets', 0],
+  ['Analyze Sources?', 'Merge Analyses', 1],
+  ['Shape Analysis Targets', 'Run WF28 (Claude Analyst)'],
+  ['Run WF28 (Claude Analyst)', 'Merge Analyses'],
+  ['Merge Analyses', 'Build Execution Summary'],
   ['Build Execution Summary', 'Build Delivery Outbox'],
   ['Build Execution Summary', 'Shape Execution Summary Row'],
   ['Build Execution Summary', 'Shape Plan Completion'],
@@ -1904,7 +1978,10 @@ ctx.estimated_cost_usd=prep.ctx.estimated_cost_usd||0;
 var resultRow=buildAnalysisResultRow(ctx,result,now);
 var telRow=buildTelemetryRow(ctx,result,now);
 var a=result.analysis||{};
-var typedReturn={analysis_id:resultRow.analysis_id,enriched:enriched,quality_status:resultRow.quality_status,mode:prep.mode,analysis:a,overall_confidence:a.overall_confidence||0,repair_used:result.repair_used,repair_success:result.repair_success,fallback_used:result.fallback_used,error_category:result.error_category,cost_usd:result.cost_usd,evidence_package_hash:ctx.evidence_package_hash};
+// The renderer must cite SOURCES, not internal ev_N ids — so hand back the id->URL map the package assigned.
+// Deterministic: the same evidence_input always yields the same ev_N, so a reused analysis maps identically.
+var evMap=((pkgRes.package&&pkgRes.package.evidence_items)||[]).map(function(e){return {id:e.evidence_id,url:e.source_url,type:e.source_type};});
+var typedReturn={analysis_id:resultRow.analysis_id,enriched:enriched,quality_status:resultRow.quality_status,mode:prep.mode,analysis:a,overall_confidence:a.overall_confidence||0,repair_used:result.repair_used,repair_success:result.repair_success,fallback_used:result.fallback_used,error_category:result.error_category,cost_usd:result.cost_usd,evidence_package_hash:ctx.evidence_package_hash,evidence_map:evMap,source:ctx.source_scope||{}};
 return [{json:{persist:persist,result_row:resultRow,telemetry_row:telRow,typed_return:typedReturn}}];`),
   ifNode('wf28-ifpersist', 'Persist?', [1940, 0], '={{ $json.persist }}'),
   code('wf28-shaperes', 'Shape Result Row', [2160, -120], [], `return [{json:$('Finalize Analysis').first().json.result_row}];`),

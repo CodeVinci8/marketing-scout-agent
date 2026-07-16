@@ -36,7 +36,10 @@ function deliver(req, adapterRaw, report) {
   H.inject(run, 'Resolve Agent Config', [CFG]);
   H.runCodeNode(run, WF20, 'Approval & Budget Gate', [{ json: { request: req, plan: { sources: ['website'], source: 'website', est_items: 10, est_external_calls: 4, est_source_cost_usd: 0.05, est_llm_cost_usd: 0.1 } } }]);
   H.runCodeNode(run, WF20, 'Normalize Website Result', [{ json: { live_source_run: adapterRaw } }]);
-  H.runCodeNode(run, WF20, 'Build Execution Summary', [{ json: { report: report } }]);
+  // STAGE-F-INTEGRATION: the summary reads WF12 BY NAME; the Stage-F analysis chain sits between them.
+  H.inject(run, 'Run WF12 Report', [report]);
+  H.inject(run, 'Merge Analyses', [{ analysis: { analyses: [], count_enriched: 0, count_reused: 0, count_fallback: 0, analysis_cost_usd: 0, reason: 'disabled' } }]);
+  H.runCodeNode(run, WF20, 'Build Execution Summary', [{ json: {} }]);
   return H.runCodeNode(run, WF20, 'Build Delivery Outbox', [])[0].json;
 }
 // WF23 monitor driver (real nodes: Check & Detect Change reads injected change events)

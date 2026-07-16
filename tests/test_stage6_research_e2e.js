@@ -91,11 +91,12 @@ try {
   A.ok('EOCD present', buf.indexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06])) >= 0);
   var parts = XLSX.readZip(buf);
   var wbxml = parts['xl/workbook.xml'].toString('utf8');
-  A.eq('8 expected sheets in fixed order', pack.sheet_names, PKG.SHEET_NAMES);
+  A.eq('every expected sheet in fixed order', pack.sheet_names, PKG.SHEET_NAMES);
   PKG.SHEET_NAMES.forEach(function (n) { A.ok('workbook lists ' + n, wbxml.indexOf('name="' + n + '"') >= 0); });
   // collect all worksheet xml
   var sheetXml = Object.keys(parts).filter(function (k) { return /xl\/worksheets\/sheet\d+\.xml/.test(k); }).map(function (k) { return parts[k].toString('utf8'); }).join('\n');
-  A.ok('headers present (Competitor, Price / rate, Evidence link)', /Competitor/.test(sheetXml) && /Price \/ rate/.test(sheetXml) && /Evidence link/.test(sheetXml));
+  // Stage F §6: the user-facing workbook has RUSSIAN headers (B7 russified the sheet names).
+  A.ok('Russian headers present (Конкурент, Цена / ставка, Ссылка на доказательство)', /Конкурент/.test(sheetXml) && /Цена \/ ставка/.test(sheetXml) && /Ссылка на доказательство/.test(sheetXml));
   A.ok('user text is NOT emitted as an OOXML <f> formula (injection neutralized)', sheetXml.indexOf('<f>') < 0);
   A.ok('numeric score cells are numeric (t="n" or bare number, never a leading-= string)', /HYPERLINK/.test(sheetXml) ? !/<f>=HYPERLINK/.test(sheetXml) : true);
   A.ok('methodology/calculations representable: Run_Metadata sheet present', pack.sheet_names.indexOf('Технические данные') >= 0);
