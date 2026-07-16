@@ -8,7 +8,9 @@ const RG = require('../n8n/lib/report_gate.js');
 
 const wf = H.loadWorkflow('10_competitor_audience_intelligence_aggregator.json');
 
-const WHEN = '2026-06-15T10:00:00+03:00';
+// Freshness fixture must stay INSIDE WF10's 30-day window (created_at >= now-30d), so it is anchored 5 days
+// before "now" rather than a fixed date that silently goes stale and breaks the suite as wall-clock advances.
+const WHEN = new Date(Date.now() - 5 * 86400000).toISOString().replace('Z', '+03:00');
 function comp(source_run_id, extra) {
   return Object.assign({
     entity_type: 'competitor', company_name: 'Брокер ' + source_run_id, platform: 'avito', service_type: 'credit_broker',

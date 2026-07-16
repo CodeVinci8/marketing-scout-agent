@@ -61,6 +61,9 @@ const JS_SUITES = [
   ['report-quality-v2', 'test_report_quality_v2.js'],
   // --- B1/B6: explicit single-website report scoping (current-run vs historical context) ---
   ['single-source-scope', 'test_single_source_scope.js'],
+  // --- Stage F core: Claude adapter (tool_use transport), contracts/validators, evidence package, cost, analysis
+  //     orchestration (validate -> one repair -> deterministic fallback). Offline, injected fetchFn, $0. ---
+  ['stage-f-core', 'test_stage_f_core.js'],
   // --- WF24 XLSX export/delivery fixes (EXPORT-CHAT-001 caller scope + EXPORT-CHART-001 chart tolerance) ---
   ['wf24-export', 'test_wf24_export.js'],
   // --- SOURCE-OP-001: NL monitored-source registry (parseSourceOp -> list/add/pause/resume/remove/check) ---
