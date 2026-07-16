@@ -305,9 +305,10 @@ function findReusablePlan(existingRows, newPlan, ctx, opts) {
     if (!r) return;
     if (str(r.owner_user_id) !== owner) return;
     if (planIsTerminal(r.status)) return;
-    if (low(r.status) === 'awaiting_approval') {
-      var t = Date.parse(str(r.created_at)); if (!isNaN(t) && (nowMs - t) > ttlMs) return; // stale prompt abandoned
-    }
+    // STATUS-TTL-002 parity: ANY non-terminal plan older than the TTL is abandoned (a crashed/never-finalized run
+    // or a stale approval prompt) and must NOT be reused — a real run finishes in minutes. Applies to
+    // awaiting_approval AND in-flight (approved/collecting/…) alike.
+    var t = Date.parse(str(r.created_at)); if (!isNaN(t) && (nowMs - t) > ttlMs) return;
     if (planFingerprint(r, { owner_user_id: str(r.owner_user_id), chat_id: str(r.chat_id) }) !== fp) return;
     var ct = Date.parse(str(r.created_at)); if (isNaN(ct)) ct = 0;
     if (ct >= bestT) { bestT = ct; best = r; }

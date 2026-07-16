@@ -50,9 +50,12 @@ A.section('findReusablePlan — reuse / new / terminal / TTL / owner isolation')
   // a stale awaiting_approval (older than TTL) is abandoned, not reused
   const stale = Object.assign({}, existing, { created_at: '2026-07-16T11:00:00+03:00' }); // 60 min old
   A.ok('stale awaiting_approval abandoned (TTL)', P.findReusablePlan([stale], planWeb, ctxA, { now_ms: now, ttl_min: 30 }).reused === false);
-  // an approved (in-flight) plan still blocks a duplicate (already running)
+  // a RECENT approved (in-flight) plan still blocks a duplicate (a run is under way)
   const approved = Object.assign({}, existing, { status: 'approved' });
-  A.ok('in-flight approved plan blocks a duplicate', P.findReusablePlan([approved], planWeb, ctxA, { now_ms: now, ttl_min: 30 }).reused === true);
+  A.ok('recent in-flight approved plan blocks a duplicate', P.findReusablePlan([approved], planWeb, ctxA, { now_ms: now, ttl_min: 30 }).reused === true);
+  // a STALE approved plan (past TTL) is abandoned, not reused — a real run finishes in minutes (live-found bug)
+  const staleApproved = Object.assign({}, existing, { status: 'approved', created_at: '2026-07-15T12:00:00+03:00' }); // ~24h old
+  A.ok('stale approved plan (past TTL) is abandoned, NOT reused', P.findReusablePlan([staleApproved], planWeb, ctxA, { now_ms: now, ttl_min: 30 }).reused === false);
   // owner isolation: another owner's equivalent plan does not match
   const other = Object.assign({}, existing, { owner_user_id: '222', chat_id: '222' });
   A.ok('other owner does not match', P.findReusablePlan([other], planWeb, ctxA, { now_ms: now }).reused === false);
