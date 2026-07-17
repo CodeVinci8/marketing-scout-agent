@@ -15,7 +15,8 @@
     "outbox": "delivery queue; unsent entries are protected"
   },
   "dynamic_tab_allowlist": [
-    "={{ $json.route }}"
+    "={{ $json.route }}",
+    "={{ $json.reuse_route }}"
   ],
   "$bootstrap_note": "sheet_order + headers + identity_columns below are the SINGLE SOURCE OF TRUTH for the Stage 3 staging bootstrap (tools/gen_sheets_bootstrap_workflow.js, n8n/lib/sheets_contract_resolver.js). Header order is canonical and sourced from the repository schema docs / library row shapes (provenance in config/sheets_ui_contracts.json `_provenance`). headers[tab] is always a superset of tabs[tab].required_columns. Tabs written by more than one workflow generation carry the UNION of every writer's columns (n8n Google Sheets append maps by header NAME, so a tab missing a writer's column silently drops that field). Add a new tab by appending its name to sheet_order and an ordered list to headers; no engine change is required.",
   "sheet_order": [
@@ -1849,11 +1850,13 @@
       "writers": [
         "10",
         "12",
-        "16"
+        "16",
+        "04"
       ],
       "readers": [
         "10",
-        "12"
+        "12",
+        "04"
       ]
     },
     "vk_posts": {

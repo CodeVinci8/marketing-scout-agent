@@ -165,6 +165,17 @@ function deliveryBody(report, summary, availableCaps) {
   const failedNames = (Array.isArray(summary.failed_sources) ? summary.failed_sources : [])
     .map(k => RU_SRC[str(k).toLowerCase()] || str(k)).filter(Boolean);
   const lines = [facts];
+  // SOURCE-REUSE-001: when a source was answered from a saved accepted snapshot, say so EXPLICITLY, with the real
+  // collection time — the user must never believe a $0 reuse was a fresh scrape.
+  const reusedList = Array.isArray(summary.reused_sources) ? summary.reused_sources : [];
+  if (reusedList.length) {
+    const when = reusedList.map(r => {
+      const src = RU_SRC[str(r.source).toLowerCase()] || str(r.source);
+      const m = str(r.original_collected_at).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+      return src + (m ? (' (сбор от ' + m[3] + '.' + m[2] + '.' + m[1] + ' ' + m[4] + ':' + m[5] + ' МСК)') : '');
+    }).join(', ');
+    lines.push('💾 Использованы сохранённые данные: ' + when + '. Новый сбор не выполнялся — стоимость сбора $0.');
+  }
   if (state === 'failed') lines.push(failedNames.length
     ? ('Не удалось собрать данные по запрошенным источникам: ' + failedNames.join(', ') + '. Попробуйте позже или измените источники.')
     : 'Не удалось собрать данные по запрошенным источникам. Попробуйте позже.');

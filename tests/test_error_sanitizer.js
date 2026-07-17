@@ -120,7 +120,13 @@ A.section('WF04-ROUTE-001 — the route contract is CLOSED: every emitted route 
   const wf04 = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'n8n', 'workflows', '04_firecrawl_url_list_resilient.json'), 'utf8'));
   const nr = wf04.nodes.find(n => n.name === 'Normalize + Route').parameters.jsCode;
   A.ok('route is never spread in from the parsed provider payload', !/\.\.\.data\b/.test(nr) && !/Object\.assign\(\{\}\s*,\s*data\s*\)/.test(nr));
-  A.ok('dynamic tab allowlist is the single route expression', JSON.stringify(C.dynamic_tab_allowlist) === JSON.stringify(['={{ $json.route }}']));
+  // SOURCE-REUSE-001: reuse_route joins the allowlist. It is NOT model output — it comes from url_registry.last_route
+  // (our own written value) and Evaluate Dedup additionally validates it against REUSABLE_ROUTES (the 3 data queues)
+  // before the read node ever sees it.
+  A.ok('dynamic tab allowlist is exactly the two validated route expressions',
+    JSON.stringify(C.dynamic_tab_allowlist) === JSON.stringify(['={{ $json.route }}', '={{ $json.reuse_route }}']));
+  const ed = wf04.nodes.find(n => n.name === 'Evaluate Dedup').parameters.jsCode;
+  A.ok('reuse_route is allowlist-validated before any read', ed.indexOf("REUSABLE_ROUTES = ['monitor_queue', 'content_queue', 'review_queue']") >= 0 && /REUSABLE_ROUTES\.indexOf\(origRoute\)\s*<\s*0/.test(ed));
 }
 
 A.section('WF04-ROUTE-002 — the sanitizer is EMBEDDED at each persistence choke point (no drift)');

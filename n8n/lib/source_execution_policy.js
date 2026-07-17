@@ -29,11 +29,15 @@ var SX_MODES = { REUSE: 'reuse', COLLECT: 'collect', REFRESH: 'refresh' };
 var SX_DEFAULT_FRESHNESS_DAYS = 7;
 
 // A snapshot is reusable only if it actually produced accepted content.
+var SX_REJECTED_STATUSES = ['failed', 'error', 'quarantined', 'technical_error', 'excluded', 'invalid'];
 function sxIsAccepted(s) {
   if (!s) return false;
   var st = sxStr(s.quality_status || s.status).toLowerCase();
-  if (st && ['failed', 'error', 'quarantined', 'technical_error', 'excluded', 'invalid'].indexOf(st) >= 0) return false;
-  if (sxStr(s.processing_status).toLowerCase() === 'technical_error') return false;
+  if (st && SX_REJECTED_STATUSES.indexOf(st) >= 0) return false;
+  // SOURCE-REUSE-001: url_registry rows carry the verdict in processing_status (last_processing_status), not in
+  // quality_status. Checking only technical_error here let a quarantined/failed prior run count as "accepted".
+  var ps = sxStr(s.processing_status).toLowerCase();
+  if (ps && SX_REJECTED_STATUSES.indexOf(ps) >= 0) return false;
   if (s.accepted === false) return false;
   return true;
 }

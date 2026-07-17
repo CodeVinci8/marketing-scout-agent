@@ -209,4 +209,27 @@ A.section('WF20 topology — WF28 is called per source and NEVER gates the deter
   A.ok('the summary records analysis counts', sum.indexOf('llm_analyses') >= 0);
 }
 
+A.section('DELIVERY-CHUNKS-001 — every built chunk is actually sent (chunks 1..N carried the AI analysis)');
+{
+  // Live exec 956: Build Delivery Outbox built 4 chunks (13.5k chars; the WF28 sections sat in chunks 1-3), the
+  // send node consumed only telegram_send_body — chunk 0 — and the user never saw the analysis they paid for.
+  const wf20 = JSON.parse(fs.readFileSync(path.join(WFD, '20_agent_orchestrator.json'), 'utf8'));
+  const n20 = (n) => wf20.nodes.find(x => x.name === n);
+  const exp = n20('Expand Telegram Chunks');
+  A.ok('WF20 has Expand Telegram Chunks', !!exp);
+  A.ok('it fans telegram_send_bodies out to one item per chunk', exp.parameters.jsCode.indexOf('telegram_send_bodies') >= 0 && /bodies\.map\(/.test(exp.parameters.jsCode));
+  A.ok('fail-safe: an unparsable outbox still delivers chunk 0 (delivery is never blocked)', exp.parameters.jsCode.indexOf("ob.telegram_send_body||'{}'") >= 0);
+  const C20 = wf20.connections;
+  const t20 = (from) => ((C20[from] || {}).main || [[]])[0].map(x => x.node).join(',');
+  A.eq('outbox -> append -> expand -> send', t20('Build Delivery Outbox') + '|' + t20('Append telegram_outbox') + '|' + t20('Expand Telegram Chunks'),
+    'Append telegram_outbox|Expand Telegram Chunks|Send Telegram Report');
+  A.ok('send node posts $json.telegram_send_body per item', n20('Send Telegram Report').parameters.jsonBody === '={{ $json.telegram_send_body }}');
+  // executable proof of the expansion contract (same expressions as the node)
+  const ob = { telegram_send_bodies: JSON.stringify([{ chat_id: '1', text: 'a' }, { chat_id: '1', text: 'b' }]), telegram_send_body: JSON.stringify({ chat_id: '1', text: 'a' }) };
+  let bodies = []; try { bodies = JSON.parse(ob.telegram_send_bodies || '[]'); } catch (e) { bodies = []; }
+  A.eq('2 chunks -> 2 send items', bodies.length, 2);
+  let bad = []; try { bad = JSON.parse('not json'); } catch (e) { bad = []; }
+  A.eq('parse failure -> [] -> single-body fallback path', bad.length, 0);
+}
+
 A.report('stage-f-integration');

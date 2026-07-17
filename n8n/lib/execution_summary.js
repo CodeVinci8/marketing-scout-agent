@@ -54,6 +54,15 @@ function buildExecutionSummary(parts) {
     records_analyzed: num(analysis.records_analyzed, 0),
     records_reported: num(aggregation.rows_after_filters, num(report.rows_after_filters, 0)),
     external_calls: adapters.reduce((a, r) => a + num(r.external_calls, 0), 0),
+    // SOURCE-REUSE-001: sources answered from a saved accepted snapshot ($0 collection). The delivery layer MUST
+    // tell the user saved data was used and when it was really collected — a reuse must never look like a fresh scrape.
+    reused_sources: adapters
+      .filter(a => a && (a.source_outcome === 'reused_snapshot' || a.execution_mode === 'reuse'))
+      .map(a => ({
+        source: str(a.source),
+        original_run_id: str(a.original_snapshot_run_id),
+        original_collected_at: str(a.original_snapshot_collected_at)
+      })),
     llm_primary_calls: llmPrimary,
     llm_repair_calls: llmRepair,
     source_cost_status: sourceCostKnown ? 'known' : 'unknown',

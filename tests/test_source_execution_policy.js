@@ -163,10 +163,11 @@ A.section('§3 — WF20 propagates the APPROVED refresh to WF04 (and only then)'
   const wf04 = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'n8n', 'workflows', '04_firecrawl_url_list_resilient.json'), 'utf8'));
   const trig = wf04.nodes.find(n => (n.type || '').indexOf('executeWorkflowTrigger') >= 0);
   A.ok('WF04 declares the force_reprocess callable input', trig.parameters.workflowInputs.values.some(v => v.name === 'force_reprocess'));
-  // and the dedup itself honours it
+  // and the dedup itself honours it — SOURCE-REUSE-001: WF04 now runs the SAME canonical policy the planner ran,
+  // so force arrives as requested_refresh and bypasses ONLY the freshness check (never quality/budget gates).
   const dedup = wf04.nodes.find(n => n.name === 'Evaluate Dedup').parameters.jsCode;
-  A.ok('WF04 dedup honours force (bypasses ONLY the freshness/dup check)', /const hit = !force/.test(dedup));
-  A.ok('WF04 dedup does not disable the quality gates', dedup.indexOf('quality') < 0 || true);
+  A.ok('WF04 dedup honours force (bypasses ONLY the freshness/dup check)', /requested_refresh:\s*force/.test(dedup));
+  A.ok('WF04 dedup decides through the canonical policy', dedup.indexOf('decideSourceExecution(') >= 0);
 }
 
 A.report('source-execution-policy');

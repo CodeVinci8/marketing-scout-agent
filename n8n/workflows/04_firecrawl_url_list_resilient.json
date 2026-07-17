@@ -38,7 +38,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// OPERATOR: edit rawUrls below. MAX 5 URLs (hard cap). First run: use 3.\n// Keep ONLY example.com placeholders committed to the repo — paste real URLs locally.\nvar __agentIn = (typeof $json === 'object' && $json) ? $json : {};\nconst __exampleUrls = [\n  'https://example.com/competitor-1',\n  'https://example.com/competitor-2',\n  'https://example.com/competitor-3'\n];\nconst rawUrls = (Array.isArray(__agentIn.urls) && __agentIn.urls.length) ? __agentIn.urls : __exampleUrls;\n\nfunction pad(n){ return String(n).padStart(2, '0'); }\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now = moscowIsoNow();\nconst __stamp = moscowStamp();\nconst run_id = (__agentIn.source_run_id || __agentIn.run_id) ? String(__agentIn.source_run_id || __agentIn.run_id) : ('firecrawl_' + __stamp);\nconst agent_request_id = __agentIn.agent_request_id ? String(__agentIn.agent_request_id) : ('wf04_req_' + __stamp); // distinct request id (not the source_run_id)\n\nconst cleaned = [];\nfor (let u of rawUrls) {\n  if (u == null) continue;\n  u = String(u).trim();\n  if (u === '') continue;\n  cleaned.push(u);\n}\nconst capped = cleaned.slice(0, 5); // HARD CAP: max 5 URLs\n\n// --- Stage C Closure Patch 2: reset run-level repair/fallback accounting (S2-D7/D8/D9/D16) ---\nconst __sd=$getWorkflowStaticData('global');\n__sd.wf04_run={ urls_received:capped.length, urls_scraped:0, primary_calls:0, primary_parse_success:0, primary_parse_failure:0, repair_calls:0, repair_success:0, repair_failure:0, deterministic_fallback:0, degraded:0, quarantined:0, snapshots_written:0, firecrawl_calls:0, claude_calls:0 };\nconst items = [];\nlet idx = 0;\nfor (const u of capped) {\n  idx++;\n  items.push({ json: {\n    target_url: u,\n    source_type: 'scraped_web',\n    platform: 'website',\n    parsed_at: now,\n    source_note: 'firecrawl_url_list_manual',\n    run_id: run_id,\n    agent_request_id: agent_request_id,\n    batch_index: idx,\n    force_reprocess: (__agentIn.force_reprocess === true || __agentIn.force_reprocess === 'true') // FORCE-REPROCESS-001: callable passes strings\n  }});\n}\nreturn items;"
+        "jsCode": "// OPERATOR: edit rawUrls below. MAX 5 URLs (hard cap). First run: use 3.\n// Keep ONLY example.com placeholders committed to the repo — paste real URLs locally.\nvar __agentIn = (typeof $json === 'object' && $json) ? $json : {};\nconst __exampleUrls = [\n  'https://example.com/competitor-1',\n  'https://example.com/competitor-2',\n  'https://example.com/competitor-3'\n];\nconst rawUrls = (Array.isArray(__agentIn.urls) && __agentIn.urls.length) ? __agentIn.urls : __exampleUrls;\n\nfunction pad(n){ return String(n).padStart(2, '0'); }\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now = moscowIsoNow();\nconst __stamp = moscowStamp();\nconst run_id = (__agentIn.source_run_id || __agentIn.run_id) ? String(__agentIn.source_run_id || __agentIn.run_id) : ('firecrawl_' + __stamp);\nconst agent_request_id = __agentIn.agent_request_id ? String(__agentIn.agent_request_id) : ('wf04_req_' + __stamp); // distinct request id (not the source_run_id)\n// SOURCE-REUSE-001: the caller's owner + execution-mode context. WF04 must make the SAME reuse/collect/refresh\n// decision the planner promised, so the planner's inputs travel with every item.\nconst owner_user_id = __agentIn.owner_user_id ? String(__agentIn.owner_user_id) : '';\nconst source_execution_mode = __agentIn.source_execution_mode ? String(__agentIn.source_execution_mode) : '';\nconst freshness_days = Number(__agentIn.freshness_days) || 0;\n\nconst cleaned = [];\nfor (let u of rawUrls) {\n  if (u == null) continue;\n  u = String(u).trim();\n  if (u === '') continue;\n  cleaned.push(u);\n}\nconst capped = cleaned.slice(0, 5); // HARD CAP: max 5 URLs\n\n// --- Stage C Closure Patch 2: reset run-level repair/fallback accounting (S2-D7/D8/D9/D16) ---\nconst __sd=$getWorkflowStaticData('global');\n__sd.wf04_run={ urls_received:capped.length, urls_scraped:0, primary_calls:0, primary_parse_success:0, primary_parse_failure:0, repair_calls:0, repair_success:0, repair_failure:0, deterministic_fallback:0, degraded:0, quarantined:0, snapshots_written:0, firecrawl_calls:0, claude_calls:0, reused:0, reuse_failed:0, original_snapshot_run_id:'', original_snapshot_collected_at:'', force_reprocess:(__agentIn.force_reprocess === true || __agentIn.force_reprocess === 'true'), requested_mode:source_execution_mode };\nconst items = [];\nlet idx = 0;\nfor (const u of capped) {\n  idx++;\n  items.push({ json: {\n    target_url: u,\n    source_type: 'scraped_web',\n    platform: 'website',\n    parsed_at: now,\n    source_note: 'firecrawl_url_list_manual',\n    run_id: run_id,\n    agent_request_id: agent_request_id,\n    batch_index: idx,\n    force_reprocess: (__agentIn.force_reprocess === true || __agentIn.force_reprocess === 'true'), // FORCE-REPROCESS-001: callable passes strings\n    owner_user_id: owner_user_id,\n    source_execution_mode: source_execution_mode,\n    freshness_days: freshness_days\n  }});\n}\nreturn items;"
       }
     },
     {
@@ -64,7 +64,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "const j = $json;\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nlet u = String(j.target_url || '').trim();\nlet normalized = u;\ntry {\n  if (u) {\n    const noFrag = u.split('#')[0];\n    const url = new URL(noFrag);\n    url.protocol = (url.protocol || '').toLowerCase();\n    url.hostname = (url.hostname || '').toLowerCase();\n    const drop = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','yclid','fbclid'];\n    for (const p of drop) url.searchParams.delete(p);\n    let path = url.pathname || '/';\n    if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);\n    url.pathname = path;\n    normalized = url.toString();\n  }\n} catch(e) {\n  normalized = u;\n}\nreturn [{ json: {\n  target_url: u || normalized,\n  normalized_source_url: normalized,\n  source_url: normalized,\n  source_type: j.source_type || 'scraped_web',\n  platform: j.platform || 'website',\n  parsed_at: j.parsed_at || moscowIsoNow(),\n  source_note: j.source_note || 'firecrawl_url_list_manual',\n  run_id: j.run_id || '',\n  batch_index: j.batch_index || 0,\n  force_reprocess: (j.force_reprocess === true || j.force_reprocess === 'true')\n}}];"
+        "jsCode": "const j = $json;\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nlet u = String(j.target_url || '').trim();\nlet normalized = u;\ntry {\n  if (u) {\n    const noFrag = u.split('#')[0];\n    const url = new URL(noFrag);\n    url.protocol = (url.protocol || '').toLowerCase();\n    url.hostname = (url.hostname || '').toLowerCase();\n    const drop = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','yclid','fbclid'];\n    for (const p of drop) url.searchParams.delete(p);\n    let path = url.pathname || '/';\n    if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);\n    url.pathname = path;\n    normalized = url.toString();\n  }\n} catch(e) {\n  normalized = u;\n}\nreturn [{ json: {\n  target_url: u || normalized,\n  normalized_source_url: normalized,\n  source_url: normalized,\n  source_type: j.source_type || 'scraped_web',\n  platform: j.platform || 'website',\n  parsed_at: j.parsed_at || moscowIsoNow(),\n  source_note: j.source_note || 'firecrawl_url_list_manual',\n  run_id: j.run_id || '',\n  batch_index: j.batch_index || 0,\n  force_reprocess: (j.force_reprocess === true || j.force_reprocess === 'true'),\n  owner_user_id: j.owner_user_id || '',\n  source_execution_mode: j.source_execution_mode || '',\n  freshness_days: Number(j.freshness_days) || 0\n}}];"
       }
     },
     {
@@ -99,7 +99,9 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "returnAllMatches": "returnAllMatches"
+        }
       },
       "credentials": {
         "googleApi": {
@@ -121,12 +123,12 @@
         300
       ],
       "parameters": {
-        "jsCode": "const ctx = $('Normalize URL for Dedup').first().json;\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nconst now = moscowIsoNow();\nconst key = String(ctx.normalized_source_url || '').trim();\nconst run_id = ctx.run_id || '';\nconst batch_index = ctx.batch_index || 0;\nconst parsedAt = ctx.parsed_at || now;\nconst force = (ctx.force_reprocess === true || ctx.force_reprocess === 'true');\n\n// Dedup against the dedicated url_registry tab (DEC-051). force_reprocess bypasses.\nlet rows = [];\ntry { rows = $('Registry Lookup').all().map(i => i.json); } catch(e) { rows = []; }\nconst hit = !force && key !== '' && rows.some(r => r && String(r.normalized_source_url || '').trim() === key);\n\nif (hit) {\n  // Duplicate → skipped_log, NO Firecrawl/Claude cost. 35 fields.\n  return [{ json: {\n    created_at: now, source_type: ctx.source_type || 'scraped_web', platform: ctx.platform || 'website',\n    source_url: key, parsed_at: parsedAt, published_at: '', freshness_status: 'unknown',\n    entity_type: 'irrelevant', company_name: '', profile_name: '', profile_url: '', region: '',\n    service_type: 'unknown', offer_text: '', terms: '', contact_public: '', text_context: '', detected_need: '',\n    competitor_strength: 1, lead_signal_score: 1, content_idea_score: 1, quality_score: 1,\n    reason: 'Duplicate source_url already exists in url_registry; skipped before Firecrawl/Claude cost.',\n    recommended_action: 'ignore', status: 'skipped', processing_status: 'business_skip',\n    parse_method: 'dedup_source_url', parse_error: '',\n    raw_response_preview: 'Duplicate source_url found in url_registry.',\n    route: 'skipped_log', needs_manual_review: false, repair_used: false, repair_status: '',\n    run_id: run_id, batch_index: batch_index\n  }}];\n}\n\n// Not a duplicate (or force_reprocess) → source record for Firecrawl (no parse_method marker).\nreturn [{ json: {\n  target_url: ctx.target_url || key,\n  normalized_source_url: key,\n  source_url: key,\n  source_type: ctx.source_type || 'scraped_web',\n  platform: ctx.platform || 'website',\n  parsed_at: parsedAt,\n  run_id: run_id,\n  batch_index: batch_index\n}}];"
+        "jsCode": "const ctx = $('Normalize URL for Dedup').first().json;\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nconst now = moscowIsoNow();\nconst key = String(ctx.normalized_source_url || '').trim();\nconst run_id = ctx.run_id || '';\nconst batch_index = ctx.batch_index || 0;\nconst parsedAt = ctx.parsed_at || now;\nconst force = (ctx.force_reprocess === true || ctx.force_reprocess === 'true');\nconst ownerId = String(ctx.owner_user_id || '');\nconst freshnessDays = Number(ctx.freshness_days) || 0;\n\n// embedded n8n/lib/source_execution_policy.js (do not edit here; edit the lib and re-run the transform)\n// source_execution_policy.js — the ONE decision for \"do we pay to collect this source again?\"\n//\n// SOURCE-EXEC-001. Before this, WF04's `url_registry` check was a PERMANENT dedup: `hit = !force && rows.some(...)`\n// with no time component. Once a URL was ever scraped it was skipped forever, so a user could never re-analyze a\n// site — and the run produced an empty bundle and a misleading \"данных нет\" while a perfectly good saved snapshot\n// sat in the sheet. Permanent-skip is not a freshness policy; it is a leak.\n//\n// Three explicit modes:\n//   reuse   — a recent ACCEPTED snapshot exists and is still fresh. No paid collection; analyze the saved snapshot\n//             and say so, with its collection time. Collection cost $0.\n//   collect — no accepted snapshot, or the newest is older than the TTL, or every prior attempt failed. Pay once.\n//   refresh — the user explicitly asked to re-collect. Bypasses ONLY the freshness check; approval, budget, quality\n//             and global dedup all still apply, and the repeated paid collection is stated in the plan.\n//\n// A FAILED snapshot never counts as reusable and never blocks a retry — otherwise one bad scrape would poison a\n// source forever (the same permanence bug in a different costume).\n//\n// Embeddable: unique sx*-prefixed names, no cross-lib require.\n\nfunction sxStr(v) { return v == null ? '' : String(v); }\nfunction sxNum(v, d) { var n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }\n\nvar SX_MODES = { REUSE: 'reuse', COLLECT: 'collect', REFRESH: 'refresh' };\n// Default freshness window. The product's monitoring/report cadence is weekly (WF25 weekly digest, WF23 monitor),\n// and WF10/WF12 already reason over a 30-day window — so a snapshot younger than 7 days is \"current\" for a\n// competitor's public positioning (offers/prices change on a weeks-to-months scale, not hourly). Operator override:\n// MS_SOURCE_FRESHNESS_DAYS.\nvar SX_DEFAULT_FRESHNESS_DAYS = 7;\n\n// A snapshot is reusable only if it actually produced accepted content.\nvar SX_REJECTED_STATUSES = ['failed', 'error', 'quarantined', 'technical_error', 'excluded', 'invalid'];\nfunction sxIsAccepted(s) {\n  if (!s) return false;\n  var st = sxStr(s.quality_status || s.status).toLowerCase();\n  if (st && SX_REJECTED_STATUSES.indexOf(st) >= 0) return false;\n  // SOURCE-REUSE-001: url_registry rows carry the verdict in processing_status (last_processing_status), not in\n  // quality_status. Checking only technical_error here let a quarantined/failed prior run count as \"accepted\".\n  var ps = sxStr(s.processing_status).toLowerCase();\n  if (ps && SX_REJECTED_STATUSES.indexOf(ps) >= 0) return false;\n  if (s.accepted === false) return false;\n  return true;\n}\nfunction sxTime(s) {\n  var t = Date.parse(sxStr((s && (s.collected_at || s.parsed_at || s.last_seen_at || s.created_at)) || ''));\n  return isFinite(t) ? t : NaN;\n}\nfunction sxNorm(u) {\n  return sxStr(u).trim().toLowerCase().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/\\/+$/, '');\n}\n\n// newestAcceptedSnapshot(snapshots, source_url, owner) -> the freshest ACCEPTED snapshot for this url (or null).\n// Owner isolation: when a snapshot carries an owner, only that owner's rows are considered.\nfunction newestAcceptedSnapshot(snapshots, sourceUrl, owner) {\n  var key = sxNorm(sourceUrl);\n  var best = null, bestT = -1;\n  (Array.isArray(snapshots) ? snapshots : []).forEach(function (s) {\n    if (!s) return;\n    if (sxNorm(s.source_url || s.normalized_source_url) !== key) return;\n    if (owner && sxStr(s.owner_user_id) && sxStr(s.owner_user_id) !== sxStr(owner)) return;\n    if (!sxIsAccepted(s)) return;\n    var t = sxTime(s);\n    if (isNaN(t)) return;\n    if (t > bestT) { bestT = t; best = s; }\n  });\n  return best;\n}\n\n// decideSourceExecution(input) -> { mode, reason, force_reprocess, snapshot, snapshot_age_days, snapshot_collected_at }\n// input: { source_url, snapshots[], owner_user_id, requested_refresh, now, freshness_days }\nfunction decideSourceExecution(input) {\n  input = input || {};\n  var nowMs = input.now ? Date.parse(sxStr(input.now)) : Date.now();\n  if (!isFinite(nowMs)) nowMs = Date.now();\n  var ttlDays = sxNum(input.freshness_days, SX_DEFAULT_FRESHNESS_DAYS);\n  if (!(ttlDays > 0)) ttlDays = SX_DEFAULT_FRESHNESS_DAYS;\n\n  var snap = newestAcceptedSnapshot(input.snapshots, input.source_url, input.owner_user_id);\n  // Did we try this url before and fail? That is NOT \"never collected\" — the user deserves the real reason, and a\n  // failed attempt must never block a retry.\n  var key = sxNorm(input.source_url);\n  var triedBefore = (Array.isArray(input.snapshots) ? input.snapshots : []).some(function (s) {\n    return s && sxNorm(s.source_url || s.normalized_source_url) === key &&\n      (!input.owner_user_id || !sxStr(s.owner_user_id) || sxStr(s.owner_user_id) === sxStr(input.owner_user_id));\n  });\n  var ageDays = snap ? (nowMs - sxTime(snap)) / 86400000 : null;\n  var out = {\n    mode: SX_MODES.COLLECT, reason: triedBefore ? 'last_attempt_failed' : 'never_collected', force_reprocess: false,\n    snapshot: null, snapshot_age_days: null, snapshot_collected_at: ''\n  };\n  if (snap) {\n    out.snapshot = snap;\n    out.snapshot_age_days = Math.round(ageDays * 100) / 100;\n    out.snapshot_collected_at = sxStr(snap.collected_at || snap.parsed_at || snap.last_seen_at || snap.created_at);\n  }\n\n  // An explicit refresh wins over freshness — but ONLY over freshness. Everything else still gates it.\n  if (input.requested_refresh === true) {\n    out.mode = SX_MODES.REFRESH;\n    out.force_reprocess = true;\n    out.reason = snap ? 'explicit_refresh' : 'explicit_refresh_no_snapshot';\n    return out;\n  }\n  if (!snap) return out;                                   // collect / never_collected\n  if (ageDays > ttlDays) { out.reason = 'snapshot_stale'; return out; }  // collect / stale\n  out.mode = SX_MODES.REUSE;\n  out.reason = 'fresh_snapshot';\n  return out;\n}\n\n// Russian phrases that mean \"collect it again, now\". Cyrillic \\b/\\w do not fire in JS, so match on explicit\n// [а-яё] boundaries. Deliberately narrow: an accidental refresh costs the user real money.\nvar SX_REFRESH_RE = /(^|[^а-яёa-z])(обнови(ть|те)?|переобнови(ть|те)?|пересобери|пересобрать|пересоберите|заново|повтори(ть|те)? сбор|повторный сбор|принудительн(о|ый|ая)|ещё раз собери|еще раз собери|свеж(ие|их) данн(ые|ых)|актуализируй|перепроверь)([^а-яёa-z]|$)/i;\n// \"обнови отчёт\" = rebuild the report from what we have; it is NOT automatically a paid re-collection.\nvar SX_REPORT_ONLY_RE = /обнови(ть|те)?\\s+отч[её]т/i;\n\n// detectRefreshRequest(text) -> { requested_refresh, refresh_reason }\nfunction detectRefreshRequest(text) {\n  var t = sxStr(text);\n  if (!t) return { requested_refresh: false, refresh_reason: '' };\n  if (SX_REPORT_ONLY_RE.test(t) && !/данн|сбор|источник|сайт/i.test(t)) {\n    return { requested_refresh: false, refresh_reason: 'report_rebuild_only' };\n  }\n  if (SX_REFRESH_RE.test(t)) return { requested_refresh: true, refresh_reason: 'user_requested_refresh' };\n  return { requested_refresh: false, refresh_reason: '' };\n}\n// --- end embedded source_execution_policy ---\n\n// SOURCE-REUSE-001. The old check here was a PERMANENT dedup: any registry hit emitted only a skipped_log row and\n// ZERO data, so the planner could promise \"reuse\" while the executor delivered \"no_sources\" (live: WF04 exec 948 ->\n// WF10 exec 951 rows_after_isolation=0 for a site scraped 25 minutes earlier). Planning and execution now share the\n// ONE canonical decision: decideSourceExecution (reuse | collect | refresh).\nlet rows = [];\ntry { rows = $('Registry Lookup').all().map(i => i.json); } catch(e) { rows = []; }\n// url_registry rows -> the policy's snapshot shape (the registry's last_processing_status IS the snapshot status).\nconst snapshots = rows.filter(r => r).map(function (r) { return {\n  source_url: r.normalized_source_url || r.source_url,\n  normalized_source_url: r.normalized_source_url,\n  last_seen_at: r.last_seen_at || r.first_seen_at,\n  processing_status: r.last_processing_status,\n  run_id: r.run_id,\n  last_route: r.last_route,\n  owner_user_id: r.owner_user_id // absent on today's registry rows; enforced whenever present\n};});\nconst decision = decideSourceExecution({ source_url: key, snapshots: snapshots, owner_user_id: ownerId, requested_refresh: force, freshness_days: freshnessDays, now: now });\n\n// Reuse is only real if the original run left something WF10 can actually consume: a row in one of the three data\n// queues, from a run whose source_health verdict is still eligible. Anything else -> collect again (fail closed:\n// a blocked/quarantined/unscored original never silently becomes \"saved data\").\nconst REUSABLE_ROUTES = ['monitor_queue', 'content_queue', 'review_queue'];\nlet originalHealth = null;\nif (decision.mode === 'reuse') {\n  const origRoute = String((decision.snapshot && decision.snapshot.last_route) || '');\n  if (REUSABLE_ROUTES.indexOf(origRoute) < 0) {\n    decision.mode = 'collect';\n    decision.reason = 'previous_run_not_reusable_route';\n  } else {\n    let healthRows = [];\n    try { healthRows = $('Source Health Lookup').all().map(i => i.json); } catch(e) { healthRows = []; }\n    const orig = String(decision.snapshot.run_id || '');\n    const BAD_HEALTH = ['quarantined', 'failed', 'error', 'invalid', 'excluded'];\n    healthRows.forEach(function (h) {\n      if (!h || String(h.source_run_id || '') !== orig) return;\n      const t = Date.parse(String(h.evaluated_at || '')) || 0;\n      if (!originalHealth || t >= (Date.parse(String(originalHealth.evaluated_at || '')) || 0)) originalHealth = h;\n    });\n    const hOk = originalHealth\n      && BAD_HEALTH.indexOf(String(originalHealth.quality_status || '').toLowerCase()) < 0\n      && String(originalHealth.report_eligible).toLowerCase() !== 'false';\n    if (!hOk) {\n      decision.mode = 'collect';\n      decision.reason = originalHealth ? 'original_run_not_eligible' : 'original_run_unscored';\n      originalHealth = null;\n    }\n  }\n}\n\nif (decision.mode === SX_MODES.REUSE) {\n  return [{ json: {\n    sx_mode: 'reuse',\n    sx_reason: decision.reason,\n    target_url: ctx.target_url || key,\n    normalized_source_url: key,\n    source_url: key,\n    source_type: ctx.source_type || 'scraped_web',\n    platform: ctx.platform || 'website',\n    parsed_at: parsedAt,\n    run_id: run_id,\n    batch_index: batch_index,\n    owner_user_id: ownerId,\n    reuse_route: String(decision.snapshot.last_route),\n    original_run_id: String(decision.snapshot.run_id || ''),\n    original_collected_at: String(decision.snapshot_collected_at || ''),\n    original_snapshot_age_days: decision.snapshot_age_days,\n    original_health_row: originalHealth\n  }}];\n}\n\n// collect / refresh -> Firecrawl branch (same record shape as before, now with the typed decision attached).\nreturn [{ json: {\n  sx_mode: decision.mode,\n  sx_reason: decision.reason,\n  target_url: ctx.target_url || key,\n  normalized_source_url: key,\n  source_url: key,\n  source_type: ctx.source_type || 'scraped_web',\n  platform: ctx.platform || 'website',\n  parsed_at: parsedAt,\n  run_id: run_id,\n  batch_index: batch_index\n}}];"
       }
     },
     {
       "id": "b4000000-0000-0000-0000-00000000000i",
-      "name": "IF Duplicate?",
+      "name": "IF Reuse?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
@@ -143,8 +145,8 @@
           "conditions": [
             {
               "id": "b4-if-dup-01",
-              "leftValue": "={{ $json.parse_method }}",
-              "rightValue": "dedup_source_url",
+              "leftValue": "={{ $json.sx_mode }}",
+              "rightValue": "reuse",
               "operator": {
                 "type": "string",
                 "operation": "equals"
@@ -636,7 +638,7 @@
         160
       ],
       "parameters": {
-        "jsCode": "function moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\n// WF04 live_source_runs ledger. CANONICAL IDENTITY (Stage 3 closure, DEC-147): the connector's canonical\n// source_run_id (Set URL List run_id = 'firecrawl_<stamp>') is the join key used by raw records, snapshots,\n// source_health and reports. The workflow-local execution id ('wf04_<stamp>') is recorded SEPARATELY as\n// workflow_run_id and NEVER replaces source_run_id (the pre-fix wf04_* run_id broke WF16's join). One row\n// per run; aggregates the SplitInBatches DONE output via $input.all().\nfunction str(v){return v==null?'':String(v).trim();}function low(v){return str(v).toLowerCase();}\nconst items=$input.all().map(i=>i.json);\nconst total=items.length;\nconst written=items.filter(r=>str(r.note)==='processed_by_workflow_04').length; // non-duplicate registry rows\nconst dup=total-written; // duplicates routed to skipped_log (no Firecrawl call)\nlet sourceRunId='';try{sourceRunId=str($('Set URL List').first().json.run_id);}catch(e){}\nif(!sourceRunId)sourceRunId='firecrawl_'+moscowStamp();\nconst workflowRunId='wf04_'+sourceRunId.replace(/^firecrawl_/,'');\nlet agentRequestId='';try{agentRequestId=str($('Set URL List').first().json.agent_request_id);}catch(e){}\nlet received=total;try{received=$('Set URL List').all().length||total;}catch(e){}\n// run-level call accounting from staticData (primary/repair separated, S2-D7/D8/D16)\nconst __sd=$getWorkflowStaticData('global');const __r=(__sd&&__sd.wf04_run)||{};\nconst firecrawlCalls=Number(__r.firecrawl_calls)||written;\nconst primaryCalls=Number(__r.primary_calls)||written;\nconst repairCalls=Number(__r.repair_calls)||0;\nconst claudeCalls=Number(__r.claude_calls)||(primaryCalls+repairCalls);\nconst externalCalls=firecrawlCalls; // paid source (Firecrawl) calls\n// §12 cost: a paid external/LLM call whose provider cost was NOT recovered is 'unknown' (never 0 / not_applicable)\nconst sourceCostStatus=(externalCalls>0?'unknown':'not_applicable');\nconst llmCostStatus=(claudeCalls>0?'unknown':'not_applicable');\nconst costStatus=((sourceCostStatus==='unknown'||llmCostStatus==='unknown')?'unknown':'not_applicable');\nreturn [{ json: {\n  run_id:sourceRunId,            // backward-compat alias == canonical source_run_id (join-safe)\n  source_run_id:sourceRunId,     // CANONICAL join key (raw/snapshot/source_health/report)\n  workflow_run_id:workflowRunId, // workflow-local execution id (was silently used as run_id)\n  agent_request_id:agentRequestId,\n  created_at:moscowIsoNow(),\n  workflow:'WF04 - Firecrawl URL List Resilient',\n  source_family:'web_competitor',\n  platform:'website',\n  mode:'live',\n  data_mode:'live',\n  approval_token_used:'not_required', // WF04 has no paid-approval token gate (Firecrawl url list); accurate semantic (§2.7)\n  source_allowlist:'operator url list (Set URL List, <=5)',\n  max_items:5,\n  items_received:received,\n  items_relevant:written,\n  items_written_raw:written,\n  items_unique:written,\n  items_duplicate:dup,\n  hard_skipped:0,\n  external_calls:externalCalls,\n  firecrawl_calls:firecrawlCalls,\n  primary_calls:primaryCalls,\n  repair_calls:repairCalls,\n  estimated_source_cost_usd:0,\n  actual_source_cost_usd:null,\n  source_cost_status:sourceCostStatus,\n  llm_calls:claudeCalls,\n  estimated_llm_cost_usd:0,\n  actual_llm_cost_usd:null,\n  llm_cost_status:llmCostStatus,\n  cost_status:costStatus,\n  status:'completed',\n  error_summary:'',\n  operator_next_action:'WF16 (score source_health by source_run_id) -> WF08 (analyze canonical records) -> WF10/WF12 report.',\n  notes:'Web competitor scrape. Canonical source_run_id='+sourceRunId+' (= raw/snapshot/source_health join key); workflow_run_id='+workflowRunId+'. received=Set URL List; written=non-duplicate registry rows. Firecrawl/Claude $ not recovered => cost_status=unknown; primary/repair calls separated from staticData.'\n}}];"
+        "jsCode": "function moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\n// WF04 live_source_runs ledger. CANONICAL IDENTITY (Stage 3 closure, DEC-147): the connector's canonical\n// source_run_id (Set URL List run_id = 'firecrawl_<stamp>') is the join key used by raw records, snapshots,\n// source_health and reports. The workflow-local execution id ('wf04_<stamp>') is recorded SEPARATELY as\n// workflow_run_id and NEVER replaces source_run_id (the pre-fix wf04_* run_id broke WF16's join). One row\n// per run; aggregates the SplitInBatches DONE output via $input.all().\nfunction str(v){return v==null?'':String(v).trim();}function low(v){return str(v).toLowerCase();}\nconst items=$input.all().map(i=>i.json);\nconst total=items.length;\nconst written=items.filter(r=>str(r.note)==='processed_by_workflow_04').length; // non-duplicate registry rows\nconst dup=total-written; // duplicates routed to skipped_log (no Firecrawl call)\nlet sourceRunId='';try{sourceRunId=str($('Set URL List').first().json.run_id);}catch(e){}\nif(!sourceRunId)sourceRunId='firecrawl_'+moscowStamp();\nconst workflowRunId='wf04_'+sourceRunId.replace(/^firecrawl_/,'');\nlet agentRequestId='';try{agentRequestId=str($('Set URL List').first().json.agent_request_id);}catch(e){}\nlet received=total;try{received=$('Set URL List').all().length||total;}catch(e){}\n// run-level call accounting from staticData (primary/repair separated, S2-D7/D8/D16)\nconst __sd=$getWorkflowStaticData('global');const __r=(__sd&&__sd.wf04_run)||{};\nconst firecrawlCalls=Number(__r.firecrawl_calls)||written;\nconst primaryCalls=Number(__r.primary_calls)||written;\nconst repairCalls=Number(__r.repair_calls)||0;\nconst claudeCalls=Number(__r.claude_calls)||(primaryCalls+repairCalls);\nconst externalCalls=firecrawlCalls; // paid source (Firecrawl) calls\n// SOURCE-REUSE-001: reuse accounting + a stash for the (now downstream) agent_requests/summary builders,\n// which no longer receive the loop DONE items directly (the done-side is serialized for a deterministic return).\nconst reused=Number(__r.reused)||0;\nconst reuseFailed=Number(__r.reuse_failed)||0;\nconst pureReuse=(written===0&&reused>0&&firecrawlCalls===0);\n__sd.wf04_run=Object.assign({},__r,{done_total:total,registry_rows_written:written});\n// §12 cost: a paid external/LLM call whose provider cost was NOT recovered is 'unknown' (never 0 / not_applicable)\nconst sourceCostStatus=(externalCalls>0?'unknown':'not_applicable');\nconst llmCostStatus=(claudeCalls>0?'unknown':'not_applicable');\nconst costStatus=((sourceCostStatus==='unknown'||llmCostStatus==='unknown')?'unknown':'not_applicable');\nreturn [{ json: {\n  run_id:sourceRunId,            // backward-compat alias == canonical source_run_id (join-safe)\n  source_run_id:sourceRunId,     // CANONICAL join key (raw/snapshot/source_health/report)\n  workflow_run_id:workflowRunId, // workflow-local execution id (was silently used as run_id)\n  agent_request_id:agentRequestId,\n  created_at:moscowIsoNow(),\n  workflow:'WF04 - Firecrawl URL List Resilient',\n  source_family:'web_competitor',\n  platform:'website',\n  mode:(pureReuse?'reuse':'live'),\n  data_mode:'live',\n  approval_token_used:'not_required', // WF04 has no paid-approval token gate (Firecrawl url list); accurate semantic (§2.7)\n  source_allowlist:'operator url list (Set URL List, <=5)',\n  max_items:5,\n  items_received:received,\n  items_relevant:written,\n  items_written_raw:written,\n  items_unique:written,\n  items_duplicate:dup,\n  hard_skipped:0,\n  external_calls:externalCalls,\n  firecrawl_calls:firecrawlCalls,\n  primary_calls:primaryCalls,\n  repair_calls:repairCalls,\n  estimated_source_cost_usd:0,\n  actual_source_cost_usd:(externalCalls===0?0:null),\n  source_cost_status:sourceCostStatus,\n  llm_calls:claudeCalls,\n  estimated_llm_cost_usd:0,\n  actual_llm_cost_usd:(claudeCalls===0?0:null),\n  llm_cost_status:llmCostStatus,\n  cost_status:costStatus,\n  status:'completed',\n  error_summary:'',\n  operator_next_action:'WF16 (score source_health by source_run_id) -> WF08 (analyze canonical records) -> WF10/WF12 report.',\n  notes:(pureReuse?('REUSE run: no new collection; rows re-emitted from accepted snapshot of source_run '+String(__r.original_snapshot_run_id||'')+'; health inherited ($0). '):'')+'Web competitor scrape. Canonical source_run_id='+sourceRunId+' (= raw/snapshot/source_health join key); workflow_run_id='+workflowRunId+'. received=Set URL List; written=non-duplicate registry rows. Firecrawl/Claude $ not recovered => cost_status=unknown; primary/repair calls separated from staticData.'\n}}];"
       }
     },
     {
@@ -689,7 +691,7 @@
         360
       ],
       "parameters": {
-        "jsCode": "function moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\n// WF04 agent_requests row (21 cols). One per run, aggregated from the DONE output via $input.all().\nfunction str(v){return v==null?'':String(v).trim();}\nconst items=$input.all().map(i=>i.json);\nconst total=items.length;\nconst written=items.filter(r=>str(r.note)==='processed_by_workflow_04').length;\nconst dup=total-written;\nlet stamp='';try{stamp=str($('Set URL List').first().json.run_id).replace(/^firecrawl_/,'');}catch(e){stamp=String(Date.now());}\nreturn [{ json: {\n  agent_request_id:'wf04_'+stamp,\n  created_at:moscowIsoNow(),\n  requested_by:'operator',\n  request_text:'Firecrawl competitor website scrape (approved URL list, <=5).',\n  request_type:'web_competitor_scrape',\n  source_scope:'competitor_websites',\n  platforms:'website',\n  query:'',\n  region:'Москва/МО',\n  service_focus:'credit_broker',\n  requested_limit:5,\n  status:'completed',\n  plan_summary:'WF04 Firecrawl URL list -> business route sheets + url_registry + competitor_site_snapshots.',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:0,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:'urls_processed='+total+'; scraped_written='+written+'; duplicates='+dup+'; snapshots appended for non-error competitor pages.',\n  next_action:(written>0?'Review competitor_site_snapshots + monitor_queue; refresh WF12.':'No new pages written (all duplicates/errors); inspect Firecrawl output.'),\n  notes:'Firecrawl + Claude per non-duplicate URL. No outreach. Cost not recovered in-row (see Firecrawl/Anthropic dashboards).'\n}}];"
+        "jsCode": "function moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\n// WF04 agent_requests row (21 cols). One per run, aggregated from the DONE output via $input.all().\nfunction str(v){return v==null?'':String(v).trim();}\n// SOURCE-REUSE-001: the done-side is serialized (this node now follows Append live_source_runs), so the loop\n// DONE counts come from the staticData stash written by Build live_source_runs Row.\nconst __sd=$getWorkflowStaticData('global');const __r=(__sd&&__sd.wf04_run)||{};\nconst total=Number(__r.done_total)||0;\nconst written=Number(__r.registry_rows_written)||0;\nconst reused=Number(__r.reused)||0;\nconst dup=Math.max(0,total-written-reused-(Number(__r.reuse_failed)||0));\nlet stamp='';try{stamp=str($('Set URL List').first().json.run_id).replace(/^firecrawl_/,'');}catch(e){stamp=String(Date.now());}\nreturn [{ json: {\n  agent_request_id:'wf04_'+stamp,\n  created_at:moscowIsoNow(),\n  requested_by:'operator',\n  request_text:'Firecrawl competitor website scrape (approved URL list, <=5).',\n  request_type:'web_competitor_scrape',\n  source_scope:'competitor_websites',\n  platforms:'website',\n  query:'',\n  region:'Москва/МО',\n  service_focus:'credit_broker',\n  requested_limit:5,\n  status:'completed',\n  plan_summary:'WF04 Firecrawl URL list -> business route sheets + url_registry + competitor_site_snapshots.',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:0,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:'urls_processed='+total+'; scraped_written='+written+'; reused='+reused+'; reuse_failed='+(Number(__r.reuse_failed)||0)+'; duplicates='+dup+'; snapshots appended for non-error competitor pages.',\n  next_action:(written>0?'Review competitor_site_snapshots + monitor_queue; refresh WF12.':(reused>0?'Reused accepted snapshot(s); report built from saved data at $0 collection cost.':'No new pages written (all duplicates/errors); inspect Firecrawl output.')),\n  notes:'Firecrawl + Claude per non-duplicate URL. No outreach. Cost not recovered in-row (see Firecrawl/Anthropic dashboards).'\n}}];"
       }
     },
     {
@@ -734,7 +736,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// WF04 Final Summary Output (Stage C Closure Patch 2, S2-D7). Aggregates run-level accounting from\n// staticData (written by the parse + Normalize+Route nodes) + the SplitInBatches DONE output. $0, no calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst __sd=$getWorkflowStaticData('global');const a=__sd.wf04_run||{};\nconst done=$input.all().map(i=>i.json);\nconst registryWritten=done.filter(r=>str(r.note)==='processed_by_workflow_04').length;\nlet runId='';try{runId='wf04_'+str($('Set URL List').first().json.run_id).replace(/^firecrawl_/,'');}catch(e){runId='wf04_unknown';}\nlet urlsReceived=Number(a.urls_received)||0;try{urlsReceived=urlsReceived||$('Set URL List').all().length;}catch(e){}\nconst primaryCalls=Number(a.primary_calls)||0,repairCalls=Number(a.repair_calls)||0;\nconst primaryOk=Number(a.primary_parse_success)||0,primaryFail=Number(a.primary_parse_failure)||0;\nconst repairOk=Number(a.repair_success)||0,repairFail=Number(a.repair_failure)||0;\nconst detFallback=Number(a.deterministic_fallback)||0;\nconst claudeCalls=Number(a.claude_calls)||(primaryCalls+repairCalls);\nconst firecrawlCalls=Number(a.firecrawl_calls)||Number(a.urls_scraped)||0;\nconst repairRate=primaryCalls>0?Math.round((repairCalls/primaryCalls)*1000)/10:0;\nconst errors=[];if(primaryFail>repairOk+detFallback)errors.push('unrecovered_primary_parse_failures');\nreturn [{ json: {\n  workflow:'04 - Firecrawl URL List Resilient',\n  run_id:runId,\n  agent_request_id:runId,\n  urls_received:urlsReceived,\n  urls_scraped:Number(a.urls_scraped)||0,\n  primary_calls:primaryCalls,\n  primary_parse_successes:primaryOk,\n  primary_parse_failures:primaryFail,\n  repair_calls:repairCalls,\n  repair_successes:repairOk,\n  repair_failures:repairFail,\n  deterministic_fallback_count:detFallback,\n  repair_rate_pct:repairRate,\n  degraded_count:Number(a.degraded)||0,\n  quarantined_count:Number(a.quarantined)||0,\n  snapshots_written:Number(a.snapshots_written)||registryWritten,\n  registry_rows_written:registryWritten,\n  monitor_rows_written:registryWritten,\n  firecrawl_calls:firecrawlCalls,\n  claude_calls:claudeCalls,\n  input_tokens:null,\n  output_tokens:null,\n  actual_source_cost_usd:null,\n  actual_llm_cost_usd:null,\n  cost_status:'unknown',\n  technical_errors:errors.join('; '),\n  status:'completed',\n  next_action:(repairRate>=40?('HIGH repair rate ('+repairRate+'%) — treat affected snapshots as degraded; inspect Firecrawl/Claude output quality before trusting the report.'):'Review competitor_site_snapshots + monitor_queue; refresh WF12 report.')\n}}];"
+        "jsCode": "// WF04 Final Summary Output (Stage C Closure Patch 2, S2-D7). Aggregates run-level accounting from\n// staticData (written by the parse + Normalize+Route nodes) + the SplitInBatches DONE output. $0, no calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst __sd=$getWorkflowStaticData('global');const a=__sd.wf04_run||{};\n// SOURCE-REUSE-001: serialized done-side — counts come from the staticData stash (Build live_source_runs Row).\nconst registryWritten=Number(a.registry_rows_written)||0;\nlet runId='';try{runId='wf04_'+str($('Set URL List').first().json.run_id).replace(/^firecrawl_/,'');}catch(e){runId='wf04_unknown';}\nlet urlsReceived=Number(a.urls_received)||0;try{urlsReceived=urlsReceived||$('Set URL List').all().length;}catch(e){}\nconst primaryCalls=Number(a.primary_calls)||0,repairCalls=Number(a.repair_calls)||0;\nconst primaryOk=Number(a.primary_parse_success)||0,primaryFail=Number(a.primary_parse_failure)||0;\nconst repairOk=Number(a.repair_success)||0,repairFail=Number(a.repair_failure)||0;\nconst detFallback=Number(a.deterministic_fallback)||0;\nconst claudeCalls=Number(a.claude_calls)||(primaryCalls+repairCalls);\nconst firecrawlCalls=Number(a.firecrawl_calls)||Number(a.urls_scraped)||0;\nconst repairRate=primaryCalls>0?Math.round((repairCalls/primaryCalls)*1000)/10:0;\nconst errors=[];if(primaryFail>repairOk+detFallback)errors.push('unrecovered_primary_parse_failures');\nconst __reused=Number(a.reused)||0;\nconst __reuseFailed=Number(a.reuse_failed)||0;\nconst __force=(a.force_reprocess===true);\nconst __pureReuse=(registryWritten===0&&__reused>0&&firecrawlCalls===0);\nconst __execMode=(__pureReuse?'reuse':(__reused>0?'mixed':(__force?'refresh':'collect')));\nconst __outcome=(__pureReuse?'reused_snapshot':(registryWritten>0?(__force?'refreshed_with_data':'collected_with_data'):(__reuseFailed>0?'empty_response':'no_relevant_content')));\nreturn [{ json: {\n  workflow:'04 - Firecrawl URL List Resilient',\n  run_id:runId,\n  agent_request_id:runId,\n  urls_received:urlsReceived,\n  urls_scraped:Number(a.urls_scraped)||0,\n  primary_calls:primaryCalls,\n  primary_parse_successes:primaryOk,\n  primary_parse_failures:primaryFail,\n  repair_calls:repairCalls,\n  repair_successes:repairOk,\n  repair_failures:repairFail,\n  deterministic_fallback_count:detFallback,\n  repair_rate_pct:repairRate,\n  degraded_count:Number(a.degraded)||0,\n  quarantined_count:Number(a.quarantined)||0,\n  snapshots_written:Number(a.snapshots_written)||registryWritten,\n  registry_rows_written:registryWritten,\n  monitor_rows_written:registryWritten,\n  firecrawl_calls:firecrawlCalls,\n  claude_calls:claudeCalls,\n  input_tokens:null,\n  output_tokens:null,\n  actual_source_cost_usd:(firecrawlCalls===0?0:null),\n  actual_llm_cost_usd:(claudeCalls===0?0:null),\n  cost_status:((firecrawlCalls===0&&claudeCalls===0)?'not_applicable':'unknown'),\n  technical_errors:errors.join('; '),\n  status:'completed',\n  // SOURCE-REUSE-001: the adapter contract WF20 consumes — typed execution mode + outcome + reuse lineage.\n  items_received:urlsReceived,\n  items_written:registryWritten+__reused,\n  items_unique:registryWritten+__reused,\n  external_calls:firecrawlCalls,\n  execution_mode:__execMode,\n  source_outcome:__outcome,\n  reused_count:__reused,\n  reuse_failed_count:__reuseFailed,\n  original_snapshot_run_id:str(a.original_snapshot_run_id),\n  original_snapshot_collected_at:str(a.original_snapshot_collected_at),\n  next_action:(repairRate>=40?('HIGH repair rate ('+repairRate+'%) — treat affected snapshots as degraded; inspect Firecrawl/Claude output quality before trusting the report.'):(__execMode==='reuse'?('Report built from the accepted snapshot of source_run '+str(a.original_snapshot_run_id)+' (collected '+str(a.original_snapshot_collected_at)+'); $0 collection.'):'Review competitor_site_snapshots + monitor_queue; refresh WF12 report.'))\n}}];"
       },
       "id": "aa040000-0000-0000-0000-0000000000fs",
       "name": "Final Summary Output",
@@ -826,6 +828,18 @@
             {
               "name": "force_reprocess",
               "type": "string"
+            },
+            {
+              "name": "owner_user_id",
+              "type": "string"
+            },
+            {
+              "name": "source_execution_mode",
+              "type": "string"
+            },
+            {
+              "name": "freshness_days",
+              "type": "string"
             }
           ]
         }
@@ -838,6 +852,226 @@
       ],
       "id": "wf04-subtrig",
       "name": "When Called by Agent"
+    },
+    {
+      "id": "fc000000-0000-0000-0000-0000000000r1",
+      "name": "Source Health Lookup",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        990,
+        500
+      ],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "source_health",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "fc000000-0000-0000-0000-0000000000r2",
+      "name": "Read Reuse Route Rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1100,
+        80
+      ],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $json.reuse_route }}",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "source_url",
+              "lookupValue": "={{ $('Evaluate Dedup').first().json.source_url }}"
+            }
+          ]
+        },
+        "options": {
+          "returnAllMatches": "returnAllMatches"
+        }
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "fc000000-0000-0000-0000-0000000000r3",
+      "name": "Build Reuse Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        80
+      ],
+      "parameters": {
+        "jsCode": "// SOURCE-REUSE-001: re-emit the ORIGINAL accepted route rows under the CURRENT request's lineage. The alias row\n// keeps the original content and parsed_at (when it was really collected) and is explicitly marked as a reuse —\n// parse_method=reused_snapshot / processing_status=reused / quality_flags+=reused_snapshot — so nothing downstream\n// can mistake it for a fresh collection. No Firecrawl, no Claude, no new url_registry/raw/snapshot rows: $0.\nconst ctx = $('Evaluate Dedup').first().json;\nfunction str(v){return v==null?'':String(v).trim();}\nfunction low(v){return str(v).toLowerCase();}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nconst now = moscowIsoNow();\nfunction normUrl(u){ return low(u).replace(/^https?:\\/\\//,'').replace(/^www\\./,'').replace(/\\/+$/,''); }\nconst key = normUrl(ctx.source_url);\nlet rows = [];\ntry { rows = $('Read Reuse Route Rows').all().map(i => i.json); } catch(e) { rows = []; }\nconst BAD_PS = ['technical_error', 'failed', 'error'];\nconst usable = rows.filter(function (r) {\n  if (!r) return false;\n  if (normUrl(r.source_url) !== key) return false;\n  if (str(r.run_id) !== str(ctx.original_run_id)) return false;      // exactly the run the registry promised\n  if (BAD_PS.indexOf(low(r.processing_status)) >= 0) return false;\n  if (low(r.quality_status) === 'quarantined') return false;\n  if (r.report_eligible === false || low(r.report_eligible) === 'false') return false;\n  return true;\n}).slice(0, 10);\nconst __sd = $getWorkflowStaticData('global'); __sd.wf04_run = __sd.wf04_run || {};\nif (!usable.length) {\n  // Registry promised an accepted snapshot but the queue rows are gone/unusable. Fail closed and say so — never\n  // fabricate data, never pretend the source was collected.\n  __sd.wf04_run.reuse_failed = (Number(__sd.wf04_run.reuse_failed) || 0) + 1;\n  return [{ json: {\n    created_at: now, source_type: ctx.source_type || 'scraped_web', platform: ctx.platform || 'website',\n    source_url: str(ctx.source_url), parsed_at: ctx.parsed_at || now, published_at: '', freshness_status: 'unknown',\n    entity_type: 'irrelevant', company_name: '', profile_name: '', profile_url: '', region: '',\n    service_type: 'unknown', offer_text: '', terms: '', contact_public: '', text_context: '', detected_need: '',\n    competitor_strength: 1, lead_signal_score: 1, content_idea_score: 1, quality_score: 1,\n    reason: 'url_registry points to accepted snapshot run ' + str(ctx.original_run_id) + ' but no usable rows were found in ' + str(ctx.reuse_route) + '; ask for a refresh to recollect.',\n    recommended_action: 'ignore', status: 'failed', processing_status: 'reuse_readback_empty',\n    parse_method: 'reused_snapshot', parse_error: '',\n    raw_response_preview: 'Reuse readback found no usable rows for run ' + str(ctx.original_run_id) + '.',\n    route: 'skipped_log', needs_manual_review: false, repair_used: false, repair_status: '',\n    run_id: str(ctx.run_id), batch_index: ctx.batch_index, sx_reuse_failed: true\n  }}];\n}\n__sd.wf04_run.reused = (Number(__sd.wf04_run.reused) || 0) + usable.length;\n__sd.wf04_run.original_snapshot_run_id = str(ctx.original_run_id);\n__sd.wf04_run.original_snapshot_collected_at = str(usable[0].parsed_at || ctx.original_collected_at);\nreturn usable.map(function (r) {\n  const c = Object.assign({}, r);\n  delete c.row_number; // sheets read metadata, not a column\n  const flags = str(r.quality_flags);\n  return { json: Object.assign(c, {\n    created_at: now,                                  // the reuse EVENT time; parsed_at stays the ORIGINAL collection time\n    run_id: str(ctx.run_id),                          // current-request lineage (WF10 isolation)\n    source_run_id: str(ctx.run_id),\n    batch_index: ctx.batch_index,\n    data_mode: 'live',\n    processing_status: 'reused',\n    parse_method: 'reused_snapshot',\n    parse_error: '',\n    raw_response_preview: 'Reused accepted snapshot (source_run ' + str(ctx.original_run_id) + ', collected ' + str(r.parsed_at || ctx.original_collected_at) + '); no new collection ($0).',\n    quality_flags: flags ? (flags + '; reused_snapshot') : 'reused_snapshot',\n    sx_reuse_failed: false\n  })};\n});"
+      }
+    },
+    {
+      "id": "fc000000-0000-0000-0000-0000000000r4",
+      "name": "IF Reuse Records OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        80
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "sx-reuse-ok-01",
+              "leftValue": "={{ $json.sx_reuse_failed === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "fc000000-0000-0000-0000-0000000000r5",
+      "name": "Append Reuse Route Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1760,
+        0
+      ],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $json.route }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "fc000000-0000-0000-0000-0000000000r6",
+      "name": "Build Reuse Health Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// SOURCE-REUSE-001: WF10 runs with require_source_health=true (production fail-closed), so the CURRENT run needs an\n// eligible source_health row or the reused rows are excluded all over again. The honest verdict for reused data is\n// the ORIGINAL run's verdict (WF16 scored that content when it was collected): inherit it under the current run's\n// lineage, marked reused_snapshot, with zero calls and zero cost. WF16 itself SKIPS pure-reuse runs (it would\n// otherwise score \"0 fresh records\" and overwrite this row in the last-wins eligibility index).\nconst ctx = $('Evaluate Dedup').first().json;\nfunction str(v){return v==null?'':String(v).trim();}\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst h = ctx.original_health_row || {};\nconst c = Object.assign({}, h);\ndelete c.row_number;\nlet agentRequestId = '';\ntry { agentRequestId = str($('Set URL List').first().json.agent_request_id); } catch(e) {}\nreturn [{ json: Object.assign(c, {\n  quality_evaluation_id: 'qe_reuse_' + moscowStamp(),\n  evaluated_at: moscowIsoNow(),\n  source_run_id: str(ctx.run_id),\n  agent_request_id: agentRequestId,\n  external_calls: 0,\n  llm_calls: 0,\n  actual_source_cost_usd: 0,\n  actual_llm_cost_usd: 0,\n  source_cost_status: 'not_applicable',\n  llm_cost_status: 'not_applicable',\n  cost_per_unique_record: 0,\n  quality_flags: (str(h.quality_flags) ? str(h.quality_flags) + '; ' : '') + 'reused_snapshot',\n  notes: 'Reused accepted snapshot of source_run ' + str(ctx.original_run_id) + ' (collected ' + str(ctx.original_collected_at) + '); health inherited from the original run; no new collection ($0).'\n})}];"
+      }
+    },
+    {
+      "id": "fc000000-0000-0000-0000-0000000000r7",
+      "name": "Append Reuse source_health",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        2200,
+        0
+      ],
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "source_health",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "PASTE_CREDENTIAL_ID_HERE",
+          "name": "Google Sheets - Marketing Scout Service Account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     }
   ],
   "connections": {
@@ -870,16 +1104,6 @@
             "node": "Build live_source_runs Row",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Build agent_requests Row",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Final Summary Output",
-            "type": "main",
-            "index": 0
           }
         ],
         [
@@ -906,7 +1130,7 @@
       "main": [
         [
           {
-            "node": "Evaluate Dedup",
+            "node": "Source Health Lookup",
             "type": "main",
             "index": 0
           }
@@ -917,25 +1141,7 @@
       "main": [
         [
           {
-            "node": "IF Duplicate?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IF Duplicate?": {
-      "main": [
-        [
-          {
-            "node": "Append Skipped Log (Duplicate)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Build Firecrawl Request",
+            "node": "IF Reuse?",
             "type": "main",
             "index": 0
           }
@@ -1191,6 +1397,130 @@
         [
           {
             "node": "Set URL List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Reuse?": {
+      "main": [
+        [
+          {
+            "node": "Read Reuse Route Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Firecrawl Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source Health Lookup": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Reuse Route Rows": {
+      "main": [
+        [
+          {
+            "node": "Build Reuse Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Reuse Records": {
+      "main": [
+        [
+          {
+            "node": "IF Reuse Records OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Reuse Records OK?": {
+      "main": [
+        [
+          {
+            "node": "Append Skipped Log (Duplicate)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append Reuse Route Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Reuse Route Row": {
+      "main": [
+        [
+          {
+            "node": "Build Reuse Health Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Reuse Health Row": {
+      "main": [
+        [
+          {
+            "node": "Append Reuse source_health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Reuse source_health": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append live_source_runs": {
+      "main": [
+        [
+          {
+            "node": "Build agent_requests Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append agent_requests": {
+      "main": [
+        [
+          {
+            "node": "Final Summary Output",
             "type": "main",
             "index": 0
           }

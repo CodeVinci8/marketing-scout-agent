@@ -56,7 +56,14 @@ function normalizeAdapterResult(sourceKey, raw, ctx) {
     optional: !!fam.optional,
     status: status,
     errors: errors,
-    next_state: next_state
+    next_state: next_state,
+    // SOURCE-REUSE-001: typed execution mode + outcome + reuse lineage from the connector's run summary.
+    // Empty when the connector predates the contract — consumers must treat '' as "collect" era, not as reuse.
+    execution_mode: str(raw.execution_mode),
+    source_outcome: str(raw.source_outcome),
+    reused_count: num(raw.reused_count, 0),
+    original_snapshot_run_id: str(raw.original_snapshot_run_id),
+    original_snapshot_collected_at: str(raw.original_snapshot_collected_at)
   };
 }
 

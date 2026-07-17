@@ -1064,10 +1064,15 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
     data_mode: "={{ $('Resolve Collection Set').first().json.data_mode }}",
     urls: "={{ $('Resolve Collection Set').first().json.website_urls }}",
     // SOURCE-EXEC-001: only an EXPLICIT, approved refresh bypasses the source freshness/dedup check. Default false.
-    force_reprocess: "={{ $('Resolve Collection Set').first().json.force_reprocess === true ? 'true' : 'false' }}"
+    force_reprocess: "={{ $('Resolve Collection Set').first().json.force_reprocess === true ? 'true' : 'false' }}",
+    // SOURCE-REUSE-001: the executor makes the SAME reuse/collect/refresh decision the planner promised —
+    // owner scope + mode + freshness travel with the call instead of living only in the plan row.
+    owner_user_id: "={{ String($('Approval & Budget Gate').first().json.request.owner_user_id || '') }}",
+    source_execution_mode: "={{ String($('Resolve Collection Set').first().json.source_execution_mode || '') }}",
+    freshness_days: "={{ String(($('Approval & Budget Gate').first().json.cfg || {}).source_freshness_days || '') }}"
   }, { tolerant: true }),
   code('wf20-normweb', 'Normalize Website Result', [720, -260], ['source_adapter'],
-    "var g=$('Approval & Budget Gate').first().json;\nvar raw=($json&&$json.live_source_run)?$json.live_source_run:($json||{});\nif(raw.source_cost_status&&!raw.cost_status)raw=Object.assign({},raw,{cost_status:raw.source_cost_status});\nif(raw.items_unique!=null&&raw.items_written==null)raw=Object.assign({},raw,{items_written:Number(raw.items_unique)||0});\nvar res=normalizeAdapterResult('website',raw,{agent_request_id:g.request.agent_request_id});\nreturn [{json:{adapter:res,plan:g.plan,request:g.request,cfg:g.cfg}}];"),
+    "var g=$('Approval & Budget Gate').first().json;\nvar raw=($json&&$json.live_source_run)?$json.live_source_run:($json||{});\nif(raw.source_cost_status&&!raw.cost_status)raw=Object.assign({},raw,{cost_status:raw.source_cost_status});\nif(raw.items_unique!=null&&raw.items_written==null)raw=Object.assign({},raw,{items_written:Number(raw.items_unique)||0});\n// ADAPTER-RETURN-001: WF04's sub-workflow return is the LAST executed node's item. On a collect run the queued\n// snapshot-append sibling finishes after the summary chain, so the return is a competitor_site_snapshots ROW —\n// which carries no item counts, and this adapter recorded items_written=0/external_calls=0/status=empty on a run\n// that really scraped (live: exec 956). Map the snapshot shape honestly instead of zeroing it. Pure-reuse runs\n// have no snapshot sibling and deterministically return the real Final Summary (typed reuse contract).\nif(raw.snapshot_id&&raw.items_written==null){raw=Object.assign({},raw,{items_received:1,items_written:1,items_unique:1,external_calls:Number(raw.firecrawl_calls)||0});}\nvar res=normalizeAdapterResult('website',raw,{agent_request_id:g.request.agent_request_id});\nreturn [{json:{adapter:res,plan:g.plan,request:g.request,cfg:g.cfg}}];"),
   ifNode('wf20-ifavito', 'Collect Avito?', [940, -160], "={{ $('Resolve Collection Set').first().json.set.avito }}"),
   execWf('wf20-wf09', 'Run Avito Source (WF09)', [1160, -260], 'WF09 avito classifieds connector', {
     agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
@@ -1196,6 +1201,8 @@ return [{json:{analysis:Object.assign({},col,{reason:String(ai.analysis_reason||
   code('wf20-outbox', 'Build Delivery Outbox', [2820, -320], ['telegram_io', 'conversation_response', 'agent_charter', 'analysis_report_ru'],
     "var s=$('Build Execution Summary').first().json;\nvar cfg=s.cfg||{};\nvar caps=availableCapabilities(cfg);\nvar chat=String((s.request&&s.request.chat_id)||'');\nvar state=String((s.summary&&s.summary.final_state)||'completed');\nvar noData=Number((s.summary&&s.summary.records_reported)||0)===0&&state!=='completed';\nvar stateForActions=noData?'no_data':state;\nvar report=s.report||{};\n// Stage F §5: EXTEND the deterministic report with «Подтверждённые факты / Аналитические выводы / Рекомендации /\n// Доказательства и ограничения». Ungrounded claims are dropped by the renderer; a failed/disabled analyst yields\n// no sections (or one honest note) and the deterministic markdown ships unchanged — delivery is never blocked.\nvar __md=String(report.report_markdown||'');\ntry{var __b={};try{__b=JSON.parse(String(report.report_bundle||'{}'));}catch(e){__b={};}\nvar __rend=renderAnalysisSectionsRu(((s.analysis||{}).analyses)||[],__b,{});\n__md=appendAnalysisToReportRu(__md,__rend);}catch(e){}\nvar body=deliveryBody({report_markdown:__md,summary_text:report.summary_text},s.summary,caps);\nvar ptxt=proactiveText(stateForActions,caps);\nvar dlv=makeDelivery((s.request&&s.request.agent_request_id)||'req',(report.report_id)||'rep',chat,body);\nvar chunks=chunkMessage(body);\nvar kb=proactiveKeyboard(stateForActions,caps);\nvar bodies=chunks.map(function(t,i){var b={chat_id:chat,text:t};if(i===chunks.length-1&&kb)b.reply_markup=kb;return b;});\nreturn [{json:{delivery:dlv,telegram_send_body:JSON.stringify(bodies[0]),telegram_send_bodies:JSON.stringify(bodies),final_keyboard:kb?JSON.stringify(kb):'',chunk_count:chunks.length,proactive_text:ptxt,summary:s.summary}}];"),
   sheetsAppend('wf20-apout', 'Append telegram_outbox', [1940, -160], 'telegram_outbox'),
+  code('wf20-expandchunks', 'Expand Telegram Chunks', [2050, -160], [],
+    "// DELIVERY-CHUNKS-001: Build Delivery Outbox chunks the report (Telegram caps a message at 4096 chars) but the\n// send node consumed only telegram_send_body — chunk 0. Chunks 1..N (live exec 956: the ENTIRE AI analysis, 3 of 4\n// chunks) were built, persisted to the outbox row, and never sent. One item per chunk => one sendMessage per chunk,\n// in order. Fail-safe: any parse problem falls back to the single first-chunk body — delivery is never blocked.\nvar ob=$('Build Delivery Outbox').first().json;\nvar bodies=[];\ntry{bodies=JSON.parse(ob.telegram_send_bodies||'[]');}catch(e){bodies=[];}\nif(!Array.isArray(bodies))bodies=[];\nif(!bodies.length){return [{json:{telegram_send_body:ob.telegram_send_body||'{}',chunk_index:0,chunk_count:1}}];}\nreturn bodies.map(function(b,i){return {json:{telegram_send_body:JSON.stringify(b),chunk_index:i,chunk_count:bodies.length}};});"),
   httpTelegram('wf20-send', 'Send Telegram Report', [2160, -160]),
   code('wf20-shapesum', 'Shape Execution Summary Row', [1500, 60], [],
     "var s=$('Build Execution Summary').first().json;return [{json:s.summary}];"),
@@ -1346,7 +1353,9 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
   ['Build Report XLSX', 'Send Report XLSX'],
   ['Shape Report Context', 'Upsert Report Context'],
   ['Build Delivery Outbox', 'Append telegram_outbox'],
-  ['Append telegram_outbox', 'Send Telegram Report'],
+  // DELIVERY-CHUNKS-001: one item per chunk between outbox and send, so every chunk is actually delivered.
+  ['Append telegram_outbox', 'Expand Telegram Chunks'],
+  ['Expand Telegram Chunks', 'Send Telegram Report'],
   ['Send Telegram Report', 'Progress: Done'],
   ['Progress: Done', 'Edit Progress (Done)'],
   ['Build Blocked Response', 'Send Blocked Reply']

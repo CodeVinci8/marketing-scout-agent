@@ -154,7 +154,9 @@ A.ok('WF18 both reads AND appends conversation_messages', readsTab(WF18, 'conver
 
 // ============================================================================================================
 A.section('Part 8 — Telegram delivery proof (outbox before send; dedup; persisted fields)');
-A.ok('WF20: outbox row persisted before send (Append telegram_outbox -> Send Telegram Report)', edge(WF20, 'Append telegram_outbox', 'Send Telegram Report'));
+// DELIVERY-CHUNKS-001: the chunk fan-out sits between the persisted outbox row and the send.
+A.ok('WF20: outbox row persisted before send (Append telegram_outbox -> Expand Telegram Chunks -> Send Telegram Report)',
+  edge(WF20, 'Append telegram_outbox', 'Expand Telegram Chunks') && edge(WF20, 'Expand Telegram Chunks', 'Send Telegram Report'));
 A.ok('WF20: delivery built before outbox append (Build Delivery Outbox -> Append telegram_outbox)', edge(WF20, 'Build Delivery Outbox', 'Append telegram_outbox'));
 const dlv = tio.makeDelivery('req_1', 'rep_1', '555', 'body');
 A.ok('delivery row carries a telegram_message_id slot', Object.prototype.hasOwnProperty.call(dlv, 'telegram_message_id'));
