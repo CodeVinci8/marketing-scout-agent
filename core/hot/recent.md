@@ -4,6 +4,59 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-17 (session 59) — HEALTH-LINEAGE-001 traced to the END: it is a QUALITY POLICY, not a bug
+
+Branch `fix/stage4-live-final-acceptance`, HEAD **6af9dda**, worktree CLEAN, ahead 133, NOT pushed. Prod healthy,
+17 active, 47 tabs, flags CLAUDE/LLM=true WF08=false. Disk 847M. **No code changed this session** — the whole
+session was root-cause tracing, and it ended somewhere that needs an OPERATOR DECISION, not more engineering.
+
+**THE COMPLETE CAUSAL CHAIN (run req_1784255157, every link verified against real execution runData):**
+1. WF04 exec 929 scraped autolombardn1.ru fine → Claude PRIMARY parse failed, REPAIR succeeded →
+   `parse_method="repaired_json"`.
+2. WF04 therefore stamps the record `quality_status="degraded"`, `review_status="pending"` — even though the
+   repaired data is EXCELLENT (`competitor_name="Автоломбард №1"`, full offer_text, `service_hint="pts_loan"`,
+   `is_valid_listing=true`, `dedup_status="unique"`, `is_detail=true`).
+3. WF16 `Assemble Run Bundles`: `pending=true` → `report_candidate=false`; `degraded=true`.
+4. WF16 `computeRunHealth`: `total>0 && report_candidate===0 && hard_skipped<total && degraded>0`
+   → flag **`no_detail_records`** → it is in CRITICAL_FLAGS → `quality_status="quarantined"` **despite
+   `quality_score=81`**.
+5. Independently: `if(total>0 && pending===total){ report_eligible=false; llm_eligible=false; }`.
+6. WF10 exec 932 report_gate excludes it → `rows_after_isolation=1` → `rows_after_filters=0` → empty bundle → WF28
+   never runs.
+
+**THIS IS NOT THE ABSENT-FIELD CLASS.** It is a deliberate, working quality control: *a record whose LLM parse
+needed a repair is marked degraded + pending human review, and degraded/pending records are excluded from reports
+by default* (`allow_degraded_report=false`). The system is behaving as designed. `no_lineage` (report_gate reading
+only `source_run_id`) is REAL and still needs the shared-resolver fix, but fixing it alone only changes the
+exclusion reason from `no_lineage` to `run_excluded:no_detail_records` — it does NOT unblock the E2E.
+
+**TWO FINDINGS FOR THE OPERATOR:**
+1. **`no_detail_records` is a misnomer that misfires (real defect, safe to fix).** Its condition never checks
+   whether detail records exist. This record IS a detail record (`is_detail=true`, `search_card=false`). Because
+   the flag is CRITICAL it quarantines a score-81 run, and `operator_next_action` then tells the operator to
+   "investigate critical flags (no_detail_records)" — actively misleading. Fix: require an actual absence of
+   detail records (e.g. `&& search_card>0` / `detail_count===0`). NOTE: this alone STILL will not unblock, because
+   step 5 (`pending===total`) independently sets report_eligible=false.
+2. **THE REAL GATE — needs your decision.** Should a SUCCESSFULLY repaired parse block a report?
+   - WF04 says yes: repaired_json → degraded + pending review → unreportable.
+   - **WF28 (Stage F) says no**: it treats `repaired` as `quality_status='repaired'`, `enriched=true`, and ships
+     the analysis. Live-proven session 54 (exec 834: 1 repair, no fallback, report delivered).
+   These two contracts CONTRADICT each other. The resilient router's whole design is primary → repair → fallback;
+   a successful repair means the router did its job and produced schema-valid data.
+   **I did NOT change this unilaterally** — the standing instruction is "do not disable quality controls", and
+   relaxing "repaired ⇒ needs human review" is a quality-policy change, not a bug fix. Options:
+   (a) align WF04 with WF28 (repaired = acceptable, keep a non-critical flag) — unblocks the E2E;
+   (b) set `allow_degraded_report=true` — weaker, and explicitly discouraged;
+   (c) improve the WF04 prompt so the primary parse succeeds (real fix, slower, no guarantee);
+   (d) keep the policy and accept that any repaired record needs manual review before it can be reported.
+   **Recommendation: (a).** It removes a contradiction between two of our own contracts rather than lowering a bar,
+   and the repaired data here is verifiably good.
+
+**Stage F remains NOT complete. Stage F.5 NOT started. Stage G NOT started.** No code was committed this session;
+the worktree is clean at 6af9dda and the previous session's tests (126 suites) still pass.
+
+---
+
 ## Session: 2026-07-17 (session 58) — PLAN-TERMINAL + EXPLICIT-SOURCE-SCOPE fixed; WF10 isolation PASSES live
 
 Branch `fix/stage4-live-final-acceptance` (ahead ~132, NOT pushed). Commits → **f8d7192** (PLAN-TERMINAL-001) ·

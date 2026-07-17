@@ -4,60 +4,59 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-07-17, session 58) — the health gate is the last thing between us and WF28
+## CURRENT PRIORITY (2026-07-17, session 59) — HEALTH-LINEAGE-001 is a QUALITY POLICY: needs an operator decision
 
-Two more root causes fixed and live-deployed: **PLAN-TERMINAL-001** (the approval flip raced past and clobbered the
-terminal write) and **EXPLICIT-SOURCE-SCOPE-001** (an inferred region excluded the source the user named).
-`node tests/run_all.js` → **ALL SUITES PASS, 126 suites, EXIT=0**.
+Session 59 traced the empty-report chain to its end. **It is not a bug and not the absent-field class.** The full
+verified chain (run req_1784255157):
 
-**LIVE PROOF (run req_1784255157):** WF04 929 `scraped=1`, `entity=competitor`, `company="Автоломбард №1"` →
-WF20 928 `scope_mode=explicit_source region_filter=ANY` → **WF10 932 `rows_after_isolation=1`**. The explicitly-named
-source survived isolation for the FIRST time (every prior run: 0). The collection + scope layers are now proven.
+  WF04 929: scrape OK → Claude primary parse FAILED, repair SUCCEEDED → parse_method="repaired_json"
+  → WF04 stamps quality_status="degraded", review_status="pending"   (data itself is excellent:
+     competitor_name="Автоломбард №1", full offer_text, service_hint="pts_loan", is_detail=true, unique)
+  → WF16 930 Assemble Run Bundles: pending → report_candidate=false; degraded=true
+  → WF16 computeRunHealth: report_candidate===0 && degraded>0 → flag `no_detail_records` (CRITICAL)
+     → quality_status="quarantined" DESPITE quality_score=81
+  → and independently: pending===total → report_eligible=false
+  → WF10 932: iso=1 → rows_after_filters=0 → empty bundle → WF28 never runs
 
-**THE LAST BLOCKER — WF10 932: `iso=1` → `rows_after_filters=0`, `rows_excluded_by_health=1`,
-`source_health_excluded_reasons={"no_lineage":1}`.** Two separate things:
+**THE DECISION YOU NEED TO MAKE — should a SUCCESSFULLY repaired parse block a report?**
+Our own two contracts contradict each other:
+- WF04: `repaired_json` ⇒ degraded + pending human review ⇒ unreportable.
+- WF28 (Stage F): `repaired` ⇒ quality_status='repaired', enriched=true, analysis SHIPS (live-proven exec 834).
+The resilient router is designed as primary → repair → fallback; a successful repair means it worked and produced
+schema-valid data. Options:
+  (a) **RECOMMENDED** — align WF04 with WF28: a successful repair is acceptable, keep a NON-critical flag
+      (`repaired_parse`) for visibility. Removes a contradiction between our own contracts rather than lowering a
+      bar. Unblocks the E2E.
+  (b) `allow_degraded_report=true` — weaker and explicitly discouraged; do not do this.
+  (c) improve the WF04 prompt so the primary parse succeeds — real, slower, no guarantee.
+  (d) keep the policy: any repaired record needs manual review before it can be reported.
+This was NOT changed unilaterally because the standing instruction is "do not disable quality controls".
 
-1. **`no_lineage` in `report_gate.rowEligible`** — the FIFTH instance of the recurring class. The monitor_queue row
-   carries the request family ONLY in `run_id`; `source_run_id`/`agent_request_id` are empty, and rowEligible does
-   not read `run_id`. Fix exactly like ISO-RUNID-001 (`source_run_id || agent_request_id || run_id`). Start here —
-   it is a two-line fix in `n8n/lib/report_gate.js` + its WF10/WF12 embedded mirrors (keep them byte-identical;
-   `node tools/gen_stage4_workflows.js` does NOT regenerate WF10/WF12 — they are hand-maintained).
-2. **WF16 QUARANTINED the source** (exec 930): `quality_score=81` (good) but `quality_status=quarantined`,
-   `report_eligible=false`, flags `no_detail_records; missing_published_at; pending_review; cost_unknown`. But WF16
-   DID read this run's raw_market_record with full lineage
-   (`record_id=wf04_rec_req_1784255157::website::a1_1`, run_id + source_run_id + agent_request_id all set). So
-   `no_detail_records` is computed from something else — inspect `Assemble Run Bundles` / `Build Source Health` in
-   WF16 for the record_type / parse_method distinction. **A score of 81 with report_eligible=false is itself
-   suspicious** — verify the quarantine is a real quality verdict and not another absent-field artefact.
+**Independent real defect, safe to fix now (does NOT unblock on its own):**
+- **`no_detail_records` is a misnomer that misfires.** Its condition (`report_candidate===0 && degraded>0`, in
+  `n8n/lib/quality_gate.js:124` + its WF16 embedded mirror) never checks whether detail records actually exist.
+  This record IS a detail record (is_detail=true, search_card=false). Being CRITICAL, it quarantines a score-81
+  run and makes operator_next_action tell the operator to investigate a flag that is not true. Fix: require a real
+  absence of detail records. Keep the mirrors byte-identical (WF16 is hand-maintained; the generator does NOT
+  regenerate it).
+- **`no_lineage`** (`n8n/lib/report_gate.js:127`, `const id = str(row.source_run_id)`) is still real — the queue
+  row carries the family only in `run_id`. Build the shared `resolveRunLineage(row)` resolver
+  (`source_run_id || agent_request_id || run_id`) and use it in report_gate + WF10 isolation + WF16 detail lookup.
+  Fixing it changes the exclusion reason from `no_lineage` to `run_excluded:no_detail_records` — necessary, not
+  sufficient.
 
-Then the E2E is one approve away: send «обнови данные и сделай анализ autolombardn1.ru», approve, and verify WF28
-actually runs (do_analyze=true → WF28 exec → llm_analysis_results + telemetry → report → XLSX → plan terminal).
+**After the decision, the E2E is one approve away:** «обнови данные и сделай анализ autolombardn1.ru» — everything
+upstream is proven (refresh re-scrapes; access classifier passes a real page; explicit-source scope keeps the row;
+WF10 iso=1; plan terminates correctly).
 
-**After the E2E:** concise renderer (still **2082 chars**); reuse mode; source_analysis vs change_report; TG + VK;
-synthesis; WF27 enrichment; lead interpretation; CodeVinci AI Pilot; repair-rate ≥5. **Stage F.5 NOT STARTED.**
+**Then:** concise renderer (2082 chars today); reuse mode; source_analysis vs change_report; TG + VK; synthesis;
+WF27 enrichment; lead interpretation; repair-rate ≥5. **Stage F.5 NOT started. Stage G NOT started.**
 
-**Cleanup:** msqamktetab, msqamkslog, msqamkresults, msqaplancols, msqawf28proof, msqamktabs, msdrvscope12.
-**Operator/infra:** harden SSH (brute-force log flood); disk 864M (92%) — /root/.local Claude CLI versions are the
-recurring reclaim (keep the running one only).
-
-**THE RECURRING DEFECT CLASS — 5 instances now. CHECK THIS FIRST when any stage returns 0 rows:**
-ISO-ARID-001 · ISO-RUNID-001 · data_mode · region · no_lineage.
-A consumer strict-compares a field the producer never populates, OR an inferred default overrides an explicit user
-scope. Every one of them silently returned zero rows and produced a confidently wrong user message.
-
-**Process lessons:**
-- Write long-run logs INSIDE the repo (`scratchpad/`), never /tmp — the ephemeral scratchpad is wiped on session
-  end and takes the log (and the backgrounded process) with it. That is what exit 144 was: an external kill, NOT a
-  test failure (0 OOM, memory fine; the re-run passed 126/126).
-- Run the FULL suite in the foreground for the final verification.
-- A new Sheets column MUST be APPENDED at the end (SHEETS-COLUMN-ORDER-001).
-- Regenerate before deploying; WF10/WF12/WF04/WF16 are hand-maintained and NOT covered by the generator.
-
-**Do NOT start Stage G.**
+**Do NOT start Stage H.**
 
 **Exact next command:**
 ```
-grep -n "no_lineage" n8n/lib/report_gate.js
+sed -n '120,128p' n8n/lib/quality_gate.js
 ```
 
 ---
