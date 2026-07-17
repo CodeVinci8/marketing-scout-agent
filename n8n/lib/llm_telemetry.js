@@ -91,14 +91,23 @@ function findReusableAnalysis(rows, ctx) {
     if (ltStr(r.evidence_package_hash) !== hash) return;
     if (ctx.schema_version && ltStr(r.schema_version) && ltStr(r.schema_version) !== ltStr(ctx.schema_version)) return;
     if (ctx.prompt_version && ltStr(r.prompt_version) && ltStr(r.prompt_version) !== ltStr(ctx.prompt_version)) return;
+    // REUSE-OBS-001 cache-key audit: a different configured MODEL is a material change — reuse is only honest when
+    // the same model would have produced the answer now. Both-present rule (legacy rows without a model column stay
+    // reusable). schema_version/prompt_version already cover the request/validation contract; no separate policy
+    // version exists, so no further keys are required.
+    if (ctx.model && ltStr(r.model) && ltStr(r.model) !== ltStr(ctx.model)) return;
     if (ltStr(r.quality_status) === 'deterministic_fallback') return; // don't reuse a failed run
     var t = Date.parse(ltStr(r.created_at)); if (!isFinite(t)) t = 0;
     if (t >= bestT) { bestT = t; best = r; }                          // newest valid analysis wins
   });
   if (!best) return null;
   try {
+    // REUSE-OBS-001: the hit must NAME its origin — id, when it was created and which model produced it — so the
+    // typed return / summary / report bundle can prove where a reused result came from.
     return { analysis: JSON.parse(ltStr(best.structured_result_json) || '{}'), analysis_id: ltAnalysisId(ctx),
-      quality_status: ltStr(best.quality_status), reused_from_analysis_id: ltStr(best.analysis_id) };
+      quality_status: ltStr(best.quality_status), reused_from_analysis_id: ltStr(best.analysis_id),
+      reused_created_at: ltStr(best.created_at), reused_model: ltStr(best.model),
+      cache_reason: 'match: owner+analysis_type+evidence_hash+schema+prompt+model → ' + ltStr(best.analysis_id) };
   } catch (e) { return null; }
 }
 

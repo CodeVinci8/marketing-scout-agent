@@ -152,6 +152,22 @@ function plainifyForTelegram(md) {
   s = s.replace(/\n{3,}/g, '\n\n');
   return s.trim();
 }
+// COST-SPLIT-001: one honest cost line from the canonical actual components. A run where the deep analysis was
+// cached ($0) but the WF12 summary AI ran is NEVER called "$0" — each component that actually cost money is named.
+// Components are observed actuals; absent/unparseable totals render nothing (no fabricated $0).
+function costFmt(n) { const r = Math.round(num(n, 0) * 10000) / 10000; return String(r); }
+function costLine(summary) {
+  summary = summary || {};
+  const t = Number(summary.actual_cost_usd);
+  if (!isFinite(t)) return '';
+  const parts = [];
+  const add = (v, label) => { const n = num(v, 0); if (n > 0) parts.push(label + ' $' + costFmt(n)); };
+  add(summary.actual_collection_usd, 'сбор данных');
+  add(summary.actual_summary_ai_usd, 'AI-сводка');
+  add(summary.actual_deep_analysis_usd, 'AI-анализ');
+  add(summary.actual_repair_usd, 'восстановление ответа');
+  return '💰 Фактическая стоимость: ' + (parts.length ? parts.join(' + ') + ' = ' : '') + '$' + costFmt(t) + '.';
+}
 function deliveryBody(report, summary, availableCaps) {
   report = report || {}; summary = summary || {};
   const state = str(summary.final_state).toLowerCase() || 'completed';
@@ -183,11 +199,13 @@ function deliveryBody(report, summary, availableCaps) {
   else if (state === 'partial') lines.push(failedNames.length
     ? ('Отчёт частичный — не удалось собрать: ' + failedNames.join(', ') + '.')
     : 'Отчёт частичный — часть источников не отработала.');
+  const cl = costLine(summary);
+  if (cl) lines.push(cl);
   lines.push(proactiveText(noData ? 'no_data' : state, availableCaps));
   return lines.join('\n\n');
 }
 
 module.exports = {
   buildConversationalReply, clarificationReply, followupSuggestions, postReportReply,
-  approvalButtons, actionButtons, proactiveActions, proactiveText, proactiveKeyboard, deliveryBody, plainifyForTelegram, str, num
+  approvalButtons, actionButtons, proactiveActions, proactiveText, proactiveKeyboard, deliveryBody, plainifyForTelegram, costLine, str, num
 };

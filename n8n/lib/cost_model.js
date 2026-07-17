@@ -12,6 +12,9 @@
 
 function costNum(v, d) { var n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }
 function costRound(v) { return Math.round(costNum(v, 0) * 100) / 100; }
+// COST-SPLIT-001: ACTUALS keep 4-decimal precision — real per-call analysis costs are sub-cent (live: $0.0132),
+// and rounding them to cents would erase the very components the split exists to show. Projections stay 2dp.
+function costRound4(v) { return Math.round(costNum(v, 0) * 10000) / 10000; }
 
 var COST_PRICE_DEFAULTS = {
   cost_firecrawl_page_usd: 0.01,
@@ -150,17 +153,24 @@ function actualRequestCost(usage, cfg) {
   // Stage F: WF28 reports its REAL cost from response usage tokens (never an estimate) — add it as its own
   // component so the persisted actual is comparable to the projection the user approved.
   var analysisActual = costNum(usage.claude_analysis_cost_usd, 0);
+  // COST-SPLIT-001: repair is the share of the deep-analysis cost spent on the bounded repair call. It is a
+  // component OF analysisActual (never added twice) — split out so "AI cost" can be reported honestly per part:
+  // collection / summary AI / deep analysis AI / repair / total. Deterministic extraction is $0 by design.
+  var repairActual = Math.min(costNum(usage.claude_repair_cost_usd, 0), analysisActual);
   var firecrawlUnits = costNum(usage.firecrawl_pages, 0) + costNum(usage.firecrawl_searches, 0) + costNum(usage.firecrawl_scrapes, 0);
-  var collection = costRound(firecrawlUnits * pFire + costNum(usage.apify_searches, 0) * pApify);
-  var ai = costRound(llm + analysisActual);
-  var actual = costRound(collection + ai);
+  var collection = costRound4(firecrawlUnits * pFire + costNum(usage.apify_searches, 0) * pApify);
+  var ai = costRound4(llm + analysisActual);
+  var actual = costRound4(collection + ai);
   var cap = costRound(costNum(cfg.source_budget_usd, 0) + costNum(cfg.llm_budget_usd, 0));
   return {
     actual_cost_usd: actual,
     actual_collection_usd: collection,
     actual_ai_usd: ai,
+    actual_summary_ai_usd: costRound4(llm),
+    actual_deep_analysis_usd: costRound4(Math.max(0, analysisActual - repairActual)),
+    actual_repair_usd: costRound4(repairActual),
     hard_cap_usd: cap,
-    remaining_budget_usd: costRound(Math.max(0, cap - actual))
+    remaining_budget_usd: costRound4(Math.max(0, cap - actual))
   };
 }
 

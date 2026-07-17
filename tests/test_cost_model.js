@@ -156,8 +156,10 @@ A.section('§4 — actual AI cost is captured separately and compared with the e
 {
   const act = CM.actualRequestCost({ firecrawl_pages: 1, claude_analysis_cost_usd: 0.084 }, cfg);
   A.eq('actual splits collection', act.actual_collection_usd, 0.01);
-  A.eq('actual splits AI (real WF28 usage-token cost)', act.actual_ai_usd, 0.08);
-  A.eq('actual total = collection + AI', act.actual_cost_usd, 0.09);
+  // COST-SPLIT-001: actuals keep 4dp — the measured $0.084 must NOT be flattened to $0.08 (that rounding used to
+  // erase the sub-cent components the split exists to show).
+  A.eq('actual splits AI (real WF28 usage-token cost)', act.actual_ai_usd, 0.084);
+  A.eq('actual total = collection + AI', act.actual_cost_usd, 0.094);
   A.eq('hard cap still bounds the run', act.hard_cap_usd, 8);
   // The live-measured single-source run ($0.084) must fall inside the quoted band for that plan shape.
   const oneSitePlan = { sources: ['website'], urls: ['https://autolombardn1.ru'], max_items: 10 };

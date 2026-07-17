@@ -203,11 +203,19 @@ function buildSheets(b) {
         { header: 'AI reused', key: 'ai_reused', type: 'integer', width: 12 },
         { header: 'AI fallbacks', key: 'ai_fallbacks', type: 'integer', width: 12 },
         { header: 'AI cost usd', key: 'ai_cost_usd', width: 14 },
-        { header: 'AI model', key: 'ai_model', width: 22 }
+        { header: 'AI repair cost usd', key: 'ai_repair_cost_usd', width: 16 },
+        { header: 'AI model', key: 'ai_model', width: 22 },
+        // REUSE-OBS-001: the audit trail for cached analyses — which persisted analysis a reused result came
+        // from, and the explicit cache decision + reason for every WF28 invocation. Hidden sheet only (§6).
+        { header: 'AI reused from', key: 'ai_reused_from', width: 40 },
+        { header: 'AI cache decisions', key: 'ai_cache_decisions', width: 60 }
       ],
       rows: [{
         analysis_ids: join(an.analysis_ids), ai_analyses: an.count_enriched, ai_reused: an.count_reused,
-        ai_fallbacks: an.count_fallback, ai_cost_usd: an.analysis_cost_usd, ai_model: str(an.model),
+        ai_fallbacks: an.count_fallback, ai_cost_usd: an.analysis_cost_usd,
+        ai_repair_cost_usd: an.repair_cost_usd != null ? an.repair_cost_usd : '', ai_model: str(an.model),
+        ai_reused_from: join((an.reuse_lineage || []).map(l => str(l.reused_from_analysis_id)).filter(Boolean)),
+        ai_cache_decisions: join((an.cache_decisions || []).map(d => str(d.decision) + (d.reason ? (': ' + str(d.reason)) : ''))),
         agent_request_id: b.agent_request_id, report_id: b.report_id,
         run_ids: join(b.run_ids ? Object.values(b.run_ids).filter(Boolean) : meta.run_ids),
         calls: meta.calls != null ? meta.calls : sum.external_calls,

@@ -69,6 +69,7 @@ const JS_SUITES = [
   ['stage-f-core', 'test_stage_f_core.js'],
   ['wf28-claude-analyst', 'test_wf28_claude_analyst.js'],
   ['stage-f-integration', 'test_stage_f_integration.js'],
+  ['reuse-observability', 'test_reuse_observability.js'],
   ['stage-f-report', 'test_stage_f_report.js'],
   ['error-sanitizer', 'test_error_sanitizer.js'],
   ['source-execution-policy', 'test_source_execution_policy.js'],
