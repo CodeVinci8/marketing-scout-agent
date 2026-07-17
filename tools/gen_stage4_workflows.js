@@ -36,6 +36,14 @@ function credFirecrawl() { return { httpHeaderAuth: { id: 'PASTE_CREDENTIAL_ID_H
 // 4xx/5xx/timeout returns {statusCode,headers,body} to the parser as a provider error instead of aborting the run.
 // Body is the tool-transport Messages request built by claude_adapter.buildToolRequest (tool_choice:auto).
 // NB: distinct from the legacy httpClaude (WF19 planner, $json.claude_request_body) — this one reads claude_body.
+//
+// WF28-TIMEOUT-001. This was 90000, which is NOT the "generous timeout" the adapter's own header claims. The
+// gateway wraps Claude Code with thinking always on, so wall time tracks OUTPUT tokens, not prompt size: our
+// proven-good analysis (exec 834) emitted 3900 output tokens. Live exec 943 sent a 4602-byte body — 1% larger
+// than 834's 4543 — and was aborted at ~92 s, so the ceiling sat right at the real cost of a normal analysis and
+// decided runs by coin-flip. A timeout is pure downside: it burns the provider's full generation, bills nothing
+// back to us, and drops the user to a deterministic fallback. Sized to ~2x the observed good call.
+var CLAUDE_HTTP_TIMEOUT_MS = 180000;
 function httpClaudeMsg(id, name, pos) {
   return {
     parameters: {
@@ -43,7 +51,7 @@ function httpClaudeMsg(id, name, pos) {
       authentication: 'predefinedCredentialType', nodeCredentialType: 'httpHeaderAuth',
       sendHeaders: true, headerParameters: { parameters: [{ name: 'anthropic-version', value: '2023-06-01' }] },
       sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.claude_body) }}',
-      options: { timeout: 90000, response: { response: { neverError: true, fullResponse: true } } }
+      options: { timeout: CLAUDE_HTTP_TIMEOUT_MS, response: { response: { neverError: true, fullResponse: true } } }
     },
     onError: 'continueRegularOutput',
     type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name,
@@ -1957,23 +1965,32 @@ if(reuse){base.mode='reuse';base.do_call=false;base.reuse_analysis=reuse.analysi
 else if(!enabled){base.mode='disabled';base.do_call=false;}
 else if(!haveEvidence){base.mode='no_evidence';base.do_call=false;}
 else{var built=buildSourceAnalysisCall(base.pkg,{llm_model:model});base.mode='call';base.do_call=true;base.claude_body=built.body;base.allowed_ids=built.allowed_evidence_ids;base.ctx.estimated_cost_usd=estimateCost((evIn.evidence||[]).length*200,700,cfg).est_cost_usd;}
+// WF28-LATENCY-001: the clock the parser needs. n8n's HTTP node reports no timing, so latency is measured across
+// the node boundary or not at all — and "not at all" is what shipped: parseClaudeResponse reads http.latency_ms
+// from an object this workflow builds WITHOUT that key, so every call recorded latency_ms=0, including the
+// successful ones. That blinded us to a p50 sitting near the timeout until it started failing.
+base.__t0=Date.now();
 return [{json:base}];`),
   ifNode('wf28-ifcall', 'Call Claude?', [400, 0], '={{ $json.do_call }}'),
   httpClaudeMsg('wf28-http1', 'Claude Primary', [620, -120]),
   code('wf28-parse1', 'Parse Primary', [840, -120], WF28_LIBS_PARSE, `
 var prep=$('Prepare Analysis').first().json;var raw=$json;
-var http={status:Number(raw.statusCode||raw.status||0)||(raw.body?200:0),body:raw.body||raw,headers:raw.headers||{}};
+// An absent __t0 must read as "not measured" (0), never as time-since-epoch.
+var __t0=Number(prep.__t0)||0;
+var http={status:Number(raw.statusCode||raw.status||0)||(raw.body?200:0),body:raw.body||raw,headers:raw.headers||{},latency_ms:__t0?(Date.now()-__t0):0};
 var res=parseClaudeResponse(http,{model:prep.ctx.model});
 function lr(r){return {usage:r.usage,request_id:r.request_id,stop_reason:r.stop_reason,schema_mode:r.schema_mode,latency_ms:r.latency_ms,provider:r.provider,error_category:r.error_category};}
 var out={prep:prep,res1:lr(res)};
-if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,CC_ANALYSIS_SCHEMA);if(v.ok){out.status='valid';out.analysis=res.content;}else{out.status='repair';out.errors=v.errors;out.rejected=res.content;var rep=buildRepairCall(res.content,v.errors,prep.allowed_ids,{llm_model:prep.ctx.model});out.claude_body=rep.body;}}
+if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,CC_ANALYSIS_SCHEMA);if(v.ok){out.status='valid';out.analysis=res.content;}else{out.status='repair';out.errors=v.errors;out.rejected=res.content;var rep=buildRepairCall(res.content,v.errors,prep.allowed_ids,{llm_model:prep.ctx.model});out.claude_body=rep.body;out.__t1=Date.now();}}
 else{out.status='fail';out.error_category=res.error_category;}
 return [{json:out}];`),
   ifNode('wf28-ifrep', 'Need Repair?', [1060, -120], "={{ $json.status === 'repair' }}"),
   httpClaudeMsg('wf28-http2', 'Claude Repair', [1280, -220]),
   code('wf28-parse2', 'Parse Repair', [1500, -220], WF28_LIBS_PARSE, `
 var pp=$('Parse Primary').first().json;var prep=pp.prep;var raw=$json;
-var http={status:Number(raw.statusCode||raw.status||0)||(raw.body?200:0),body:raw.body||raw,headers:raw.headers||{}};
+// The repair call has its OWN clock, stamped by Parse Primary when it built the repair body.
+var __t1=Number(pp.__t1)||0;
+var http={status:Number(raw.statusCode||raw.status||0)||(raw.body?200:0),body:raw.body||raw,headers:raw.headers||{},latency_ms:__t1?(Date.now()-__t1):0};
 var res=parseClaudeResponse(http,{model:prep.ctx.model});
 function lr(r){return {usage:r.usage,request_id:r.request_id,stop_reason:r.stop_reason,schema_mode:r.schema_mode,latency_ms:r.latency_ms,provider:r.provider,error_category:r.error_category};}
 var out={prep:prep,res1:pp.res1,res2:lr(res),repair_used:true,prev_errors:pp.errors||[]};

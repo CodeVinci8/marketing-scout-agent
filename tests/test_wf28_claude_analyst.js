@@ -25,7 +25,9 @@ A.section('WF28 — exactly 2 Claude calls (primary + one repair), never a loop'
   A.eq('exactly 2 Claude HTTP nodes', claudeHttp.length, 2);
   claudeHttp.forEach(n => {
     A.ok(n.name + ' uses the Claude credential', (n.credentials || {}).httpHeaderAuth && /Claude API/.test(n.credentials.httpHeaderAuth.name));
-    A.ok(n.name + ' 90s timeout + neverError (provider errors do not abort)', JSON.stringify(n.parameters.options).indexOf('90000') >= 0 && JSON.stringify(n.parameters.options).indexOf('neverError') >= 0);
+    // Pins the PROPERTY (a bounded timeout that never aborts the run), not a magic number: this assertion used to
+    // require exactly 90000 and so defended the very ceiling that killed live exec 943. The floor is asserted above.
+    A.ok(n.name + ' has a bounded timeout + neverError (provider errors do not abort)', ((n.parameters.options || {}).timeout || 0) > 0 && JSON.stringify(n.parameters.options).indexOf('neverError') >= 0);
     A.ok(n.name + ' onError continues', n.onError === 'continueRegularOutput');
   });
   // repair only reachable from Parse Primary status==='repair'; no edge back from repair to primary
@@ -63,6 +65,37 @@ A.section('WF28 — persistence with lineage + fail-closed return');
   const lt = fs.readFileSync(path.join(LIB, 'llm_telemetry.js'), 'utf8');
   A.ok('telemetry row builder never emits a thinking field', lt.indexOf('thinking:') < 0);
   A.ok('result row stores the VALIDATED analysis only (structured_result_json = analysis)', lt.indexOf('structured_result_json: JSON.stringify(analysis)') >= 0);
+}
+
+A.section('WF28 — the gateway call is measured and given room to finish (WF28-LATENCY-001 / WF28-TIMEOUT-001)');
+{
+  // WF28-TIMEOUT-001: 90 s aborted a NORMAL analysis mid-generation (live exec 943, ~92 s, body 4602 B — 1% larger
+  // than the proven-good exec 834). Wall time tracks OUTPUT tokens (thinking is always on at the gateway), so the
+  // ceiling must clear a full-length analysis, not the median prompt.
+  ['Claude Primary', 'Claude Repair'].forEach(n => {
+    const t = ((node(n).parameters.options || {}).timeout) || 0;
+    A.ok(n + ' allows a full-length generation (>=180s, was 90s and cut exec 943 off)', t >= 180000);
+  });
+
+  // WF28-LATENCY-001: parseClaudeResponse reads http.latency_ms. If the workflow builds `http` without that key the
+  // adapter dutifully records 0 — which is exactly what shipped, on SUCCESSFUL calls too (exec 834: 3900 output
+  // tokens, latency_ms=0). Same defect class as RUN-LINEAGE-001: a consumer reading a field no producer populates.
+  const adapter = fs.readFileSync(path.join(LIB, 'claude_adapter.js'), 'utf8');
+  A.ok('adapter still sources latency from http.latency_ms (contract this test pins)', /latency_ms:\s*claudeNum\(http\.latency_ms/.test(adapter));
+  A.ok('Prepare Analysis stamps the start clock', /base\.__t0\s*=\s*Date\.now\(\)/.test(node('Prepare Analysis').parameters.jsCode));
+  const pp = node('Parse Primary').parameters.jsCode;
+  A.ok('Parse Primary passes a measured latency_ms into the http object', /latency_ms:\s*__t0\s*\?\s*\(Date\.now\(\)\s*-\s*__t0\)/.test(pp));
+  A.ok('Parse Primary stamps the repair clock when it builds a repair body', /out\.__t1\s*=\s*Date\.now\(\)/.test(pp));
+  A.ok('Parse Repair measures the repair call on its own clock', /latency_ms:\s*__t1\s*\?\s*\(Date\.now\(\)\s*-\s*__t1\)/.test(node('Parse Repair').parameters.jsCode));
+
+  // An unstamped input must read as "not measured", never as ~57 years of milliseconds since the epoch.
+  [['Parse Primary', pp, '__t0', 'prep'], ['Parse Repair', node('Parse Repair').parameters.jsCode, '__t1', 'pp']].forEach(([n, code, k, src]) => {
+    A.ok(n + ' guards an absent ' + k + ' (0, not time-since-epoch)', new RegExp('var ' + k + '=Number\\(' + src + '\\.' + k + '\\)\\|\\|0').test(code));
+  });
+  // Prove the guard arithmetic rather than trusting the regex: run the real expression both ways.
+  const lat = (t0) => { const __t0 = Number(t0) || 0; return __t0 ? (Date.now() - __t0) : 0; };
+  A.eq('absent start clock -> latency 0', lat(undefined), 0);
+  A.ok('present start clock -> a small positive latency', lat(Date.now() - 1234) >= 1234 && lat(Date.now() - 1234) < 5000);
 }
 
 A.section('WF28 — embedded Stage-F libs are byte-identical to the canonical libs (no drift)');
