@@ -81,6 +81,25 @@ Live repair stats so far (WF28 + session-52 harness): 2 analyses, **0 JSON-synta
 
 **Live Claude spend this session: $0** (WF28 never fired — no evidence was ever collected).
 
-**Stage F.5 must NOT start.**
+## Session 61 (2026-07-17) — reuse/collect/refresh EXECUTED, WF28 transport proven, complete chunked delivery
+
+| Item | Evidence |
+|---|---|
+| **WF28-TIMEOUT-001 + LATENCY-001 — LIVE-PROVEN twice** | Refresh E2E (`req_1784260795988`, execs 955–962): WF28 exec **962** primary success in **68.6 s** (`latency_ms=68758` MEASURED, was always 0), `enriched=true quality=ok schema=tool_use stop=tool_use`, 2652 in / 350 out tokens, est $0.0183 ≥ actual **$0.0132**, provider_request_id `5f759119`, analysis `an_f91a9fd1`, telemetry `tl_3defc7b1`. Reuse E2E exec **972**: primary success in **91.1 s** — above the old 90 s ceiling; the timeout fix saved this exact call. No repair either time. Retry NOT added: 1 transient in 4 live calls does not justify doubled spend (commit 88dedef records the deferral). |
+| **Scenario B (refresh) — PASS** | plan `source_execution_mode=refresh, force_reprocess=true`; WF04 exec 957 genuinely re-scraped (Firecrawl 930 ms, repair path success, `run_id req_1784260795988::website::a1`); WF16 88; WF10 iso=2/filters=2/profiles=1; WF12 report; WF28 962 enriched; Telegram msg 376 + XLSX msg 377 (15829 B); plan `completed`. |
+| **SOURCE-REUSE-001 — BUILT + DEPLOYED + LIVE-PROVEN (commit 3c1e18d)** | WF04 embeds the canonical `source_execution_policy` (byte-mirror-tested) and executes reuse\|collect\|refresh in ONE place. Reuse E2E (`req_1784276354484`, execs 965–972): WF04 exec **967** — Registry Lookup 6 rows (returnAllMatches), decision `reuse/fresh_snapshot` (orig run `req_1784260795988::website::a1`, age 0.04 d, orig health 88/healthy verified), readback 9 rows → **1 alias row** under CURRENT lineage (`parse_method=reused_snapshot`, original `parsed_at` preserved) + INHERITED source_health row; **no Firecrawl/Claude node executed**; `execution_mode=reuse source_outcome=reused_snapshot external_calls=0 actual_source_cost_usd=0 cost_status=not_applicable`. WF16 exec 968 emitted `skip_write reuse_run_health_inherited_from_original` (no 0-record poisoning row). WF10 exec 970: current run IN eligible_run_ids, iso=1/filters=1/profiles=1. Telegram states «💾 Использованы сохранённые данные … сбор от 17.07.2026 … $0». |
+| **ANALYSIS-REUSE-001 — FIXED + LIVE-PROVEN (commit 92aafc3)** | findReusableAnalysis required analysis_id equality (embeds request ids → cross-request reuse could NEVER match; exec 972 paid again for the same snapshot). Now keyed owner+type+evidence_hash (+schema/prompt-version invalidation, newest wins, fallback banned). PROOF exec **982**: `Call Claude?`→0 items, `mode=reuse enriched=true cost=$0`, hash `753b287e` matched — WF28 in 1.5 s instead of 91 s. |
+| **DELIVERY-CHUNKS-001/002 — FIXED + LIVE-PROVEN** | exec 956 built 4 chunks (AI sections in chunks 1–3) but sent ONLY chunk 0 (msg 376) — the user never saw the paid analysis. `Expand Telegram Chunks` + batchSize=1: exec 966 sent 4/4 (ids 381,383,382,384 — parallel scramble found live) → exec **976** sent 4/4 **strictly ordered** (389–392), reuse line + «Подтверждённые факты/Аналитические выводы/Рекомендации/Доказательства» delivered, XLSX 393, plan `completed`, collection $0 / analysis $0 (the $0.03 = WF12 summary call, honestly attributed). |
+| **ADAPTER-RETURN-001** | WF04's sub-workflow return was the LAST executed node = snapshot row → adapter recorded `status=empty external_calls=0` on a run that scraped (exec 956). Done-side serialized (pure-reuse returns the typed Final Summary deterministically) + WF20 adapter maps a snapshot-shaped return honestly. |
+| Regression | `make test` ALL SUITES PASS ($0, 0 calls) after each commit; production redeployed surgically (8 wf then 2 wf), 17 active restored exactly, ids/creds/bindings preserved, backups in scratchpad/backup/. |
+
+### Still open for the Stage F gate (next)
+
+| Item | Notes |
+|---|---|
+| §4 source outcomes on TG/VK connectors + `source_analysis` vs `change_report` modes | website connector now emits typed outcomes; TG/VK do not; analysis modes not persisted. |
+| §5 concise Telegram renderer | delivered report is still the full ~13.5k-char 4-chunk document; targets 700–1200 (success) / 300–700 (reuse) / 250–600 (failure), hard max 1500. |
+| §6 live roles | TG-channel, VK-community, 3-source synthesis, WF27 enrichment, public-lead interpretation, blocked carmoney.ru, controlled failure matrix, ≥5 fresh analyses (repair-rate M4). |
+| Observability nit | WF28's typed return drops `reused_from_analysis_id` (matcher supplies it; Finalize doesn't forward). |
 
 **Stage F.5 must NOT start** — Stage F is not complete.

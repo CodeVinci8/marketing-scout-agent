@@ -4,6 +4,41 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-17 (session 61) — reuse/collect/refresh EXECUTED end-to-end; WF28 transport proven; full chunked delivery
+
+Branch `fix/stage4-live-final-acceptance`, HEAD **92aafc3**, worktree CLEAN, NOT pushed. Prod healthy, 17 active,
+`make test` ALL SUITES PASS ($0). Commits this session: **3c1e18d** (SOURCE-REUSE-001 + ADAPTER-RETURN-001 +
+DELIVERY-CHUNKS-001), **92aafc3** (ANALYSIS-REUSE-001 + DELIVERY-CHUNKS-002). Deployed surgically: WF04/16/18/20/
+21/22/23/26 then WF20/28 again; ids/creds/bindings preserved; backups in scratchpad/backup/.
+
+**Live proofs (all boundaries inspected from runData, not statuses):**
+1. **Refresh E2E** `req_1784260795988` (execs 955–962): WF04 really re-scraped; WF28 exec 962 primary success
+   **68.6 s MEASURED** (`latency_ms=68758`, was always 0), enriched, tokens 2652/350, est $0.0183 ≥ actual $0.0132,
+   `provider_request_id 5f759119`, `an_f91a9fd1`; Telegram 376 + XLSX 377; plan completed.
+2. **Reuse E2E** `req_1784276354484` (execs 965–972): WF04 exec 967 took the NEW reuse branch — 0 Firecrawl,
+   1 alias row under current lineage (orig `parsed_at` preserved), INHERITED health row; WF16 emitted
+   `skip_write` (no 0-record poisoning); WF10 iso=1/filters=1/profiles=1; WF28 exec 972 fresh call succeeded at
+   **91.1 s** (would have DIED at the old 90 s timeout). Telegram says «💾 Использованы сохранённые данные… $0».
+3. **Analysis-reuse E2E** `req_1784277311282` (execs 975–982): WF28 exec 982 `mode=reuse cost=$0` in 1.5 s —
+   hash `753b287e` matched exec 972's stored analysis across REQUESTS (the old matcher keyed on analysis_id which
+   embeds request ids → could never match). 4/4 chunks delivered STRICTLY ORDERED (389–392) incl. all AI sections;
+   XLSX 393; plan completed; collection $0, WF28 $0 (the $0.03 shown = WF12 summary call, honest).
+
+**Defect-class instances found live this session:** #8 `telegram_send_bodies` built but never consumed (user got
+1 of 4 chunks — the ENTIRE paid AI analysis was never delivered before today); #9 WF04's sub-workflow return =
+last-executed node = snapshot row → adapter logged `status=empty external_calls=0` on a real scrape; #10
+findReusableAnalysis keyed on per-request analysis_id → cross-request reuse dead. Plus: n8n httpRequest sends
+multiple items IN PARALLEL (chunk order scrambled live: 381,383,382,384) → batchSize=1; Google Sheets lookup
+default returns FIRST match = OLDEST registry row → returnAllMatches everywhere the policy decides.
+
+**Next (Stage F gate, in order):** §4 typed outcomes for TG/VK + source_analysis/change_report modes → §5 concise
+Telegram renderer (700–1200/300–700/250–600, hard max 1500; full detail stays in XLSX) → §6 live roles (TG channel,
+VK, synthesis, WF27 enrichment, lead interpretation, blocked carmoney.ru, failure matrix, ≥5 fresh analyses) →
+formal Stage F gate → F.5 (Source Runtime → Unified Result → Radar → feature-ask → Analyst Agent → Monitoring) →
+Stage G. **Do not start Stage H.** Tracker: docs/STAGE_F_ACCEPTANCE.md session-61 block.
+
+---
+
 ## Session: 2026-07-17 (session 59) — HEALTH-LINEAGE-001 traced to the END: it is a QUALITY POLICY, not a bug
 
 Branch `fix/stage4-live-final-acceptance`, HEAD **6af9dda**, worktree CLEAN, ahead 133, NOT pushed. Prod healthy,
