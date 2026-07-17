@@ -4,6 +4,62 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-17 (session 58) — PLAN-TERMINAL + EXPLICIT-SOURCE-SCOPE fixed; WF10 isolation PASSES live
+
+Branch `fix/stage4-live-final-acceptance` (ahead ~132, NOT pushed). Commits → **f8d7192** (PLAN-TERMINAL-001) ·
+**5e62ad0** (EXPLICIT-SOURCE-SCOPE-001). **`node tests/run_all.js` → ALL SUITES PASS, 126 suites, EXIT=0,
+external calls=0, $0.** Disk 864M (92%). Live Claude spend: **$0** (WF28 still not reached).
+
+**exit 144 explained (previous session):** NOT a test failure. The scratchpad was wiped at 05:01 — the log the
+backgrounded `make test` was writing to vanished, the process was terminated with the session, 0 OOM events, memory
+fine. 144 = 128+16 (SIGSTKFLT/external kill). Re-ran to completion: **ALL SUITES PASS**. **Lesson: write long-run
+logs INSIDE the repo (`scratchpad/`), not the ephemeral /tmp scratchpad, and prefer foreground for the final run.**
+
+**PLAN-TERMINAL-001 FIXED + DEPLOYED (f8d7192).** Root cause was a RACE, not a failed write: WF20 exec 904 timings
+showed `Mark Plan Complete +110400ms` then `Mark Plan Approved +112310ms` — the approval flip hung off a FLOATING
+parallel branch, n8n executionOrder v1 deferred it to the END, and it overwrote completed→approved 1.9s later. That
+left every finished run non-terminal → B4 reused it inside the TTL → the next approval could never dispatch. Fixed
+STRUCTURALLY: `Resolve Approved Plan → Plan To Approve?(IF) → Shape → Mark Plan Approved → Orchestration Reuse
+Decision`, with the false branch converging so a manual/no-plan run still proceeds. Verified by graph depth:
+approved=6 vs complete=45 (strictly upstream — the clobber is impossible by construction). **LIVE-PROVEN**: WF18
+exec 925 created a NEW plan (`reused false`) where the old one used to block. +test_plan_terminal (38).
+
+**EXPLICIT-SOURCE-SCOPE-001 FIXED + DEPLOYED (5e62ad0) — new `n8n/lib/scope_policy.js`.** The user named
+autolombardn1.ru; the SITE reported region "Россия" while the PLAN defaulted "Москва/МО", so WF10's inferred region
+filter dropped the very source they asked about. Canonical policy (planner→plan row→WF20→WF10, not a magic string):
+explicit_source / comparison / monitoring → region is NOT an admission filter (ANY sentinel); discovery / niche-scan
+→ region still filters. An explicit sentinel is required because WF10's `__ov` ignores empty strings. Honest note
+when the source region is broader — never a silent drop. +test_scope_policy (60, all eight §2 cases).
+
+**LIVE PROOF — WF10 isolation now PASSES (the headline).** Run req_1784255157 (WF18 925 → WF19 926 → WF20 928 →
+WF04 929 → WF16 930 → WF10 932 → WF12 933): WF04 `scraped=1 primary=1`, `route=monitor_queue entity=competitor
+company="Автоломбард №1" region="Россия"`; WF20 `scope_mode=explicit_source apply_region=false region_filter=ANY`;
+**WF10 `window=310 iso=1`** — the explicitly-named source survived isolation for the FIRST time (every prior run: 0).
+
+**NEXT BLOCKER — the health gate, precisely located.** WF10 932: `rows_after_isolation=1` → `rows_after_filters=0`,
+`rows_excluded_by_health=1`, `source_health_excluded_reasons={"no_lineage":1}`. TWO things to fix:
+1. **`no_lineage` in `report_gate.rowEligible`** — 5th instance of the recurring class: the monitor_queue row carries
+   the family ONLY in `run_id` (source_run_id/agent_request_id empty), and rowEligible does not read `run_id`.
+   Same shape as ISO-RUNID-001; fix it the same way.
+2. **WF16 QUARANTINED the source** (exec 930): `quality_score=81` (good!) but `quality_status=quarantined
+   report_eligible=false`, flags `no_detail_records; missing_published_at; pending_review; cost_unknown`. Yet WF16
+   DID read this run's raw_market_record with full lineage (`record_id=wf04_rec_req_1784255157::website::a1_1`,
+   run_id+source_run_id+agent_request_id all set). So `no_detail_records` is computed from something else —
+   investigate the record_type/parse_method distinction in WF16's `Assemble Run Bundles` / `Build Source Health`.
+   A score of 81 with report_eligible=false is itself suspicious.
+
+**REMAINING Stage F:** the two blockers above → WF28 E2E; concise renderer (still 2082 chars); reuse mode;
+source_analysis vs change_report; TG + VK; synthesis; WF27 enrichment; lead interpretation; CodeVinci AI Pilot;
+repair-rate ≥5. **Stage F.5 NOT STARTED** (Source Runtime, Analysis Result Model, Opportunity Radar, Analyst Agent,
+Monitoring Intelligence). Disposable QA drivers: msqamktetab, msqamkslog, msqamkresults, msqaplancols,
+msqawf28proof, msqamktabs, msdrvscope12.
+
+**Recurring defect class (now 5 instances): ISO-ARID-001 / ISO-RUNID-001 / data_mode / region / no_lineage.**
+A consumer strict-compares a field the producer never populates, or an inferred default overrides an explicit user
+scope → zero rows, silently. CHECK THIS FIRST whenever a stage returns 0 rows.
+
+---
+
 ## Session: 2026-07-16 (session 57) — BLOCK-HONESTY-001 fixed; ISO-RUNID-001 = the real empty-bundle cause
 
 Branch `fix/stage4-live-final-acceptance` (ahead ~129, NOT pushed). Commits → **3c37d14** (block classifier) ·
