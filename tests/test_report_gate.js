@@ -12,6 +12,9 @@ A.section('report_gate — embedded mirrors are byte-identical to the shared lib
 const libCore = (function () {
   let s = fs.readFileSync(path.join(__dirname, '..', 'n8n', 'lib', 'report_gate.js'), 'utf8');
   s = s.replace(/^'use strict';\s*$/m, '').replace(/module\.exports[\s\S]*$/m, '');
+  // RUN-LINEAGE-001: a Code node cannot require() a local file, so the embed step strips destructured local
+  // requires and inlines that lib alongside (same rule tools/gen_stage4_workflows.js uses).
+  s = s.replace(/^\s*const\s*\{[^}]*\}\s*=\s*require\('\.\/[^']+'\);\s*$/gm, '');
   return s.trim();
 })();
 for (const [file, node] of [

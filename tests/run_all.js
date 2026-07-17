@@ -75,6 +75,7 @@ const JS_SUITES = [
   ['source-access', 'test_source_access.js'],
   ['plan-terminal', 'test_plan_terminal.js'],
   ['scope-policy', 'test_scope_policy.js'],
+  ['parse-outcome', 'test_parse_outcome.js'],
   // --- WF24 XLSX export/delivery fixes (EXPORT-CHAT-001 caller scope + EXPORT-CHART-001 chart tolerance) ---
   ['wf24-export', 'test_wf24_export.js'],
   // --- SOURCE-OP-001: NL monitored-source registry (parseSourceOp -> list/add/pause/resume/remove/check) ---
