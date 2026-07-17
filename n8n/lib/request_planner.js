@@ -181,6 +181,15 @@ function deterministicPlan(text, cfg) {
     expected_output: 'competitor_market_report',
     // SOURCE-EXEC-001: an explicit refresh re-collects an already-registered source. It bypasses ONLY the freshness
     // check — approval, budget, quality and global dedup all still apply, and the approval text says so.
+    // EXPLICIT-SOURCE-SCOPE-001: when the user names a source, the named source IS the scope — an inferred region
+    // must not exclude it later (live: site said "Россия", plan defaulted "Москва/МО", WF10 dropped the row and the
+    // user was told there were no facts about the site they named). Kept in sync with scope_policy.resolveScope
+    // (test asserts equality); this lib stays require-free to remain embeddable in a Code node.
+    scope_mode: (function () {
+      var n = (ex.websites || []).length + (ex.telegram_channels || []).length + (ex.vk_sources || []).length;
+      if (/discovery/.test(String(t).toLowerCase()) || explicitPlatforms.length === 0) return n >= 2 ? 'comparison' : (n === 1 ? 'explicit_source' : 'discovery');
+      return n >= 2 ? 'comparison' : 'explicit_source';
+    })(),
     source_execution_mode: planWantsRefresh(t) ? 'refresh' : 'auto',
     force_reprocess: planWantsRefresh(t),
     refresh_reason: planWantsRefresh(t) ? 'user_requested_refresh' : '',
@@ -213,6 +222,7 @@ function normalizePlan(p, cfg) {
     est_source_cost_usd: Math.min(num(p.est_source_cost_usd, num(cfg.source_budget_usd, 0.20)), num(cfg.source_budget_usd, 0.20)),
     est_llm_cost_usd: Math.min(num(p.est_llm_cost_usd, num(cfg.llm_budget_usd, 0.50)), num(cfg.llm_budget_usd, 0.50)),
     expected_output: str(p.expected_output) || 'competitor_market_report',
+    scope_mode: ['explicit_source', 'comparison', 'discovery', 'monitoring'].indexOf(str(p.scope_mode)) >= 0 ? str(p.scope_mode) : 'discovery',
     source_execution_mode: ['refresh', 'reuse', 'collect'].indexOf(str(p.source_execution_mode)) >= 0 ? str(p.source_execution_mode) : 'auto',
     force_reprocess: p.force_reprocess === true || str(p.force_reprocess) === 'true',
     refresh_reason: str(p.refresh_reason),
@@ -360,6 +370,7 @@ function buildPlanRow(plan, identity, ctx) {
     est_source_cost_usd: num(plan.est_source_cost_usd, 0), est_llm_cost_usd: num(plan.est_llm_cost_usd, 0),
     expected_output: str(plan.expected_output), plan_source: str(plan.plan_source),
     // SOURCE-EXEC-001: the refresh decision MUST survive approval — WF20 reads it off the stored row.
+    scope_mode: str(plan.scope_mode) || 'discovery',
     source_execution_mode: str(plan.source_execution_mode) || 'auto',
     force_reprocess: plan.force_reprocess === true ? 'true' : '',
     refresh_reason: str(plan.refresh_reason),
