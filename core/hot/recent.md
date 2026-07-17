@@ -4,6 +4,32 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-17 (session 62) — REUSE-OBS-001 + COST-SPLIT-001 closed, deployed, live-proven
+
+Branch `fix/stage4-live-final-acceptance`, HEAD **2565702** (+docs commit after), worktree CLEAN, NOT pushed.
+Prod healthy, 17 active, `make test` ALL SUITES PASS ($0).
+
+**What shipped (commit 2565702):** a cached analysis now NAMES its origin end-to-end: `findReusableAnalysis`
+returns origin id/created_at/model + reason, **model joined the cache key** (both-present rule), WF28 records a
+canonical cache decision (`reuse`/`fresh_call`/`skip_disabled`/`skip_no_evidence`) and forwards origin + repair
+cost in the typed return → collectAnalyses (`reuse_lineage`, `cache_decisions`, `model`) → execution summary →
+report bundle → hidden XLSX tech sheet («AI reused from», «AI cache decisions»). `actualRequestCost` splits
+actuals into collection / summary-AI / deep-analysis-AI / repair at **4dp** (2dp used to erase $0.0132→$0.01);
+`deliveryBody` renders one honest Russian cost line. New `tests/test_reuse_observability.js` (74).
+
+**Live proof `req_1784310302289` (execs 984–992):** source reuse (WF04 987, $0) + analysis reuse (WF28 992,
+1.5 s, no HTTP): typed return `reused_from_analysis_id=an_5f3ef630`, decision `reuse`, reason names matched keys;
+summary `actual_cost_usd=0.0302 = AI-сводка 0.0302` (cached run NOT presented as $0); Telegram msgs 397–400
+ordered with the 💰 line, no internal ids; XLSX msg 401 (16298 B) — origin id/reason/model ONLY in hidden sheet8;
+plan completed. Deployed via jsCode re-sync to 9 workflows (backups `*_prod_20260717_203907.json`).
+
+**Next (Stage F gate, in order):** REPORT-TRUTH milestone (§3–§7: analysis modes, evidence-grounded claim
+validation, semantic guards, CONCISE Telegram renderer 700–1200/300–700/250–600 hard-max 1500 — live report is
+still ~12.9k chars / 4 chunks, XLSX truth) → §8 TG/VK typed outcomes → §9 live roles + failure matrix → §10
+repair metrics (≥5 fresh) → Stage F gate.
+
+---
+
 ## Session: 2026-07-17 (session 61) — reuse/collect/refresh EXECUTED end-to-end; WF28 transport proven; full chunked delivery
 
 Branch `fix/stage4-live-final-acceptance`, HEAD **92aafc3**, worktree CLEAN, NOT pushed. Prod healthy, 17 active,

@@ -103,3 +103,19 @@ Live repair stats so far (WF28 + session-52 harness): 2 analyses, **0 JSON-synta
 | Observability nit | WF28's typed return drops `reused_from_analysis_id` (matcher supplies it; Finalize doesn't forward). |
 
 **Stage F.5 must NOT start** — Stage F is not complete.
+
+## Session 62 (2026-07-17) — REUSE-OBS-001 + COST-SPLIT-001 CLOSED (commit 2565702, deployed, live-proven)
+
+| Item | Evidence |
+|---|---|
+| **REUSE-OBS-001 — a cached answer names its origin** | `findReusableAnalysis` returns origin id/created_at/model + explicit reason; **model joins the cache key** (both-present rule — legacy rows without a model stay reusable; a different configured model invalidates). WF28 Prepare records a canonical cache decision (`reuse` / `fresh_call` / `skip_disabled` / `skip_no_evidence`), Finalize forwards origin+decision+repair-cost in the typed return; collectAnalyses aggregates `reuse_lineage`+`cache_decisions`+`model`; execution summary and report bundle persist them; hidden XLSX tech sheet renders «AI reused from» + «AI cache decisions». No separate provider/policy version key needed: schema_version+prompt_version already version the request/validation contract (audited, decision recorded here). |
+| **COST-SPLIT-001 — honest component costs** | `actualRequestCost` splits actuals: collection / summary-AI / deep-analysis-AI / repair (repair = share of analysis spend, clamped, never double-counted) at **4dp** (old 2dp rounding erased sub-cent actuals: $0.0132→$0.01). `deliveryBody` renders one Russian cost line naming each paid component. |
+| **LIVE PROOF (`req_1784310302289`, execs 984–992)** | Source reuse (WF04 987, $0, no Firecrawl) + analysis reuse (WF28 **992**, 1.5 s, no HTTP node): typed return = `mode=reuse, cost 0, reused_from_analysis_id=an_5f3ef630 (created 08:24Z, claude-sonnet-4-6), cache_decision=reuse, reason="match: owner+analysis_type+evidence_hash+schema+prompt+model → an_5f3ef630"`; current lineage `an_e6145372` separate. Summary: `actual_cost_usd=0.0302 = summary-AI 0.0302 + collection 0 + deep 0 + repair 0`, `llm_reuse_lineage`/`llm_cache_decisions` persisted; bundle carries the same. Telegram (msgs **397–400**, ordered): «💰 Фактическая стоимость: AI-сводка $0.0302 = $0.0302.» — **a cached-analysis run is no longer presented as $0**; no internal id leaked. XLSX msg **401** `marketing_scout_report_20260717_204749_report.xlsx` (16298 B): OOXML valid, `an_5f3ef630` + cache reason + model present ONLY in sheet8 «Технические данные» `state="hidden"`. Plan `plan_req_1784310302289_h6ef5737d` → completed. |
+| Tests / deploy | New `tests/test_reuse_observability.js` (74) in run_all; cost-model pins updated to 4dp truth; `make test` ALL SUITES PASS ($0). Deployed surgically via jsCode re-sync to 9 prod workflows (18,19,20,21,22,23,24,26,28 — backups `scratchpad/backup/*_prod_20260717_203907.json`), 17 active restored, health ok. |
+
+### Still open for the Stage F gate (in order)
+
+1. **REPORT-TRUTH milestone (§3–§7)**: explicit analysis modes (source_analysis / change_report / …) persisted end-to-end; evidence-grounded claim validation (no market-wide claims from one homepage); semantic quality guards; **concise Telegram renderer** (700–1200 / 300–700 / 250–600, hard max 1500 — current live report is ~12.9k chars in 4 chunks); XLSX truth (current-request scope, no global inventory totals, dedup, evidenced regions).
+2. §8 typed source outcomes for TG/VK connectors (website done).
+3. §9 live roles: TG-channel, VK-community, 3-source synthesis, WF27 enrichment, public-lead interpretation, failure matrix (blocked carmoney.ru, timeout, repair-fail→fallback, context-too-long, owner-isolation negative), terminal-plan idempotency.
+4. §10 ≥5 fresh analyses → repair/latency/cost metrics.
