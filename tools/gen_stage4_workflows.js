@@ -1203,7 +1203,10 @@ return [{json:{analysis:Object.assign({},col,{reason:String(ai.analysis_reason||
   sheetsAppend('wf20-apout', 'Append telegram_outbox', [1940, -160], 'telegram_outbox'),
   code('wf20-expandchunks', 'Expand Telegram Chunks', [2050, -160], [],
     "// DELIVERY-CHUNKS-001: Build Delivery Outbox chunks the report (Telegram caps a message at 4096 chars) but the\n// send node consumed only telegram_send_body — chunk 0. Chunks 1..N (live exec 956: the ENTIRE AI analysis, 3 of 4\n// chunks) were built, persisted to the outbox row, and never sent. One item per chunk => one sendMessage per chunk,\n// in order. Fail-safe: any parse problem falls back to the single first-chunk body — delivery is never blocked.\nvar ob=$('Build Delivery Outbox').first().json;\nvar bodies=[];\ntry{bodies=JSON.parse(ob.telegram_send_bodies||'[]');}catch(e){bodies=[];}\nif(!Array.isArray(bodies))bodies=[];\nif(!bodies.length){return [{json:{telegram_send_body:ob.telegram_send_body||'{}',chunk_index:0,chunk_count:1}}];}\nreturn bodies.map(function(b,i){return {json:{telegram_send_body:JSON.stringify(b),chunk_index:i,chunk_count:bodies.length}};});"),
-  httpTelegram('wf20-send', 'Send Telegram Report', [2160, -160]),
+  // DELIVERY-CHUNKS-002: with multiple chunk items the httpRequest node dispatches them in PARALLEL and Telegram
+  // assigns message ids by arrival — live exec 966 delivered chunk order 0,2,1,3 (ids 381,383,382,384). batchSize 1
+  // forces one request at a time, preserving reading order.
+  (function () { const n = httpTelegram('wf20-send', 'Send Telegram Report', [2160, -160]); n.parameters.options = { batching: { batch: { batchSize: 1, batchInterval: 0 } } }; return n; })(),
   code('wf20-shapesum', 'Shape Execution Summary Row', [1500, 60], [],
     "var s=$('Build Execution Summary').first().json;return [{json:s.summary}];"),
   sheetsAppend('wf20-apsum', 'Append execution_summaries', [1720, 60], 'execution_summaries'),

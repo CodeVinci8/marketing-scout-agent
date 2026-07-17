@@ -85,9 +85,11 @@ A.section('SOURCE-REUSE-001 — WF04 topology: the reuse branch exists and is $0
   // 11. no Firecrawl call on reuse: nothing on the reuse branch is an httpRequest
   ['Read Reuse Route Rows', 'Build Reuse Records', 'Append Reuse Route Row', 'Build Reuse Health Row', 'Append Reuse source_health']
     .forEach(n => A.ok('11. reuse branch node ' + n + ' makes no HTTP call', (node(n).type || '').indexOf('httpRequest') < 0));
-  // 12. no duplicate snapshot / registry / raw rows: the reuse branch reaches none of those appends
+  // 12. no duplicate snapshot / registry / raw rows: the reuse branch reaches none of those appends.
+  // The walk stops at Loop Over Items — the next ITERATION (which may legitimately collect another url) is not
+  // part of this url's reuse path.
   const reach = new Set(); const q = ['Read Reuse Route Rows'];
-  while (q.length) { const n = q.shift(); if (reach.has(n)) continue; reach.add(n); ((C[n] || {}).main || []).forEach(a => (a || []).forEach(x => q.push(x.node))); }
+  while (q.length) { const n = q.shift(); if (reach.has(n) || n === 'Loop Over Items') continue; reach.add(n); ((C[n] || {}).main || []).forEach(a => (a || []).forEach(x => q.push(x.node))); }
   ['Append url_registry', 'Append competitor_site_snapshots', 'Append raw_market_records', 'Firecrawl Scrape API']
     .forEach(n => A.ok('12. reuse branch never reaches ' + n, !reach.has(n)));
   // the registry read must see EVERY row for the url (first-match returned the OLDEST run)
@@ -195,6 +197,34 @@ A.section('SOURCE-REUSE-001 — planner inputs travel to the executor; the user 
   A.ok('deliveryBody renders the reuse line with the real timestamp', body.indexOf('Использованы сохранённые данные') >= 0 && body.indexOf('17.07.2026 10:18') >= 0);
   const body2 = CR.deliveryBody({ report_markdown: 'Отчёт.' }, { final_state: 'completed', records_reported: 2 }, []);
   A.ok('no reuse -> no reuse line (never claims saved data on a fresh collect)', body2.indexOf('сохранённые данные') < 0);
+}
+
+A.section('ANALYSIS-REUSE-001 — same evidence, same owner => the paid analysis is reused across requests');
+{
+  // Live: exec 972 re-analyzed the same snapshot 3h after exec 962 because findReusableAnalysis required
+  // analysis_id equality — and ltAnalysisId embeds agent_request_id + source_run_id, new for every request.
+  const LT = require(path.join(LIB, 'llm_telemetry.js'));
+  const row = (o) => Object.assign({
+    analysis_id: 'an_old1', owner_user_id: '111', agent_request_id: 'req_OLD', source_run_id: 'req_OLD::website::a1',
+    analysis_type: 'single_source', evidence_package_hash: 'h1', schema_version: 'v1', prompt_version: 'p1',
+    structured_result_json: '{"executive_summary_ru":"x"}', quality_status: 'ok', created_at: '2026-07-17T07:21:56.000Z'
+  }, o);
+  const ctx = { owner_user_id: '111', agent_request_id: 'req_NEW', source_run_id: 'req_NEW::website::a1',
+    analysis_type: 'single_source', evidence_package_hash: 'h1', schema_version: 'v1', prompt_version: 'p1' };
+  const hit = LT.findReusableAnalysis([row({})], ctx);
+  A.ok('cross-REQUEST reuse now matches (same owner+type+hash)', !!hit && hit.analysis.executive_summary_ru === 'x');
+  A.ok('the reused result keeps the CURRENT request identity + names its origin', !!hit && hit.analysis_id === LT.ltAnalysisId(ctx) && hit.reused_from_analysis_id === 'an_old1');
+  A.eq('different owner -> never reused (isolation)', LT.findReusableAnalysis([row({ owner_user_id: '999' })], ctx), null);
+  A.eq('different evidence hash -> fresh call', LT.findReusableAnalysis([row({ evidence_package_hash: 'h2' })], ctx), null);
+  A.eq('different analysis_type -> fresh call', LT.findReusableAnalysis([row({ analysis_type: 'comparison' })], ctx), null);
+  A.eq('deterministic_fallback -> never reused', LT.findReusableAnalysis([row({ quality_status: 'deterministic_fallback' })], ctx), null);
+  A.eq('prompt version moved -> invalidated (quality control)', LT.findReusableAnalysis([row({ prompt_version: 'p0' })], ctx), null);
+  A.eq('schema version moved -> invalidated', LT.findReusableAnalysis([row({ schema_version: 'v0' })], ctx), null);
+  A.eq('no evidence hash in ctx -> nothing to reuse (fail closed)', LT.findReusableAnalysis([row({})], Object.assign({}, ctx, { evidence_package_hash: '' })), null);
+  const newest = LT.findReusableAnalysis([row({ structured_result_json: '{"executive_summary_ru":"old"}', created_at: '2026-07-16T00:00:00Z' }),
+    row({ analysis_id: 'an_new1', structured_result_json: '{"executive_summary_ru":"new"}', created_at: '2026-07-17T00:00:00Z' })], ctx);
+  A.eq('newest valid analysis wins', newest.analysis.executive_summary_ru, 'new');
+  A.ok('a successfully repaired analysis IS reusable (operator decision)', !!LT.findReusableAnalysis([row({ quality_status: 'repaired' })], ctx));
 }
 
 A.report('wf04-source-reuse');

@@ -1551,7 +1551,14 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ $json.telegram_send_body }}",
-        "options": {}
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 0
+            }
+          }
+        }
       },
       "onError": "continueRegularOutput",
       "type": "n8n-nodes-base.httpRequest",

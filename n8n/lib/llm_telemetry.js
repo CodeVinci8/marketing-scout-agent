@@ -74,20 +74,32 @@ function buildTelemetryRow(ctx, result, nowIso) {
 // Find a reusable persisted result for this evidence hash (idempotent reuse) — same owner + analysis_id and a
 // non-fallback quality. Returns the parsed structured_result_json or null.
 function findReusableAnalysis(rows, ctx) {
-  var id = ltAnalysisId(ctx);
+  // ANALYSIS-REUSE-001: this used to require r.analysis_id === ltAnalysisId(ctx) — but ltAnalysisId embeds
+  // agent_request_id + source_run_id, which are NEW for every request, so cross-request reuse could never match
+  // and every repeat question paid for a fresh Claude call (live: exec 972 re-analyzed the same snapshot 3h after
+  // exec 962). Same evidence means same analysis: match on owner + analysis_type + evidence_package_hash (the hash
+  // already encodes source identity + facts + excerpts), and invalidate when the schema/prompt version moved.
   var owner = ltStr(ctx.owner_user_id);
-  var best = null;
+  var hash = ltStr(ctx.evidence_package_hash);
+  var typ = ltStr(ctx.analysis_type) || 'single_source';
+  if (!hash) return null;                                            // no evidence identity -> nothing to reuse
+  var best = null, bestT = -1;
   (Array.isArray(rows) ? rows : []).forEach(function (r) {
     if (!r) return;
-    if (ltStr(r.owner_user_id) !== owner) return;
-    if (ltStr(r.analysis_id) !== id) return;
-    if (ltStr(r.evidence_package_hash) !== ltStr(ctx.evidence_package_hash)) return;
+    if (ltStr(r.owner_user_id) !== owner) return;                    // owner isolation, never relaxed
+    if ((ltStr(r.analysis_type) || 'single_source') !== typ) return;
+    if (ltStr(r.evidence_package_hash) !== hash) return;
+    if (ctx.schema_version && ltStr(r.schema_version) && ltStr(r.schema_version) !== ltStr(ctx.schema_version)) return;
+    if (ctx.prompt_version && ltStr(r.prompt_version) && ltStr(r.prompt_version) !== ltStr(ctx.prompt_version)) return;
     if (ltStr(r.quality_status) === 'deterministic_fallback') return; // don't reuse a failed run
-    best = r;
+    var t = Date.parse(ltStr(r.created_at)); if (!isFinite(t)) t = 0;
+    if (t >= bestT) { bestT = t; best = r; }                          // newest valid analysis wins
   });
   if (!best) return null;
-  try { return { analysis: JSON.parse(ltStr(best.structured_result_json) || '{}'), analysis_id: id, quality_status: ltStr(best.quality_status) }; }
-  catch (e) { return null; }
+  try {
+    return { analysis: JSON.parse(ltStr(best.structured_result_json) || '{}'), analysis_id: ltAnalysisId(ctx),
+      quality_status: ltStr(best.quality_status), reused_from_analysis_id: ltStr(best.analysis_id) };
+  } catch (e) { return null; }
 }
 
 module.exports = { ltAnalysisId, buildAnalysisResultRow, buildTelemetryRow, findReusableAnalysis, ltHash };
