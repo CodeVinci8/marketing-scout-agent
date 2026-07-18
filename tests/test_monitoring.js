@@ -154,7 +154,10 @@ const okAdapter = { agent_request_id: 'req_1', source_run_id: 'firecrawl_X', ite
 const okReport = { report_id: 'rep1', report_markdown: 'ФАКТ: 2 конкурента, ставка от 0,1%/день.', rows_after_filters: 2, records_unique: 2, records_eligible: 2, records_analyzed: 2, llm_primary_calls: 0, llm_repair_calls: 0 };
 const okOut = deliver(okAdapter, okReport);
 const okBody = JSON.parse(okOut.telegram_send_body);
-A.ok('delivery preserves the immutable report facts verbatim', /ФАКТ: 2 конкурента/.test(okBody.text));
+// REPORT-TRUTH-C: Telegram now gets the compact structured answer — the full report markdown stays in the
+// XLSX and the stored bundle, so raw markdown must NOT be delivered verbatim anymore.
+A.ok('delivery is the compact structured answer (markdown stays in XLSX/bundle)',
+  !/ФАКТ: 2 конкурента/.test(okBody.text) && okBody.text.length <= 1500 && /📊/.test(okBody.text));
 A.ok('delivery includes a proactive continuation', /Просто напишите, что сделать дальше/.test(okBody.text));
 A.ok('proactive_text exposed on the node output', /Просто напишите/.test(okOut.proactive_text));
 const finalBody = JSON.parse(okOut.telegram_send_bodies)[JSON.parse(okOut.telegram_send_bodies).length - 1];

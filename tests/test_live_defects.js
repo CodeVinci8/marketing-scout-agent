@@ -54,7 +54,9 @@ A.section('DEFECT-5 — WF20 auto-delivers the XLSX after the report (only when 
 const w20 = wf('20_agent_orchestrator.json');
 A.ok('WF20 has a Build Report XLSX node', !!node('20_agent_orchestrator.json', 'Build Report XLSX'));
 A.ok('WF20 has a Send Report XLSX (sendDocument)', /sendDocument/.test(JSON.stringify(node('20_agent_orchestrator.json', 'Send Report XLSX').parameters)));
-A.ok('bundle -> XLSX -> send wired', hasEdge(w20, 'Append report_bundles', 'Build Report XLSX') && hasEdge(w20, 'Build Report XLSX', 'Send Report XLSX'));
+// REPORT-TRUTH-C: the send now sits behind the «XLSX Ready?» gate so a skipped workbook still reaches the
+// completion edit.
+A.ok('bundle -> XLSX -> gate -> send wired', hasEdge(w20, 'Append report_bundles', 'Build Report XLSX') && hasEdge(w20, 'Build Report XLSX', 'XLSX Ready?') && hasEdge(w20, 'XLSX Ready?', 'Send Report XLSX'));
 A.ok('XLSX build gates on run content (no empty workbook)', /hasContent/.test(node('20_agent_orchestrator.json', 'Build Report XLSX').parameters.jsCode));
 
 A.section('DEFECT-1 — WF20 marks the plan terminal after delivery');

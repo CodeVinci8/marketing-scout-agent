@@ -81,7 +81,9 @@ const okAdapter = { agent_request_id: 'req_1', source_run_id: 'firecrawl_X', ite
 const okReport = { report_id: 'rep_1', report_markdown: 'ФАКТ: 2 конкурента в Москве, ставка от 0,1%/день.', competitors: [{ company_name: 'Конкурент А' }, { company_name: 'Конкурент Б' }], rows_after_filters: 2, records_unique: 2, records_eligible: 2, records_analyzed: 2, llm_primary_calls: 0, llm_repair_calls: 0 };
 const out = deliver(req, okAdapter, okReport);
 const body = JSON.parse(out.telegram_send_body);
-A.ok('report facts are delivered verbatim (immutable)', /ФАКТ: 2 конкурента в Москве/.test(body.text));
+// REPORT-TRUTH-C: Telegram gets the compact structured answer; the full markdown stays in XLSX/bundle.
+A.ok('delivery is compact and structured (markdown not shipped verbatim)',
+  !/ФАКТ: 2 конкурента в Москве/.test(body.text) && body.text.length <= 1500 && /📊/.test(body.text));
 A.ok('outbox row is built before send', /^dlv_req_1_rep_1_/.test(out.delivery.delivery_id));
 
 A.section('E2E step 9 — proactive assistance rides the real delivery path (works without buttons)');

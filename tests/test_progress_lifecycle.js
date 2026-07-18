@@ -87,7 +87,11 @@ A.section('WF20 §9 — the ONE progress message is edited on the real main line
   A.ok('analysis edit precedes WF08', hasEdge(WF20, 'Run WF16 Quality Gate', 'Progress: Analysis') && hasEdge(WF20, 'Edit Progress (Analysis)', 'Run WF08 Analyzer'));
   A.ok('comparison edit precedes WF10', hasEdge(WF20, 'Run WF08 Analyzer', 'Progress: Comparison') && hasEdge(WF20, 'Edit Progress (Comparison)', 'Run WF10 Aggregator'));
   A.ok('report edit precedes WF12', hasEdge(WF20, 'Run WF10 Aggregator', 'Progress: Report') && hasEdge(WF20, 'Edit Progress (Report)', 'Run WF12 Report'));
-  A.ok('terminal ✅ edit follows the report delivery', hasEdge(WF20, 'Send Telegram Report', 'Progress: Done') && hasEdge(WF20, 'Progress: Done', 'Edit Progress (Done)'));
+  // REPORT-TRUTH-C: the terminal ✅ edit follows the LAST delivery step — the XLSX branch (send or explicit
+  // skip), never the text send, so «Анализ завершён» can no longer race ahead of the workbook.
+  A.ok('terminal ✅ edit follows the XLSX delivery (send or skip)',
+    hasEdge(WF20, 'Send Report XLSX', 'Progress: Done') && hasEdge(WF20, 'XLSX Ready?', 'Progress: Done')
+    && !hasEdge(WF20, 'Send Telegram Report', 'Progress: Done') && hasEdge(WF20, 'Progress: Done', 'Edit Progress (Done)'));
   for (const nm of ['Edit Progress (Quality Gate)', 'Edit Progress (Analysis)', 'Edit Progress (Comparison)', 'Edit Progress (Report)', 'Edit Progress (Done)']) {
     const nd = WF20.nodes.find(n => n.name === nm);
     A.eq(nm + ' uses editMessageText', nd.parameters.url.indexOf('editMessageText') >= 0, true);
