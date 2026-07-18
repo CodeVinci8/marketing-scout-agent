@@ -47,7 +47,21 @@ function arBuildEvidenceIndex(analyses) {
     (a && a.evidence_map ? a.evidence_map : []).forEach(function (e) {
       var url = arStr(e && e.url);
       if (!url) return;
-      if (!byUrl[url]) { list.push({ n: list.length + 1, url: url, type: arStr(e.type), source_id: arStr((a.source || {}).source_id) }); byUrl[url] = list.length; }
+      if (!byUrl[url]) {
+        // REPORT-TRUTH-D: the visible evidence entry carries the captured contract (bounded quote, kind of
+        // observation, when it was collected, source quality) — a bare URL cannot honestly support many claims.
+        list.push({ n: list.length + 1, url: url, type: arStr(e.type), source_id: arStr((a.source || {}).source_id),
+          excerpt: arTrim(e.excerpt, 300), fact_type: arStr(e.fact_type),
+          collected_at: arStr(e.collected_at), quality: arStr(e.quality_status) });
+        byUrl[url] = list.length;
+      } else {
+        // Same URL seen again: backfill fields the first sighting lacked (never overwrite captured data).
+        var ex = list[byUrl[url] - 1];
+        if (!ex.excerpt && arStr(e.excerpt)) ex.excerpt = arTrim(e.excerpt, 300);
+        if (!ex.fact_type && arStr(e.fact_type)) ex.fact_type = arStr(e.fact_type);
+        if (!ex.collected_at && arStr(e.collected_at)) ex.collected_at = arStr(e.collected_at);
+        if (!ex.quality && arStr(e.quality_status)) ex.quality = arStr(e.quality_status);
+      }
       local[arStr(e.id)] = byUrl[url];
     });
     a.__local = local; // ev_N -> visible number, for this analysis only
@@ -216,7 +230,9 @@ function appendAnalysisToReportRu(reportMarkdown, rendered) {
 function analysisXlsxData(analyses, rendered) {
   var r = rendered || renderAnalysisSectionsRu(analyses, {}, {});
   var s = r.sections || {};
-  var mk = function (m) { return arStr(m).replace(/[\[\]]/g, ' ').trim(); };
+  // REPORT-TRUTH-D: keep the bracketed [1] [2] form — a bare «1» in a «Доказательства» column reads as a count,
+  // not as a reference into the «Доказательства» sheet.
+  var mk = function (m) { return arStr(m).replace(/\]\[/g, '] [').trim(); };
   var inferences = (s.inferences || []).map(function (i) {
     return { source: i.source_id, dimension: arDimensionRu(i.dimension), text: i.text, evidence: mk(i.markers) };
   });
@@ -230,7 +246,9 @@ function analysisXlsxData(analyses, rendered) {
     return { source: i.source_id, kind: arDimensionRu(i.dimension), text: i.text, evidence: mk(i.markers) };
   });
   var evidence = (r.evidence_list || []).map(function (e) {
-    return { ref: '[' + e.n + ']', source: e.source_id, url: e.url, type: e.type };
+    return { ref: '[' + e.n + ']', source: e.source_id, url: e.url, type: e.type,
+      excerpt: arStr(e.excerpt), fact_type: arStr(e.fact_type),
+      collected_at: arStr(e.collected_at), quality: arStr(e.quality) };
   });
   // REPORT-TRUTH-D: honest limitations belong on the user-facing Summary sheet.
   var unknowns = ((r.sections || {}).unknowns || []).slice(0, 5);

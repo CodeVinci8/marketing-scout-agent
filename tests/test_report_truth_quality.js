@@ -315,7 +315,8 @@ A.section('REPORT-TRUTH-D — the workbook tells the truth about THIS request');
   A.ok('evidence-less recommendation marked as hypothesis',
     recs.rows.filter(r => !String(r.linked_finding_ids).trim()).every(r => String(r.rationale).indexOf('гипотеза') >= 0));
   const ev = sh('Доказательства');
-  has('AI evidence row names its role', ev.rows[0].finding, 'цитируемый источник');
+  has('AI evidence row names its observation kind', ev.rows[0].finding, 'наблюдение из источника');
+  has('a quote we did not capture is an EXPLICIT limitation', ev.rows[0].excerpt, 'цитата не сохранена');
   const tech = sh('Технические данные').rows[0];
   A.eq('tech: component total', tech.cost_total, '$0.1301');
   A.eq('tech: tokens in', tech.ai_tokens_in, 2392);
@@ -331,6 +332,76 @@ A.section('REPORT-TRUTH-D — the workbook tells the truth about THIS request');
   has('bundle injects actual component costs', sb, "'actual_summary_ai_usd'");
   const fin = node(JSON.parse(fs.readFileSync(path.join(WFD, '28_claude_analyst.json'), 'utf8')), 'Finalize Analysis').parameters.jsCode;
   has('WF28 typed return carries tokens/latency', fin, 'tokens_in:((result.usage||{}).input_tokens)');
+
+  // --- D2: the gaps the LIVE exec-1058 workbook still showed -----------------------------------------------------
+  A.section('REPORT-TRUTH-D2 — live exec 1058: consistency, canonical states, claim scope in XLSX');
+  // Summary «Ключевые рекомендации» falls back to the SAME canonical rows the Рекомендации sheet renders.
+  const sumRow2 = sh('Сводка').rows[0];
+  has('Summary recommendations use the canonical rec rows', sumRow2.recs, 'Добавить калькулятор');
+  // Конкуренты quality: populated from the run's source-quality verdict when the row lacks its own.
+  A.eq('competitor quality resolved from source_quality', comp.rows[0].quality, 'healthy');
+  A.ok('quality column present when quality is known', comp.columns.some(c => c.key === 'quality'));
+  // Tech sheet canonical states: measured costs are never 'unknown'; data mode matches the user-facing label.
+  A.eq('tech: collection cost measured at zero => measured_zero', tech.source_cost, 'measured_zero');
+  A.eq('tech: LLM cost measured nonzero => measured', tech.llm_cost, 'measured');
+  A.eq('tech: data mode canonical and consistent with «Режим данных»', tech.data_mode, 'reuse');
+
+  // When quality is genuinely unknown for EVERY competitor, the column disappears instead of standing empty.
+  const B2 = JSON.parse(JSON.stringify(B));
+  B2.source_quality = []; B2.summary.reused_sources = [];
+  const sheets2 = RPKG.buildSheets(B2);
+  const comp2 = sheets2.find(s => s.name === 'Конкуренты');
+  A.ok('unknown quality => column dropped', !comp2.columns.some(c => c.key === 'quality'));
+  A.eq('no reuse => data mode collect', sheets2.find(s => s.name === 'Технические данные').rows[0].data_mode, 'collect');
+  has('…and the user label agrees', sheets2.find(s => s.name === 'Сводка').rows[0].data_mode, 'свежий сбор');
+
+  // Evidence contract travels: enriched evidence_map -> visible quote/quality/collected_at; markers stay bracketed.
+  const AR = require('../n8n/lib/analysis_report_ru.js');
+  const analyses = [{
+    analysis_id: 'an_1', enriched: true, quality_status: 'llm_primary', source: { source_id: 'lioncredit.ru' },
+    evidence_map: [{ id: 'ev_1', url: 'https://lioncredit.ru', type: 'website', excerpt: 'от 4,99% годовых',
+      fact_type: 'offer', collected_at: '2026-07-18T11:24:00Z', quality_status: 'accepted' }],
+    analysis: { items: [
+      { kind: 'inference', dimension: 'advertising_angles', text_ru: 'Ценовой якорь — основной рекламный ход', evidence_ids: ['ev_1'] }
+    ], recommended_actions: [], unknowns_ru: [] }
+  }];
+  const rend = AR.renderAnalysisSectionsRu(analyses, {}, {});
+  const xd = AR.analysisXlsxData(analyses, rend);
+  A.eq('evidence row keeps the bounded quote', xd.evidence[0].excerpt, 'от 4,99% годовых');
+  A.eq('evidence row keeps collection time', xd.evidence[0].collected_at, '2026-07-18T11:24:00Z');
+  A.eq('evidence row keeps source quality', xd.evidence[0].quality, 'accepted');
+  A.eq('evidence row keeps the observation kind', xd.evidence[0].fact_type, 'offer');
+  A.eq('markers stay bracketed references, not bare counts', xd.inferences[0].evidence, '[1]');
+  // The workbook renders the captured quote (not the limitation marker) when it exists.
+  const B3 = JSON.parse(JSON.stringify(B));
+  B3.analysis.evidence = xd.evidence;
+  const ev3 = RPKG.buildSheets(B3).find(s => s.name === 'Доказательства');
+  A.eq('captured quote reaches the sheet', ev3.rows[0].excerpt, 'от 4,99% годовых');
+  has('observation kind is named in Russian', ev3.rows[0].finding, 'зафиксированное предложение');
+  A.eq('quality reaches the sheet', ev3.rows[0].source_quality, 'accepted');
+
+  // Claim validator now rejects the exact ungrounded patterns the 1058 workbook still carried.
+  const ctxD = CV.cvBuildCtx({ analyses: [{ evidence_map: [{ id: 'ev_1', url: 'https://lioncredit.ru', type: 'website' }] }], now: NOW });
+  const liveClaims = [
+    ['score => market effectiveness', 'Высокая оценка силы объявления (75/100) свидетельствует об эффективности данного подхода на рынке.', 'не подтверждается'],
+    ['score proof, reversed order', 'Конкурентная сила подтверждается агрессивным ценовым якорем и высоким рейтингом объявления.', 'не подтверждается'],
+    ['rate => CTR/lead flow', 'Низкая ставка обеспечивает высокую кликабельность и поток входящих обращений.', 'не измерялись'],
+    ['unfair competition', 'Публикация заниженной ставки формирует нечестную конкуренцию для брокеров.', 'Гипотеза'],
+    ['one offer => audience pain', 'Основная боль целевой аудитории — высокая стоимость заимствований.', 'аудиторные сигналы не собирались'],
+    ['«одна из наиболее … в сегменте»', 'Ставка 4,99% — одна из наиболее привлекательных в сегменте кредитного брокериджа Москвы и МО.', 'Гипотеза']
+  ];
+  liveClaims.forEach(([label, text, marker]) => {
+    const v = CV.cvValidateItem({ kind: 'inference', text_ru: text, dimension: 'strengths', evidence_ids: ['ev_1'] }, ctxD);
+    A.eq('demoted: ' + label, v.action, 'demote');
+    has('bounded: ' + label, v.item.text_ru, marker);
+    const again = CV.cvValidateItem({ kind: 'inference', text_ru: v.item.text_ru, dimension: 'strengths', evidence_ids: ['ev_1'] }, ctxD);
+    A.eq('idempotent: ' + label, again.item.text_ru, v.item.text_ru);
+  });
+
+  // Wiring: WF28 ships the full evidence contract; the bundle records terminal state + real budget ceilings.
+  has('WF28 evidence map carries the bounded excerpt', fin, "excerpt:String(e.excerpt||'').slice(0,300)");
+  has('bundle final state is terminal after delivery', sb, "b.summary.final_state=(__fs==='no_data')?'no_data'");
+  has('bundle records enforced budget ceilings', sb, 'b.budgets.source_budget_usd==null');
 }
 
 A.report('report-truth-quality');

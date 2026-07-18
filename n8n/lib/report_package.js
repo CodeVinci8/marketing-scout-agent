@@ -66,13 +66,29 @@ function rpDedupOffers(offers) {
   });
   return out;
 }
-// Execution data mode for the Summary: reuse vs fresh collection, from the reused_sources audit.
-function rpDataModeRu(sum, b) {
+// Execution data mode: reuse vs fresh collection, from the reused_sources audit. ONE derivation feeds both the
+// user-facing Russian label and the canonical technical value — the two sheets can never disagree (§D).
+function rpDataMode(sum, b) {
   const reused = Array.isArray(sum.reused_sources) ? sum.reused_sources.length : 0;
-  if (!reused) return 'свежий сбор';
+  if (!reused) return 'collect';
   const total = (b.source_quality || []).length || (b.competitors || []).length || reused;
-  return reused >= total ? 'сохранённые данные (без нового сбора)' : 'смешанный (часть из сохранённых данных)';
+  return reused >= total ? 'reuse' : 'mixed';
 }
+function rpDataModeRu(sum, b) {
+  const m = rpDataMode(sum, b);
+  return m === 'reuse' ? 'сохранённые данные (без нового сбора)'
+    : m === 'mixed' ? 'смешанный (часть из сохранённых данных)' : 'свежий сбор';
+}
+// Canonical cost status from a measured component: never 'unknown' when the number is known.
+function rpCostStatus(v, legacy) {
+  const n = Number(v);
+  if (v != null && isFinite(n)) return n > 0 ? 'measured' : 'measured_zero';
+  return str(legacy) || 'unknown';
+}
+function rpShort(s, n) { s = str(s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+// Observation label for an evidence row — what KIND of captured fact this quote is.
+const RP_FACT_RU = { positioning: 'позиционирование со страницы источника', offer: 'зафиксированное предложение', general: 'наблюдение из источника' };
+function rpFactRu(v) { return RP_FACT_RU[low(v)] || RP_FACT_RU.general; }
 
 function buildSheets(b) {
   const sum = b.summary || {};
@@ -85,6 +101,36 @@ function buildSheets(b) {
   const filterStr = b.active_filters ? join(b.active_filters) : '';
   const offers = rpDedupOffers(b.offers);
   const limitations = join(an.unknowns);
+
+  // ONE canonical recommendation list — the Рекомендации sheet AND the Summary «Ключевые рекомендации» cell both
+  // render from it, so the two views can never disagree (§D: detailed rows with an empty Summary field is a lie).
+  const recRows = (b.recommendations || []).map(r => Object.assign({}, r, { linked_finding_ids: join(r.linked_finding_ids) }))
+    .concat((an.recommendations || []).map(r => ({
+      recommendation: str(r.text), priority: str(r.priority),
+      rationale: str(r.source) ? ('по данным источника: ' + str(r.source)) : '',
+      linked_finding_ids: str(r.evidence), next_action: ''
+    })))
+    .filter(r => str(r.recommendation).trim())
+    .map(r => (str(r.linked_finding_ids).trim() ? r
+      : Object.assign({}, r, { rationale: (str(r.rationale) ? str(r.rationale) + ' — ' : '') + 'гипотеза (без прямых доказательств в этом отчёте)' })));
+  const summaryRecs = [].concat(sum.key_recommendations || []).map(str).filter(s => s.trim());
+  const recsCell = summaryRecs.length ? join(summaryRecs)
+    : recRows.slice(0, 3).map(r => rpShort(r.recommendation, 120)).join('; ');
+
+  // Конкуренты quality: the competitor's own status, else the run's source-quality verdict for that source.
+  // If quality is genuinely unknown for every row the COLUMN is dropped — an empty column pretends to knowledge.
+  const sqByRun = {}, sqByHost = {};
+  (b.source_quality || []).forEach(q => {
+    if (str(q.source_run_id)) sqByRun[str(q.source_run_id)] = str(q.status);
+    const h = low(rpHost(q.source)) || low(q.source);
+    if (h && !sqByHost[h]) sqByHost[h] = str(q.status);
+  });
+  const compRows = (b.competitors || []).map(c => Object.assign({}, c, {
+    domain: str(c.domain) || rpHost(c.source_url),
+    source_type: rpSourceType(c.source_url),
+    quality: str(c.quality) || sqByRun[str(c.source_run_id)] || sqByHost[low(rpHost(c.source_url))] || ''
+  }));
+  const anyCompQuality = compRows.some(r => str(r.quality).trim());
 
   return [
     {
@@ -120,7 +166,7 @@ function buildSheets(b) {
         sources: sum.sources_checked != null ? sum.sources_checked : (b.source_quality || []).length,
         quality: sum.quality_status, scope: scopeStr, filters: filterStr,
         findings: join(sum.key_findings),
-        recs: join([].concat(sum.key_recommendations || []).map(str).filter(s => s.trim())),
+        recs: recsCell,
         limitations: limitations,
         calls: sum.external_calls_actual != null ? sum.external_calls_actual : sum.external_calls,
         cost_collection: rpMoney(sum.actual_collection_usd), cost_summary_ai: rpMoney(sum.actual_summary_ai_usd),
@@ -143,11 +189,8 @@ function buildSheets(b) {
         { header: 'Качество', key: 'quality', width: 12 },
         { header: 'Последняя проверка', key: 'last_checked', type: 'datetime', width: 20 },
         { header: 'Ссылка на источник', key: 'source_url', type: 'url', width: 38 }
-      ],
-      rows: (b.competitors || []).map(c => Object.assign({}, c, {
-        domain: str(c.domain) || rpHost(c.source_url),
-        source_type: rpSourceType(c.source_url)
-      })),
+      ].filter(c => c.key !== 'quality' || anyCompQuality),
+      rows: compRows,
       highlight: (r, c) => c.key === 'quality' ? qualityHighlight(r.quality) : null
     },
     {
@@ -187,14 +230,8 @@ function buildSheets(b) {
       ],
       // deterministic angles first (authoritative), then the analyst's evidence-cited proposals.
       // REPORT-TRUTH-D: no empty placeholder rows; a recommendation without evidence is explicitly a hypothesis.
-      rows: (b.recommendations || []).map(r => Object.assign({}, r, { linked_finding_ids: join(r.linked_finding_ids) }))
-        .concat((an.recommendations || []).map(r => ({
-          recommendation: str(r.text), priority: str(r.priority), rationale: str(r.source),
-          linked_finding_ids: str(r.evidence), next_action: ''
-        })))
-        .filter(r => str(r.recommendation).trim())
-        .map(r => (str(r.linked_finding_ids).trim() ? r
-          : Object.assign({}, r, { rationale: (str(r.rationale) ? str(r.rationale) + ' — ' : '') + 'гипотеза (без прямых доказательств в этом отчёте)' })))
+      // Same canonical recRows the Summary cell renders from.
+      rows: recRows
     },
     // Stage F: recurring pains/objections — the "what hurts customers" view, evidence-cited.
     {
@@ -220,11 +257,16 @@ function buildSheets(b) {
       ],
       // The deterministic bundle ships evidence:[]; Stage F fills this sheet with the exact sources every
       // analytical claim cites, so [1]/[2] markers in the report resolve to a clickable URL here.
-      // Honest blanks: a field we did not capture stays empty — it is never fabricated.
+      // REPORT-TRUTH-D: each row carries the captured contract — bounded quote, observation kind, collection
+      // time, source quality. A quote we did NOT capture is an explicit stated limitation, never a silent blank
+      // that makes the evidence look complete — and never a fabricated excerpt.
       rows: (b.evidence || []).concat((an.evidence || []).map(e => ({
-        ref: str(e.ref), finding: str(e.type) ? ('цитируемый источник анализа (' + str(e.type) + ')') : '',
-        competitor: str(e.source), excerpt: '', url: str(e.url),
-        source_quality: '', collected_at: ''
+        ref: str(e.ref),
+        finding: rpFactRu(e.fact_type) + (str(e.type) ? ' (' + str(e.type) + ')' : ''),
+        competitor: str(e.source),
+        excerpt: str(e.excerpt) || 'цитата не сохранена при сборе — ограничение данных',
+        url: str(e.url),
+        source_quality: str(e.quality), collected_at: str(e.collected_at)
       }))),
       highlight: (r, c) => c.key === 'source_quality' ? qualityHighlight(r.source_quality) : null
     },
@@ -305,8 +347,13 @@ function buildSheets(b) {
         llm_primary: meta.llm_primary != null ? meta.llm_primary : sum.llm_primary_calls,
         source_budget: budgets.source_budget_usd != null ? budgets.source_budget_usd : 'unknown',
         llm_budget: budgets.llm_budget_usd != null ? budgets.llm_budget_usd : 'unknown',
-        source_cost: sum.source_cost_status || 'unknown', llm_cost: sum.llm_cost_status || 'unknown',
-        data_mode: b.data_mode || meta.data_mode || 'live', generated_at: meta.generated_at || b.created_at,
+        // REPORT-TRUTH-D canonical states: a measured $0 is 'measured_zero', never 'unknown'; Data mode is the
+        // SAME derivation the user-facing «Режим данных» uses (reuse/mixed/collect) — the sheets cannot disagree.
+        source_cost: rpCostStatus(sum.actual_collection_usd, sum.source_cost_status),
+        llm_cost: rpCostStatus(sum.actual_summary_ai_usd != null || sum.actual_deep_analysis_usd != null
+          ? (Number(sum.actual_summary_ai_usd) || 0) + (Number(sum.actual_deep_analysis_usd) || 0) + (Number(sum.actual_repair_usd) || 0)
+          : null, sum.llm_cost_status),
+        data_mode: rpDataMode(sum, b), generated_at: meta.generated_at || b.created_at,
         analysis_mode: str(b.analysis_mode) || 'source_analysis',
         cost_collection: rpMoney(sum.actual_collection_usd), cost_summary_ai: rpMoney(sum.actual_summary_ai_usd),
         cost_deep_ai: rpMoney(sum.actual_deep_analysis_usd), cost_repair: rpMoney(sum.actual_repair_usd),

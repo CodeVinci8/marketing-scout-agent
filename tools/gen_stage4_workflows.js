@@ -1249,7 +1249,14 @@ if(Array.isArray(b.recommendations))b.recommendations=b.recommendations.filter(f
 ['actual_cost_usd','actual_collection_usd','actual_summary_ai_usd','actual_deep_analysis_usd','actual_repair_usd'].forEach(function(k){if(__sum[k]!==undefined)b.summary[k]=__sum[k];});
 b.summary.external_calls_actual=Number(__sum.external_calls_used!==undefined?__sum.external_calls_used:(b.summary.external_calls||0))||0;
 b.summary.reused_sources=Array.isArray(__sum.reused_sources)?__sum.reused_sources:[];
-b.summary.final_state=String(__sum.final_state||'');
+// REPORT-TRUTH-D: this node runs AFTER Send Telegram Report succeeded, so the bundle's final state is the
+// TERMINAL delivery state — 'reporting' in a delivered workbook was a lie. Same mapping Mark Plan Complete uses.
+var __fs=String(__sum.final_state||'');
+b.summary.final_state=(__fs==='no_data')?'no_data':((__fs==='failed'||__fs==='error')?'failed':(__fs==='partial'?'partial':'delivered'));
+// Budget ceilings are config facts this run enforced — 'unknown' in the tech sheet was false.
+b.budgets=b.budgets||{};
+if(b.budgets.source_budget_usd==null&&s.cfg&&s.cfg.source_budget_usd!=null)b.budgets.source_budget_usd=Number(s.cfg.source_budget_usd);
+if(b.budgets.llm_budget_usd==null&&s.cfg&&s.cfg.llm_budget_usd!=null)b.budgets.llm_budget_usd=Number(s.cfg.llm_budget_usd);
 }catch(e){}
 // Stage F §6: the bundle is the single source for BOTH the live XLSX and WF24's later export, so the analysis
 // rows live here. Grounded rows only; analysis_id/telemetry are consumed exclusively by the HIDDEN technical sheet.
@@ -2072,7 +2079,7 @@ var telRow=buildTelemetryRow(ctx,result,now);
 var a=result.analysis||{};
 // The renderer must cite SOURCES, not internal ev_N ids — so hand back the id->URL map the package assigned.
 // Deterministic: the same evidence_input always yields the same ev_N, so a reused analysis maps identically.
-var evMap=((pkgRes.package&&pkgRes.package.evidence_items)||[]).map(function(e){return {id:e.evidence_id,url:e.source_url,type:e.source_type};});
+var evMap=((pkgRes.package&&pkgRes.package.evidence_items)||[]).map(function(e){return {id:e.evidence_id,url:e.source_url,type:e.source_type,excerpt:String(e.excerpt||'').slice(0,300),fact_type:String(e.fact_type||''),collected_at:String(e.collected_at||''),quality_status:String(e.quality_status||'')};});
 // REUSE-OBS-001: forward the cache decision + reuse origin (id/created_at/model) — the summary and report bundle
 // are the audit surface; analysis_id itself stays CURRENT-request lineage. repair_cost_usd feeds COST-SPLIT-001.
 var reusedRef=(prep.mode==='reuse'&&prep.reuse_ref)?prep.reuse_ref:null;

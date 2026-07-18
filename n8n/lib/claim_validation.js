@@ -88,10 +88,11 @@ function cvGuardMarkdownRu(md) {
 
 // Cyrillic-safe boundaries: JS \b/\w never fire on Cyrillic — use explicit (^|[^а-яё]) style anchors.
 var CV_MARKET_ZONE = '(на рынке|в отрасли|среди конкурентов|в сегменте|по рынку)';
+var CV_SUPERLATIVE = '(максимальн|минимальн|лучш|самы[йех]|крупнейш|единственн|наиболее|наименее)';
 var CV_RE = {
   // superlative … market (or market … superlative) within one clause
-  market_wide: new RegExp('((максимальн|минимальн|лучш|самы[йех]|крупнейш|единственн)[а-яё]*[^.!?]{0,60}' + CV_MARKET_ZONE +
-    '|' + CV_MARKET_ZONE + '[^.!?]{0,60}(максимальн|минимальн|лучш|самы[йех]|крупнейш|единственн))', 'i'),
+  market_wide: new RegExp('(' + CV_SUPERLATIVE + '[а-яё]*[^.!?]{0,60}' + CV_MARKET_ZONE +
+    '|' + CV_MARKET_ZONE + '[^.!?]{0,60}' + CV_SUPERLATIVE + ')', 'i'),
   leader: /((^|[^а-яё])лидер[а-яё]*\s+(рынка|отрасл|сегмент)|№\s*1\s+(на рынке|в отрасли))/i,
   benchmark: /(отраслев[а-яё]+\s+(стандарт|бенчмарк|норм)|(^|[^а-яё])бенчмарк|стандарт[а-яё]*\s+(рынка|отрасли)|рыночн[а-яё]+\s+стандарт)/i,
   trend: /(быстрорастущ|стремительно\s+раст|растущ(ий|ем|его)\s+(сегмент|рынок|спрос))/i,
@@ -99,7 +100,16 @@ var CV_RE = {
   ad_strength: /(активн[а-яё]*\s+реклам|рекламн[а-яё]+\s+(активн|кампани|давлени|бюджет)|(сильн|агрессивн)[а-яё]+\s+реклам|много\s+рекламы)/i,
   absence: /((^|[^а-яё])отсутству|(^|[^а-яё])нет\s+(у|на|в)\s|не\s+(предлагает|предоставляет|указан|имеет|представлен|размещает))/i,
   demand_absence: /(спрос[а-яё]*[^.!?]{0,40}(отсутству|низк|минимал)|нет\s+спроса|отсутствие\s+спроса)/i,
-  vehicle_terms: /((изъят|конфиск|лишени|лишит)[а-яё]*[^.!?]{0,40}(авто|машин|транспорт)|(авто|машин|транспорт)[а-яё]*[^.!?]{0,40}(изъят|изымает|конфиск|заберут)|не\s+сможете\s+пользоваться|без\s+права\s+пользования)/i
+  vehicle_terms: /((изъят|конфиск|лишени|лишит)[а-яё]*[^.!?]{0,40}(авто|машин|транспорт)|(авто|машин|транспорт)[а-яё]*[^.!?]{0,40}(изъят|изымает|конфиск|заберут)|не\s+сможете\s+пользоваться|без\s+права\s+пользования)/i,
+  // REPORT-TRUTH-D (live exec 1058): a deterministic ad score is OUR model's number — it can never prove
+  // market effectiveness («оценка … свидетельствует об эффективности», «подтверждается … рейтингом»).
+  score_proof: /((оценк|рейтинг|балл)[а-яё]*[^.!?]{0,60}(свидетельствует|подтвержда|доказыва|демонстрирует\s+эффективн)|(подтвержда|доказыва)[а-яё]*[^.!?]{0,60}(оценк|рейтинг|балл))/i,
+  // Behavioral outcomes (CTR, lead flow, conversion) were never measured — a page snapshot cannot promise them.
+  performance_outcome: /((обеспечива|гарантиру|создаёт|создает|приводит\s+к|даёт|дает)[а-яё]*[^.!?]{0,50}(кликабельн|конверси|отклик|поток[^.!?]{0,25}(обращений|заявок|лидов))|высок(ая|ую)\s+кликабельност|поток\s+входящих\s+обращений)/i,
+  // «Нечестная конкуренция» is a legal/market judgement, not something one landing page can establish.
+  unfair_competition: /((нечестн|недобросовестн)[а-яё]*[^.!?]{0,30}конкуренц|конкуренц[а-яё]*[^.!?]{0,30}(нечестн|недобросовестн))/i,
+  // Asserting THE audience's actual pain from one offer, with no audience signals collected, is a hypothesis.
+  audience_pain: /(основн[а-яё]+\s+боль|бол[ьи]\s+целевой\s+аудитории|главн[а-яё]+\s+боль)/i
 };
 var CV_MARKET_CATS = ['market_wide', 'leader', 'benchmark', 'trend', 'competition'];
 
@@ -112,7 +122,7 @@ function cvClassifyClaimRu(text) {
 
 // Text that already carries honest scoping is never re-scoped (idempotency).
 function cvIsScopedRu(text) {
-  return /(гипотез|в доступном снимке|в проверенн[а-яё]+\s+страниц|данных недостаточно|требует проверки|по данным (сайта|снимка|источника))/i.test(cvStr(text));
+  return /(гипотез|в доступном снимке|в проверенн[а-яё]+\s+страниц|данных недостаточно|требует проверки|по данным (сайта|снимка|источника)|это предположение|не измерял|внутренней метрикой|судя по|по-видимому|предположительно)/i.test(cvStr(text));
 }
 
 // --- context ---------------------------------------------------------------------------------------------------
@@ -198,6 +208,27 @@ function cvValidateItem(item, ctx) {
     // Absence of a feature is only known for the pages actually inspected.
     it.text_ru = 'В проверенных страницах: ' + it.text_ru;
     reasons.push('absence_scoped');
+  }
+  // REPORT-TRUTH-D rules — each fires once (a mutation adds honest scoping, which cvIsScopedRu then sees).
+  if (cats.indexOf('score_proof') >= 0 && !cvIsScopedRu(it.text_ru)) {
+    demote = true;
+    it.text_ru = it.text_ru.replace(/[.\s]+$/, '') + ' — оценка является внутренней метрикой текста объявления, рыночная эффективность ею не подтверждается.';
+    reasons.push('score_as_market_proof');
+  }
+  if (cats.indexOf('performance_outcome') >= 0 && !cvIsScopedRu(it.text_ru)) {
+    demote = true;
+    it.text_ru = it.text_ru.replace(/[.\s]+$/, '') + ' — кликабельность и поток обращений не измерялись, это предположение.';
+    reasons.push('performance_outcome_unmeasured');
+  }
+  if (cats.indexOf('unfair_competition') >= 0 && !cvIsScopedRu(it.text_ru)) {
+    demote = true;
+    it.text_ru = 'Гипотеза: ' + it.text_ru;
+    reasons.push('unfair_competition_hypothesis');
+  }
+  if (cats.indexOf('audience_pain') >= 0 && !ctx.has_audience_signals && !cvIsScopedRu(it.text_ru)) {
+    demote = true;
+    it.text_ru = 'Гипотеза (аудиторные сигналы не собирались): ' + it.text_ru;
+    reasons.push('audience_pain_unsupported');
   }
   if (cats.indexOf('vehicle_terms') >= 0) {
     var backed = (ctx.evidence_texts || []).some(function (t) { return /(пользован|эксплуатац|изъят|остаётся|остается|хранени)/i.test(t); });
