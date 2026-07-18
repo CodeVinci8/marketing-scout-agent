@@ -39,7 +39,7 @@ function crKind(analyses, kind, max) {
     ((a.analysis.items) || []).forEach(function (it) {
       if (out.length >= max) return;
       if (crStr(it && it.kind) !== kind) return;
-      var t = crTrim(it.text_ru, 160);
+      var t = crTrim(it.text_ru, 140);
       if (t && (it.evidence_ids || []).length) out.push(t);
     });
   });
@@ -51,7 +51,7 @@ function crRecs(analyses, max) {
     if (!crUsable(a) || out.length >= max) return;
     ((a.analysis.recommended_actions) || []).forEach(function (r) {
       if (out.length >= max) return;
-      var t = crTrim(r && r.text_ru, 160);
+      var t = crTrim(r && r.text_ru, 140);
       if (t) out.push(t);
     });
   });
@@ -93,10 +93,13 @@ function crHeader(bundle, analyses, summary) {
   var assess = '';
   (analyses || []).some(function (a) {
     if (!crUsable(a)) return false;
-    assess = crTrim((a.analysis || {}).executive_summary_ru, 220);
+    assess = crTrim((a.analysis || {}).executive_summary_ru, 180);
     return !!assess;
   });
   if (!assess) assess = 'собрано записей: ' + crNum(summary && summary.records_reported, 0);
+  // The executive summary often opens with the subject name — don't print «LionCredit — LionCredit — …».
+  var lead = new RegExp('^' + subject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[—:-]+\\s*', 'i');
+  assess = assess.replace(lead, '');
   return '📊 ' + subject + ' — ' + assess;
 }
 
@@ -217,6 +220,19 @@ function crFinish(lines, profile, maxLen) {
     arr.splice(cut, 1);
     text = arr.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
+  // Cap-trimming may leave a section header (📌/🧠/💡 + optional explainer line) with no bullets — drop it.
+  var out = [];
+  var arr2 = text.split('\n');
+  for (var j = 0; j < arr2.length; j++) {
+    var ln = arr2[j];
+    if (/^[📌🧠💡]/u.test(ln.trim())) {
+      var k = j + 1;
+      while (k < arr2.length && arr2[k].trim() && !/^•/.test(arr2[k].trim()) && !/^[📌🧠💡🔍💾💰]/u.test(arr2[k].trim())) k++;
+      if (!(k < arr2.length && /^•/.test(arr2[k].trim()))) { j = k - 1; continue; }
+    }
+    out.push(ln);
+  }
+  text = out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   return { text: text, length: text.length, profile: profile };
 }
 

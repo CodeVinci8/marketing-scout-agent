@@ -32,6 +32,20 @@ var CV_FOREIGN_RE = new RegExp('[\\u3400-\\u9FFF\\u3040-\\u30FF\\uAC00-\\uD7AF\\
 var CV_MIXED_TOKEN_RE = /(?:[a-z]+[а-яё]+|[а-яё]+[a-z]+)[a-zа-яё]*/i;
 // An underscore touching a Cyrillic letter is a leaked identifier/key artifact («текстом_ю», «text_ю»).
 var CV_SNAKE_CYR_RE = /[а-яё]_|_[а-яё]/i;
+// An ASCII snake_case token inside Russian prose is a leaked INTERNAL ENUM (live exec 1034: «в категории
+// generic_lending») — unless it is a Telegram handle (@some_channel) or part of a URL/path, which are
+// legitimate user-facing identifiers.
+function cvHasLeakedEnum(s) {
+  var re = /[a-z][a-z0-9]*_[a-z0-9_]+/gi, m;
+  while ((m = re.exec(s)) !== null) {
+    var before = s.slice(0, m.index);
+    var prev = before.slice(-1);
+    if (prev === '@' || prev === '/' || prev === '.' || prev === '_' || prev === '-') continue;
+    if (/https?:\/\/[^\s]*$/i.test(before)) continue;   // inside a URL
+    return true;
+  }
+  return false;
+}
 // 3+ identical consecutive letters — truncation/generation artifact («оченььь»).
 var CV_STUTTER_RE = /([а-яёa-z])\1\1/i;
 
@@ -42,6 +56,7 @@ function cvGuardTextRu(text) {
   if (CV_FOREIGN_RE.test(s)) flags.push('foreign_script');
   if (CV_MIXED_TOKEN_RE.test(s)) flags.push('mixed_script_word');
   if (CV_SNAKE_CYR_RE.test(s)) flags.push('leaked_identifier');
+  else if (cvHasLeakedEnum(s)) flags.push('leaked_enum');
   if (CV_STUTTER_RE.test(s)) flags.push('malformed_word');
   return { text: s, flags: flags, fatal: flags.length > 0 };
 }

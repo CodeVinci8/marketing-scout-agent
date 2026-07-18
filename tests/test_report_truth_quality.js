@@ -215,6 +215,22 @@ A.section('live-1024/1018 regressions — string tool input, offer enum leak, co
   // Header names the competitor even when the bundle row has no domain (WF12 rows use `competitor`).
   const hdr = CR.crHeader({ competitors: [{ competitor: 'LionCredit', domain: '' }] }, [], { records_reported: 2 });
   has('header names the competitor', hdr, 'LionCredit');
+
+  // Live exec 1034: the model echoed our internal service enum into Russian prose — reject.
+  A.ok('AI prose with internal enum is fatal', CV.cvGuardTextRu('Компания предлагает услугу в категории generic_lending (общее кредитование)').fatal);
+  A.ok('Telegram handle with underscore is fine', !CV.cvGuardTextRu('Канал @dom_click публикует офферы').fatal);
+  A.ok('URL path with underscore is fine', !CV.cvGuardTextRu('Страница https://x.ru/loan_terms описывает условия').fatal);
+
+  // Live exec 1034: «LionCredit — LionCredit — кредитный брокер…» — assessment must not repeat the subject.
+  const h2 = CR.crHeader({ competitors: [{ competitor: 'LionCredit' }] },
+    [{ enriched: true, analysis: { executive_summary_ru: 'LionCredit — кредитный брокер с ценовым якорем.' } }], {});
+  A.eq('no duplicated subject', (h2.match(/LionCredit/g) || []).length, 1);
+
+  // Cap-trimming must not leave an orphaned section header (live: empty «💡 Рекомендации» survived).
+  const orphan = CR.crFinish(['📊 X — тест', '', '💡 Рекомендации — предложения к проверке', '', '💰 Итог $1.'], 'success', 1500);
+  A.ok('orphaned section header dropped', orphan.text.indexOf('Рекомендации') < 0 && orphan.text.indexOf('💰 Итог') >= 0);
+  const keep = CR.crFinish(['📊 X — тест', '', '💡 Рекомендации — предложения к проверке', '• Сделать А', '', '💰 Итог $1.'], 'success', 1500);
+  A.ok('populated section kept', keep.text.indexOf('Рекомендации') >= 0 && keep.text.indexOf('• Сделать А') >= 0);
 }
 
 A.section('WF20 wiring — validation + compact renderer + completion order');
