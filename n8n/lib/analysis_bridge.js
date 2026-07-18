@@ -163,9 +163,12 @@ function collectAnalyses(returns) {
   var enriched = rows.filter(function (r) { return r.enriched === true && r.analysis && Object.keys(r.analysis).length; });
   var cost = 0, repairCost = 0, reused = 0, repaired = 0, fallbacks = 0;
   var reuseLineage = [], cacheDecisions = [], model = '';
+  var tokensIn = 0, tokensOut = 0, latencyMax = 0;
   rows.forEach(function (r) {
     cost += abNum(r.cost_usd, 0);
     repairCost += abNum(r.repair_cost_usd, 0);
+    tokensIn += abNum(r.tokens_in, 0); tokensOut += abNum(r.tokens_out, 0);
+    if (abNum(r.latency_ms, 0) > latencyMax) latencyMax = abNum(r.latency_ms, 0);
     if (abStr(r.mode) === 'reuse') {
       reused++;
       // REUSE-OBS-001: a reused analysis must NAME the analysis it came from — this is the run-level audit record.
@@ -187,7 +190,9 @@ function collectAnalyses(returns) {
     analysis_cost_usd: Math.round(cost * 1e6) / 1e6,
     // COST-SPLIT-001: the repair share of the analysis cost, its own canonical component downstream.
     analysis_repair_cost_usd: Math.round(repairCost * 1e6) / 1e6,
-    reuse_lineage: reuseLineage, cache_decisions: cacheDecisions.slice(0, 10), model: model
+    reuse_lineage: reuseLineage, cache_decisions: cacheDecisions.slice(0, 10), model: model,
+    // REPORT-TRUTH-D: token/latency telemetry travels to the hidden tech sheet.
+    tokens_in: tokensIn, tokens_out: tokensOut, latency_ms: latencyMax
   };
 }
 

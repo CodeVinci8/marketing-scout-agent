@@ -31,6 +31,49 @@ function qualityHighlight(v) {
   return null;
 }
 
+// REPORT-TRUTH-D helpers ----------------------------------------------------------------------------------------
+const RP_MODE_RU = {
+  source_analysis: 'анализ текущего состояния источника', change_report: 'отчёт об изменениях',
+  comparison: 'сравнение источников', synthesis: 'сводный анализ', candidate_enrichment: 'оценка кандидатов',
+  public_lead_interpretation: 'интерпретация публичных сигналов', opportunity_radar: 'поиск возможностей',
+  monitoring_insight: 'мониторинговое уведомление'
+};
+function rpModeRu(v) { return RP_MODE_RU[low(v)] || RP_MODE_RU.source_analysis; }
+function rpHost(u) { const m = str(u).match(/^https?:\/\/([^\/?#]+)/i); return m ? m[1].replace(/^www\./i, '') : ''; }
+function rpSourceType(u) {
+  const h = low(rpHost(u));
+  if (/(^|\.)t\.me$|telegram/.test(h)) return 'telegram';
+  if (/(^|\.)vk\.com$/.test(h)) return 'vk';
+  if (/avito\.ru$/.test(h)) return 'avito';
+  return h ? 'website' : '';
+}
+function rpMoney(v) { const n = Number(v); return isFinite(n) ? ('$' + (Math.round(n * 10000) / 10000)) : ''; }
+// Offer text is machine-built upstream — internal enums and boilerplate never reach a user sheet.
+function rpCleanOffer(text) {
+  return str(text)
+    .replace(/^Предложение конкурента\s*\([^)]*\)[,.]?\s*/i, '')
+    .replace(/услуга:\s*[a-z0-9_]+\.?\s*/gi, '')
+    .replace(/^условия:\s*/i, '').trim();
+}
+function rpNorm(s) { return low(s).replace(/[^а-яёa-z0-9%]+/gi, ' ').replace(/\s+/g, ' ').trim(); }
+function rpDedupOffers(offers) {
+  const seen = {}; const out = [];
+  (offers || []).forEach(o => {
+    const clean = Object.assign({}, o, { offer: rpCleanOffer(o && o.offer) });
+    const key = rpNorm(str(clean.competitor) + '|' + str(clean.offer) + '|' + str(clean.price_rate));
+    if (seen[key]) return; seen[key] = true;
+    out.push(clean);
+  });
+  return out;
+}
+// Execution data mode for the Summary: reuse vs fresh collection, from the reused_sources audit.
+function rpDataModeRu(sum, b) {
+  const reused = Array.isArray(sum.reused_sources) ? sum.reused_sources.length : 0;
+  if (!reused) return 'свежий сбор';
+  const total = (b.source_quality || []).length || (b.competitors || []).length || reused;
+  return reused >= total ? 'сохранённые данные (без нового сбора)' : 'смешанный (часть из сохранённых данных)';
+}
+
 function buildSheets(b) {
   const sum = b.summary || {};
   const meta = b.run_metadata || {};
@@ -40,33 +83,49 @@ function buildSheets(b) {
   const an = b.analysis || {};
   const scopeStr = [b.niche, b.region, (b.time_window_days ? b.time_window_days + 'd' : '')].filter(Boolean).join(' · ');
   const filterStr = b.active_filters ? join(b.active_filters) : '';
+  const offers = rpDedupOffers(b.offers);
+  const limitations = join(an.unknowns);
 
   return [
     {
       name: 'Сводка', freeze_header: true, autofilter: false,
       columns: [
         { header: 'Запрос', key: 'request', width: 22 },
+        { header: 'Тип отчёта', key: 'mode', width: 26 },
+        { header: 'Режим данных', key: 'data_mode', width: 26 },
         { header: 'Ниша', key: 'niche', width: 18 },
-        { header: 'Регион', key: 'region', width: 16 },
+        { header: 'Регион запроса', key: 'region', width: 16 },
         { header: 'Дата отчёта', key: 'date', type: 'datetime', width: 20 },
         { header: 'Найдено конкурентов', key: 'competitors', type: 'integer', width: 18 },
-        { header: 'Проверено источников', key: 'sources', type: 'integer', width: 18 },
+        { header: 'Проверено источников (в этом запросе)', key: 'sources', type: 'integer', width: 20 },
         { header: 'Качество данных', key: 'quality', width: 16 },
         { header: 'Охват', key: 'scope', width: 26 },
         { header: 'Активные фильтры', key: 'filters', width: 24 },
         { header: 'Ключевые находки', key: 'findings', width: 50 },
         { header: 'Ключевые рекомендации', key: 'recs', width: 50 },
+        { header: 'Ограничения данных', key: 'limitations', width: 50 },
         { header: 'Внешних запросов', key: 'calls', type: 'integer', width: 16 },
-        { header: 'Стоимость сбора', key: 'source_cost', width: 16 },
-        { header: 'Стоимость AI', key: 'llm_cost', width: 14 }
+        // REPORT-TRUTH-D: actual component costs, not status enums.
+        { header: 'Стоимость: сбор', key: 'cost_collection', width: 14 },
+        { header: 'Стоимость: AI-сводка', key: 'cost_summary_ai', width: 16 },
+        { header: 'Стоимость: AI-анализ', key: 'cost_deep_ai', width: 16 },
+        { header: 'Стоимость: восстановление', key: 'cost_repair', width: 18 },
+        { header: 'Стоимость: итого', key: 'cost_total', width: 14 }
       ],
       rows: [{
-        request: b.agent_request_id, niche: b.niche, region: b.region, date: b.created_at,
+        request: b.agent_request_id, mode: rpModeRu(b.analysis_mode), data_mode: rpDataModeRu(sum, b),
+        niche: b.niche, region: b.region, date: b.created_at,
         competitors: sum.competitors_found != null ? sum.competitors_found : (b.competitors || []).length,
+        // Scope truth: this counts the sources of THIS request, never the global inventory.
         sources: sum.sources_checked != null ? sum.sources_checked : (b.source_quality || []).length,
         quality: sum.quality_status, scope: scopeStr, filters: filterStr,
-        findings: join(sum.key_findings), recs: join(sum.key_recommendations),
-        calls: sum.external_calls, source_cost: sum.source_cost_status || 'unknown', llm_cost: sum.llm_cost_status || 'unknown'
+        findings: join(sum.key_findings),
+        recs: join([].concat(sum.key_recommendations || []).map(str).filter(s => s.trim())),
+        limitations: limitations,
+        calls: sum.external_calls_actual != null ? sum.external_calls_actual : sum.external_calls,
+        cost_collection: rpMoney(sum.actual_collection_usd), cost_summary_ai: rpMoney(sum.actual_summary_ai_usd),
+        cost_deep_ai: rpMoney(sum.actual_deep_analysis_usd), cost_repair: rpMoney(sum.actual_repair_usd),
+        cost_total: rpMoney(sum.actual_cost_usd)
       }],
       highlight: (r, c) => c.key === 'quality' ? qualityHighlight(r.quality) : null
     },
@@ -75,14 +134,20 @@ function buildSheets(b) {
       columns: [
         { header: 'Конкурент', key: 'competitor', width: 26 },
         { header: 'Домен', key: 'domain', width: 24 },
-        { header: 'Регион', key: 'region', width: 16 },
+        { header: 'Тип источника', key: 'source_type', width: 14 },
+        // The region shown is the REQUEST scope — an evidenced source region is a separate future field, and the
+        // two must never be conflated (§7).
+        { header: 'Регион запроса', key: 'region', width: 16 },
         { header: 'Позиционирование', key: 'positioning', width: 40 },
         { header: 'Оценка', key: 'score', type: 'number', width: 10 },
         { header: 'Качество', key: 'quality', width: 12 },
         { header: 'Последняя проверка', key: 'last_checked', type: 'datetime', width: 20 },
         { header: 'Ссылка на источник', key: 'source_url', type: 'url', width: 38 }
       ],
-      rows: b.competitors || [],
+      rows: (b.competitors || []).map(c => Object.assign({}, c, {
+        domain: str(c.domain) || rpHost(c.source_url),
+        source_type: rpSourceType(c.source_url)
+      })),
       highlight: (r, c) => c.key === 'quality' ? qualityHighlight(r.quality) : null
     },
     {
@@ -98,7 +163,7 @@ function buildSheets(b) {
         { header: 'Собрано', key: 'collected_at', type: 'datetime', width: 20 },
         { header: 'Ссылка на доказательство', key: 'evidence_url', type: 'url', width: 38 }
       ],
-      rows: b.offers || []
+      rows: offers
     },
     // Stage F: ONLY kind=inference — interpretation, kept physically apart from facts so it can never read as one.
     {
@@ -121,11 +186,15 @@ function buildSheets(b) {
         { header: 'Следующий шаг', key: 'next_action', width: 40 }
       ],
       // deterministic angles first (authoritative), then the analyst's evidence-cited proposals.
+      // REPORT-TRUTH-D: no empty placeholder rows; a recommendation without evidence is explicitly a hypothesis.
       rows: (b.recommendations || []).map(r => Object.assign({}, r, { linked_finding_ids: join(r.linked_finding_ids) }))
         .concat((an.recommendations || []).map(r => ({
           recommendation: str(r.text), priority: str(r.priority), rationale: str(r.source),
           linked_finding_ids: str(r.evidence), next_action: ''
         })))
+        .filter(r => str(r.recommendation).trim())
+        .map(r => (str(r.linked_finding_ids).trim() ? r
+          : Object.assign({}, r, { rationale: (str(r.rationale) ? str(r.rationale) + ' — ' : '') + 'гипотеза (без прямых доказательств в этом отчёте)' })))
     },
     // Stage F: recurring pains/objections — the "what hurts customers" view, evidence-cited.
     {
@@ -151,8 +220,10 @@ function buildSheets(b) {
       ],
       // The deterministic bundle ships evidence:[]; Stage F fills this sheet with the exact sources every
       // analytical claim cites, so [1]/[2] markers in the report resolve to a clickable URL here.
+      // Honest blanks: a field we did not capture stays empty — it is never fabricated.
       rows: (b.evidence || []).concat((an.evidence || []).map(e => ({
-        ref: str(e.ref), finding: '', competitor: str(e.source), excerpt: '', url: str(e.url),
+        ref: str(e.ref), finding: str(e.type) ? ('цитируемый источник анализа (' + str(e.type) + ')') : '',
+        competitor: str(e.source), excerpt: '', url: str(e.url),
         source_quality: '', collected_at: ''
       }))),
       highlight: (r, c) => c.key === 'source_quality' ? qualityHighlight(r.source_quality) : null
@@ -209,7 +280,18 @@ function buildSheets(b) {
         // REUSE-OBS-001: the audit trail for cached analyses — which persisted analysis a reused result came
         // from, and the explicit cache decision + reason for every WF28 invocation. Hidden sheet only (§6).
         { header: 'AI reused from', key: 'ai_reused_from', width: 40 },
-        { header: 'AI cache decisions', key: 'ai_cache_decisions', width: 60 }
+        { header: 'AI cache decisions', key: 'ai_cache_decisions', width: 60 },
+        // REPORT-TRUTH-D: full run telemetry — component costs, tokens, latency, final outcome.
+        { header: 'Cost collection usd', key: 'cost_collection', width: 16 },
+        { header: 'Cost summary AI usd', key: 'cost_summary_ai', width: 16 },
+        { header: 'Cost deep AI usd', key: 'cost_deep_ai', width: 16 },
+        { header: 'Cost repair usd', key: 'cost_repair', width: 16 },
+        { header: 'Cost total usd', key: 'cost_total', width: 14 },
+        { header: 'AI tokens in', key: 'ai_tokens_in', type: 'integer', width: 12 },
+        { header: 'AI tokens out', key: 'ai_tokens_out', type: 'integer', width: 12 },
+        { header: 'AI latency ms', key: 'ai_latency_ms', type: 'integer', width: 12 },
+        { header: 'Final state', key: 'final_state', width: 14 },
+        { header: 'Claim audit', key: 'claim_audit', width: 60 }
       ],
       rows: [{
         analysis_ids: join(an.analysis_ids), ai_analyses: an.count_enriched, ai_reused: an.count_reused,
@@ -219,13 +301,19 @@ function buildSheets(b) {
         ai_cache_decisions: join((an.cache_decisions || []).map(d => str(d.decision) + (d.reason ? (': ' + str(d.reason)) : ''))),
         agent_request_id: b.agent_request_id, report_id: b.report_id,
         run_ids: join(b.run_ids ? Object.values(b.run_ids).filter(Boolean) : meta.run_ids),
-        calls: meta.calls != null ? meta.calls : sum.external_calls,
+        calls: meta.calls != null ? meta.calls : (sum.external_calls_actual != null ? sum.external_calls_actual : sum.external_calls),
         llm_primary: meta.llm_primary != null ? meta.llm_primary : sum.llm_primary_calls,
         source_budget: budgets.source_budget_usd != null ? budgets.source_budget_usd : 'unknown',
         llm_budget: budgets.llm_budget_usd != null ? budgets.llm_budget_usd : 'unknown',
         source_cost: sum.source_cost_status || 'unknown', llm_cost: sum.llm_cost_status || 'unknown',
         data_mode: b.data_mode || meta.data_mode || 'live', generated_at: meta.generated_at || b.created_at,
-        analysis_mode: str(b.analysis_mode) || 'source_analysis'
+        analysis_mode: str(b.analysis_mode) || 'source_analysis',
+        cost_collection: rpMoney(sum.actual_collection_usd), cost_summary_ai: rpMoney(sum.actual_summary_ai_usd),
+        cost_deep_ai: rpMoney(sum.actual_deep_analysis_usd), cost_repair: rpMoney(sum.actual_repair_usd),
+        cost_total: rpMoney(sum.actual_cost_usd),
+        ai_tokens_in: an.tokens_in != null ? an.tokens_in : '', ai_tokens_out: an.tokens_out != null ? an.tokens_out : '',
+        ai_latency_ms: an.latency_ms != null ? an.latency_ms : '',
+        final_state: str(sum.final_state), claim_audit: b.claim_audit ? JSON.stringify(b.claim_audit).slice(0, 500) : ''
       }]
     }
   ];

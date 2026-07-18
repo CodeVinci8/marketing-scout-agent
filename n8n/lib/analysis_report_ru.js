@@ -232,7 +232,9 @@ function analysisXlsxData(analyses, rendered) {
   var evidence = (r.evidence_list || []).map(function (e) {
     return { ref: '[' + e.n + ']', source: e.source_id, url: e.url, type: e.type };
   });
-  return { inferences: inferences, recommendations: recommendations, pains: pains, evidence: evidence };
+  // REPORT-TRUTH-D: honest limitations belong on the user-facing Summary sheet.
+  var unknowns = ((r.sections || {}).unknowns || []).slice(0, 5);
+  return { inferences: inferences, recommendations: recommendations, pains: pains, evidence: evidence, unknowns: unknowns };
 }
 
 module.exports = {

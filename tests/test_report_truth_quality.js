@@ -261,4 +261,76 @@ A.section('WF20 wiring — validation + compact renderer + completion order');
   A.ok('progress stage text updated in embedded tracker', node(wf20, 'Progress: Report').parameters.jsCode.indexOf('Данные собраны, формирую отчёт') >= 0);
 }
 
+A.section('REPORT-TRUTH-D — the workbook tells the truth about THIS request');
+{
+  const RPKG = require('../n8n/lib/report_package.js');
+  // Fixture mirrors live exec 1038: machine offer text with enum, duplicate offer, empty domain, empty
+  // placeholder recommendations, component costs on summary, tokens/latency + claim audit on the bundle.
+  const B = {
+    report_id: 'rep_d', agent_request_id: 'req_d', owner_user_id: 'u1', created_at: '2026-07-18T12:00:00Z',
+    niche: 'кредитный брокеридж', region: 'Москва/МО', analysis_mode: 'source_analysis',
+    summary: { competitors_found: 1, sources_checked: 1, quality_status: 'healthy',
+      key_findings: ['LionCredit'], key_recommendations: [],
+      actual_cost_usd: 0.1301, actual_collection_usd: 0, actual_summary_ai_usd: 0.0435,
+      actual_deep_analysis_usd: 0.0866, actual_repair_usd: 0, external_calls_actual: 0,
+      reused_sources: [{ source: 'website', original_collected_at: '2026-07-18T11:24:00Z' }], final_state: 'completed' },
+    competitors: [{ competitor: 'LionCredit', domain: '', region: 'Москва/МО', score: 80, quality: '', source_url: 'https://lioncredit.ru' }],
+    offers: [
+      { competitor: 'LionCredit', offer: 'Предложение конкурента (LionCredit), услуга: generic_lending. Условия: от 4,99% годовых.', price_rate: 'от 4,99% годовых' },
+      { competitor: 'LionCredit', offer: 'Предложение конкурента (LionCredit), услуга: generic_lending. Условия: от 4,99% годовых.', price_rate: 'от 4,99% годовых' }
+    ],
+    evidence: [], recommendations: [
+      { recommendation: '', priority: 'medium', rationale: '', linked_finding_ids: [], next_action: '' },
+      { recommendation: 'Добавить калькулятор', priority: 'high', rationale: '', linked_finding_ids: [], next_action: '' }
+    ],
+    source_quality: [{ source: 'lioncredit.ru', platform: 'website', status: 'healthy', source_run_id: 'run_now' }],
+    changes: [], claim_audit: { checked: 20, demoted: 2, rejected: 1 },
+    analysis: { inferences: [{ source: 'lioncredit.ru', dimension: 'позиционирование', text: 'вывод', evidence: '1' }],
+      recommendations: [{ text: 'Проверить реальные ставки', priority: 'high', source: 'lioncredit.ru', evidence: '1' }],
+      pains: [], evidence: [{ ref: '[1]', source: 'lioncredit.ru', url: 'https://lioncredit.ru', type: 'website' }],
+      unknowns: ['Реальный диапазон итоговых ставок'], analysis_ids: ['an_x'], count_enriched: 1, count_reused: 0,
+      count_fallback: 0, analysis_cost_usd: 0.0866, repair_cost_usd: 0, reuse_lineage: [], cache_decisions: [],
+      model: 'claude-sonnet-4-6', tokens_in: 2392, tokens_out: 1500, latency_ms: 61000 }
+  };
+  const sheets = RPKG.buildSheets(B);
+  const sh = n => sheets.find(s => s.name === n);
+  const sumRow = sh('Сводка').rows[0];
+  has('Summary states the report mode in Russian', sumRow.mode, 'анализ текущего состояния');
+  has('Summary states the data mode honestly', sumRow.data_mode, 'сохранённые данные');
+  A.eq('Summary source count is request-scoped', sumRow.sources, 1);
+  A.eq('Summary component costs are real dollars', sumRow.cost_total, '$0.1301');
+  A.eq('…including the deep-AI component', sumRow.cost_deep_ai, '$0.0866');
+  has('Summary carries limitations', sumRow.limitations, 'Реальный диапазон');
+  A.ok('no status enums in cost columns', String(sumRow.cost_collection).indexOf('unknown') < 0);
+  const comp = sh('Конкуренты');
+  A.eq('domain derived from source_url', comp.rows[0].domain, 'lioncredit.ru');
+  A.eq('source type derived', comp.rows[0].source_type, 'website');
+  A.ok('region column is explicitly the REQUEST region', comp.columns.some(c => c.header === 'Регион запроса'));
+  const off = sh('Офферы и цены');
+  A.eq('duplicate offers deduped', off.rows.length, 1);
+  A.ok('offer text carries no internal enum', off.rows[0].offer.indexOf('generic_lending') < 0);
+  A.ok('offer text carries no boilerplate', off.rows[0].offer.indexOf('Предложение конкурента') < 0);
+  const recs = sh('Рекомендации');
+  A.eq('empty placeholder recommendation dropped', recs.rows.filter(r => !String(r.recommendation).trim()).length, 0);
+  A.ok('evidence-less recommendation marked as hypothesis',
+    recs.rows.filter(r => !String(r.linked_finding_ids).trim()).every(r => String(r.rationale).indexOf('гипотеза') >= 0));
+  const ev = sh('Доказательства');
+  has('AI evidence row names its role', ev.rows[0].finding, 'цитируемый источник');
+  const tech = sh('Технические данные').rows[0];
+  A.eq('tech: component total', tech.cost_total, '$0.1301');
+  A.eq('tech: tokens in', tech.ai_tokens_in, 2392);
+  A.eq('tech: latency', tech.ai_latency_ms, 61000);
+  A.eq('tech: final state', tech.final_state, 'completed');
+  has('tech: claim audit persisted', tech.claim_audit, '"rejected":1');
+  A.ok('tech sheet stays hidden', sh('Технические данные').hidden === true);
+
+  // Wiring: the bundle node scopes source_quality + drops placeholder recs + injects component costs.
+  const sb = node(wf20, 'Shape Report Bundle').parameters.jsCode;
+  has('bundle scopes source_quality to this run', sb, '__runIds.indexOf(String((r||{}).source_run_id');
+  has('bundle drops empty key_recommendations', sb, 'key_recommendations.filter');
+  has('bundle injects actual component costs', sb, "'actual_summary_ai_usd'");
+  const fin = node(JSON.parse(fs.readFileSync(path.join(WFD, '28_claude_analyst.json'), 'utf8')), 'Finalize Analysis').parameters.jsCode;
+  has('WF28 typed return carries tokens/latency', fin, 'tokens_in:((result.usage||{}).input_tokens)');
+}
+
 A.report('report-truth-quality');

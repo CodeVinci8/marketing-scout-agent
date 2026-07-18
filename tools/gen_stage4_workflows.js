@@ -1230,6 +1230,27 @@ b.owner_user_id=String(req.owner_user_id||'');
 // report answers (current state vs changes) instead of guessing.
 b.analysis_mode=String((s.summary&&s.summary.analysis_mode)||'source_analysis');
 if(!b.created_at)b.created_at=(new Date()).toISOString();
+// REPORT-TRUTH-D: the bundle is scoped to THIS request before anything renders from it.
+// (live exec 1038: sources_checked=65 global inventory + unrelated telegram sources in a one-site report.)
+try{
+var __sum=s.summary||{};
+b.summary=b.summary||{};
+// Качество данных: only rows from THIS run's collectors (source_run_id ∈ run_ids); an unmatched inventory row
+// is history, not this report.
+var __runIds=Object.keys(b.run_ids||{}).map(function(k){return String(b.run_ids[k]||'');}).filter(Boolean);
+if(Array.isArray(b.source_quality)&&__runIds.length){
+  b.source_quality=b.source_quality.filter(function(r){return __runIds.indexOf(String((r||{}).source_run_id||''))>=0;});
+}
+b.summary.sources_checked=(b.source_quality||[]).length||(b.competitors||[]).length||0;
+// no empty placeholder recommendations — neither in the digest list nor as sheet rows.
+if(Array.isArray(b.summary.key_recommendations))b.summary.key_recommendations=b.summary.key_recommendations.filter(function(x){return String(x||'').trim();});
+if(Array.isArray(b.recommendations))b.recommendations=b.recommendations.filter(function(r){return String((r||{}).recommendation||'').trim();});
+// honest actual component costs + execution facts for the Summary/tech sheets.
+['actual_cost_usd','actual_collection_usd','actual_summary_ai_usd','actual_deep_analysis_usd','actual_repair_usd'].forEach(function(k){if(__sum[k]!==undefined)b.summary[k]=__sum[k];});
+b.summary.external_calls_actual=Number(__sum.external_calls_used!==undefined?__sum.external_calls_used:(b.summary.external_calls||0))||0;
+b.summary.reused_sources=Array.isArray(__sum.reused_sources)?__sum.reused_sources:[];
+b.summary.final_state=String(__sum.final_state||'');
+}catch(e){}
 // Stage F §6: the bundle is the single source for BOTH the live XLSX and WF24's later export, so the analysis
 // rows live here. Grounded rows only; analysis_id/telemetry are consumed exclusively by the HIDDEN technical sheet.
 // REPORT-TRUTH-B: claims are validated (market-wide scoping, semantic guards, dedup) BEFORE they are baked into
@@ -1246,7 +1267,8 @@ if((__x.inferences||[]).length||(__x.recommendations||[]).length||(__x.pains||[]
     analysis_cost_usd:Number(__ana.analysis_cost_usd)||0,
     repair_cost_usd:Number(__ana.analysis_repair_cost_usd)||0,
     reuse_lineage:__ana.reuse_lineage||[],cache_decisions:__ana.cache_decisions||[],
-    model:String(__ana.model||(s.cfg&&s.cfg.llm_model)||'claude-sonnet-4-6')});
+    model:String(__ana.model||(s.cfg&&s.cfg.llm_model)||'claude-sonnet-4-6'),
+    tokens_in:Number(__ana.tokens_in)||0,tokens_out:Number(__ana.tokens_out)||0,latency_ms:Number(__ana.latency_ms)||0});
 }}catch(e){}
 return [{json:{report_id:b.report_id,owner_user_id:b.owner_user_id,agent_request_id:b.agent_request_id,created_at:String(b.created_at),report_type:String(rep.report_type||''),bundle:JSON.stringify(b),notes:'wf20 run bundle (export/digest source)'}}];`),
   sheetsAppend('wf20-apbundle', 'Append report_bundles', [2160, 60], 'report_bundles'),
@@ -2055,7 +2077,7 @@ var evMap=((pkgRes.package&&pkgRes.package.evidence_items)||[]).map(function(e){
 // are the audit surface; analysis_id itself stays CURRENT-request lineage. repair_cost_usd feeds COST-SPLIT-001.
 var reusedRef=(prep.mode==='reuse'&&prep.reuse_ref)?prep.reuse_ref:null;
 var cacheDec=prep.cache_decision||{decision:(prep.mode==='call'?'fresh_call':String(prep.mode||'')),reason:''};
-var typedReturn={analysis_id:resultRow.analysis_id,enriched:enriched,quality_status:resultRow.quality_status,mode:prep.mode,analysis:a,overall_confidence:a.overall_confidence||0,repair_used:result.repair_used,repair_success:result.repair_success,fallback_used:result.fallback_used,error_category:result.error_category,cost_usd:result.cost_usd,repair_cost_usd:repairCost,model:String(ctx.model||''),reused_from_analysis_id:(reusedRef?String(reusedRef.reused_from_analysis_id||''):''),reused_from_created_at:(reusedRef?String(reusedRef.created_at||''):''),reused_from_model:(reusedRef?String(reusedRef.model||''):''),cache_decision:String(cacheDec.decision||''),cache_reason:String(cacheDec.reason||''),evidence_package_hash:ctx.evidence_package_hash,evidence_map:evMap,source:ctx.source_scope||{}};
+var typedReturn={analysis_id:resultRow.analysis_id,enriched:enriched,quality_status:resultRow.quality_status,mode:prep.mode,analysis:a,overall_confidence:a.overall_confidence||0,repair_used:result.repair_used,repair_success:result.repair_success,fallback_used:result.fallback_used,error_category:result.error_category,cost_usd:result.cost_usd,repair_cost_usd:repairCost,model:String(ctx.model||''),reused_from_analysis_id:(reusedRef?String(reusedRef.reused_from_analysis_id||''):''),reused_from_created_at:(reusedRef?String(reusedRef.created_at||''):''),reused_from_model:(reusedRef?String(reusedRef.model||''):''),cache_decision:String(cacheDec.decision||''),cache_reason:String(cacheDec.reason||''),evidence_package_hash:ctx.evidence_package_hash,evidence_map:evMap,source:ctx.source_scope||{},tokens_in:((result.usage||{}).input_tokens)||0,tokens_out:((result.usage||{}).output_tokens)||0,latency_ms:result.latency_ms||0};
 return [{json:{persist:persist,result_row:resultRow,telemetry_row:telRow,typed_return:typedReturn}}];`),
   ifNode('wf28-ifpersist', 'Persist?', [1940, 0], '={{ $json.persist }}'),
   code('wf28-shaperes', 'Shape Result Row', [2160, -120], [], `return [{json:$('Finalize Analysis').first().json.result_row}];`),
