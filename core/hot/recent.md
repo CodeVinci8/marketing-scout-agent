@@ -4,6 +4,33 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-18 (session 63) — REPORT-TRUTH-A closed, deployed, live-proven
+
+Branch `fix/stage4-live-final-acceptance`, HEAD **27eb736** (+docs commit after), NOT pushed.
+Prod healthy, 17 active, `make test` ALL SUITES PASS ($0). Disk: journal vacuumed + 6 old n8n backup
+tarballs removed (kept newest 20260711-071439) → **582 MB free** (paid-call floor is 500 MB — watch it).
+
+**What shipped (commit 27eb736):** `analysis_mode` is an explicit persisted contract:
+source_analysis / change_report / comparison / synthesis (+4 reserved) inferred deterministically from the
+Russian request (`PLAN_CHANGE_RE` past-form stems — «что изменить в моём оффере» stays source_analysis), part of
+**planHash + planFingerprint** (row/plan parity, legacy default), persisted on `execution_plans.analysis_mode`
+(live headers migrated append-only execs 993/994), «Тип отчёта: …» in approval only when non-default, WF20 →
+WF28 `analysis_type` → summary → bundle → hidden XLSX tech sheet. Cache alias `single_source`≡`source_analysis`;
+cross-mode reuse impossible. `deploy_sync.js` now also syncs executeWorkflow `workflowInputs` (never workflowId).
+New `tests/test_analysis_modes.js` (32); bootstrap/ops-QA workflows regenerated from the contract.
+
+**Live proofs:** (1) `req_1784370207600` execs 995–1004: change_report plan `h3f90e66e`, approval «Тип отчёта:
+отчёт об изменениях с прошлой проверки», mode read back from the Sheets row, WF28 1004 **same evidence hash
+753b287e → MISS → fresh `an_4a0d54db` $0.0145** (mode is in the cache key), summary 0.0512 = 0.0367+0.0145,
+Telegram msgs 404–408 with split cost line, plan completed. (2) `req_1784370884282` execs 1005–1014: re-ask →
+source_analysis **reused legacy `an_5f3ef630` $0, no Claude HTTP**; change_report row NOT matched; WF04 $0.
+
+**Next (Stage F gate, in order):** REPORT-TRUTH B (claim validation + semantic guards) → C (concise renderer —
+live report still ~10k chars / 3 chunks) → D (XLSX truth) → §8 TG/VK typed outcomes → §9 live scenarios →
+§10 repair metrics → gate (incl. deleting disposable `zzmigrateheaders1`).
+
+---
+
 ## Session: 2026-07-17 (session 62) — REUSE-OBS-001 + COST-SPLIT-001 closed, deployed, live-proven
 
 Branch `fix/stage4-live-final-acceptance`, HEAD **2565702** (+docs commit after), worktree CLEAN, NOT pushed.
