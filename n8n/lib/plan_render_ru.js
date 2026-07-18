@@ -31,6 +31,17 @@ var RU_SOURCE = {
   vk: 'ВКонтакте', vk_community: 'ВКонтакте',
   apify: 'веб-каталоги'
 };
+// REPORT-TRUTH-A: user-facing Russian names for the canonical analysis modes (never leak the enum itself).
+var RU_ANALYSIS_MODE = {
+  source_analysis: 'анализ текущего состояния источника',
+  change_report: 'отчёт об изменениях с прошлой проверки',
+  comparison: 'сравнение указанных источников',
+  synthesis: 'сводный анализ нескольких источников',
+  candidate_enrichment: 'оценка найденных кандидатов',
+  public_lead_interpretation: 'интерпретация публичных сигналов спроса',
+  opportunity_radar: 'поиск возможностей',
+  monitoring_insight: 'мониторинговое уведомление'
+};
 var RU_PLAN_STATUS = {
   awaiting_approval: 'ждёт подтверждения',
   approved: 'подтверждён, готовится запуск',
@@ -123,6 +134,10 @@ function planApprovalMessageRu(plan, opts) {
     '🔎 План анализа',
     '',
     'Цель: ' + ruIntent(plan.intent),
+    // REPORT-TRUTH-A: the mode is part of what the user approves — "что изменилось" and "проанализируй" are
+    // different deliverables. Rendered only when it adds information beyond the default.
+    (ruText(plan.analysis_mode) && plan.analysis_mode !== 'source_analysis'
+      ? ('Тип отчёта: ' + ruEnum(RU_ANALYSIS_MODE, plan.analysis_mode, 'анализ источника')) : null),
     'Регион: ' + ruRegion(plan.region),
     (hasExplicit ? null : ('Источники: ' + ruSources(plan.sources, dataMode))),
     explicitBlock,

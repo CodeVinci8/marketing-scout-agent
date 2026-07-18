@@ -81,13 +81,16 @@ function findReusableAnalysis(rows, ctx) {
   // already encodes source identity + facts + excerpts), and invalidate when the schema/prompt version moved.
   var owner = ltStr(ctx.owner_user_id);
   var hash = ltStr(ctx.evidence_package_hash);
-  var typ = ltStr(ctx.analysis_type) || 'single_source';
+  // REPORT-TRUTH-A: 'single_source' is the legacy spelling of the canonical mode 'source_analysis' — rows
+  // persisted before the rename stay reusable. Any OTHER mode pair is a different deliverable and never matches.
+  var norm = function (v) { var s = ltStr(v) || 'single_source'; return s === 'single_source' ? 'source_analysis' : s; };
+  var typ = norm(ctx.analysis_type);
   if (!hash) return null;                                            // no evidence identity -> nothing to reuse
   var best = null, bestT = -1;
   (Array.isArray(rows) ? rows : []).forEach(function (r) {
     if (!r) return;
     if (ltStr(r.owner_user_id) !== owner) return;                    // owner isolation, never relaxed
-    if ((ltStr(r.analysis_type) || 'single_source') !== typ) return;
+    if (norm(r.analysis_type) !== typ) return;
     if (ltStr(r.evidence_package_hash) !== hash) return;
     if (ctx.schema_version && ltStr(r.schema_version) && ltStr(r.schema_version) !== ltStr(ctx.schema_version)) return;
     if (ctx.prompt_version && ltStr(r.prompt_version) && ltStr(r.prompt_version) !== ltStr(ctx.prompt_version)) return;

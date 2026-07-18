@@ -134,6 +134,27 @@ function planWantsRefresh(text) {
   return PLAN_REFRESH_RE.test(t);
 }
 
+// REPORT-TRUTH-A: explicit analysis/report mode. source_analysis answers "what is this source NOW" from the
+// latest ACCEPTED state (it must never depend on "new rows inside the reporting window"); change_report answers
+// "what changed" between accepted snapshots and may honestly say "no changes". The two must never mix in one
+// default answer. comparison/synthesis derive from how many sources the user explicitly named; the remaining
+// modes belong to their owning system flows (WF27 enrichment, lead interpretation, radar, monitoring) and are
+// never inferred from free text. Cyrillic \b never fires in JS — boundaries are explicit [а-яё] classes.
+const PLAN_ANALYSIS_MODES = ['source_analysis', 'change_report', 'comparison', 'synthesis',
+  'candidate_enrichment', 'public_lead_interpretation', 'opportunity_radar', 'monitoring_insight'];
+// NB: «что изменить (в оффере)» is a RECOMMENDATION question, not a change report — the stems below require the
+// past form (изменил-/изменени-), never the infinitive.
+const PLAN_CHANGE_RE = /(^|[^а-яёa-z])(что\s+изменил[а-яё]*|изменил(ось|ись|ся|ась)|изменени[а-яё]+|с\s+прошл(ым|ого)\s+(отч[её]т|период|раз)[а-яё]*|динамик[а-яё]*|что\s+нового\s+(у|на|в))([^а-яёa-z]|$)/i;
+function inferAnalysisMode(text, extracted) {
+  const t = str(text);
+  const ex = extracted || {};
+  const n = (ex.websites || []).length + (ex.telegram_channels || []).length + (ex.vk_sources || []).length;
+  if (PLAN_CHANGE_RE.test(t)) return 'change_report';
+  if (n >= 3) return 'synthesis';
+  if (n === 2) return 'comparison';
+  return 'source_analysis';
+}
+
 function deterministicPlan(text, cfg) {
   cfg = cfg || {};
   const t = str(text);
@@ -165,6 +186,7 @@ function deterministicPlan(text, cfg) {
   const maxCalls = num(cfg.max_external_calls, 40);
   return normalizePlan({
     intent: 'competitor_market_scan',
+    analysis_mode: inferAnalysisMode(t, ex),
     niche: niche,
     service: niche,
     region: region,
@@ -208,6 +230,7 @@ function normalizePlan(p, cfg) {
   sources = sources.slice(0, Math.max(1, num(cfg.max_sources_per_request, 3)));
   return {
     intent: str(p.intent) || 'competitor_market_scan',
+    analysis_mode: PLAN_ANALYSIS_MODES.indexOf(low(p.analysis_mode)) >= 0 ? low(p.analysis_mode) : 'source_analysis',
     niche: str(p.niche) || str(p.service) || (cfg.default_niche || 'credit_brokerage'),
     service: str(p.service) || str(p.niche) || (cfg.default_niche || 'credit_brokerage'),
     region: str(p.region) || (cfg.default_region || 'Москва/МО'),
@@ -281,7 +304,10 @@ function planHash(plan) {
     (Array.isArray(plan.vk_communities) ? plan.vk_communities : []).map(low).sort(),
     num(plan.max_items, 0), num(plan.max_external_calls, 0),
     num(plan.est_source_cost_usd, 0), num(plan.est_llm_cost_usd, 0),
-    str(plan.expected_output), str(plan.plan_source)
+    str(plan.expected_output), str(plan.plan_source),
+    // REPORT-TRUTH-A: the analysis mode is part of what the user approves — "what changed" and "analyze this
+    // source" are different deliverables and must not be approvable under each other's callback.
+    str(plan.analysis_mode) || 'source_analysis'
   ]);
   let h = 5381;
   for (let i = 0; i < canon.length; i++) h = ((h << 5) + h + canon.charCodeAt(i)) >>> 0;
@@ -318,7 +344,10 @@ function planFingerprint(planOrRow, ctx) {
     // re-collection and must NOT silently reuse an awaiting-approval non-refresh plan for the same site (the user
     // would approve a refresh and get a dedup skip). Derived identically from a plan OR a stored row: the row
     // persists force_reprocess as the string 'true'.
-    (planOrRow.force_reprocess === true || low(planOrRow.force_reprocess) === 'true') ? 'refresh' : 'auto'
+    (planOrRow.force_reprocess === true || low(planOrRow.force_reprocess) === 'true') ? 'refresh' : 'auto',
+    // REPORT-TRUTH-A: mode is request identity ("что изменилось у X" ≠ "проанализируй X"). Legacy rows without
+    // the column normalize to the default so a stored row and its in-memory plan still hash identically.
+    low(planOrRow.analysis_mode) || 'source_analysis'
     // NB: data_mode is intentionally excluded — it is not persisted on the execution_plans row, so including it
     // would make a stored row and its originating in-memory plan hash differently and break reuse detection.
   ]);
@@ -374,6 +403,7 @@ function buildPlanRow(plan, identity, ctx) {
     source_execution_mode: str(plan.source_execution_mode) || 'auto',
     force_reprocess: plan.force_reprocess === true ? 'true' : '',
     refresh_reason: str(plan.refresh_reason),
+    analysis_mode: str(plan.analysis_mode) || 'source_analysis',
     status: 'awaiting_approval', created_at: str(ctx.ts), decided_at: '', decided_by: ''
   };
 }
@@ -402,5 +432,6 @@ module.exports = {
   deterministicPlan, normalizePlan, validatePlanJSON, planToApprovalText,
   planHash, planIdentity, buildPlanRow, validateApproval, pendingPlansForOwner,
   blockedRequestedSources, extractSafeUrls, extractExplicitSources,
-  planFingerprint, findReusablePlan, planIsTerminal
+  planFingerprint, findReusablePlan, planIsTerminal,
+  PLAN_ANALYSIS_MODES, inferAnalysisMode
 };

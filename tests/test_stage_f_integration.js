@@ -193,7 +193,9 @@ A.section('WF20 topology — WF28 is called per source and NEVER gates the deter
   const inputs = call.parameters.workflowInputs.value;
   ['agent_request_id', 'source_run_id', 'report_id', 'owner_user_id', 'chat_id', 'analysis_type', 'evidence_input', 'niche', 'region']
     .forEach(k => A.ok('passes named field ' + k, inputs[k] !== undefined));
-  A.eq('analysis_type is the single-source contract', inputs.analysis_type, 'single_source');
+  // REPORT-TRUTH-A: the plan's analysis mode IS the analysis type (safe default source_analysis).
+  A.ok('analysis_type carries the approved plan mode',
+    String(inputs.analysis_type).indexOf("analysis_mode || 'source_analysis'") >= 0);
   A.ok('owner is propagated (isolation)', /owner_user_id/.test(inputs.owner_user_id));
 
   const prep = node20('Build Analysis Inputs').parameters.jsCode;

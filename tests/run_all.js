@@ -70,6 +70,7 @@ const JS_SUITES = [
   ['wf28-claude-analyst', 'test_wf28_claude_analyst.js'],
   ['stage-f-integration', 'test_stage_f_integration.js'],
   ['reuse-observability', 'test_reuse_observability.js'],
+  ['analysis-modes', 'test_analysis_modes.js'],
   ['stage-f-report', 'test_stage_f_report.js'],
   ['error-sanitizer', 'test_error_sanitizer.js'],
   ['source-execution-policy', 'test_source_execution_policy.js'],

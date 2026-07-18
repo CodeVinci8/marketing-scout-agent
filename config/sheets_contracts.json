@@ -384,7 +384,8 @@
       "decided_by",
       "source_execution_mode",
       "force_reprocess",
-      "refresh_reason"
+      "refresh_reason",
+      "analysis_mode"
     ],
     "execution_summaries": [
       "agent_request_id",
@@ -411,7 +412,19 @@
       "projected_cost_usd",
       "hard_cap_usd",
       "actual_cost_usd",
-      "remaining_budget_usd"
+      "remaining_budget_usd",
+      "actual_collection_usd",
+      "actual_ai_usd",
+      "actual_summary_ai_usd",
+      "actual_deep_analysis_usd",
+      "actual_repair_usd",
+      "llm_analyses",
+      "llm_analyses_reused",
+      "llm_analyses_fallback",
+      "llm_reuse_lineage",
+      "llm_cache_decisions",
+      "llm_model",
+      "analysis_mode"
     ],
     "telegram_outbox": [
       "delivery_id",

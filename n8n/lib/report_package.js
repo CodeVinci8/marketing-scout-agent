@@ -196,6 +196,7 @@ function buildSheets(b) {
         { header: 'Source cost status', key: 'source_cost', width: 16 },
         { header: 'LLM cost status', key: 'llm_cost', width: 16 },
         { header: 'Data mode', key: 'data_mode', width: 12 },
+        { header: 'Analysis mode', key: 'analysis_mode', width: 18 },
         { header: 'Generated at', key: 'generated_at', type: 'datetime', width: 20 },
         // Stage F: analysis lineage + AI telemetry live ONLY here (§6) — never in a user-facing sheet.
         { header: 'Analysis IDs', key: 'analysis_ids', width: 40 },
@@ -223,7 +224,8 @@ function buildSheets(b) {
         source_budget: budgets.source_budget_usd != null ? budgets.source_budget_usd : 'unknown',
         llm_budget: budgets.llm_budget_usd != null ? budgets.llm_budget_usd : 'unknown',
         source_cost: sum.source_cost_status || 'unknown', llm_cost: sum.llm_cost_status || 'unknown',
-        data_mode: b.data_mode || meta.data_mode || 'live', generated_at: meta.generated_at || b.created_at
+        data_mode: b.data_mode || meta.data_mode || 'live', generated_at: meta.generated_at || b.created_at,
+        analysis_mode: str(b.analysis_mode) || 'source_analysis'
       }]
     }
   ];
