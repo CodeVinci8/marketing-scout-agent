@@ -110,8 +110,21 @@ A.section('WF20 §9 — the ONE progress message is edited on the real main line
   const e2 = editor('Progress: Report', { ok: true, result: { message_id: 88 } });
   A.eq('later editor edits the SAME message', JSON.parse(e2.telegram_edit_body).message_id, 88);
   A.ok('stages differ (real transitions, no repeat spam)', JSON.parse(e2.telegram_edit_body).text !== JSON.parse(e1.telegram_edit_body).text);
-  const done = editor('Progress: Done', { ok: true, result: { message_id: 88 } });
+  // REPORT-TRUTH-C: the terminal text is state-aware — it claims report+XLSX only when a summary with data
+  // exists and the workbook was actually built (xlsx_skipped false on the incoming item).
+  const doneRun = H.makeRun();
+  H.inject(doneRun, 'Approval & Budget Gate', [{ request: { agent_request_id: 'r1', chat_id: 'c1' } }]);
+  H.inject(doneRun, 'Send Progress', [{ ok: true, result: { message_id: 88 } }]);
+  H.inject(doneRun, 'Build Execution Summary', [{ summary: { final_state: 'completed', records_reported: 5 } }]);
+  const done = H.runCodeNode(doneRun, WF20, 'Progress: Done', [{ json: { xlsx_skipped: false } }])[0].json;
   A.ok('terminal edit is the completed state', JSON.parse(done.telegram_edit_body).text.indexOf('✅ Анализ завершён') >= 0);
+  const doneEmptyRun = H.makeRun();
+  H.inject(doneEmptyRun, 'Approval & Budget Gate', [{ request: { agent_request_id: 'r1', chat_id: 'c1' } }]);
+  H.inject(doneEmptyRun, 'Send Progress', [{ ok: true, result: { message_id: 88 } }]);
+  H.inject(doneEmptyRun, 'Build Execution Summary', [{ summary: { final_state: 'reporting', records_reported: 0 } }]);
+  const doneEmpty = H.runCodeNode(doneEmptyRun, WF20, 'Progress: Done', [{ json: { xlsx_skipped: true } }])[0].json;
+  A.ok('empty run never claims a delivered workbook (live exec 1048 defect)',
+    JSON.parse(doneEmpty.telegram_edit_body).text.indexOf('Excel') < 0 && JSON.parse(doneEmpty.telegram_edit_body).text.indexOf('данных не собрано') >= 0);
   const skipped = editor('Progress: Analysis', { ok: false });
   A.eq('missing message_id skips the edit silently', skipped.progress_skipped, true);
   // no internal leakage in any stage name
