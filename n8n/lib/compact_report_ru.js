@@ -59,14 +59,24 @@ function crRecs(analyses, max) {
   return out;
 }
 
+function crNormTxt(s) { return crStr(s).toLowerCase().replace(/[^а-яёa-z0-9%]+/gi, ' ').replace(/\s+/g, ' ').trim(); }
+
 // Deterministic offer facts from the bundle — authoritative, listed before AI facts.
+// Bundle offer text is machine-built (live exec 1018: «Предложение конкурента (LionCredit), услуга:
+// generic_lending. Условия: …») — drop the boilerplate prefix and any internal ascii enum, and never repeat
+// price_rate when the text already contains it.
 function crOfferFacts(bundle, max) {
   var out = [];
   (Array.isArray(bundle && bundle.offers) ? bundle.offers : []).forEach(function (o) {
     if (out.length >= max) return;
+    var text = crStr(o && o.offer)
+      .replace(/^Предложение конкурента\s*\([^)]*\)[,.]?\s*/i, '')
+      .replace(/услуга:\s*[a-z0-9_]+\.?\s*/gi, '')
+      .replace(/^условия:\s*/i, '').trim();
     var bits = [];
-    if (crStr(o && o.offer)) bits.push(crStr(o.offer));
-    if (crStr(o && o.price_rate)) bits.push(crStr(o.price_rate));
+    if (text) bits.push(text);
+    var rate = crStr(o && o.price_rate);
+    if (rate && crNormTxt(text).indexOf(crNormTxt(rate)) < 0) bits.push(rate);
     if (!bits.length) return;
     out.push(crTrim((crStr(o.competitor) ? crStr(o.competitor) + ': ' : '') + bits.join(' — '), 160));
   });
@@ -76,7 +86,7 @@ function crOfferFacts(bundle, max) {
 function crHeader(bundle, analyses, summary) {
   var doms = [];
   (Array.isArray(bundle && bundle.competitors) ? bundle.competitors : []).forEach(function (c) {
-    var d = crStr(c && (c.domain || c.name));
+    var d = crStr(c && (c.domain || c.name || c.competitor));
     if (d && doms.indexOf(d) < 0) doms.push(d);
   });
   var subject = doms.slice(0, 3).join(', ') || 'запрошенные источники';

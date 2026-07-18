@@ -88,13 +88,20 @@ function parseClaudeResponse(http, ctx) {
     return out;
   }
   var blocks = Array.isArray(body.content) ? body.content : [];
-  var toolBlock = null, lastText = '';
+  var toolBlock = null, toolStringInput = null, lastText = '';
   for (var i = 0; i < blocks.length; i++) {
     var bl = blocks[i] || {};
     if (bl.type === 'tool_use' && bl.input && typeof bl.input === 'object') toolBlock = bl;
+    // Gateway quirk (live exec 1024): tool_use.input sometimes arrives as a SERIALIZED JSON STRING instead of an
+    // object. A valid analysis must not be discarded over transport framing — parse it, tagged with its own
+    // schema_mode so telemetry keeps the two shapes distinguishable.
+    else if (bl.type === 'tool_use' && typeof bl.input === 'string' && bl.input.length) {
+      try { var si = JSON.parse(bl.input); if (si && typeof si === 'object') toolStringInput = si; } catch (e) { }
+    }
     else if (bl.type === 'text' && typeof bl.text === 'string') lastText = bl.text;
   }
   if (toolBlock) { out.ok = true; out.content = toolBlock.input; out.schema_mode = 'tool_use'; out.text = ''; return out; }
+  if (toolStringInput) { out.ok = true; out.content = toolStringInput; out.schema_mode = 'tool_use_string'; out.text = ''; return out; }
   // fallback: a JSON object embedded in the text block (gateway declined the tool)
   var parsed = extractJsonObject(lastText);
   if (parsed) { out.ok = true; out.content = parsed; out.schema_mode = 'text_json'; out.text = ''; return out; }

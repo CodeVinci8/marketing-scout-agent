@@ -189,6 +189,34 @@ A.section('compact renderer — reuse, issue, change_report honesty, hard cap');
   has('cost line survives the cap', capped.text, '$0.0512');
 }
 
+A.section('live-1024/1018 regressions — string tool input, offer enum leak, competitor header');
+{
+  const CA = require('../n8n/lib/claude_adapter.js');
+  // Gateway returned tool_use.input as a serialized JSON STRING (exec 1024) — a valid analysis must survive.
+  const r = CA.parseClaudeResponse({ status: 200, latency_ms: 5, body: { model: 'claude-sonnet-4-6', stop_reason: 'tool_use',
+    content: [{ type: 'thinking' }, { type: 'tool_use', name: 'submit_analysis', input: '{"executive_summary_ru":"тест","items":[]}' }] } }, {});
+  A.ok('string tool input parsed', r.ok === true);
+  A.eq('…tagged with its own schema_mode', r.schema_mode, 'tool_use_string');
+  const bad = CA.parseClaudeResponse({ status: 200, body: { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_analysis', input: '{broken' }] } }, {});
+  A.eq('unparseable string input still fails closed', bad.error_category, 'no_structured_output');
+  const obj = CA.parseClaudeResponse({ status: 200, body: { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_analysis', input: { a: 1 } }] } }, {});
+  A.eq('object input keeps the canonical mode', obj.schema_mode, 'tool_use');
+
+  // Offer machine-text leak (exec 1018): boilerplate prefix + ascii enum + duplicated rate.
+  const facts = CR.crOfferFacts({ offers: [{ competitor: 'LionCredit',
+    offer: 'Предложение конкурента (LionCredit), услуга: generic_lending. Условия: от 4,99% годовых; сумма до 100 млн рублей.',
+    price_rate: 'от 4,99% годовых; сумма до 100 млн рублей' }] }, 3);
+  A.eq('one clean fact', facts.length, 1);
+  A.ok('no internal enum in user text', facts[0].indexOf('generic_lending') < 0);
+  A.ok('no boilerplate prefix', facts[0].indexOf('Предложение конкурента') < 0);
+  A.eq('rate not duplicated', (facts[0].match(/4,99%/g) || []).length, 1);
+  has('competitor named', facts[0], 'LionCredit');
+
+  // Header names the competitor even when the bundle row has no domain (WF12 rows use `competitor`).
+  const hdr = CR.crHeader({ competitors: [{ competitor: 'LionCredit', domain: '' }] }, [], { records_reported: 2 });
+  has('header names the competitor', hdr, 'LionCredit');
+}
+
 A.section('WF20 wiring — validation + compact renderer + completion order');
 {
   const ob = node(wf20, 'Build Delivery Outbox').parameters.jsCode;
