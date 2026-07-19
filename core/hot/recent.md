@@ -4,6 +4,45 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-19 (session 64) — REPORT-TRUTH B+C+D closed, deployed, live-proven
+
+Branch `fix/stage4-live-final-acceptance`, HEAD **b2e39ba** (D closure code), NOT pushed. Prod healthy, **17
+active**, `make test` ALL SUITES PASS ($0). Disk floor management: Claude auto-update leaves a superseded
+`versions/2.1.NNN` (~253 MB) + npm `_cacache` on every bump — `rm -rf` the non-running version dir (check
+`/proc/<pid>/exe`), vacuum journal, gzip old transcripts/backups → keep **>500 MB** before any paid run.
+
+**What shipped:** B (commit 442fff1) evidence-grounded claim validation + semantic guards; C (442fff1) concise
+Telegram renderer (`compact_report_ru.js`); **D (commits 15e2383 + b2e39ba)** the XLSX describes THIS request:
+`report_package.js` — Summary carries Тип отчёта / Режим данных / request-scoped source count / limitations /
+five real component-cost columns; Конкуренты domain+source_type, «Качество» column dropped when unknown,
+«Регион запроса» never conflated with source region; Офферы deduped + enum/boilerplate stripped
+(`rpCleanOffer`); Рекомендации + Summary «Ключевые рекомендации» render from ONE canonical `recRows` (no empty
+placeholders); Доказательства carries the captured contract (bounded quote, observation kind, collected_at,
+quality) with an explicit limitation when no quote captured; hidden tech sheet has canonical states
+(`rpDataMode` reuse/mixed/collect = same derivation as «Режим данных», `rpCostStatus` measured/measured_zero,
+real budget ceilings, terminal `final_state`). `claim_validation.js` now bounds score-as-market-proof,
+unmeasured CTR/lead-flow, unfair-competition, audience-pain, «одна из наиболее … в сегменте» superlatives in
+Telegram+XLSX+bundle alike. WF28 evidence_map carries excerpt/fact_type/collected_at/quality; Shape Report
+Bundle sets terminal final_state after delivery + records enforced budget ceilings. `test_report_truth_quality.js`
+165 checks. Deployed surgically (backup-first) to WF20/24/25/28, reactivated, n8n restart, 17 active.
+
+**D live proof — reuse run `req_1784397139206`** (execs planner 1070 / approve 1071 / WF20 **1072** /
+WF04 1073 / WF16 1074 / WF08 1075 / WF10 1076 / WF12 1077 / WF28 1078): report `report_20260718_205438`,
+workbook `marketing_scout_report_20260718_205438_report.xlsx` **sha256 608cbc34…**, 8 sheets (tech hidden), 3
+valid external hyperlinks, OOXML valid, Telegram report msg **454** + XLSX msg **455**, plan **completed** /
+final_state **delivered**. Source reused + deep-analysis reused (`an_eb7de5f2`, 0 tokens/latency) + **fresh
+summary-AI $0.012** → Summary & tech agree: сбор $0 / AI-сводка **$0.012** / AI-анализ $0 / итого $0.012,
+status measured_zero+measured, режим данных «сохранённые данные», source count **1** (not global). Claim audit
+checked=20 kept=13 demoted=6 rejected=1; workbook claims are scoped hypotheses. This is the LIVE proof of
+nonzero component-cost rendering (previously only unit-fixture proven). **REPORT-TRUTH D = COMPLETE.**
+
+**Next (this mission):** PHASE 2 approval/progress UX — remove public «максимальный лимит запуска: $8.00»
+(`plan_render_ru.js:179`, cap stays internal) → reuse-aware approval estimate → callback idempotency (no
+«план не найден» after «Запускаю анализ») → neutral completion wording (no «выше/ниже»). Then Stage F §8–12,
+Stage F.5 §13–19, Stage G §20–21. Do NOT start Stage H/I.
+
+---
+
 ## Session: 2026-07-18 (session 63) — REPORT-TRUTH-A closed, deployed, live-proven
 
 Branch `fix/stage4-live-final-acceptance`, HEAD **27eb736** (+docs commit after), NOT pushed.
