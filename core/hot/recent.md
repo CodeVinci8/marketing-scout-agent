@@ -54,9 +54,32 @@ collect. New `scratchpad/graft_topology.js` grafts missing nodes (real cred by t
 req_1784397139206 → Command Lane `approve_ack_dup` (toast «Уже завершено», no launch), reply «Этот анализ уже
 завершён.», dispatch `approval_dup:duplicate_done`, **WF20 max stayed 1072 (no 2nd execution)**.
 
-**Next (this mission):** Stage F §8–12 (typed TG/VK outcomes, 16 live roles, ≥5 fresh-analysis metrics, F gate) →
-Stage F.5 §13–19 → Stage G §20–21. Do NOT start Stage H/I. Disk floor 500 MB for paid runs (currently ~483 MB —
-reclaim before the fresh-analysis batch: rm superseded claude version, gzip logs/backups).
+**Stage F §8 = COMPLETE (commit f97c563 + 9b49074, deployed, live-proven).** `source_adapter.deriveSourceOutcome`
+maps every normalized collector result onto ONE of 11 canonical terminal outcomes (collected_with_data /
+refreshed_with_data / reused_snapshot / blocked / access_denied / provider_failed / timeout / empty_response /
+unsupported_content / no_relevant_content / quality_rejected). Website (WF04) declares its own; Telegram/VK/Avito
+get the outcome DERIVED from counts + classified error strings, each with a RU label + retryable/has_data flags;
+`items_relevant` (a downstream WF16 verdict) is never used at collect time; an unclassifiable error is
+provider_failed (never silent success). `execution_summary` now surfaces ONE `source_outcomes[]` list.
+`tests/test_source_outcomes.js` (57). **Bug found+fixed via the live run:** compact_report_ru hardcoded «Это
+ограничение доступа к данным» for every empty run — now outcome-aware (collected-but-no-profiles says «Источники
+доступны, но конкурентных профилей … не найдено»; genuine access-fail keeps the access wording; legacy unchanged).
+**Live proof — telegram analysis `req_1784430788288`** (planner 1085 / WF20 **1087** / WF11 **1088** / WF16 1089 /
+WF08 1090 / WF10 1091 / WF12 1092): Normalize Telegram Result → `source_outcome=collected_with_data mode=collect
+ru="собраны свежие данные"` (30 received → 22 written, DERIVED — collector declared none); summary
+`source_outcomes=[{telegram, collected_with_data, has_data:true}]`; plan completed; **terminal edit «✅ Проверка
+завершена. Данные для анализа не получены.»** (also live-proves PHASE-2 §8 neutral wording). Known Stage-E/G defer
+(unchanged): telegram/vk social posts collect fine but 0 become competitor-profile records downstream.
+
+**Disk: durable reclaim done** — removed old non-running kernel build headers (/usr/src/linux-headers-6.8.0-48 +
+-110; running is 6.8.0-124) → ~792 MB free (was hovering ~483). n8n sqlite is 854 MB (prod data, left alone).
+
+**Next (this mission):** Stage F §10 (16 live role scenarios — most already proven in prior sessions per
+STAGE_F_ACCEPTANCE; assemble matrix + fill gaps, don't re-run proven paid scenarios) → §11 (≥5 FRESH non-reused
+analyses → repair/latency/token/cost metrics) → **STAGE F gate** → Stage F.5 §13–19 (Unified Source Runtime,
+Unified Analysis Result Model, Opportunity Radar, Claude feature review, AI Pilot, Monitoring Intelligence — all
+NEW canonical libs, mostly $0) → Stage G §20–21 (stored-data reporting/export). Do NOT start Stage H/I.
+Exact next command: `cd /opt/marketing-scout-agent && git log -8 --oneline | cat && df -BM --output=avail /`.
 
 ---
 
