@@ -17,6 +17,65 @@ const FAMILIES = {
   vk: { family: 'social', platform: 'vk', first_class: false, optional: true }
 };
 
+// STAGE-F §8 — the ONE canonical terminal outcome per source. Website (WF04) already declares these; Telegram
+// (WF11) and VK (WF26) predate the contract, so their outcome is DERIVED here from the normalized counts + error
+// signals. Exactly one per source, so outcome / cost / next action / Telegram / Sheets / XLSX cannot disagree.
+const SOURCE_OUTCOMES = {
+  COLLECTED: 'collected_with_data', REFRESHED: 'refreshed_with_data', REUSED: 'reused_snapshot',
+  BLOCKED: 'blocked', ACCESS_DENIED: 'access_denied', PROVIDER_FAILED: 'provider_failed',
+  TIMEOUT: 'timeout', EMPTY: 'empty_response', UNSUPPORTED: 'unsupported_content',
+  NO_RELEVANT: 'no_relevant_content', QUALITY_REJECTED: 'quality_rejected'
+};
+const SOURCE_OUTCOME_SET = Object.keys(SOURCE_OUTCOMES).map(k => SOURCE_OUTCOMES[k]);
+// Russian labels + a bounded next-action per outcome — user-facing surfaces render from THIS map, never a raw enum.
+const SOURCE_OUTCOME_RU = {
+  collected_with_data: 'собраны свежие данные', refreshed_with_data: 'данные обновлены (повторный сбор)',
+  reused_snapshot: 'использован сохранённый снимок', blocked: 'источник заблокирован (защита от ботов)',
+  access_denied: 'доступ к источнику закрыт', provider_failed: 'сбой поставщика данных',
+  timeout: 'источник не ответил вовремя', empty_response: 'источник не вернул данных',
+  unsupported_content: 'неподдерживаемый тип содержимого', no_relevant_content: 'подходящих данных не найдено',
+  quality_rejected: 'данные отклонены контролем качества'
+};
+function sourceOutcomeRu(o) { return SOURCE_OUTCOME_RU[str(o)] || 'состояние источника не определено'; }
+// A retryable outcome may succeed later (a transient block/timeout/provider blip); a structural one will not.
+function sourceOutcomeRetryable(o) {
+  return ['blocked', 'provider_failed', 'timeout', 'empty_response'].indexOf(str(o)) >= 0;
+}
+function sourceOutcomeHasData(o) {
+  return ['collected_with_data', 'refreshed_with_data', 'reused_snapshot'].indexOf(str(o)) >= 0;
+}
+
+// Map a collector's freeform error strings onto an access/provider failure outcome. An error we cannot classify
+// is still a failure (provider_failed) — never silently treated as success.
+function classifyErrorOutcome(errors) {
+  const blob = [].concat(errors || []).map(str).join(' ').toLowerCase();
+  if (!blob) return '';
+  if (/timeout|timed out|etimedout|deadline|esockettimedout/.test(blob)) return SOURCE_OUTCOMES.TIMEOUT;
+  if (/(^|\D)429(\D|$)|rate.?limit|waf|captcha|cloudflare|challenge|too many requests|\bblocked\b/.test(blob)) return SOURCE_OUTCOMES.BLOCKED;
+  if (/(^|\D)40[13](\D|$)|forbidden|unauthor|access.?denied|robots|login required|private/.test(blob)) return SOURCE_OUTCOMES.ACCESS_DENIED;
+  if (/unsupported|content.?type|not.?html|binary|mime/.test(blob)) return SOURCE_OUTCOMES.UNSUPPORTED;
+  return SOURCE_OUTCOMES.PROVIDER_FAILED;
+}
+
+// deriveSourceOutcome(a) -> the ONE terminal outcome for a normalized adapter result.
+// Priority: connector-declared valid outcome > quality rejection > access/provider failure > reuse > has-data >
+// came-back-but-nothing-usable > nothing-came-back. items_relevant is a DOWNSTREAM (WF16) verdict and is NOT used
+// here, so a healthy collect is never mislabeled no_relevant just because relevance hasn't been scored yet.
+function deriveSourceOutcome(a) {
+  a = a || {};
+  const declared = str(a.source_outcome);
+  if (SOURCE_OUTCOME_SET.indexOf(declared) >= 0) return declared;      // website speaks the contract already
+  if (a.quarantined === true || str(a.status) === 'quarantined') return SOURCE_OUTCOMES.QUALITY_REJECTED;
+  const errs = [].concat(a.errors || []).map(str).filter(Boolean);
+  const written = num(a.items_written, 0), received = num(a.items_received, 0);
+  const mode = str(a.execution_mode);
+  if (errs.length && written === 0) return classifyErrorOutcome(errs) || SOURCE_OUTCOMES.PROVIDER_FAILED;
+  if (mode === 'reuse' || (num(a.reused_count, 0) > 0 && written === 0)) return SOURCE_OUTCOMES.REUSED;
+  if (written > 0) return mode === 'refresh' ? SOURCE_OUTCOMES.REFRESHED : SOURCE_OUTCOMES.COLLECTED;
+  if (received > 0) return SOURCE_OUTCOMES.NO_RELEVANT;                 // came back, nothing usable persisted
+  return SOURCE_OUTCOMES.EMPTY;                                        // nothing came back at all
+}
+
 // raw: a collector's live_source_runs-shaped summary (already produced by WF04/WF09/WF11).
 // Returns the canonical adapter result + the orchestration state this outcome implies.
 function normalizeAdapterResult(sourceKey, raw, ctx) {
@@ -35,7 +94,7 @@ function normalizeAdapterResult(sourceKey, raw, ctx) {
   else if (written === 0) { status = 'empty'; next_state = 'quality_check'; }
   else { status = 'ok'; next_state = 'quality_check'; }
 
-  return {
+  const result = {
     agent_request_id: str(raw.agent_request_id) || str(ctx.agent_request_id),
     source: str(sourceKey).toLowerCase(),
     source_family: fam.family,
@@ -57,14 +116,25 @@ function normalizeAdapterResult(sourceKey, raw, ctx) {
     status: status,
     errors: errors,
     next_state: next_state,
-    // SOURCE-REUSE-001: typed execution mode + outcome + reuse lineage from the connector's run summary.
-    // Empty when the connector predates the contract — consumers must treat '' as "collect" era, not as reuse.
+    // SOURCE-REUSE-001 / STAGE-F §8: typed execution mode + ONE canonical terminal outcome + reuse lineage.
+    // A connector that already declares them (website WF04) is authoritative; Telegram/VK/Avito get the outcome
+    // DERIVED from these normalized counts so exactly one terminal outcome exists per source.
     execution_mode: str(raw.execution_mode),
     source_outcome: str(raw.source_outcome),
     reused_count: num(raw.reused_count, 0),
     original_snapshot_run_id: str(raw.original_snapshot_run_id),
     original_snapshot_collected_at: str(raw.original_snapshot_collected_at)
   };
+  result.source_outcome = deriveSourceOutcome(result);
+  // Backfill the execution mode from the outcome when the connector didn't declare one (never overwrite a real one).
+  if (!result.execution_mode) {
+    result.execution_mode = result.source_outcome === SOURCE_OUTCOMES.REUSED ? 'reuse'
+      : result.source_outcome === SOURCE_OUTCOMES.REFRESHED ? 'refresh' : 'collect';
+  }
+  result.outcome_label_ru = sourceOutcomeRu(result.source_outcome);
+  result.outcome_has_data = sourceOutcomeHasData(result.source_outcome);
+  result.outcome_retryable = sourceOutcomeRetryable(result.source_outcome);
+  return result;
 }
 
 // Roll several adapter results into the request-level collection outcome.
@@ -102,4 +172,8 @@ function rollupCollection(results, requestedSources) {
   };
 }
 
-module.exports = { FAMILIES, normalizeAdapterResult, rollupCollection };
+module.exports = {
+  FAMILIES, normalizeAdapterResult, rollupCollection,
+  SOURCE_OUTCOMES, SOURCE_OUTCOME_SET, SOURCE_OUTCOME_RU,
+  deriveSourceOutcome, classifyErrorOutcome, sourceOutcomeRu, sourceOutcomeRetryable, sourceOutcomeHasData
+};

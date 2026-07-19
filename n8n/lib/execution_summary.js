@@ -63,6 +63,13 @@ function buildExecutionSummary(parts) {
         original_run_id: str(a.original_snapshot_run_id),
         original_collected_at: str(a.original_snapshot_collected_at)
       })),
+    // STAGE-F §8: ONE canonical terminal outcome per source (website/telegram/vk/avito), so the Telegram
+    // message, Sheets and the XLSX all render the same verdict + next action — never a raw enum, never disagreement.
+    source_outcomes: adapters.filter(Boolean).map(a => ({
+      source: str(a.source), outcome: str(a.source_outcome), label_ru: str(a.outcome_label_ru),
+      has_data: a.outcome_has_data === true, retryable: a.outcome_retryable === true,
+      items: num(a.items_written, 0), external_calls: num(a.external_calls, 0), cost_status: str(a.cost_status)
+    })),
     llm_primary_calls: llmPrimary,
     llm_repair_calls: llmRepair,
     source_cost_status: sourceCostKnown ? 'known' : 'unknown',
