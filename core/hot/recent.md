@@ -36,10 +36,27 @@ status measured_zero+measured, режим данных «сохранённые 
 checked=20 kept=13 demoted=6 rejected=1; workbook claims are scoped hypotheses. This is the LIVE proof of
 nonzero component-cost rendering (previously only unit-fixture proven). **REPORT-TRUTH D = COMPLETE.**
 
-**Next (this mission):** PHASE 2 approval/progress UX — remove public «максимальный лимит запуска: $8.00»
-(`plan_render_ru.js:179`, cap stays internal) → reuse-aware approval estimate → callback idempotency (no
-«план не найден» after «Запускаю анализ») → neutral completion wording (no «выше/ниже»). Then Stage F §8–12,
-Stage F.5 §13–19, Stage G §20–21. Do NOT start Stage H/I.
+**PHASE 2 = COMPLETE (commit 7f07764, deployed, live-proven).** (a) public «максимальный лимит запуска: $8.00»
+removed from the approval message (cap stays internal in cost_model/gates/telemetry). (b) execution-aware
+estimate: new `cost_model.sourceReusePreflight` (free url_registry prediction) + `projectRequestCost(plan,cfg,
+{preflight})` zeroes collection/deep for reused sources and adds the per-report summary-AI component (never an
+exact $0). (c) `request_planner.classifyApprovalCallback` — a duplicate/late approve tap is acknowledged
+idempotently and NEVER dispatches WF20 twice or says «план не найден». (d) WF20 terminal wording neutral, no
+«выше/ниже». New `tests/test_approval_ux.js` (76); make test ALL PASS $0. Deployed surgically to WF18/19/20/21/
+22/26 (backups `scratchpad/backup/*_prod_20260719_054359.json.gz`), 17 active, webhook 0-pending.
+**Deploy gotcha found+fixed:** `deploy_sync.js` only re-syncs jsCode of EXISTING nodes — it can NOT add a new
+node or rewire connections. WF19's new `Read url_registry` never reached prod, so the preflight always predicted
+collect. New `scratchpad/graft_topology.js` grafts missing nodes (real cred by type, ignores PASTE_ placeholders)
++ replaces connections with repo topology, keeping prod ids/creds. USE IT for any structural workflow change.
+**Live proofs:** planner exec 1082 reuse estimate = «$0.02–0.03 (используются сохранённые данные) / сбор $0
+(снимок от 2026-07-18) / AI-анализ $0 (переиспользуется) / AI-сводка ~$0.02–0.03»; a fresh site = «$0.10–0.15 /
+сбор ~$0.01 / AI-анализ ~$0.07–0.11 / AI-сводка ~$0.02–0.03». Gateway exec 1083: approve tap on COMPLETED plan
+req_1784397139206 → Command Lane `approve_ack_dup` (toast «Уже завершено», no launch), reply «Этот анализ уже
+завершён.», dispatch `approval_dup:duplicate_done`, **WF20 max stayed 1072 (no 2nd execution)**.
+
+**Next (this mission):** Stage F §8–12 (typed TG/VK outcomes, 16 live roles, ≥5 fresh-analysis metrics, F gate) →
+Stage F.5 §13–19 → Stage G §20–21. Do NOT start Stage H/I. Disk floor 500 MB for paid runs (currently ~483 MB —
+reclaim before the fresh-analysis batch: rm superseded claude version, gzip logs/backups).
 
 ---
 
