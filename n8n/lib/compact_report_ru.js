@@ -154,7 +154,16 @@ function crCompactReportRu(p) {
       .map(function (k) { return CR_RU_SRC[crStr(k).toLowerCase()] || crStr(k); }).filter(Boolean);
     L.push('⚠️ ' + (RU_FAIL[state] || RU_FAIL.no_data));
     if (failedNames.length) L.push('Проблемные источники: ' + failedNames.join(', ') + '.');
-    L.push('Это ограничение доступа к данным, а не вывод о рынке или спросе.');
+    // STAGE-F §8 (live telegram exec 1087): only call it an access limitation when access was actually lost. A
+    // source that COLLECTED data but yielded no competitor profiles is NOT an access problem — saying so is a lie.
+    var crOut = Array.isArray(summary.source_outcomes) ? summary.source_outcomes : [];
+    var crAnyData = crOut.some(function (o) { return o && o.has_data; });
+    var crAllAccessFail = crOut.length > 0 && crOut.every(function (o) {
+      return o && ['blocked', 'access_denied', 'timeout', 'provider_failed', 'empty_response', 'unsupported_content'].indexOf(crStr(o.outcome)) >= 0;
+    });
+    if (crAnyData) L.push('Источники доступны, но конкурентных профилей с офферами и ценами в собранных данных не найдено.');
+    else if (crAllAccessFail || !crOut.length) L.push('Это ограничение доступа к данным, а не вывод о рынке или спросе.');
+    else L.push('Это ограничение сбора данных, а не вывод о рынке или спросе.');
     if (crStr(p.cost_line)) L.push(crStr(p.cost_line));
     if (crStr(p.next_action)) L.push(crStr(p.next_action));
     return crFinish(L, 'issue', 600);

@@ -81,4 +81,22 @@ A.section('the execution summary surfaces ONE canonical outcome list all rendere
   A.ok('reuse still recorded in reused_sources (delivery cost truth)', sum.reused_sources.length === 1 && sum.reused_sources[0].source === 'website');
 }
 
+A.section('§8 report honesty — do not blame access when a source actually collected data (live telegram exec 1087)');
+{
+  const CR = require('../n8n/lib/compact_report_ru.js');
+  // telegram collected 22 posts but 0 competitor records extracted — NOT an access limitation.
+  const collected = CR.crCompactReportRu({ bundle: {}, analyses: [], state: 'no_data',
+    summary: { final_state: 'no_data', records_reported: 0, source_outcomes: [{ source: 'telegram', outcome: 'collected_with_data', has_data: true }] },
+    cost_line: '💰 Фактическая стоимость: $0.', next_action: '' }).text;
+  A.ok('collected-but-empty does NOT claim an access limitation', collected.indexOf('ограничение доступа') < 0);
+  A.ok('…it says the collected data held no competitor profiles', collected.indexOf('конкурентных профилей') >= 0);
+  // a genuine access failure still says so.
+  const blocked = CR.crCompactReportRu({ bundle: {}, analyses: [], state: 'failed',
+    summary: { final_state: 'failed', records_reported: 0, source_outcomes: [{ source: 'website', outcome: 'blocked', has_data: false }] }, cost_line: '' }).text;
+  A.ok('genuine access failure still names it', blocked.indexOf('ограничение доступа к данным') >= 0);
+  // legacy summaries (no source_outcomes) keep the prior message (backward compatible).
+  const legacy = CR.crCompactReportRu({ bundle: {}, analyses: [], state: 'no_data', summary: { final_state: 'no_data', records_reported: 0 } }).text;
+  A.ok('legacy (no outcomes) unchanged', legacy.indexOf('ограничение доступа к данным') >= 0);
+}
+
 A.report('source-outcomes');
