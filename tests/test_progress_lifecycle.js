@@ -56,12 +56,25 @@ A.section('WF18 §9 — immediate ack per accepted update (post-claim, exactly o
   A.eq('a new business request gets an immediate ack', rq.lane, 'request_ack');
   A.ok('ack is Russian and generic (no enums)', JSON.parse(rq.telegram_send_body).text.indexOf('Принял запрос') >= 0);
   A.eq('the request still continues to the heavy path', rq.continue_heavy, true);
+  // CALLBACK-IDEMP-001: the fast approve-ack is status-aware — it reads the plan from the already-read batch.
+  const pendPlan = { agent_request_id: 'req_1', owner_user_id: 'u1', chat_id: 'c1', status: 'awaiting_approval', plan_id: 'p1', intent: 'competitor_analysis' };
+  const batchWith = st => [{ valueRanges: [{ range: 'execution_plans!A1:Z9', values: [Object.keys(st), Object.keys(st).map(k => st[k])] }] }];
   const run2 = H.makeRun();
   H.inject(run2, 'Resolve Winner', [{ parsed: { kind: 'callback', chat_id: 'c1', user_id: 'u1', callback_data: 'approve:req_1' }, gate: { callback_query_id: 'cbq9' } }]);
+  H.inject(run2, 'Batch Read Sheets', batchWith(pendPlan));
   const ap = H.runCodeNode(run2, WF18, 'Command Lane', [{ json: {} }])[0].json;
-  A.eq('an approve callback gets an immediate ack', ap.lane, 'approve_ack');
+  A.eq('a FIRST valid approve callback gets an immediate launch ack', ap.lane, 'approve_ack');
   A.ok('approve ack mentions launching the analysis', JSON.parse(ap.telegram_send_body).text.indexOf('Запускаю анализ') >= 0);
   A.ok('approve ack also answers the callback (spinner cleared)', JSON.parse(ap.answer_callback_body).callback_query_id === 'cbq9');
+  // A DUPLICATE tap (plan already running) never re-promises a launch — it clears the spinner with an honest toast.
+  const run2b = H.makeRun();
+  H.inject(run2b, 'Resolve Winner', [{ parsed: { kind: 'callback', chat_id: 'c1', user_id: 'u1', callback_data: 'approve:req_1' }, gate: { callback_query_id: 'cbqA' } }]);
+  H.inject(run2b, 'Batch Read Sheets', batchWith(Object.assign({}, pendPlan, { status: 'approved' })));
+  const apDup = H.runCodeNode(run2b, WF18, 'Command Lane', [{ json: {} }])[0].json;
+  A.eq('a duplicate approve tap does NOT re-promise a launch', apDup.lane, 'approve_ack_dup');
+  A.eq('duplicate tap sends no launch message', apDup.has_reply, false);
+  A.ok('duplicate tap still clears the spinner', JSON.parse(apDup.answer_callback_body).callback_query_id === 'cbqA');
+  A.ok('duplicate tap still continues the heavy path (for the idempotent reply)', apDup.continue_heavy === true);
   const run3 = H.makeRun();
   H.inject(run3, 'Resolve Winner', [{ parsed: { kind: 'callback', chat_id: 'c1', user_id: 'u1', callback_data: 'reject:req_1' }, gate: { callback_query_id: 'cbq9' } }]);
   const rj = H.runCodeNode(run3, WF18, 'Command Lane', [{ json: {} }])[0].json;
@@ -117,14 +130,16 @@ A.section('WF20 §9 — the ONE progress message is edited on the real main line
   H.inject(doneRun, 'Send Progress', [{ ok: true, result: { message_id: 88 } }]);
   H.inject(doneRun, 'Build Execution Summary', [{ summary: { final_state: 'completed', records_reported: 5 } }]);
   const done = H.runCodeNode(doneRun, WF20, 'Progress: Done', [{ json: { xlsx_skipped: false } }])[0].json;
-  A.ok('terminal edit is the completed state', JSON.parse(done.telegram_edit_body).text.indexOf('✅ Анализ завершён') >= 0);
+  // PHASE-2 §8: neutral, non-directional terminal wording.
+  A.ok('terminal edit is the completed state (report + workbook)', JSON.parse(done.telegram_edit_body).text.indexOf('✅ Готово. Отчёт и Excel-файл отправлены.') >= 0);
+  A.ok('terminal edit uses no directional wording', JSON.parse(done.telegram_edit_body).text.indexOf('выше') < 0 && JSON.parse(done.telegram_edit_body).text.indexOf('ниже') < 0);
   const doneEmptyRun = H.makeRun();
   H.inject(doneEmptyRun, 'Approval & Budget Gate', [{ request: { agent_request_id: 'r1', chat_id: 'c1' } }]);
   H.inject(doneEmptyRun, 'Send Progress', [{ ok: true, result: { message_id: 88 } }]);
   H.inject(doneEmptyRun, 'Build Execution Summary', [{ summary: { final_state: 'reporting', records_reported: 0 } }]);
   const doneEmpty = H.runCodeNode(doneEmptyRun, WF20, 'Progress: Done', [{ json: { xlsx_skipped: true } }])[0].json;
   A.ok('empty run never claims a delivered workbook (live exec 1048 defect)',
-    JSON.parse(doneEmpty.telegram_edit_body).text.indexOf('Excel') < 0 && JSON.parse(doneEmpty.telegram_edit_body).text.indexOf('данных не собрано') >= 0);
+    JSON.parse(doneEmpty.telegram_edit_body).text.indexOf('Excel') < 0 && JSON.parse(doneEmpty.telegram_edit_body).text.indexOf('Данные для анализа не получены') >= 0);
   const skipped = editor('Progress: Analysis', { ok: false });
   A.eq('missing message_id skips the edit silently', skipped.progress_skipped, true);
   // no internal leakage in any stage name

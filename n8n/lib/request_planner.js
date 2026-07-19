@@ -428,10 +428,32 @@ function pendingPlansForOwner(planRows, ownerUserId) {
   return (planRows || []).filter(r => str(r.owner_user_id) === str(ownerUserId) && str(r.status) === 'awaiting_approval');
 }
 
+// CALLBACK-IDEMP-001: an approve callback is not always "start the plan". A duplicate delivery (dedup'd at the
+// claim gate) never reaches here, but a REPEATED BUTTON TAP is a fresh update with the same callback_data — and
+// by then the first tap has already flipped the plan out of `awaiting_approval`. Looking only for an
+// awaiting_approval row then reports "план не найден" for a run that is demonstrably approved/running/finished.
+// This classifies the situation from ALL of the owner's rows for the request, so the caller can acknowledge an
+// already-running/finished analysis idempotently and NEVER dispatch a second execution.
+//   -> { kind: 'apply'|'duplicate_running'|'duplicate_done'|'duplicate_closed'|'no_plan', plan }
+function classifyApprovalCallback(planRows, claim) {
+  claim = claim || {};
+  const arid = str(claim.agent_request_id), owner = str(claim.owner_user_id);
+  const forReq = (planRows || []).filter(r => r && str(r.agent_request_id) === arid && str(r.owner_user_id) === owner);
+  if (!forReq.length) return { kind: 'no_plan', plan: null };
+  const pending = forReq.filter(r => str(r.status) === 'awaiting_approval');
+  if (pending.length) return { kind: 'apply', plan: pending[pending.length - 1] };
+  // No awaiting row: this is a duplicate. Classify by the latest row's status.
+  const latest = forReq[forReq.length - 1];
+  const st = low(latest.status);
+  if (st === 'completed' || st === 'done' || st === 'delivered' || st === 'no_data') return { kind: 'duplicate_done', plan: latest };
+  if (planIsTerminal(st)) return { kind: 'duplicate_closed', plan: latest }; // failed/error/rejected/cancelled/expired/superseded
+  return { kind: 'duplicate_running', plan: latest }; // approved / collecting / analyzing / reporting / …
+}
+
 module.exports = {
   deterministicPlan, normalizePlan, validatePlanJSON, planToApprovalText,
   planHash, planIdentity, buildPlanRow, validateApproval, pendingPlansForOwner,
   blockedRequestedSources, extractSafeUrls, extractExplicitSources,
   planFingerprint, findReusablePlan, planIsTerminal,
-  PLAN_ANALYSIS_MODES, inferAnalysisMode
+  PLAN_ANALYSIS_MODES, inferAnalysisMode, classifyApprovalCallback
 };

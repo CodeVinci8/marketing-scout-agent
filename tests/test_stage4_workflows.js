@@ -133,7 +133,13 @@ A.eq('approve callback bound to awaiting plan => wf20', dAppr.intake.dispatch_ta
 A.eq('approve binds the existing request id', dAppr.intake.request.agent_request_id, 'req_900');
 const dStale = dispatch(cbParsed, { plans: [Object.assign({}, planRow, { status: 'approved' })] });
 A.eq('stale/already-approved => local (not re-dispatched)', dStale.intake.dispatch_target, 'local');
-A.ok('stale reason recorded', /approval_invalid/.test(dStale.intake.dispatch_reason));
+// CALLBACK-IDEMP-001: a duplicate tap of an already-running plan is an IDEMPOTENT ack, not a contradictory error.
+A.ok('duplicate-of-running recorded as idempotent (never «план не найден»)', dStale.intake.dispatch_reason === 'approval_dup:duplicate_running');
+const dDone = dispatch(cbParsed, { plans: [Object.assign({}, planRow, { status: 'completed' })] });
+A.eq('duplicate-of-completed => local (no re-dispatch)', dDone.intake.dispatch_target, 'local');
+A.ok('duplicate-of-completed recorded as already-finished', dDone.intake.dispatch_reason === 'approval_dup:duplicate_done');
+const dNoPlan = dispatch(cbParsed, { plans: [] });
+A.ok('genuinely absent plan still reports no_plan (real error path)', dNoPlan.intake.dispatch_reason === 'approval_invalid:no_plan');
 
 // ----- WF19: deterministic plan + planner LLM guard (off by default) -------------------------------------
 A.section('WF19 — planner: deterministic plan always built; LLM guard OFF by default');

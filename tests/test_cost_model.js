@@ -116,7 +116,9 @@ A.section('B3 — cost breakdown band names AI as OFF when it is off, never quot
   const msg = R.planApprovalMessageRu(plan, { cost: proj });
   A.ok('shows a low–high band', /Оценка стоимости: \$0\.06–0\.09/.test(msg.text), msg.text);
   A.ok('names AI enrichment as off', msg.text.indexOf('AI-анализ: выключен') >= 0, msg.text);
-  A.ok('shows the run hard cap line', msg.text.indexOf('максимальный лимит запуска: $8') >= 0, msg.text);
+  // PHASE-2: the internal hard cap is NEVER rendered in the normal approval message.
+  A.ok('NEVER shows the hard-cap line', msg.text.indexOf('максимальный лимит запуска') < 0, msg.text);
+  A.ok('NEVER shows $8.00', msg.text.indexOf('$8.00') < 0 && msg.text.indexOf('$8') < 0, msg.text);
   A.ok('breakdown never quotes a Claude $ amount when AI is off', msg.text.indexOf('AI-анализ: ~$') < 0, msg.text);
   const projLlm = CM.projectRequestCost(plan, Object.assign({}, cfg, { enable_llm_analysis: true }));
   const msgLlm = R.planApprovalMessageRu(plan, { cost: projLlm });

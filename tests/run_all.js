@@ -72,6 +72,7 @@ const JS_SUITES = [
   ['reuse-observability', 'test_reuse_observability.js'],
   ['analysis-modes', 'test_analysis_modes.js'],
   ['report-truth-quality', 'test_report_truth_quality.js'],
+  ['approval-ux', 'test_approval_ux.js'],
   ['stage-f-report', 'test_stage_f_report.js'],
   ['error-sanitizer', 'test_error_sanitizer.js'],
   ['source-execution-policy', 'test_source_execution_policy.js'],

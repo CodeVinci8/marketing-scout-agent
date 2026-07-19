@@ -83,7 +83,9 @@ function ruSources(list, dataMode) {
 function planApprovalMessageRu(plan, opts) {
   plan = plan || {}; opts = opts || {};
   var dataMode = ruText(opts.data_mode);
-  var fresh = dataMode !== 'existing_data';
+  // COST-REUSE-001: a 'reuse' run makes ZERO new external calls but is NOT "no active sources" — it analyzes a
+  // saved snapshot. Only a genuinely fresh scan with no planned calls fails closed.
+  var fresh = dataMode !== 'existing_data' && dataMode !== 'reuse';
   if (fresh && ruNum(plan.max_external_calls, 0) <= 0) {
     return {
       ok: false, status: 'no_active_sources',
@@ -160,23 +162,40 @@ function planApprovalMessageRu(plan, opts) {
     // so the user is never quoted a Claude cost for work that will not run. The hard cap is the run ceiling.
     var lo = ruNum(cost.cost_low_usd, cost.projected_cost_usd), hi = ruNum(cost.cost_high_usd, cost.projected_cost_usd);
     var bd = cost.breakdown || {};
+    var mgn = ruNum(cost.reserve_margin, 0.5);
+    var band = function (v) { return '~$' + d2(v) + '–' + d2(Math.round(v * (1 + mgn) * 100) / 100); };
+    // COST-REUSE-001: an execution-aware estimate reflects what the run will actually spend — reused data is $0
+    // collection / $0 deep analysis, and only the per-report summary AI remains. Never a mechanical fixed band.
+    var reuseCol = cost.reuse_collection === true, reuseAn = cost.reuse_analysis === true;
+    var snapDate = ruText(cost.snapshot_collected_at).slice(0, 10);
     lines.push('');
-    lines.push('💰 Оценка стоимости: $' + d2(lo) + '–' + d2(hi));
-    if (ruNum(bd.firecrawl_usd, 0) > 0) lines.push('• сбор данных: ~$' + d2(bd.firecrawl_usd));
-    if (ruNum(bd.apify_usd, 0) > 0) lines.push('• объявления: ~$' + d2(bd.apify_usd));
+    lines.push('💰 Оценка стоимости: $' + d2(lo) + '–' + d2(hi) + ((reuseCol || reuseAn) ? ' (используются сохранённые данные)' : ''));
+    if (reuseCol) {
+      lines.push('• сбор данных: $0' + (snapDate ? ' (сохранённый снимок от ' + snapDate + ')' : ' (используются сохранённые данные)'));
+    } else {
+      if (ruNum(bd.firecrawl_usd, 0) > 0) lines.push('• сбор данных: ~$' + d2(bd.firecrawl_usd));
+      if (ruNum(bd.apify_usd, 0) > 0) lines.push('• объявления: ~$' + d2(bd.apify_usd));
+    }
     // §4 AI-COST-001: three honest states. ON+usable -> quote the MEASURED evidence-based AI range (never the old
     // $0.01-0.02 fiction). ON but the credential is missing/failing -> we must NOT promise analysis that cannot
     // run, and must not bill for it. OFF -> say it is off, with no AI cost in the total.
-    var aiUsd = ruNum(bd.ai_usd, ruNum(bd.claude_usd, 0) + ruNum(bd.claude_analysis_usd, 0));
-    if (cost.llm_enabled && aiUsd > 0) {
-      var aiHi = Math.round(aiUsd * (1 + ruNum(cost.reserve_margin, 0.5)) * 100) / 100;
-      lines.push('• AI-анализ: ~$' + d2(aiUsd) + '–' + d2(aiHi));
+    var deepUsd = ruNum(bd.claude_analysis_usd, 0) + ruNum(bd.claude_usd, 0);
+    var summaryUsd = ruNum(bd.summary_ai_usd, 0);
+    if (reuseAn) {
+      lines.push('• AI-анализ: $0 (будет переиспользован сохранённый анализ)');
+    } else if (cost.llm_enabled && deepUsd > 0) {
+      lines.push('• AI-анализ: ' + band(deepUsd));
     } else if (cost.llm_requested && cost.llm_auth_ok === false) {
       lines.push('• AI-анализ: сейчас недоступен — отчёт будет собран без него');
-    } else {
+    } else if (cost.llm_enabled !== true) {
       lines.push('• AI-анализ: выключен');
     }
-    if (ruNum(cost.hard_cap_usd, 0) > 0) lines.push('• максимальный лимит запуска: $' + d2(cost.hard_cap_usd));
+    // The per-report summary AI: present only in the execution-aware projection. It is why a full-reuse run is
+    // never promised as an exact $0 total.
+    if (summaryUsd > 0) lines.push('• AI-сводка: ' + band(summaryUsd));
+    // §D PHASE-2: the internal hard cap (source+LLM budget ceiling) is an operator/diagnostics value — it is
+    // enforced in cost_model/approval-gate/execution-gate/telemetry and lives ONLY in rows + the hidden tech
+    // sheet. It must never appear in the normal Telegram approval message.
   } else if (isFinite(pc) && pc > 0 && opts.projected_reliable !== false) {
     lines.push('');
     lines.push('💰 Ориентировочная стоимость: около $' + d2(pc) + '.');
@@ -211,6 +230,22 @@ function approvalFailureRu(reason) {
   if (first.indexOf('not_awaiting_approval') === 0) return 'этот план уже обработан';
   return ruEnum(RU_APPROVAL_FAIL, first, 'подтверждение устарело или не может быть применено');
 }
+
+// CALLBACK-IDEMP-001: a repeated approval tap for a plan that is already running/finished gets an idempotent,
+// NON-contradictory acknowledgement — never «план не найден» for a run the user can see happening.
+var RU_APPROVAL_DUP = {
+  duplicate_running: 'Этот анализ уже запущен.',
+  duplicate_done: 'Этот анализ уже завершён.',
+  duplicate_closed: 'Этот запрос уже закрыт.'
+};
+function approvalDuplicateRu(kind) { return ruEnum(RU_APPROVAL_DUP, ruText(kind), 'Этот анализ уже обрабатывается.'); }
+// Short callback-toast (answerCallbackQuery text) for the same states — clears the button spinner instantly.
+var RU_APPROVAL_DUP_TOAST = {
+  duplicate_running: 'Уже выполняется',
+  duplicate_done: 'Уже завершено',
+  duplicate_closed: 'Уже закрыто'
+};
+function approvalDuplicateToastRu(kind) { return ruEnum(RU_APPROVAL_DUP_TOAST, ruText(kind), 'Уже обрабатывается'); }
 
 // ================= UX-RU-002 — Vinci persona + full user-facing message surface =========================
 // The bot's audience is a Russian-speaking credit broker, not a developer. NOTHING below may contain env var
@@ -492,7 +527,7 @@ var RU_SOURCE_STATUS = { active: 'активен', paused: 'на паузе', re
 function ruSourceStatusLabel(status) { return ruEnum(RU_SOURCE_STATUS, ruText(status), 'в обработке'); }
 
 module.exports = {
-  planApprovalMessageRu, planStatusLineRu, approvalFailureRu,
+  planApprovalMessageRu, planStatusLineRu, approvalFailureRu, approvalDuplicateRu, approvalDuplicateToastRu,
   ruIntent, ruNiche, ruRegion, ruSources, ruEnum, ruIntentAny,
   ruStartMessage, ruWhoAmIMessage, ruIsWhoAmI,
   ruCapabilityGroups, ruHelpMessage, ruCapLabel, ruCapAdvertisable,

@@ -255,8 +255,8 @@ A.section('WF20 wiring — validation + compact renderer + completion order');
   A.ok('Send Report XLSX -> Progress: Done', to('Send Report XLSX').indexOf('Progress: Done') >= 0);
   A.ok('text send no longer triggers completion', to('Send Telegram Report').indexOf('Progress: Done') < 0);
   const done = node(wf20, 'Progress: Done').parameters.jsCode;
-  has('completion names both deliveries', done, 'Отчёт и Excel-файл отправлены выше');
-  has('no_data completion is honest', done, 'подходящих данных не собрано');
+  has('completion names both deliveries (neutral, non-directional)', done, 'Готово. Отчёт и Excel-файл отправлены.');
+  has('no_data completion is honest', done, 'Данные для анализа не получены');
   const pt = node(wf20, 'Build Progress Update').parameters.jsCode;
   A.ok('progress stage text updated in embedded tracker', node(wf20, 'Progress: Report').parameters.jsCode.indexOf('Данные собраны, формирую отчёт') >= 0);
 }

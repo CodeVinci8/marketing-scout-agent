@@ -441,7 +441,7 @@ return [{json:{fast:true,fast_kind:d.kind,telegram_send_body:JSON.stringify({cha
   // ---- §8 command lane: /status renders from the ALREADY-READ batch (no context assembly, no persistence
   //      chain, no WF22 dispatch); /cancel gets an immediate ack and CONTINUES to the real WF22 cancel. Both
   //      run AFTER the durable claim (Resolve Winner), so idempotency is intact. ----
-  code('wf18-cmdlane', 'Command Lane', [20, -220], ['plan_render_ru', 'sheets_access', 'telegram_io', 'request_lifecycle'], `
+  code('wf18-cmdlane', 'Command Lane', [20, -220], ['plan_render_ru', 'sheets_access', 'telegram_io', 'request_lifecycle', 'request_planner'], `
 var g=$('Resolve Winner').first().json;var p=g.parsed||{};var gate=g.gate||{};
 var kind=String(p.kind||'');
 if(kind==='cancel'){
@@ -452,7 +452,16 @@ if(kind==='cancel'){
 // spinner via answerCallbackQuery. WF20's single editable progress message follows for approved runs.
 if(kind==='callback'){
   if(/^approve:/.test(String(p.callback_data||''))){
-    return [{json:{lane:'approve_ack',continue_heavy:true,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:'✅ Принято! Запускаю анализ — прогресс покажу здесь.'}),answer_callback_body:JSON.stringify(answerCallbackBody(String(gate.callback_query_id||''),'Принято'))}}];
+    // CALLBACK-IDEMP-001: only the FIRST valid approve promises «Запускаю анализ». A duplicate/late tap (plan
+    // already running or finished) just clears the spinner with an honest toast; the heavy path then sends the
+    // idempotent «уже запущен/завершён» reply — the user never sees «Запускаю» followed by «план не найден».
+    var __arid='';var __am=String(p.callback_data||'').match(/^approve:(.+)$/);if(__am)__arid=__am[1];
+    var __plans=[];try{__plans=extractTab($('Batch Read Sheets').first().json,'execution_plans').map(function(i){return i.json;});}catch(e){__plans=[];}
+    var __cls=classifyApprovalCallback(__plans,{owner_user_id:p.user_id,chat_id:p.chat_id,agent_request_id:__arid});
+    if(__cls.kind==='apply'){
+      return [{json:{lane:'approve_ack',continue_heavy:true,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:'✅ Принято! Запускаю анализ — прогресс покажу здесь.'}),answer_callback_body:JSON.stringify(answerCallbackBody(String(gate.callback_query_id||''),'Принято'))}}];
+    }
+    return [{json:{lane:'approve_ack_dup',continue_heavy:true,has_reply:false,answer_callback_body:JSON.stringify(answerCallbackBody(String(gate.callback_query_id||''),(__cls.kind==='no_plan')?'Готово':approvalDuplicateToastRu(__cls.kind)))}}];
   }
   // DISCOVERY-004: candidate buttons (disc_add/disc_all/disc_more/disc_none) — clear the spinner instantly with a
   // short toast; WF22 (domain=discovery) sends the real reply on the heavy path.
@@ -570,11 +579,21 @@ var approval={ok:false,reason:'',plan:null};
 var dispatch_target='local';var dispatch_reason=action;
 if(action==='build_plan'){dispatch_target=(r.capability_available===true)?'wf19':'local';if(r.capability_available!==true)dispatch_reason='capability_unavailable';}
 else if(action==='approve'){
-  var planRow=null;for(var i=0;i<planRowsAll.length;i++){if(String(planRowsAll[i].agent_request_id)===String(arid)&&String(planRowsAll[i].status)==='awaiting_approval'){planRow=planRowsAll[i];}}
-  var v=validateApproval(planRow,{owner_user_id:p.user_id,chat_id:p.chat_id,agent_request_id:arid});
-  approval={ok:v.ok,reason:v.reason,plan:planRow};
-  if(v.ok){dispatch_target=(String(planRow.intent).indexOf('deep')>=0)?'wf21':'wf20';}
-  else{dispatch_target='local';dispatch_reason='approval_invalid:'+v.reason;}
+  // CALLBACK-IDEMP-001: a REPEATED approve tap is a fresh update (the claim gate only dedups identical update_ids),
+  // and by now the first tap has moved the plan out of awaiting_approval. classifyApprovalCallback looks at ALL of
+  // the owner's rows for the request so a duplicate is acknowledged idempotently — it NEVER dispatches WF20 twice
+  // and NEVER reports «план не найден» for a run the user can see running/finished.
+  var cls=classifyApprovalCallback(planRowsAll,{owner_user_id:p.user_id,chat_id:p.chat_id,agent_request_id:arid});
+  if(cls.kind==='apply'){
+    var v=validateApproval(cls.plan,{owner_user_id:p.user_id,chat_id:p.chat_id,agent_request_id:arid});
+    approval={ok:v.ok,reason:v.reason,plan:cls.plan};
+    if(v.ok){dispatch_target=(String(cls.plan.intent).indexOf('deep')>=0)?'wf21':'wf20';}
+    else{dispatch_target='local';dispatch_reason='approval_invalid:'+v.reason;}
+  }else{
+    approval={ok:false,reason:cls.kind,plan:cls.plan};
+    dispatch_target='local';
+    dispatch_reason=(cls.kind==='no_plan')?'approval_invalid:no_plan':('approval_dup:'+cls.kind);
+  }
 }
 else if(action==='reject'){dispatch_target='wf22';dispatch_reason='reject';}
 else if(action==='cancel'||action==='status'||action==='manage_memory'||action==='manage_sources'||action==='manage_discovery'){dispatch_target='wf22';}
@@ -747,7 +766,8 @@ var caps=availableCapabilities(cfg);var text;
 var utext=String((r.parsed&&r.parsed.text)||'');
 // UX-RU-002: every user-visible branch renders through the canonical Russian layer (plan_render_ru).
 // Internal reasons/enums (dispatch_reason, unavailable_reason, intent ids) stay in execution data only.
-if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_invalid')===0){text='Это подтверждение нельзя применить: '+approvalFailureRu(d.dispatch_reason.replace('approval_invalid:',''))+'.';}
+if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_dup:')===0){text=approvalDuplicateRu(d.dispatch_reason.replace('approval_dup:',''));}
+else if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_invalid')===0){text='Это подтверждение нельзя применить: '+approvalFailureRu(d.dispatch_reason.replace('approval_invalid:',''))+'.';}
 else if(d.dispatch_reason==='capability_unavailable'){text=ruCapabilityUnavailableMessage(r.capability);}
 else if(r.route==='clarify'){text=clarificationReply(r.clarification);}
 else if(d.intent&&d.intent.intent==='help'){
@@ -991,6 +1011,10 @@ write('19_request_planner.json', wf('19 — Request Planner (deterministic + gua
   // reached the provider proves the bound credential works; the newest auth_error proves it does not. Reads only
   // provider-outcome columns, never a secret and never another owner's analysis content.
   sheetsRead('wf19-readtel', 'Read llm_analysis_telemetry', [-260, 200], 'llm_analysis_telemetry'),
+  // COST-REUSE-001: a FREE preflight of stored source snapshots — so the approval estimate reflects whether the
+  // run will reuse a fresh snapshot ($0 collection / $0 deep analysis, only the per-report summary AI) instead of
+  // mechanically quoting a fresh-collection band. Reads only registry provenance, never another owner's content.
+  sheetsRead('wf19-readreg', 'Read url_registry', [-260, 380], 'url_registry'),
   code('wf19-det', 'Deterministic Plan', [-40, 0], ['request_planner', 'llm_capability'],
     CALLER + "\nvar ci=callerInput();\nvar cfg0=$('Resolve Agent Config').first().json;\nvar tel=[];try{tel=($('Read llm_analysis_telemetry').all()||[]).map(function(x){return x.json;});}catch(e){tel=[];}\n// Fold the observed AI capability into the config so cost_model + the RU renderer tell the same truth.\nvar cfg=withClaudeCapability(cfg0,tel,{});\nvar text=String(ci.request_text||ci.text||'');\nvar plan=deterministicPlan(text,cfg);\nreturn [{json:{request_text:text,agent_request_id:String(ci.agent_request_id||''),chat_id:String(ci.chat_id||''),owner_user_id:String(ci.owner_user_id||''),conversation_id:String(ci.conversation_id||''),data_mode:String(ci.data_mode||'live'),plan:plan,cfg:cfg,claude_capability:{available:cfg.claude_available,mode:cfg.claude_auth_mode,proof_at:cfg.claude_proof_at}}}];"),
   code('wf19-guard', 'Planner LLM Guard', [180, 0], ['approval_gate'],
@@ -1003,13 +1027,14 @@ write('19_request_planner.json', wf('19 — Request Planner (deterministic + gua
     "var j=$('Build Planner Prompt').first().json;var cfg=j.cfg;\nvar text='';try{var c=($json&&$json.content)||[];for(var i=0;i<c.length;i++){if(c[i]&&c[i].type==='text')text+=String(c[i].text||'');}}catch(e){}\nvar v=validatePlanJSON(text,cfg);\nvar plan=v.valid?v.plan:deterministicPlan(j.request_text,cfg);\nreturn [{json:{plan:plan,plan_valid:v.valid,plan_reason:v.reason,plan_source:plan.plan_source,cfg:cfg}}];"),
   // Canonical planner RESULT (WF19-PLAN-002): one of plan_ready / clarification_required / planning_failed.
   // WF19 NEVER sends Telegram directly — WF18 owns the approval-message delivery and the durable plan persistence.
-  code('wf19-approval', 'Build Approval Message', [840, 120], ['request_planner', 'telegram_io', 'scope_preview', 'plan_render_ru', 'cost_model'],
-    "var src;try{src=$('Validate Plan').first().json;}catch(e){src=$('Deterministic Plan').first().json;}\nvar dp=$('Deterministic Plan').first().json;\nvar plan=src.plan;var cfg=src.cfg||{};\nif(!plan||!(plan.sources&&plan.sources.length)){return [{json:{status:'clarification_required',clarification:'Уточните нишу/регион и источник для поиска конкурентов.',user_message:'Уточните нишу/регион и источник для поиска конкурентов.',plan:null}}];}\nvar arid=String(dp.agent_request_id||'req_pending');\n// UX-RU-001: ONE humanized Russian approval block; internal enums/counters stay in plan rows + scope_preview (logs only).\n// §7 COST-UX-001: projection from the ACTUAL planned provider calls; the hard cap is never rendered.\nvar proj=projectRequestCost(plan,cfg);\nvar rend=planApprovalMessageRu(plan,{data_mode:String(dp.data_mode||''),projected_cost_usd:proj.projected_cost_usd,projected_reliable:proj.reliable,cost:proj});\nif(!rend.ok){return [{json:{status:rend.status,clarification:rend.text,user_message:rend.text,plan:null,agent_request_id:arid,chat_id:String(dp.chat_id||''),owner_user_id:String(dp.owner_user_id||'')}}];}\n// AVITO-BLOCK-001: if the user explicitly named a currently-blocked source (Avito), tell them honestly instead of silently dropping it.\nvar blockedReq=blockedRequestedSources(String(dp.request_text||''),cfg);\nif(blockedReq.indexOf('avito')>=0){rend.text=ruAvitoUnavailableMessage()+'\\n\\n'+rend.text;}\nvar kb=approvalKeyboard(arid);\n// structured scope+cost preview kept for logs/evidence — NEVER concatenated into the user message\nvar preview=buildScopePreview({goal:plan.intent||plan.expected_output,niche:plan.niche,region:plan.region,competitors:plan.competitors||[],platforms:plan.sources||['website'],cfg:cfg,refresh_plan:{expected_calls:Number(plan.max_external_calls)||0},expected_llm_calls:0,max_items:Number(plan.max_items)||undefined,outputs:{telegram_summary:true,xlsx:true,charts:true,evidence:true}});\nreturn [{json:{status:'plan_ready',plan:plan,plan_source:plan.plan_source,approval_text:rend.text,projected_cost_usd:proj.projected_cost_usd,projected_cost_reliable:proj.reliable,hard_cap_usd:proj.hard_cap_usd,cost_breakdown:proj.breakdown,scope_preview:preview,scope_preview_text:preview.text,approval_keyboard:kb,state_transition:'awaiting_approval',agent_request_id:arid,chat_id:String(dp.chat_id||''),owner_user_id:String(dp.owner_user_id||''),claude_capability:dp.claude_capability||{}}}];")
+  code('wf19-approval', 'Build Approval Message', [840, 120], ['request_planner', 'telegram_io', 'scope_preview', 'plan_render_ru', 'cost_model', 'source_execution_policy'],
+    "var src;try{src=$('Validate Plan').first().json;}catch(e){src=$('Deterministic Plan').first().json;}\nvar dp=$('Deterministic Plan').first().json;\nvar plan=src.plan;var cfg=src.cfg||{};\nif(!plan||!(plan.sources&&plan.sources.length)){return [{json:{status:'clarification_required',clarification:'Уточните нишу/регион и источник для поиска конкурентов.',user_message:'Уточните нишу/регион и источник для поиска конкурентов.',plan:null}}];}\nvar arid=String(dp.agent_request_id||'req_pending');\n// UX-RU-001: ONE humanized Russian approval block; internal enums/counters stay in plan rows + scope_preview (logs only).\n// §7 COST-UX-001: projection from the ACTUAL planned provider calls; the hard cap is never rendered.\n// COST-REUSE-001: a FREE preflight of url_registry decides whether this run will REUSE fresh snapshots, so the\n// estimate is execution-aware (reuse => $0 collection / $0 deep analysis, only the per-report summary AI) instead\n// of a mechanical fresh-collection band. url_registry rows -> the policy's snapshot shape (owner-scoped).\nvar regRows=[];try{regRows=($('Read url_registry').all()||[]).map(function(x){return x.json;}).filter(function(r){return r&&(r.normalized_source_url||r.source_url);});}catch(e){regRows=[];}\nvar snaps=regRows.map(function(r){return {source_url:r.normalized_source_url||r.source_url,normalized_source_url:r.normalized_source_url,last_seen_at:r.last_seen_at||r.first_seen_at,processing_status:r.last_processing_status,run_id:r.run_id,last_route:r.last_route,owner_user_id:r.owner_user_id};});\nvar pf=null;try{pf=sourceReusePreflight(plan,cfg,snaps,decideSourceExecution,{owner_user_id:String(dp.owner_user_id||'')});}catch(e){pf=null;}\nvar proj=projectRequestCost(plan,cfg,pf?{preflight:pf}:{});\nvar rend=planApprovalMessageRu(plan,{data_mode:String((pf&&pf.data_mode)||dp.data_mode||''),projected_cost_usd:proj.projected_cost_usd,projected_reliable:proj.reliable,cost:proj});\nif(!rend.ok){return [{json:{status:rend.status,clarification:rend.text,user_message:rend.text,plan:null,agent_request_id:arid,chat_id:String(dp.chat_id||''),owner_user_id:String(dp.owner_user_id||'')}}];}\n// AVITO-BLOCK-001: if the user explicitly named a currently-blocked source (Avito), tell them honestly instead of silently dropping it.\nvar blockedReq=blockedRequestedSources(String(dp.request_text||''),cfg);\nif(blockedReq.indexOf('avito')>=0){rend.text=ruAvitoUnavailableMessage()+'\\n\\n'+rend.text;}\nvar kb=approvalKeyboard(arid);\n// structured scope+cost preview kept for logs/evidence — NEVER concatenated into the user message\nvar preview=buildScopePreview({goal:plan.intent||plan.expected_output,niche:plan.niche,region:plan.region,competitors:plan.competitors||[],platforms:plan.sources||['website'],cfg:cfg,refresh_plan:{expected_calls:Number(plan.max_external_calls)||0},expected_llm_calls:0,max_items:Number(plan.max_items)||undefined,outputs:{telegram_summary:true,xlsx:true,charts:true,evidence:true}});\nreturn [{json:{status:'plan_ready',plan:plan,plan_source:plan.plan_source,approval_text:rend.text,projected_cost_usd:proj.projected_cost_usd,projected_cost_reliable:proj.reliable,hard_cap_usd:proj.hard_cap_usd,cost_breakdown:proj.breakdown,expected_data_mode:String(proj.data_mode||''),scope_preview:preview,scope_preview_text:preview.text,approval_keyboard:kb,state_transition:'awaiting_approval',agent_request_id:arid,chat_id:String(dp.chat_id||''),owner_user_id:String(dp.owner_user_id||''),claude_capability:dp.claude_capability||{}}}];")
 ], [
   ['Manual Start', 'Resolve Agent Config'],
   ['When Called by Agent', 'Resolve Agent Config'],
   ['Resolve Agent Config', 'Read llm_analysis_telemetry'],
-  ['Read llm_analysis_telemetry', 'Deterministic Plan'],
+  ['Read llm_analysis_telemetry', 'Read url_registry'],
+  ['Read url_registry', 'Deterministic Plan'],
   ['Deterministic Plan', 'Planner LLM Guard'],
   ['Planner LLM Guard', 'LLM Planner Enabled?'],
   ['LLM Planner Enabled?', 'Build Planner Prompt', 0],
@@ -1328,7 +1353,7 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
     var slug = label.toLowerCase().replace(/[^a-z]+/g, '');
     return [
       code('wf20-prog' + slug, 'Progress: ' + label, [x, -340], ['progress_tracker'],
-        "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}\nif(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=" + (stage - 1) + ";st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st," + stage + ",{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:" + stage + ",telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:" + (stage === 10 ? "(function(){var fs='completed';var rec=0;try{var s=($('Build Execution Summary').first().json||{}).summary||{};fs=String(s.final_state||'completed');rec=Number(s.records_reported)||0;}catch(e){}var xs=false;try{xs=$json.xlsx_skipped===true;}catch(e){}if(fs==='failed')return '⚠️ Анализ остановлен — данные собрать не удалось.';if(fs==='no_data'||rec===0)return '✅ Готово: подходящих данных не собрано. Подробности выше.';if(fs==='partial')return '✅ Анализ завершён частично. Отчёт отправлен выше.';if(xs)return '✅ Анализ завершён. Отчёт отправлен выше.';return '✅ Анализ завершён. Отчёт и Excel-файл отправлены выше.';})()" : 'up.text') + "})}}];"),
+        "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}\nif(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=" + (stage - 1) + ";st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st," + stage + ",{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:" + stage + ",telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:" + (stage === 10 ? "(function(){var fs='completed';var rec=0;try{var s=($('Build Execution Summary').first().json||{}).summary||{};fs=String(s.final_state||'completed');rec=Number(s.records_reported)||0;}catch(e){}var xs=false;try{xs=$json.xlsx_skipped===true;}catch(e){}/* CALLBACK-IDEMP/UX §8: neutral, state-aware terminal wording — the progress edit stays at its ORIGINAL position in Telegram history, so «выше/ниже» is always unreliable. This edit fires only AFTER the last delivery branch (XLSX sent or explicitly skipped). */if(fs==='failed')return '⚠️ Анализ не завершён: данные получить не удалось.';if(fs==='no_data'||rec===0)return '✅ Проверка завершена. Данные для анализа не получены.';if(fs==='partial')return '⚠️ Анализ завершён частично. Доступные результаты отправлены.';if(xs)return '✅ Готово. Отчёт отправлен.';return '✅ Готово. Отчёт и Excel-файл отправлены.';})()" : 'up.text') + "})}}];"),
       Object.assign(httpTelegramEdit('wf20-editprog' + slug, 'Edit Progress (' + label + ')', [x + 110, -340]), { onError: 'continueRegularOutput' })
     ];
   })
