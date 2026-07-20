@@ -12,6 +12,9 @@ A.section('report_gate — embedded mirrors are byte-identical to the shared lib
 const libCore = (function () {
   let s = fs.readFileSync(path.join(__dirname, '..', 'n8n', 'lib', 'report_gate.js'), 'utf8');
   s = s.replace(/^'use strict';\s*$/m, '').replace(/module\.exports[\s\S]*$/m, '');
+  // RUN-LINEAGE-001: a Code node cannot require() a local file, so the embed step strips destructured local
+  // requires and inlines that lib alongside (same rule tools/gen_stage4_workflows.js uses).
+  s = s.replace(/^\s*const\s*\{[^}]*\}\s*=\s*require\('\.\/[^']+'\);\s*$/gm, '');
   return s.trim();
 })();
 for (const [file, node] of [
@@ -31,19 +34,24 @@ const health = [
   { source_run_id: 'mt', data_mode: 'manual_test', quality_status: 'healthy', report_eligible: false, quality_flags: 'manual_test_data' },
   { source_run_id: 'q', data_mode: 'live', quality_status: 'quarantined', report_eligible: false, quality_flags: 'broken_brand' },
   { source_run_id: 'd', data_mode: 'live', quality_status: 'degraded', report_eligible: false, quality_flags: 'high_repair_rate' },
+  // PENDING-MINORITY-001: 'p' is a run with SOME records pending — WF16 keeps report_eligible=true because
+  // they are not ALL pending. The run stays eligible; the per-record gate drops the individual pending rows.
   { source_run_id: 'p', data_mode: 'live', quality_status: 'healthy', report_eligible: true, quality_flags: 'pending_review' },
+  // 'pp' is a run whose records are ALL pending — WF16 sets report_eligible=false + review_status=pending. Fail closed.
+  { source_run_id: 'pp', data_mode: 'live', quality_status: 'healthy', report_eligible: false, quality_flags: 'pending_review', review_status: 'pending' },
   { source_run_id: 'st', data_mode: 'live', quality_status: 'healthy', report_eligible: true, quality_flags: 'stale_source' },
   { source_run_id: 'sf', data_mode: 'live', quality_status: 'healthy', report_eligible: true, quality_flags: 'semantic_validation_failed' }
 ];
 
 A.section('report_gate — default excludes everything non-healthy');
 const def = RG.buildEligibility(health, {});
-A.eq('only healthy run eligible', def.eligible_run_ids, ['h']);
+A.eq('healthy + minority-pending runs eligible (PENDING-MINORITY-001)', def.eligible_run_ids, ['h', 'p']);
 A.ok('fixture excluded', def.excluded_run_ids.indexOf('fx') >= 0);
 A.ok('manual_test excluded', def.excluded_run_ids.indexOf('mt') >= 0);
 A.ok('quarantined excluded', def.excluded_run_ids.indexOf('q') >= 0);
 A.ok('degraded excluded by default', def.excluded_run_ids.indexOf('d') >= 0);
-A.ok('pending excluded', def.excluded_run_ids.indexOf('p') >= 0);
+A.ok('minority-pending run NOW eligible (PENDING-MINORITY-001)', def.eligible_run_ids.indexOf('p') >= 0);
+A.ok('fully-pending run still fail-closed excluded', def.excluded_run_ids.indexOf('pp') >= 0);
 A.ok('stale excluded', def.excluded_run_ids.indexOf('st') >= 0);
 A.ok('semantic-failed excluded', def.excluded_run_ids.indexOf('sf') >= 0);
 A.eq('no degraded silently included', def.has_degraded_included, false);
@@ -65,6 +73,21 @@ A.eq('uncertain deterministic record excluded', RG.rowEligible({ source_run_id: 
 A.eq('clean record on eligible run included', RG.rowEligible({ source_run_id: 'h' }, def, {}).eligible, true);
 A.eq('record on excluded run excluded', RG.rowEligible({ source_run_id: 'q' }, def, {}).eligible, false);
 A.eq('require_source_health drops unknown-run record', RG.rowEligible({ source_run_id: 'unknown_run' }, def, { require_source_health: true }).eligible, false);
+
+A.section('report_gate — PENDING-MINORITY-001: one pending sibling never poisons confirmed records');
+// The real website run (req_..::website::a1): two confirmed report candidates (mkbkfin.ru, lioncredit.ru) plus
+// one pending-review sibling. WF16 keeps the run report_eligible=true (not ALL pending) and emits a run-level
+// pending_review flag. The run must stay eligible so the two confirmed records aggregate, while the pending
+// record is dropped at the RECORD level only.
+const webHealth = RG.buildEligibility([{ source_run_id: 'web', data_mode: 'live', quality_status: 'healthy', report_eligible: true, quality_flags: 'missing_published_at; pending_review; cost_unknown' }], {});
+A.ok('minority-pending source run stays eligible', webHealth.eligible_run_ids.indexOf('web') >= 0);
+const confRec = { source_run_id: 'web', review_status: 'confirmed', data_mode: 'live', quality_status: 'healthy', report_eligible: true, quality_flags: '' };
+A.eq('confirmed record #1 (mkbkfin) enters aggregation', RG.rowEligible(Object.assign({}, confRec), webHealth, {}).eligible, true);
+A.eq('confirmed record #2 (lioncredit) enters aggregation', RG.rowEligible(Object.assign({}, confRec), webHealth, {}).eligible, true);
+A.eq('the pending sibling is still excluded at record level', RG.rowEligible({ source_run_id: 'web', review_status: 'pending', data_mode: 'live', quality_status: 'healthy' }, webHealth, {}).eligible, false);
+// a run that is FULLY pending stays fail-closed (WF16 emits report_eligible=false + review_status=pending).
+const allPend = RG.buildEligibility([{ source_run_id: 'apr', data_mode: 'live', quality_status: 'healthy', report_eligible: false, quality_flags: 'pending_review', review_status: 'pending' }], {});
+A.ok('fully-pending run excluded (fail closed)', allPend.excluded_run_ids.indexOf('apr') >= 0);
 
 A.section('report_gate — Patch 3 merge + production fail-closed verification');
 const empty = RG.buildEligibility([], {});

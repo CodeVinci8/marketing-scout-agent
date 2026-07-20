@@ -51,7 +51,7 @@ A.eq('3 competitors analyzed', report.competitors.length, 3);
 
 A.section('10-11. XLSX + chart, scoped, real bytes');
 const xlsx = pkg.buildReportPackage(report, sc);
-A.ok('real 8-sheet XLSX', xlsx.size_bytes > 0 && xlsx.sheet_names.length === 8);
+A.ok('real full-workbook XLSX', xlsx.size_bytes > 0 && xlsx.sheet_names.length === pkg.SHEET_NAMES.length);
 const chart = charts.renderChart(report, 'competitor_score', sc);
 A.ok('chart svg produced', /svg/i.test(chart.svg) || chart.insufficient_data === true);
 const csv = exporter.exportCsv(report, 'report', sc);

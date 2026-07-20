@@ -194,7 +194,9 @@ function workbookBuffer(sheets) {
     '</Relationships>' });
 
   // workbook.xml + its rels (sheet rels + styles rel)
-  const sheetsXml = sheets.map((s, i) => '<sheet name="' + esc(s._name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>').join('');
+  // B7: a sheet flagged hidden renders with state="hidden" (Excel/LibreOffice/Sheets hide it) — but never the
+  // first sheet, since a workbook must keep at least one visible tab.
+  const sheetsXml = sheets.map((s, i) => '<sheet name="' + esc(s._name) + '" sheetId="' + (i + 1) + '"' + ((s.hidden && i > 0) ? ' state="hidden"' : '') + ' r:id="rId' + (i + 1) + '"/>').join('');
   entries.push({ name: 'xl/workbook.xml', data:
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +

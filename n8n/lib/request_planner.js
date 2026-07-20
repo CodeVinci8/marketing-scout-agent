@@ -25,8 +25,135 @@ const NICHE_HINTS = [
 const SOURCE_HINTS = [
   [/сайт|website|firecrawl|конкурент.{0,12}сайт/i, 'website'],
   [/avito|авито|объявлен/i, 'avito'],
+  [/telegram|телеграм|t\.me|канал/i, 'telegram'],
   [/vk|вконтакте|соцсет/i, 'vk']
 ];
+
+// AVITO-BLOCK-001: the sources the user EXPLICITLY named in the request text that are currently blocked (listed
+// in cfg.blocked_sources). Lets the approval flow tell the user honestly that e.g. Avito is temporarily
+// unavailable, instead of silently clamping the plan to the remaining allowlisted sources. Pure; reuses the
+// SAME SOURCE_HINTS the planner parses, so detection can never drift from what the planner would have selected.
+function blockedRequestedSources(text, cfg) {
+  cfg = cfg || {};
+  const blocked = ((cfg.blocked_sources) || []).map(low);
+  if (!blocked.length) return [];
+  const t = str(text);
+  const named = [];
+  for (const [rx, v] of SOURCE_HINTS) { if (rx.test(t) && named.indexOf(v) < 0) named.push(v); }
+  return named.filter(s => blocked.indexOf(s) >= 0);
+}
+
+// URL-INTAKE-001: extract the safe, PUBLIC https URL(s) a user pasted so a request can target THOSE sites instead
+// of the preset competitor list. Self-contained (embeddable): https-only; reject localhost / private+loopback IPs /
+// link-local / cloud-metadata / credentials-in-url / non-web schemes; normalize (lowercase host, drop fragment);
+// dedup; cap. A pasted URL is never trusted content — only its structure is used, never its page text here.
+function extractSafeUrls(text, max) {
+  const out = [], seen = {};
+  const cap = num(max, 3);
+  const raw = str(text);
+  const rx = /\bhttps?:\/\/[^\s<>"'`)]+/gi;
+  let m;
+  while ((m = rx.exec(raw)) !== null && out.length < cap) {
+    let u = m[0].replace(/[.,;:!?)]+$/, '');
+    if (u.toLowerCase().indexOf('https://') !== 0) continue;          // public https only
+    const afterScheme = u.slice(8);
+    const authority = afterScheme.split(/[/?#]/)[0];
+    if (authority.indexOf('@') >= 0) continue;                        // credentials in url
+    const host = authority.split(':')[0].toLowerCase();
+    if (!host || host === 'localhost' || host.indexOf('.') < 0) continue;
+    if (/^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(host)) continue;        // loopback / private / link-local IPv4
+    if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) continue;                    // 172.16-31.x private
+    if (/^\[?::1\]?$/.test(host) || /^\[?f[cd][0-9a-f]{2}:/i.test(host)) continue; // ipv6 loopback / ULA
+    if (host === '169.254.169.254' || host === 'metadata.google.internal') continue; // cloud metadata
+    const path = afterScheme.slice(authority.length).split('#')[0] || '';
+    const norm = 'https://' + host + path;
+    const key = norm.replace(/\/+$/, '').toLowerCase();
+    if (seen[key]) continue; seen[key] = 1;
+    out.push(norm.replace(/\/+$/, '/') === norm ? norm : norm);
+  }
+  return out;
+}
+
+// URL-INTAKE-002: general explicit-source extraction — a user may paste 1..N mixed PUBLIC sources (websites,
+// Telegram channels, VK communities) in one message. Returns {websites, telegram_channels, vk_sources, rejected}.
+// Self-contained (embeddable). Total explicit sources capped (default 3). Invite-only Telegram (t.me/+…, joinchat)
+// and VK service links are rejected with a reason; unsafe/private websites are dropped by extractSafeUrls.
+function extractExplicitSources(text, maxTotal) {
+  const raw = str(text);
+  const cap = num(maxTotal, 3);
+  const websites = [], telegram = [], vk = [], rejected = [];
+  const seen = {};
+  function total() { return websites.length + telegram.length + vk.length; }
+  function add(arr, val) { const k = low(val); if (seen[k]) return; if (total() >= cap) return; seen[k] = 1; arr.push(val); }
+  let m;
+  // Telegram public channels: t.me/<ch>, t.me/s/<ch>, https://t.me/<ch>. Reject invite links (t.me/+…, joinchat).
+  const tgRx = /(?:https?:\/\/)?(?:t|telegram)\.me\/(s\/)?(\+?[a-z0-9_]{1,64})/gi;
+  while ((m = tgRx.exec(raw)) !== null) {
+    const h = m[2];
+    if (/^\+/.test(h) || /joinchat/i.test(m[0]) || h.length < 3) { rejected.push({ raw: m[0], platform: 'telegram', reason: 'invite_only_or_private' }); continue; }
+    add(telegram, '@' + h.toLowerCase());
+  }
+  // VK public communities/profiles: vk.com/<public>. Reject service paths (away/share/widget/…).
+  const vkRx = /(?:https?:\/\/)?(?:www\.)?vk\.com\/([a-z0-9_.]{2,64})/gi;
+  while ((m = vkRx.exec(raw)) !== null) {
+    const h = m[1].toLowerCase();
+    if (/^(away|share|widget|search|feed|im|id0)$/.test(h)) { rejected.push({ raw: m[0], platform: 'vk', reason: 'not_a_public_community' }); continue; }
+    add(vk, 'vk.com/' + h);
+  }
+  // Websites: safe public https URLs, excluding t.me / vk.com hosts (handled above).
+  extractSafeUrls(raw, cap).forEach(function (u) {
+    const host = u.slice(8).split('/')[0];
+    if (/(^|\.)(t\.me|telegram\.me|vk\.com)$/i.test(host)) return;
+    add(websites, u);
+  });
+  // E2-ROUTE-001: also accept a BARE domain typed without a scheme ("дай отчёт по autolombardn1.ru") — normalize to
+  // https://<domain>. Real TLD required so ordinary text never trips it; email hosts (preceded by @) and t.me/vk.com
+  // are excluded; deduped against the https websites above.
+  const bareRx = /(^|[\s(«"'“„])(([a-z0-9][a-z0-9-]{0,62}\.)+(ru|рф|com|net|org|io|su|by|kz|ua|info|biz|pro|site|online|store|shop|club|team|app))\b/gi;
+  let bm;
+  while ((bm = bareRx.exec(raw)) !== null && total() < cap) {
+    const dom = bm[2].toLowerCase();
+    if (/(^|\.)(t\.me|telegram\.me|vk\.com)$/i.test(dom)) continue;              // handled as tg/vk above
+    if (websites.some(function (w) { return w.slice(8).split('/')[0] === dom; })) continue; // already captured as https
+    add(websites, 'https://' + dom);
+  }
+  return { websites: websites, telegram_channels: telegram, vk_sources: vk, rejected: rejected };
+}
+
+// SOURCE-EXEC-001: an explicit "collect it again" request. Kept in sync with source_execution_policy.SX_REFRESH_RE
+// (test asserts equality) — this lib must stay require-free to remain embeddable in a Code node.
+// Cyrillic \b/\w never fire in JS, so the boundaries are explicit [а-яё] classes. Deliberately narrow: an
+// accidental refresh spends the user's money on a repeat scrape.
+const PLAN_REFRESH_RE = /(^|[^а-яёa-z])(обнови(ть|те)?|переобнови(ть|те)?|пересобери|пересобрать|пересоберите|заново|повтори(ть|те)? сбор|повторный сбор|принудительн(о|ый|ая)|ещё раз собери|еще раз собери|свеж(ие|их) данн(ые|ых)|актуализируй|перепроверь)([^а-яёa-z]|$)/i;
+// "обнови отчёт" alone = rebuild the report from stored data; NOT a paid re-collection.
+const PLAN_REPORT_ONLY_RE = /обнови(ть|те)?\s+отч[её]т/i;
+function planWantsRefresh(text) {
+  const t = str(text);
+  if (!t) return false;
+  if (PLAN_REPORT_ONLY_RE.test(t) && !/данн|сбор|источник|сайт/i.test(t)) return false;
+  return PLAN_REFRESH_RE.test(t);
+}
+
+// REPORT-TRUTH-A: explicit analysis/report mode. source_analysis answers "what is this source NOW" from the
+// latest ACCEPTED state (it must never depend on "new rows inside the reporting window"); change_report answers
+// "what changed" between accepted snapshots and may honestly say "no changes". The two must never mix in one
+// default answer. comparison/synthesis derive from how many sources the user explicitly named; the remaining
+// modes belong to their owning system flows (WF27 enrichment, lead interpretation, radar, monitoring) and are
+// never inferred from free text. Cyrillic \b never fires in JS — boundaries are explicit [а-яё] classes.
+const PLAN_ANALYSIS_MODES = ['source_analysis', 'change_report', 'comparison', 'synthesis',
+  'candidate_enrichment', 'public_lead_interpretation', 'opportunity_radar', 'monitoring_insight'];
+// NB: «что изменить (в оффере)» is a RECOMMENDATION question, not a change report — the stems below require the
+// past form (изменил-/изменени-), never the infinitive.
+const PLAN_CHANGE_RE = /(^|[^а-яёa-z])(что\s+изменил[а-яё]*|изменил(ось|ись|ся|ась)|изменени[а-яё]+|с\s+прошл(ым|ого)\s+(отч[её]т|период|раз)[а-яё]*|динамик[а-яё]*|что\s+нового\s+(у|на|в))([^а-яёa-z]|$)/i;
+function inferAnalysisMode(text, extracted) {
+  const t = str(text);
+  const ex = extracted || {};
+  const n = (ex.websites || []).length + (ex.telegram_channels || []).length + (ex.vk_sources || []).length;
+  if (PLAN_CHANGE_RE.test(t)) return 'change_report';
+  if (n >= 3) return 'synthesis';
+  if (n === 2) return 'comparison';
+  return 'source_analysis';
+}
 
 function deterministicPlan(text, cfg) {
   cfg = cfg || {};
@@ -37,24 +164,57 @@ function deterministicPlan(text, cfg) {
   for (const [rx, v] of NICHE_HINTS) { if (rx.test(t)) { niche = v; break; } }
   const sources = [];
   for (const [rx, v] of SOURCE_HINTS) { if (rx.test(t)) sources.push(v); }
-  // default to the first-class website path when nothing specific is asked, intersect with allowlist
-  let requested = sources.length ? sources : ['website'];
+  // a generic competitor scan collects from EVERY allowlisted source (Stage 5 multi-source); an explicit source
+  // mention narrows it. Always intersected with the allowlist and capped by max_sources_per_request.
   const allow = (cfg.source_allowlist || ['website']).map(low);
-  requested = requested.filter(s => allow.indexOf(s) >= 0);
+  // URL-INTAKE-002: explicit pasted sources (websites/Telegram/VK) drive the plan to EXACTLY those platforms.
+  const ex = extractExplicitSources(t);
+  const explicitPlatforms = [];
+  if (ex.websites.length) explicitPlatforms.push('website');
+  if (ex.telegram_channels.length) explicitPlatforms.push('telegram');
+  if (ex.vk_sources.length) explicitPlatforms.push('vk');
+  let requested;
+  if (explicitPlatforms.length) {
+    requested = explicitPlatforms.filter(s => allow.indexOf(s) >= 0);   // only allowlisted supplied platforms
+  } else {
+    requested = sources.length ? sources : allow.slice();
+    requested = requested.filter(s => allow.indexOf(s) >= 0);
+  }
   if (!requested.length) requested = allow.slice(0, 1);
+  requested = requested.slice(0, Math.max(1, num(cfg.max_sources_per_request, 3)));
   const maxItems = num(cfg.max_items_per_source, 25);
   const maxCalls = num(cfg.max_external_calls, 40);
   return normalizePlan({
     intent: 'competitor_market_scan',
+    analysis_mode: inferAnalysisMode(t, ex),
     niche: niche,
     service: niche,
     region: region,
     sources: requested,
+    // only carry supplied sources for allowlisted platforms — never plan/promise a platform we cannot run.
+    urls: (allow.indexOf('website') >= 0) ? ex.websites : [],
+    telegram_channels: (allow.indexOf('telegram') >= 0) ? ex.telegram_channels : [],
+    vk_communities: (allow.indexOf('vk') >= 0) ? ex.vk_sources : [],
+    explicit_sources: requested.length > 0 && explicitPlatforms.length > 0,
     max_items: maxItems,
     max_external_calls: Math.min(maxCalls, requested.length * Math.max(2, Math.ceil(maxItems / 5))),
     est_source_cost_usd: Number(cfg.source_budget_usd || 0.20),
     est_llm_cost_usd: Number(cfg.llm_budget_usd || 0.50),
     expected_output: 'competitor_market_report',
+    // SOURCE-EXEC-001: an explicit refresh re-collects an already-registered source. It bypasses ONLY the freshness
+    // check — approval, budget, quality and global dedup all still apply, and the approval text says so.
+    // EXPLICIT-SOURCE-SCOPE-001: when the user names a source, the named source IS the scope — an inferred region
+    // must not exclude it later (live: site said "Россия", plan defaulted "Москва/МО", WF10 dropped the row and the
+    // user was told there were no facts about the site they named). Kept in sync with scope_policy.resolveScope
+    // (test asserts equality); this lib stays require-free to remain embeddable in a Code node.
+    scope_mode: (function () {
+      var n = (ex.websites || []).length + (ex.telegram_channels || []).length + (ex.vk_sources || []).length;
+      if (/discovery/.test(String(t).toLowerCase()) || explicitPlatforms.length === 0) return n >= 2 ? 'comparison' : (n === 1 ? 'explicit_source' : 'discovery');
+      return n >= 2 ? 'comparison' : 'explicit_source';
+    })(),
+    source_execution_mode: planWantsRefresh(t) ? 'refresh' : 'auto',
+    force_reprocess: planWantsRefresh(t),
+    refresh_reason: planWantsRefresh(t) ? 'user_requested_refresh' : '',
     requires_approval: cfg.require_approval !== false,
     plan_source: 'deterministic'
   }, cfg);
@@ -67,17 +227,28 @@ function normalizePlan(p, cfg) {
   let sources = (Array.isArray(p.sources) ? p.sources : str(p.sources).split(/[\s,;]+/)).map(low).filter(Boolean)
     .filter(s => allow.indexOf(s) >= 0);
   if (!sources.length) sources = allow.slice(0, 1);
+  sources = sources.slice(0, Math.max(1, num(cfg.max_sources_per_request, 3)));
   return {
     intent: str(p.intent) || 'competitor_market_scan',
+    analysis_mode: PLAN_ANALYSIS_MODES.indexOf(low(p.analysis_mode)) >= 0 ? low(p.analysis_mode) : 'source_analysis',
     niche: str(p.niche) || str(p.service) || (cfg.default_niche || 'credit_brokerage'),
     service: str(p.service) || str(p.niche) || (cfg.default_niche || 'credit_brokerage'),
     region: str(p.region) || (cfg.default_region || 'Москва/МО'),
     sources: sources,
+    // URL-INTAKE-001/002: re-sanitize supplied sources through the same safe extractor (never trust a carried value).
+    urls: extractSafeUrls(Array.isArray(p.urls) ? p.urls.join(' ') : str(p.urls)),
+    telegram_channels: (function () { var r = extractExplicitSources((Array.isArray(p.telegram_channels) ? p.telegram_channels.join(' ') : str(p.telegram_channels)).replace(/@/g, ' t.me/')); return r.telegram_channels; })(),
+    vk_communities: (function () { var r = extractExplicitSources(Array.isArray(p.vk_communities) ? p.vk_communities.join(' ') : str(p.vk_communities)); return r.vk_sources; })(),
+    explicit_sources: p.explicit_sources === true,
     max_items: Math.min(num(p.max_items, num(cfg.max_items_per_source, 25)), num(cfg.max_items_per_source, 25)),
     max_external_calls: Math.min(num(p.max_external_calls, num(cfg.max_external_calls, 40)), num(cfg.max_external_calls, 40)),
     est_source_cost_usd: Math.min(num(p.est_source_cost_usd, num(cfg.source_budget_usd, 0.20)), num(cfg.source_budget_usd, 0.20)),
     est_llm_cost_usd: Math.min(num(p.est_llm_cost_usd, num(cfg.llm_budget_usd, 0.50)), num(cfg.llm_budget_usd, 0.50)),
     expected_output: str(p.expected_output) || 'competitor_market_report',
+    scope_mode: ['explicit_source', 'comparison', 'discovery', 'monitoring'].indexOf(str(p.scope_mode)) >= 0 ? str(p.scope_mode) : 'discovery',
+    source_execution_mode: ['refresh', 'reuse', 'collect'].indexOf(str(p.source_execution_mode)) >= 0 ? str(p.source_execution_mode) : 'auto',
+    force_reprocess: p.force_reprocess === true || str(p.force_reprocess) === 'true',
+    refresh_reason: str(p.refresh_reason),
     requires_approval: p.requires_approval === false ? false : (cfg.require_approval !== false),
     plan_source: str(p.plan_source) || 'deterministic'
   };
@@ -127,9 +298,16 @@ function planHash(plan) {
   const canon = JSON.stringify([
     str(plan.intent), str(plan.niche), str(plan.service), str(plan.region),
     (Array.isArray(plan.sources) ? plan.sources : []).map(low).sort(),
+    // URL-INTAKE-001/002: bind approval to the exact supplied source set — a change can't be approved under an old callback.
+    (Array.isArray(plan.urls) ? plan.urls : []).map(low).sort(),
+    (Array.isArray(plan.telegram_channels) ? plan.telegram_channels : []).map(low).sort(),
+    (Array.isArray(plan.vk_communities) ? plan.vk_communities : []).map(low).sort(),
     num(plan.max_items, 0), num(plan.max_external_calls, 0),
     num(plan.est_source_cost_usd, 0), num(plan.est_llm_cost_usd, 0),
-    str(plan.expected_output), str(plan.plan_source)
+    str(plan.expected_output), str(plan.plan_source),
+    // REPORT-TRUTH-A: the analysis mode is part of what the user approves — "what changed" and "analyze this
+    // source" are different deliverables and must not be approvable under each other's callback.
+    str(plan.analysis_mode) || 'source_analysis'
   ]);
   let h = 5381;
   for (let i = 0; i < canon.length; i++) h = ((h << 5) + h + canon.charCodeAt(i)) >>> 0;
@@ -140,6 +318,70 @@ function planIdentity(plan, agentRequestId, version) {
   const v = num(version, 1) || 1;
   return { plan_id: ['plan', str(agentRequestId) || 'req', hash].join('_'), plan_hash: hash, plan_version: v };
 }
+// --- B4: owner-scoped plan fingerprint + reuse selector -----------------------------------------------------
+// A LOGICAL request identity independent of agent_request_id, so two equivalent requests do not create two
+// awaiting_approval plans. Covers owner+chat, intent, normalized (order-independent) sources, niche/service,
+// region, window/scope and output. Derived on the fly from either an in-memory plan (arrays) OR a stored plan
+// row (comma/space-joined strings) — no new sheet column is needed. Cost estimates are excluded (they are
+// derived and may drift); the logical request is what matters.
+function planNormList(v) {
+  if (Array.isArray(v)) return v.map(low).filter(Boolean).sort();
+  return low(v).split(/[,\s]+/).map(function (x) { return x.trim(); }).filter(Boolean).sort();
+}
+function planFingerprint(planOrRow, ctx) {
+  planOrRow = planOrRow || {}; ctx = ctx || {};
+  var owner = str(ctx.owner_user_id) || str(planOrRow.owner_user_id);
+  var chat = str(ctx.chat_id) || str(planOrRow.chat_id);
+  var canon = JSON.stringify([
+    'fp1', owner, chat,
+    low(planOrRow.intent), low(planOrRow.niche), low(planOrRow.service), low(planOrRow.region),
+    planNormList(planOrRow.sources),
+    planNormList(planOrRow.urls),
+    planNormList(planOrRow.telegram_channels),
+    planNormList(planOrRow.vk_communities),
+    num(planOrRow.max_items, 0), low(planOrRow.expected_output),
+    // SOURCE-EXEC-001: refresh semantics are part of the request's IDENTITY. "обнови carmoney.ru" asks for a paid
+    // re-collection and must NOT silently reuse an awaiting-approval non-refresh plan for the same site (the user
+    // would approve a refresh and get a dedup skip). Derived identically from a plan OR a stored row: the row
+    // persists force_reprocess as the string 'true'.
+    (planOrRow.force_reprocess === true || low(planOrRow.force_reprocess) === 'true') ? 'refresh' : 'auto',
+    // REPORT-TRUTH-A: mode is request identity ("что изменилось у X" ≠ "проанализируй X"). Legacy rows without
+    // the column normalize to the default so a stored row and its in-memory plan still hash identically.
+    low(planOrRow.analysis_mode) || 'source_analysis'
+    // NB: data_mode is intentionally excluded — it is not persisted on the execution_plans row, so including it
+    // would make a stored row and its originating in-memory plan hash differently and break reuse detection.
+  ]);
+  var h = 5381;
+  for (var i = 0; i < canon.length; i++) h = ((h << 5) + h + canon.charCodeAt(i)) >>> 0;
+  return 'fp' + h.toString(16);
+}
+// Among existing execution_plans rows, find the newest NON-TERMINAL plan for THIS owner whose fingerprint equals
+// the new plan's — the canonical plan to REUSE instead of creating a duplicate. Terminal plans never block. TTL:
+// an awaiting_approval row older than ttlMin is abandoned and does not count (mirrors request_lifecycle).
+var PLAN_TERMINAL = ['completed', 'done', 'delivered', 'failed', 'error', 'cancelled', 'canceled', 'rejected', 'expired', 'no_data', 'superseded'];
+function planIsTerminal(s) { return PLAN_TERMINAL.indexOf(low(s)) >= 0; }
+function findReusablePlan(existingRows, newPlan, ctx, opts) {
+  ctx = ctx || {}; opts = opts || {};
+  var fp = planFingerprint(newPlan, ctx);
+  var owner = str(ctx.owner_user_id);
+  var ttlMs = (num(opts.ttl_min, 30) || 30) * 60000;
+  var nowMs = num(opts.now_ms, Date.now());
+  var best = null, bestT = -1;
+  (Array.isArray(existingRows) ? existingRows : []).forEach(function (r) {
+    if (!r) return;
+    if (str(r.owner_user_id) !== owner) return;
+    if (planIsTerminal(r.status)) return;
+    // STATUS-TTL-002 parity: ANY non-terminal plan older than the TTL is abandoned (a crashed/never-finalized run
+    // or a stale approval prompt) and must NOT be reused — a real run finishes in minutes. Applies to
+    // awaiting_approval AND in-flight (approved/collecting/…) alike.
+    var t = Date.parse(str(r.created_at)); if (!isNaN(t) && (nowMs - t) > ttlMs) return;
+    if (planFingerprint(r, { owner_user_id: str(r.owner_user_id), chat_id: str(r.chat_id) }) !== fp) return;
+    var ct = Date.parse(str(r.created_at)); if (isNaN(ct)) ct = 0;
+    if (ct >= bestT) { bestT = ct; best = r; }
+  });
+  return best ? { plan: best, fingerprint: fp, reused: true } : { plan: null, fingerprint: fp, reused: false };
+}
+
 // One flat durable row for the execution_plans tab (the canonical plan store). Status starts awaiting_approval.
 function buildPlanRow(plan, identity, ctx) {
   plan = plan || {}; identity = identity || {}; ctx = ctx || {};
@@ -148,9 +390,20 @@ function buildPlanRow(plan, identity, ctx) {
     agent_request_id: str(ctx.agent_request_id), owner_user_id: str(ctx.owner_user_id), chat_id: str(ctx.chat_id),
     intent: str(plan.intent), niche: str(plan.niche), service: str(plan.service), region: str(plan.region),
     sources: (Array.isArray(plan.sources) ? plan.sources : []).join(','),
+    // URL-INTAKE-001/002: persist user-supplied sources so WF20 targets THEM (space/comma-joined; empty when none).
+    urls: (Array.isArray(plan.urls) ? plan.urls : []).join(' '),
+    telegram_channels: (Array.isArray(plan.telegram_channels) ? plan.telegram_channels : []).join(','),
+    vk_communities: (Array.isArray(plan.vk_communities) ? plan.vk_communities : []).join(','),
+    explicit_sources: plan.explicit_sources === true ? 'true' : '',
     max_items: num(plan.max_items, 0), max_external_calls: num(plan.max_external_calls, 0),
     est_source_cost_usd: num(plan.est_source_cost_usd, 0), est_llm_cost_usd: num(plan.est_llm_cost_usd, 0),
     expected_output: str(plan.expected_output), plan_source: str(plan.plan_source),
+    // SOURCE-EXEC-001: the refresh decision MUST survive approval — WF20 reads it off the stored row.
+    scope_mode: str(plan.scope_mode) || 'discovery',
+    source_execution_mode: str(plan.source_execution_mode) || 'auto',
+    force_reprocess: plan.force_reprocess === true ? 'true' : '',
+    refresh_reason: str(plan.refresh_reason),
+    analysis_mode: str(plan.analysis_mode) || 'source_analysis',
     status: 'awaiting_approval', created_at: str(ctx.ts), decided_at: '', decided_by: ''
   };
 }
@@ -175,7 +428,32 @@ function pendingPlansForOwner(planRows, ownerUserId) {
   return (planRows || []).filter(r => str(r.owner_user_id) === str(ownerUserId) && str(r.status) === 'awaiting_approval');
 }
 
+// CALLBACK-IDEMP-001: an approve callback is not always "start the plan". A duplicate delivery (dedup'd at the
+// claim gate) never reaches here, but a REPEATED BUTTON TAP is a fresh update with the same callback_data — and
+// by then the first tap has already flipped the plan out of `awaiting_approval`. Looking only for an
+// awaiting_approval row then reports "план не найден" for a run that is demonstrably approved/running/finished.
+// This classifies the situation from ALL of the owner's rows for the request, so the caller can acknowledge an
+// already-running/finished analysis idempotently and NEVER dispatch a second execution.
+//   -> { kind: 'apply'|'duplicate_running'|'duplicate_done'|'duplicate_closed'|'no_plan', plan }
+function classifyApprovalCallback(planRows, claim) {
+  claim = claim || {};
+  const arid = str(claim.agent_request_id), owner = str(claim.owner_user_id);
+  const forReq = (planRows || []).filter(r => r && str(r.agent_request_id) === arid && str(r.owner_user_id) === owner);
+  if (!forReq.length) return { kind: 'no_plan', plan: null };
+  const pending = forReq.filter(r => str(r.status) === 'awaiting_approval');
+  if (pending.length) return { kind: 'apply', plan: pending[pending.length - 1] };
+  // No awaiting row: this is a duplicate. Classify by the latest row's status.
+  const latest = forReq[forReq.length - 1];
+  const st = low(latest.status);
+  if (st === 'completed' || st === 'done' || st === 'delivered' || st === 'no_data') return { kind: 'duplicate_done', plan: latest };
+  if (planIsTerminal(st)) return { kind: 'duplicate_closed', plan: latest }; // failed/error/rejected/cancelled/expired/superseded
+  return { kind: 'duplicate_running', plan: latest }; // approved / collecting / analyzing / reporting / …
+}
+
 module.exports = {
   deterministicPlan, normalizePlan, validatePlanJSON, planToApprovalText,
-  planHash, planIdentity, buildPlanRow, validateApproval, pendingPlansForOwner
+  planHash, planIdentity, buildPlanRow, validateApproval, pendingPlansForOwner,
+  blockedRequestedSources, extractSafeUrls, extractExplicitSources,
+  planFingerprint, findReusablePlan, planIsTerminal,
+  PLAN_ANALYSIS_MODES, inferAnalysisMode, classifyApprovalCallback
 };

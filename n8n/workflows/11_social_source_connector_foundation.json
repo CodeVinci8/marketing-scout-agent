@@ -54,7 +54,7 @@
         560
       ],
       "parameters": {
-        "jsCode": "// WF11 Social Source Connector Foundation config — Telegram PUBLIC channel preview (t.me/s/<channel>).\n// Deterministic ids; MSK timestamps; NO external calls by default (fixture-first, DEC-110).\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nreturn [{ json: {\n  fixture_mode:true,\n  live_mode:false,\n  // --- live v0.4.2 GATE-PROTECTED PATH (DEC-116/120/132/135): real Telegram public preview fetch, inert by default.\n  // live_mode=false, approval token empty, tracked-channel list empty -> the LIVE Preview Approval Gate blocks\n  // every external call. Transport nodes stay ENABLED but are UNREACHABLE unless the gate passes. Arming live\n  // requires ALL of: live_mode=true, exact token, a non-empty validated tracked-channel list, a selected transport.\n  // Scope is hard-limited: PUBLIC https://t.me/s/<channel> preview pages only — no groups, no private chats,\n  // no t.me/+ invite links, no joinchat, no t.me/c private channels, no MTProto/sessions, no login,\n  // no member extraction, no hidden contacts, no auto-outreach.\n  live_transport:'firecrawl',          // PREFERRED transport (Firecrawl scrape) if a Firecrawl credential exists\n  live_transport_fallback:'http_get',  // fallback: plain HTTP GET of the public preview page (no per-call fee)\n  live_channel_allowlist:[],           // usernames OR https://t.me/s/<channel> / https://t.me/<channel>\n  live_max_channels:2,                 // first-smoke cap (<=2)\n  live_max_posts_per_channel:10,       // <=10\n  live_approval_token:'',\n  live_requires_operator_approval:true,\n  source_type:'social_channel',\n  platform:'telegram',\n  requested_by:'operator',\n  request_type:'social_source_discovery',\n  region:'Москва/МО',\n  service_focus:'credit_broker',\n  channel_allowlist:[\n    'kredit_broker_msk_fixture',\n    'ipoteka_refinance_fixture',\n    'finance_news_fixture',\n    'biz_uslugi_fixture'\n  ],\n  preview_url_template:'https://t.me/s/<channel>',\n  pipeline_limit:10,\n  include_irrelevant_control_fixture:true,\n  approval_status_for_unique:'new',\n  write_duplicate_audit:true,\n  hard_skip_debug_audit:false,\n  live_debug_audit:false,\n  duplicate_next_action:'monitor_duplicate',\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  agent_request_id:'wf11_req_'+stamp,\n  run_id:'wf11_'+stamp,\n  created_at:now\n}}];"
+        "jsCode": "// WF11 Social Source Connector Foundation config — Telegram PUBLIC channel preview (t.me/s/<channel>).\n// Deterministic ids; MSK timestamps; NO external calls by default (fixture-first, DEC-110).\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\nvar base = ({\n  fixture_mode:true,\n  live_mode:false,\n  // --- live v0.4.2 GATE-PROTECTED PATH (DEC-116/120/132/135): real Telegram public preview fetch, inert by default.\n  // live_mode=false, approval token empty, tracked-channel list empty -> the LIVE Preview Approval Gate blocks\n  // every external call. Transport nodes stay ENABLED but are UNREACHABLE unless the gate passes. Arming live\n  // requires ALL of: live_mode=true, exact token, a non-empty validated tracked-channel list, a selected transport.\n  // Scope is hard-limited: PUBLIC https://t.me/s/<channel> preview pages only — no groups, no private chats,\n  // no t.me/+ invite links, no joinchat, no t.me/c private channels, no MTProto/sessions, no login,\n  // no member extraction, no hidden contacts, no auto-outreach.\n  live_transport:'firecrawl',          // PREFERRED transport (Firecrawl scrape) if a Firecrawl credential exists\n  live_transport_fallback:'http_get',  // fallback: plain HTTP GET of the public preview page (no per-call fee)\n  live_channel_allowlist:[],           // usernames OR https://t.me/s/<channel> / https://t.me/<channel>\n  live_max_channels:2,                 // first-smoke cap (<=2)\n  live_max_posts_per_channel:10,       // <=10\n  live_approval_token:'',\n  live_requires_operator_approval:true,\n  source_type:'social_channel',\n  platform:'telegram',\n  requested_by:'operator',\n  request_type:'social_source_discovery',\n  region:'Москва/МО',\n  service_focus:'credit_broker',\n  channel_allowlist:[\n    'kredit_broker_msk_fixture',\n    'ipoteka_refinance_fixture',\n    'finance_news_fixture',\n    'biz_uslugi_fixture'\n  ],\n  preview_url_template:'https://t.me/s/<channel>',\n  pipeline_limit:10,\n  include_irrelevant_control_fixture:true,\n  approval_status_for_unique:'new',\n  write_duplicate_audit:true,\n  hard_skip_debug_audit:false,\n  live_debug_audit:false,\n  duplicate_next_action:'monitor_duplicate',\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  agent_request_id:'wf11_req_'+stamp,\n  run_id:'wf11_'+stamp,\n  created_at:now\n});\n\n// --- Stage 5 agent-called mode: WF20 passes the APPROVED plan bounds. Live runs still pass ONLY through the\n// --- same LIVE Preview Approval Gate; public t.me/s previews only (scope policy unchanged).\nvar __ci=null;try{var __c=$('When Called by Agent').first().json;if(__c&&String(__c.agent_request_id||'').length)__ci=__c;}catch(e){__ci=null;}\nif(__ci){\n  var __ch=String(__ci.channels||'').split(/[\\s,;]+/).map(function(s){return s.replace(/^https?:\\/\\/t\\.me\\/(s\\/)?/i,'').replace(/^@/,'').trim();}).filter(Boolean).slice(0,3);\n  var __pp=Math.min(Math.max(1,Number(__ci.max_posts)||30),30);\n  var __live=String(__ci.data_mode||'fixture').toLowerCase()==='live';\n  base.agent_called=true;\n  base.requested_by='agent';\n  base.agent_request_id=String(__ci.agent_request_id);\n  base.run_id=String(__ci.source_run_id||base.run_id);\n  base.workflow_run_id=String(__ci.workflow_run_id||'');\n  base.data_mode=__live?'live':'fixture';\n  base.fixture_mode=!__live;\n  base.live_mode=__live;\n  base.live_channel_allowlist=__ch;\n  base.live_max_channels=Math.min(Math.max(1,__ch.length||1),3);\n  base.live_max_posts_per_channel=__pp;\n  base.pipeline_limit=Math.min(__pp*(__ch.length||1),90); // TELEGRAM-CAP-001: approved total ceiling (<=90), per-channel cap stays live_max_posts_per_channel\n  base.live_transport=String(__ci.transport||'http_get');\n  base.live_approval_token=String(__ci.approval_token||'');\n}\nreturn [{ json: base }];\n"
       }
     },
     {
@@ -112,7 +112,7 @@
         700
       ],
       "parameters": {
-        "jsCode": "// LIVE PREVIEW APPROVAL GATE v0.4.2 (DEC-116/120/132/135) — fires on live_mode=true. INERT BY DEFAULT: throws\n// unless the operator armed the run. This gate is the SINGLE safety boundary for external calls: the transport\n// nodes downstream stay enabled but are unreachable unless this gate passes (exact token + non-empty validated\n// tracked-channel list + selected transport). Same pattern as the other live-capable workflows.\n// Hard scope (CONTACT_AND_OUTREACH_POLICY): PUBLIC https://t.me/s/<channel> preview pages ONLY — no groups,\n// no private chats, no t.me/+ invites, no joinchat, no t.me/c private channels, no MTProto/sessions,\n// no login scraping, no member extraction, no hidden contacts, no outreach.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Connector Config').first().json;\nconst token=str(cfg.live_approval_token);\nconst transport=str(cfg.live_transport)||'firecrawl';\nconst maxPosts=Math.min(Number(cfg.live_max_posts_per_channel)||10,10);\nconst maxChannels=Math.min(Number(cfg.live_max_channels)||2,2);\nif(token!=='I_APPROVE_LIVE_TELEGRAM_PREVIEW'){\n  throw new Error('WF11 live gate: operator approval token missing. Live Telegram public-channel preview requires explicit operator approval: set live_approval_token=I_APPROVE_LIVE_TELEGRAM_PREVIEW, fill the tracked-channel list (live_channel_allowlist), choose live_transport (firecrawl|http_get). Transport nodes are enabled but only reachable through this gate. Default run stays fixture-only ($0). See docs/N8N_WORKFLOW_11_SOCIAL_SOURCE_CONNECTOR_FOUNDATION_RU.md and STAGE_3_4 §5.7.');\n}\nif(transport!=='firecrawl'&&transport!=='http_get'){\n  throw new Error('WF11 live gate: live_transport must be \"firecrawl\" (preferred) or \"http_get\" (fallback).');\n}\nconst raw=Array.isArray(cfg.live_channel_allowlist)?cfg.live_channel_allowlist.map(c=>str(c)).filter(Boolean):[];\nif(!raw.length){ throw new Error('WF11 live gate: the tracked-channel list (live_channel_allowlist) is empty — tracked-channels-only operation, no discovery crawling.'); }\n// non-public / non-channel paths that must never be fetched\nconst BLOCK=['joinchat','c','s','+','addstickers','proxy','socks','iv','share','login'];\nfunction normChannel(entry){\n  entry=str(entry);\n  if(!entry)return null;\n  // private invite links / groups: t.me/+<hash>, joinchat, leading +\n  if(/joinchat/i.test(entry)||/t\\.me\\/\\+/i.test(entry)||entry.charAt(0)==='+'||entry.indexOf('/+')>=0)return null;\n  let c=entry;\n  let m=entry.match(/t\\.me\\/s\\/([A-Za-z0-9_]+)/i)||entry.match(/t\\.me\\/([A-Za-z0-9_]+)/i);\n  if(m)c=m[1];\n  c=c.replace(/^@/,'');\n  if(BLOCK.indexOf(c.toLowerCase())>=0)return null;      // private/system paths (t.me/c, joinchat, ...)\n  if(!/^[A-Za-z0-9_]{4,32}$/.test(c))return null;        // public channel username charset only\n  if(!/[A-Za-z]/.test(c))return null;                    // must contain a letter (reject numeric ids)\n  return c;\n}\nconst good=[];const bad=[];\nfor(const e of raw){const c=normChannel(e);if(c){if(good.indexOf(c)<0)good.push(c);}else bad.push(e);}\nif(bad.length){ throw new Error('WF11 live gate: rejected non-public-channel entries (groups/invite links/private/joinchat/t.me-c are forbidden): '+bad.join(', ')); }\nconst channels=good.slice(0,maxChannels); // first-smoke cap (<=2)\n// one item per tracked channel; the gate-protected transport node fetches the PUBLIC preview page only.\nreturn channels.map(c=>({ json: { channel:c, fetch_url:'https://t.me/s/'+c, max_posts:maxPosts, live_transport:transport } }));"
+        "jsCode": "// LIVE PREVIEW APPROVAL GATE v0.4.2 (DEC-116/120/132/135) — fires on live_mode=true. INERT BY DEFAULT: throws\n// unless the operator armed the run. This gate is the SINGLE safety boundary for external calls: the transport\n// nodes downstream stay enabled but are unreachable unless this gate passes (exact token + non-empty validated\n// tracked-channel list + selected transport). Same pattern as the other live-capable workflows.\n// Hard scope (CONTACT_AND_OUTREACH_POLICY): PUBLIC https://t.me/s/<channel> preview pages ONLY — no groups,\n// no private chats, no t.me/+ invites, no joinchat, no t.me/c private channels, no MTProto/sessions,\n// no login scraping, no member extraction, no hidden contacts, no outreach.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Connector Config').first().json;\nconst token=str(cfg.live_approval_token);\nconst transport=str(cfg.live_transport)||'firecrawl';\nconst maxPosts=Math.min(Number(cfg.live_max_posts_per_channel)||10,30);\nconst maxChannels=Math.min(Number(cfg.live_max_channels)||2,3);\nif(token!=='I_APPROVE_LIVE_TELEGRAM_PREVIEW'){\n  throw new Error('WF11 live gate: operator approval token missing. Live Telegram public-channel preview requires explicit operator approval: set live_approval_token=I_APPROVE_LIVE_TELEGRAM_PREVIEW, fill the tracked-channel list (live_channel_allowlist), choose live_transport (firecrawl|http_get). Transport nodes are enabled but only reachable through this gate. Default run stays fixture-only ($0). See docs/N8N_WORKFLOW_11_SOCIAL_SOURCE_CONNECTOR_FOUNDATION_RU.md and STAGE_3_4 §5.7.');\n}\nif(transport!=='firecrawl'&&transport!=='http_get'){\n  throw new Error('WF11 live gate: live_transport must be \"firecrawl\" (preferred) or \"http_get\" (fallback).');\n}\nconst raw=Array.isArray(cfg.live_channel_allowlist)?cfg.live_channel_allowlist.map(c=>str(c)).filter(Boolean):[];\nif(!raw.length){ throw new Error('WF11 live gate: the tracked-channel list (live_channel_allowlist) is empty — tracked-channels-only operation, no discovery crawling.'); }\n// non-public / non-channel paths that must never be fetched\nconst BLOCK=['joinchat','c','s','+','addstickers','proxy','socks','iv','share','login'];\nfunction normChannel(entry){\n  entry=str(entry);\n  if(!entry)return null;\n  // private invite links / groups: t.me/+<hash>, joinchat, leading +\n  if(/joinchat/i.test(entry)||/t\\.me\\/\\+/i.test(entry)||entry.charAt(0)==='+'||entry.indexOf('/+')>=0)return null;\n  let c=entry;\n  let m=entry.match(/t\\.me\\/s\\/([A-Za-z0-9_]+)/i)||entry.match(/t\\.me\\/([A-Za-z0-9_]+)/i);\n  if(m)c=m[1];\n  c=c.replace(/^@/,'');\n  if(BLOCK.indexOf(c.toLowerCase())>=0)return null;      // private/system paths (t.me/c, joinchat, ...)\n  if(!/^[A-Za-z0-9_]{4,32}$/.test(c))return null;        // public channel username charset only\n  if(!/[A-Za-z]/.test(c))return null;                    // must contain a letter (reject numeric ids)\n  return c;\n}\nconst good=[];const bad=[];\nfor(const e of raw){const c=normChannel(e);if(c){if(good.indexOf(c)<0)good.push(c);}else bad.push(e);}\nif(bad.length){ throw new Error('WF11 live gate: rejected non-public-channel entries (groups/invite links/private/joinchat/t.me-c are forbidden): '+bad.join(', ')); }\nconst channels=good.slice(0,maxChannels); // MVP cap (<=3 channels, <=30 posts each)\n// one item per tracked channel; the gate-protected transport node fetches the PUBLIC preview page only.\nreturn channels.map(c=>({ json: { channel:c, fetch_url:'https://t.me/s/'+c, max_posts:maxPosts, live_transport:transport } }));"
       }
     },
     {
@@ -142,7 +142,7 @@
         "operation": "read",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -174,7 +174,7 @@
         440
       ],
       "parameters": {
-        "jsCode": "// Dedup normalized posts vs market_record_registry (by dedup_key) + within batch. No external calls.\n// Mirrors the proven WF09 pattern: invalid and hard-skipped items never register, never count unique,\n// never consume the pipeline cap; hard skips apply in BOTH modes (fixture control demonstrates the filter).\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Connector Config').first().json;\nconst approvalUnique=str(cfg.approval_status_for_unique)||'new';\nconst dupNext=str(cfg.duplicate_next_action)||'monitor_duplicate';\nconst pipelineLimit=Number(cfg.pipeline_limit)||10;\nconst recs=$('Normalize Telegram Posts').all().map(i=>i.json);\nlet reg=[];\ntry{reg=$('Read market_record_registry').all().map(i=>i.json).filter(Boolean);}catch(e){reg=[];}\nconst regSet=new Set(reg.map(r=>str(r&&r.dedup_key)).filter(Boolean));\nconst seen=new Set();\nconst out=[];\nlet acceptedCount=0;\nfor(const r of recs){\n  if(r.is_valid_listing===false){\n    out.push({ json: Object.assign({}, r, { dedup_status:'invalid', approval_status:'invalid', next_action:'ignore' }) });\n    continue;\n  }\n  if(r.hard_skip===true){\n    out.push({ json: Object.assign({}, r, { dedup_status:'hard_skipped', approval_status:'skipped_irrelevant', next_action:'ignore' }) });\n    continue;\n  }\n  if(acceptedCount>=pipelineLimit){\n    out.push({ json: Object.assign({}, r, { dedup_status:'over_pipeline_limit', approval_status:'skipped', next_action:'ignore' }) });\n    continue;\n  }\n  acceptedCount++;\n  const key=str(r.dedup_key);\n  let dedup_status='unique';\n  let approval_status=approvalUnique;\n  let next_action=str(r.next_action);\n  if(key&&regSet.has(key)){\n    dedup_status='duplicate_in_registry';approval_status='duplicate';next_action=dupNext;\n  } else if(key&&seen.has(key)){\n    dedup_status='duplicate_in_batch';approval_status='duplicate';next_action=dupNext;\n  } else {\n    dedup_status='unique';if(key)seen.add(key);\n  }\n  out.push({ json: Object.assign({}, r, { dedup_status:dedup_status, approval_status:approval_status, next_action:next_action }) });\n}\nreturn out;"
+        "jsCode": "// Dedup normalized posts vs market_record_registry (by dedup_key) + within batch. No external calls.\n// TELEGRAM-CAP-001: fair bounded persistence — a per-channel cap AND a global total ceiling, selected by\n// ROUND-ROBIN over the configured channels so an earlier channel can never starve later ones. Only UNIQUE\n// accepted rows consume capacity; invalid, hard-skipped and duplicate rows are recorded but never counted.\n// Global dedup (registry + in-batch) is unchanged; per-channel/per-post provenance is preserved.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction chanKey(r){var c=str(r.author_handle).replace(/^@/,'');if(!c)c=str(r.profile_url).replace(/^https?:\\/\\/t\\.me\\/(s\\/)?/i,'').replace(/\\/.*$/,'');if(!c)c=str(r.post_url).replace(/^https?:\\/\\/t\\.me\\/(s\\/)?/i,'').replace(/\\/.*$/,'');return c.toLowerCase();}\nconst cfg=$('Set Connector Config').first().json;\nconst approvalUnique=str(cfg.approval_status_for_unique)||'new';\nconst dupNext=str(cfg.duplicate_next_action)||'monitor_duplicate';\nconst totalCap=Math.max(1,Math.min(Number(cfg.pipeline_limit)||10,90));\nconst perChannelCap=Math.max(1,Math.min(Number(cfg.live_max_posts_per_channel)||totalCap,30));\nconst recs=$('Normalize Telegram Posts').all().map(i=>i.json);\nlet reg=[];\ntry{reg=$('Read market_record_registry').all().map(i=>i.json).filter(Boolean);}catch(e){reg=[];}\nconst regSet=new Set(reg.map(r=>str(r&&r.dedup_key)).filter(Boolean));\nconst seen=new Set();\nconst results=new Array(recs.length);\nconst candByCh={};const chanOrder=[];\nfor(let i=0;i<recs.length;i++){\n  const r=recs[i];\n  if(r.is_valid_listing===false){results[i]={dedup_status:'invalid',approval_status:'invalid',next_action:'ignore'};continue;}\n  if(r.hard_skip===true){results[i]={dedup_status:'hard_skipped',approval_status:'skipped_irrelevant',next_action:'ignore'};continue;}\n  const key=str(r.dedup_key);\n  if(key&&regSet.has(key)){results[i]={dedup_status:'duplicate_in_registry',approval_status:'duplicate',next_action:dupNext};continue;}\n  if(key&&seen.has(key)){results[i]={dedup_status:'duplicate_in_batch',approval_status:'duplicate',next_action:dupNext};continue;}\n  if(key)seen.add(key);\n  const ch=chanKey(r);\n  if(!candByCh[ch]){candByCh[ch]=[];chanOrder.push(ch);}\n  candByCh[ch].push(i);\n}\nconst accepted=new Set();let globalAccepted=0;const perCh={};let progress=true;\nwhile(globalAccepted<totalCap&&progress){\n  progress=false;\n  for(let c=0;c<chanOrder.length;c++){\n    if(globalAccepted>=totalCap)break;\n    const ch=chanOrder[c];const q=candByCh[ch];const taken=perCh[ch]||0;\n    if(taken<perChannelCap&&taken<q.length){accepted.add(q[taken]);perCh[ch]=taken+1;globalAccepted++;progress=true;}\n  }\n}\nfor(let c=0;c<chanOrder.length;c++){\n  const q=candByCh[chanOrder[c]];\n  for(let k=0;k<q.length;k++){const i=q[k];\n    if(accepted.has(i))results[i]={dedup_status:'unique',approval_status:approvalUnique,next_action:str(recs[i].next_action)};\n    else results[i]={dedup_status:'over_pipeline_limit',approval_status:'skipped',next_action:'ignore'};\n  }\n}\nreturn recs.map((r,i)=>({json:Object.assign({},r,results[i])}));"
       }
     },
     {
@@ -187,7 +187,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// Build raw_market_records rows (exactly 40 columns, matching WF07/WF09 schema). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\n// Sheets formula-injection / #ERROR! fix (DEC-124): leading + or = is parsed as a formula by Google\n// Sheets (USER_ENTERED) — '+7 ...' phones become #ERROR!. A leading apostrophe forces text.\nfunction sheetsSafeText(v){v=str(v);return /^[+=]/.test(v)?(\"'\"+v):v;}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst cfg=$('Set Connector Config').first().json;\nconst reqId=str(cfg.agent_request_id);\nconst created=str(cfg.created_at);\nconst stamp=str(cfg.run_id).replace(/^wf11_/,'')||moscowStamp();\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst hardDebug=(cfg.hard_skip_debug_audit===true||str(cfg.hard_skip_debug_audit).toLowerCase()==='true')||(cfg.live_debug_audit===true||str(cfg.live_debug_audit).toLowerCase()==='true');\nconst recs=$('Deduplicate Posts').all().map(i=>i.json);\nconst out=[];let idx=0;\nfor(const r of recs){\n  idx++;\n  const ds0=str(r.dedup_status);\n  if(ds0==='invalid'||ds0==='over_pipeline_limit')continue;\n  if(ds0==='hard_skipped'&&!hardDebug)continue;\n  if(!writeDupAudit && ds0!=='unique')continue;\n  // contact policy: contact format + evidence URL are recorded in notes (no dedicated columns in the 40-col schema yet)\n  let notes='stage_3_4_telegram_public_channel_preview_connector_foundation';\n  if(str(r.contact_public)){ notes+='; contact_format='+(str(r.contact_format)||'unknown')+'; contact_source_url='+str(r.contact_evidence_url)+'; contact_use_policy=manual_review (CONTACT_AND_OUTREACH_POLICY)'; }\n  out.push({ json: {\n    record_id:'wf11_rec_'+stamp+'_'+idx,\n    agent_request_id:reqId,\n    created_at:created,\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    profile_name:str(r.profile_name),\n    author_handle:str(r.author_handle),\n    published_at:str(r.published_at),\n    region_hint:str(r.region_hint),\n    service_hint:str(r.service_hint),\n    query:str(r.query),\n    text_context:str(r.text_context),\n    comment_text:str(r.comment_text),\n    contact_public:sheetsSafeText(r.contact_public),\n    contact_channel:str(r.contact_channel),\n    dedup_key:str(r.dedup_key),\n    record_type_hint:str(r.record_type_hint),\n    touchpoint_type:str(r.touchpoint_type),\n    lead_intent_hint:str(r.lead_intent_hint),\n    urgency_hint:str(r.urgency_hint),\n    interest_topic:str(r.interest_topic),\n    probable_need:str(r.probable_need),\n    competitor_related:(r.competitor_related===true||str(r.competitor_related).toLowerCase()==='true'),\n    competitor_name:str(r.competitor_name),\n    semantic_keywords:str(r.semantic_keywords),\n    ad_channel_hint:str(r.ad_channel_hint),\n    confidence_score:Number(r.confidence_score)||0,\n    lead_temperature:str(r.lead_temperature),\n    next_action:str(r.next_action),\n    responsible:str(r.responsible),\n    dedup_status:str(r.dedup_status),\n    approval_status:str(r.approval_status),\n    approved_by:'',\n    approved_at:'',\n    estimated_analysis_cost_usd:Number(r.estimated_analysis_cost_usd)||0,\n    manager_note:str(r.manager_note),\n    notes:notes\n  }});\n}\nreturn out;"
+        "jsCode": "// Build raw_market_records rows (exactly 40 columns, matching WF07/WF09 schema). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\n// Sheets formula-injection / #ERROR! fix (DEC-124): leading + or = is parsed as a formula by Google\n// Sheets (USER_ENTERED) — '+7 ...' phones become #ERROR!. A leading apostrophe forces text.\nfunction sheetsSafeText(v){v=str(v);return /^[+=]/.test(v)?(\"'\"+v):v;}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst cfg=$('Set Connector Config').first().json;\nconst reqId=str(cfg.agent_request_id);\nconst created=str(cfg.created_at);\nconst stamp=str(cfg.run_id).replace(/^wf11_/,'')||moscowStamp();\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst hardDebug=(cfg.hard_skip_debug_audit===true||str(cfg.hard_skip_debug_audit).toLowerCase()==='true')||(cfg.live_debug_audit===true||str(cfg.live_debug_audit).toLowerCase()==='true');\nconst recs=$('Deduplicate Posts').all().map(i=>i.json);\nconst out=[];let idx=0;\nfor(const r of recs){\n  idx++;\n  const ds0=str(r.dedup_status);\n  if(ds0==='invalid'||ds0==='over_pipeline_limit')continue;\n  if(ds0==='hard_skipped'&&!hardDebug)continue;\n  if(!writeDupAudit && ds0!=='unique')continue;\n  // contact policy: contact format + evidence URL are recorded in notes (no dedicated columns in the 40-col schema yet)\n  let notes='stage_3_4_telegram_public_channel_preview_connector_foundation';\n  if(str(r.contact_public)){ notes+='; contact_format='+(str(r.contact_format)||'unknown')+'; contact_source_url='+str(r.contact_evidence_url)+'; contact_use_policy=manual_review (CONTACT_AND_OUTREACH_POLICY)'; }\n  out.push({ json: {\n    record_id:'wf11_rec_'+stamp+'_'+idx,\n    agent_request_id:reqId,\n    source_run_id:str(cfg.run_id)||reqId,\n    data_mode:str(cfg.data_mode)||'live',\n    created_at:created,\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    profile_name:str(r.profile_name),\n    author_handle:str(r.author_handle),\n    published_at:str(r.published_at),\n    region_hint:str(r.region_hint),\n    service_hint:str(r.service_hint),\n    query:str(r.query),\n    text_context:str(r.text_context),\n    comment_text:str(r.comment_text),\n    contact_public:sheetsSafeText(r.contact_public),\n    contact_channel:str(r.contact_channel),\n    dedup_key:str(r.dedup_key),\n    record_type_hint:str(r.record_type_hint),\n    touchpoint_type:str(r.touchpoint_type),\n    lead_intent_hint:str(r.lead_intent_hint),\n    urgency_hint:str(r.urgency_hint),\n    interest_topic:str(r.interest_topic),\n    probable_need:str(r.probable_need),\n    competitor_related:(r.competitor_related===true||str(r.competitor_related).toLowerCase()==='true'),\n    competitor_name:str(r.competitor_name),\n    semantic_keywords:str(r.semantic_keywords),\n    ad_channel_hint:str(r.ad_channel_hint),\n    confidence_score:Number(r.confidence_score)||0,\n    lead_temperature:str(r.lead_temperature),\n    next_action:str(r.next_action),\n    responsible:str(r.responsible),\n    dedup_status:str(r.dedup_status),\n    approval_status:str(r.approval_status),\n    approved_by:'',\n    approved_at:'',\n    estimated_analysis_cost_usd:Number(r.estimated_analysis_cost_usd)||0,\n    manager_note:str(r.manager_note),\n    notes:notes\n  }});\n}\n// AGENT-SUMMARY-001: 0 collected rows must NOT kill the summary/ledger chain — emit a marker\n// item so the run still writes its live_source_runs ledger row (WF16/08/10/12 trust the ledger).\nif(out.length===0){return [{json:{ms_no_rows:true}}];}\nreturn out;"
       }
     },
     {
@@ -204,7 +204,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -257,7 +257,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -293,7 +293,7 @@
         440
       ],
       "parameters": {
-        "jsCode": "// One agent_requests row (exactly 21 columns). status=completed. No external calls.\n// v0.4.1 (DEC-133): in LIVE mode the request title/details/notes use the ACTUAL live allowlist + transport\n// (was logging the fixture allowlist). Relevance counters now subtract post-level false positives.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nconst cfg=$('Set Connector Config').first().json;\nconst recs=$('Deduplicate Posts').all().map(i=>i.json);\nconst posts_received=recs.length;\nconst invalid_items=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst structurally_valid_items=posts_received-invalid_items;\nconst hard_skipped_items=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst business_relevant_items=structurally_valid_items-hard_skipped_items;\nconst over_pipeline_limit=recs.filter(r=>str(r.dedup_status)==='over_pipeline_limit').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst false_positives=recs.filter(r=>str(r.relevance_class)==='irrelevant_false_positive').length;\nconst hard_negatives=recs.filter(r=>str(r.relevance_class)==='hard_negative').length;\nconst adjacent_skips=recs.filter(r=>str(r.relevance_class)==='adjacent_real_estate_signal').length;\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\n// LIVE FIX: pick the allowlist that actually drove this run.\nconst fixAllow=Array.isArray(cfg.channel_allowlist)?cfg.channel_allowlist:[];\nconst liveAllow=Array.isArray(cfg.live_channel_allowlist)?cfg.live_channel_allowlist.map(c=>str(c)).filter(Boolean):[];\nconst allowArr=fixtureMode?fixAllow:liveAllow;\nconst channels=allowArr.join(', ');\nconst transport=str(cfg.live_transport)||'firecrawl';\nfunction nextAction(){\n  if(unique>0&&business_relevant_items>0){\n    var s='Inspect raw_market_records, then run Workflow 08 manually with agent_request_id_filter. No auto-handoff, no outreach (DEC-098).';\n    if(false_positives>0)s+=' '+false_positives+' irrelevant_live_false_positive post(s) skipped (channel context is not post-level evidence).';\n    if(false_positives>=business_relevant_items)s+=' Skipped false positives are high — consider tightening the list of tracked channels / relevance config.';\n    return s;\n  }\n  if(false_positives>0)return 'No unique business-relevant posts ('+false_positives+' false positives skipped): adjust the list of tracked channels / relevance config; do NOT run Workflow 08.';\n  return 'No unique business-relevant posts: review fixtures / tracked channels; do NOT run Workflow 08.';\n}\nlet notes='WF11 foundation (DEC-110): Telegram PUBLIC channel preview connector, fixture-first, no external calls, no MTProto/groups/private chats. No auto-handoff to WF08. Source='+(fixtureMode?'fixture':'live_preview')+'. Contact policy: public contacts verbatim from post text only, evidence URL in raw notes, default manual_review.';\nif(false_positives>0||hard_negatives>0||adjacent_skips>0){ notes+=' Relevance gate (DEC-133/135, POST-LEVEL evidence only): irrelevant_false_positives='+false_positives+', adjacent_real_estate_signals='+adjacent_skips+', hard_negatives='+hard_negatives+' (all skipped, not written to raw/registry by default for the credit_brokerage MVP).'; }\nif(!fixtureMode){ notes+=' transport='+transport+'; source_cost: '+(transport==='firecrawl'?'firecrawl credits — cost_not_recovered (unknown != free)':'http_get — no per-call fee ($0)')+'.'; }\nreturn [{ json: {\n  agent_request_id:str(cfg.agent_request_id),\n  created_at:str(cfg.created_at),\n  requested_by:str(cfg.requested_by)||'operator',\n  request_text:'Telegram public channel preview discovery ('+(fixtureMode?'fixture':'live_preview')+' tracked channels): '+channels,\n  request_type:str(cfg.request_type)||'social_source_discovery',\n  source_scope:'social_public',\n  platforms:'telegram',\n  query:'tracked channels: '+channels,\n  region:str(cfg.region)||'Москва/МО',\n  service_focus:str(cfg.service_focus)||'credit_broker',\n  requested_limit:Number(cfg.pipeline_limit)||10,\n  status:'completed',\n  plan_summary:'WF11 Telegram public-channel preview connector ('+(fixtureMode?'fixture mode':'live preview mode, transport='+transport)+') -> raw_market_records + market_record_registry for the Touchpoint Analyzer (Workflow 08). One source at a time (DEC-096).',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:0,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:'posts_received='+posts_received+'; structurally_valid_items='+structurally_valid_items+'; invalid_items='+invalid_items+'; business_relevant_items='+business_relevant_items+'; hard_skipped_items='+hard_skipped_items+' (irrelevant_false_positives='+false_positives+', adjacent_real_estate_signals='+adjacent_skips+', hard_negatives='+hard_negatives+'); unique='+unique+'; duplicates='+duplicate+'; over_pipeline_limit='+over_pipeline_limit+'.',\n  next_action:nextAction(),\n  notes:notes\n}}];"
+        "jsCode": "// One agent_requests row (exactly 21 columns). status=completed. No external calls.\n// v0.4.1 (DEC-133): in LIVE mode the request title/details/notes use the ACTUAL live allowlist + transport\n// (was logging the fixture allowlist). Relevance counters now subtract post-level false positives.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nconst cfg=$('Set Connector Config').first().json;\n// agent-called mode: the canonical agent_requests row was already written by WF18 — never a second (legacy-shaped) one.\nif(cfg.agent_called===true){return [{json:{ms_agent_mode:true}}];} // AGENT-SUMMARY-001: marker keeps the ledger chain alive; the IF below bypasses the legacy append\nconst recs=$('Deduplicate Posts').all().map(i=>i.json);\nconst posts_received=recs.length;\nconst invalid_items=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst structurally_valid_items=posts_received-invalid_items;\nconst hard_skipped_items=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst business_relevant_items=structurally_valid_items-hard_skipped_items;\nconst over_pipeline_limit=recs.filter(r=>str(r.dedup_status)==='over_pipeline_limit').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst false_positives=recs.filter(r=>str(r.relevance_class)==='irrelevant_false_positive').length;\nconst hard_negatives=recs.filter(r=>str(r.relevance_class)==='hard_negative').length;\nconst adjacent_skips=recs.filter(r=>str(r.relevance_class)==='adjacent_real_estate_signal').length;\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\n// LIVE FIX: pick the allowlist that actually drove this run.\nconst fixAllow=Array.isArray(cfg.channel_allowlist)?cfg.channel_allowlist:[];\nconst liveAllow=Array.isArray(cfg.live_channel_allowlist)?cfg.live_channel_allowlist.map(c=>str(c)).filter(Boolean):[];\nconst allowArr=fixtureMode?fixAllow:liveAllow;\nconst channels=allowArr.join(', ');\nconst transport=str(cfg.live_transport)||'firecrawl';\nfunction nextAction(){\n  if(unique>0&&business_relevant_items>0){\n    var s='Inspect raw_market_records, then run Workflow 08 manually with agent_request_id_filter. No auto-handoff, no outreach (DEC-098).';\n    if(false_positives>0)s+=' '+false_positives+' irrelevant_live_false_positive post(s) skipped (channel context is not post-level evidence).';\n    if(false_positives>=business_relevant_items)s+=' Skipped false positives are high — consider tightening the list of tracked channels / relevance config.';\n    return s;\n  }\n  if(false_positives>0)return 'No unique business-relevant posts ('+false_positives+' false positives skipped): adjust the list of tracked channels / relevance config; do NOT run Workflow 08.';\n  return 'No unique business-relevant posts: review fixtures / tracked channels; do NOT run Workflow 08.';\n}\nlet notes='WF11 foundation (DEC-110): Telegram PUBLIC channel preview connector, fixture-first, no external calls, no MTProto/groups/private chats. No auto-handoff to WF08. Source='+(fixtureMode?'fixture':'live_preview')+'. Contact policy: public contacts verbatim from post text only, evidence URL in raw notes, default manual_review.';\nif(false_positives>0||hard_negatives>0||adjacent_skips>0){ notes+=' Relevance gate (DEC-133/135, POST-LEVEL evidence only): irrelevant_false_positives='+false_positives+', adjacent_real_estate_signals='+adjacent_skips+', hard_negatives='+hard_negatives+' (all skipped, not written to raw/registry by default for the credit_brokerage MVP).'; }\nif(!fixtureMode){ notes+=' transport='+transport+'; source_cost: '+(transport==='firecrawl'?'firecrawl credits — cost_not_recovered (unknown != free)':'http_get — no per-call fee ($0)')+'.'; }\nreturn [{ json: {\n  agent_request_id:str(cfg.agent_request_id),\n  created_at:str(cfg.created_at),\n  requested_by:str(cfg.requested_by)||'operator',\n  request_text:'Telegram public channel preview discovery ('+(fixtureMode?'fixture':'live_preview')+' tracked channels): '+channels,\n  request_type:str(cfg.request_type)||'social_source_discovery',\n  source_scope:'social_public',\n  platforms:'telegram',\n  query:'tracked channels: '+channels,\n  region:str(cfg.region)||'Москва/МО',\n  service_focus:str(cfg.service_focus)||'credit_broker',\n  requested_limit:Number(cfg.pipeline_limit)||10,\n  status:'completed',\n  plan_summary:'WF11 Telegram public-channel preview connector ('+(fixtureMode?'fixture mode':'live preview mode, transport='+transport)+') -> raw_market_records + market_record_registry for the Touchpoint Analyzer (Workflow 08). One source at a time (DEC-096).',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:0,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:'posts_received='+posts_received+'; structurally_valid_items='+structurally_valid_items+'; invalid_items='+invalid_items+'; business_relevant_items='+business_relevant_items+'; hard_skipped_items='+hard_skipped_items+' (irrelevant_false_positives='+false_positives+', adjacent_real_estate_signals='+adjacent_skips+', hard_negatives='+hard_negatives+'); unique='+unique+'; duplicates='+duplicate+'; over_pipeline_limit='+over_pipeline_limit+'.',\n  next_action:nextAction(),\n  notes:notes\n}}];"
       }
     },
     {
@@ -310,7 +310,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -346,7 +346,7 @@
         440
       ],
       "parameters": {
-        "jsCode": "// Final run summary. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Connector Config').first().json;\nconst recs=$('Deduplicate Posts').all().map(i=>i.json);\nconst posts_received=recs.length;\nconst invalid_items=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst structurally_valid_items=posts_received-invalid_items;\nconst hard_skipped_items=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst business_relevant_items=structurally_valid_items-hard_skipped_items;\nconst over_pipeline_limit=recs.filter(r=>str(r.dedup_status)==='over_pipeline_limit').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst false_positives=recs.filter(r=>str(r.relevance_class)==='irrelevant_false_positive').length;\nconst hard_negatives=recs.filter(r=>str(r.relevance_class)==='hard_negative').length;\nconst adjacent_skips=recs.filter(r=>str(r.relevance_class)==='adjacent_real_estate_signal').length;\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst rawWritten=writeDupAudit?(unique+duplicate):unique;\nconst record_type_counts={};\nfor(const r of recs){\n  if(['invalid','over_pipeline_limit','hard_skipped'].indexOf(str(r.dedup_status))>=0)continue;\n  const t=str(r.record_type_hint)||'unknown';record_type_counts[t]=(record_type_counts[t]||0)+1;\n}\nfunction nextAction(){\n  if(unique>0&&business_relevant_items>0){\n    var s='Inspect raw_market_records, then run Workflow 08 (Touchpoint Analyzer) manually with agent_request_id_filter. No auto-handoff, no outreach.';\n    if(false_positives>0)s+=' ('+false_positives+' irrelevant_live_false_positive post(s) skipped — channel context is not post-level evidence.)';\n    if(false_positives>=business_relevant_items)s+=' Skipped false positives are high — consider tightening the list of tracked channels / relevance config.';\n    return s;\n  }\n  if(false_positives>0)return 'No unique business-relevant posts ('+false_positives+' false positives skipped): adjust the list of tracked channels / relevance config; do NOT run Workflow 08.';\n  return 'No unique business-relevant posts: review fixtures / tracked channels; do NOT run Workflow 08.';\n}\nreturn [{ json: {\n  workflow:'11 - Social Source Connector Foundation (Telegram Public Channel Preview)',\n  agent_request_id:str(cfg.agent_request_id),\n  run_id:str(cfg.run_id),\n  fixture_mode:(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true'),\n  live_mode:(cfg.live_mode===true||str(cfg.live_mode).toLowerCase()==='true'),\n  posts_received:posts_received,\n  structurally_valid_items:structurally_valid_items,\n  invalid_items:invalid_items,\n  business_relevant_items:business_relevant_items,\n  hard_skipped_items:hard_skipped_items,\n  irrelevant_false_positives:false_positives,\n  adjacent_real_estate_skips:adjacent_skips,\n  hard_negative_skips:hard_negatives,\n  over_pipeline_limit:over_pipeline_limit,\n  unique_count:unique,\n  duplicate_count:duplicate,\n  raw_market_records_written:rawWritten,\n  registry_rows_written:unique,\n  record_type_counts:record_type_counts,\n  source_cost_usd:0,\n  next_action:nextAction()\n}}];"
+        "jsCode": "// Final run summary. No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Connector Config').first().json;\nconst recs=$('Deduplicate Posts').all().map(i=>i.json);\nconst posts_received=recs.length;\nconst invalid_items=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst structurally_valid_items=posts_received-invalid_items;\nconst hard_skipped_items=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst business_relevant_items=structurally_valid_items-hard_skipped_items;\nconst over_pipeline_limit=recs.filter(r=>str(r.dedup_status)==='over_pipeline_limit').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst false_positives=recs.filter(r=>str(r.relevance_class)==='irrelevant_false_positive').length;\nconst hard_negatives=recs.filter(r=>str(r.relevance_class)==='hard_negative').length;\nconst adjacent_skips=recs.filter(r=>str(r.relevance_class)==='adjacent_real_estate_signal').length;\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst rawWritten=writeDupAudit?(unique+duplicate):unique;\nconst record_type_counts={};\nfor(const r of recs){\n  if(['invalid','over_pipeline_limit','hard_skipped'].indexOf(str(r.dedup_status))>=0)continue;\n  const t=str(r.record_type_hint)||'unknown';record_type_counts[t]=(record_type_counts[t]||0)+1;\n}\nfunction nextAction(){\n  if(unique>0&&business_relevant_items>0){\n    var s='Inspect raw_market_records, then run Workflow 08 (Touchpoint Analyzer) manually with agent_request_id_filter. No auto-handoff, no outreach.';\n    if(false_positives>0)s+=' ('+false_positives+' irrelevant_live_false_positive post(s) skipped — channel context is not post-level evidence.)';\n    if(false_positives>=business_relevant_items)s+=' Skipped false positives are high — consider tightening the list of tracked channels / relevance config.';\n    return s;\n  }\n  if(false_positives>0)return 'No unique business-relevant posts ('+false_positives+' false positives skipped): adjust the list of tracked channels / relevance config; do NOT run Workflow 08.';\n  return 'No unique business-relevant posts: review fixtures / tracked channels; do NOT run Workflow 08.';\n}\nreturn [{ json: {\n  workflow:'11 - Social Source Connector Foundation (Telegram Public Channel Preview)',\n  agent_request_id:str(cfg.agent_request_id),\n  run_id:str(cfg.run_id),\n  items_received:posts_received,\n  items_written:rawWritten,\n  items_relevant:business_relevant_items, // adapter contract aliases (AGENT-SUMMARY-001)\n  fixture_mode:(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true'),\n  live_mode:(cfg.live_mode===true||str(cfg.live_mode).toLowerCase()==='true'),\n  posts_received:posts_received,\n  structurally_valid_items:structurally_valid_items,\n  invalid_items:invalid_items,\n  business_relevant_items:business_relevant_items,\n  hard_skipped_items:hard_skipped_items,\n  irrelevant_false_positives:false_positives,\n  adjacent_real_estate_skips:adjacent_skips,\n  hard_negative_skips:hard_negatives,\n  over_pipeline_limit:over_pipeline_limit,\n  unique_count:unique,\n  duplicate_count:duplicate,\n  raw_market_records_written:rawWritten,\n  registry_rows_written:unique,\n  record_type_counts:record_type_counts,\n  source_cost_usd:0,\n  next_action:nextAction()\n}}];"
       }
     },
     {
@@ -386,7 +386,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build ONE live_source_runs row (23 columns, docs/TABLE_SCHEMA.md) — run observability (DEC-126/132).\n// Logs what ran, which source, counters, external_calls, cost and what to do next. Never logs the approval\n// token value itself — only whether one was used. Live source cost is unknown for Firecrawl -> cost_not_recovered.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Connector Config').first().json;\nconst recs=$('Deduplicate Posts').all().map(i=>i.json);\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\nconst invalid=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst hard=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst dup=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst allow=fixtureMode?(Array.isArray(cfg.channel_allowlist)?cfg.channel_allowlist:[]):(Array.isArray(cfg.live_channel_allowlist)?cfg.live_channel_allowlist:[]);\nconst cap=Math.min(Number(cfg.live_max_channels)||2,2);\nconst transport=str(cfg.live_transport)||'firecrawl';\nconst liveChannels=fixtureMode?0:Math.min(allow.length,cap);\nconst costNote=fixtureMode?'fixture: $0':(transport==='firecrawl'?'firecrawl credits — cost_not_recovered (record Firecrawl usage after the run; unknown != free)':'http_get public preview — no per-call fee ($0), bandwidth only');\nreturn [{ json: {\n  run_id:str(cfg.run_id),\n  created_at:str(cfg.created_at),\n  workflow:'WF11 - Social Source Connector (Telegram Preview)',\n  source_family:'social_channel',\n  platform:'telegram',\n  mode:fixtureMode?'fixture':'live',\n  approval_token_used:fixtureMode?'no':(str(cfg.live_approval_token)?'yes':'no'),\n  source_allowlist:allow.join(', '),\n  max_items:Number(fixtureMode?cfg.pipeline_limit:cfg.live_max_posts_per_channel)||10,\n  items_received:recs.length,\n  items_relevant:recs.length-invalid-hard,\n  items_written_raw:writeDupAudit?(unique+dup):unique,\n  items_unique:unique,\n  items_duplicate:dup,\n  hard_skipped:hard,\n  external_calls:fixtureMode?0:liveChannels,\n  estimated_source_cost_usd:0,\n  llm_calls:0,\n  estimated_llm_cost_usd:0,\n  status:'completed',\n  error_summary:'',\n  operator_next_action:(unique>0?'Inspect raw_market_records, then run WF08 manually with agent_request_id_filter ('+str(cfg.agent_request_id)+'). Skipped false positives (no post-level finance evidence) are not handed off.':'No unique posts; review the list of tracked channels / relevance config; do NOT run WF08.'),\n  notes:'stage_3_source_foundation_telegram_public_preview; transport='+(fixtureMode?'fixture':transport)+'; source_cost: '+costNote+'; t.me/s public preview pages only; no MTProto/groups/private chats; no member extraction; no outreach.'\n}}];"
+        "jsCode": "// Build ONE live_source_runs row (23 columns, docs/TABLE_SCHEMA.md) — run observability (DEC-126/132).\n// Logs what ran, which source, counters, external_calls, cost and what to do next. Never logs the approval\n// token value itself — only whether one was used. Live source cost is unknown for Firecrawl -> cost_not_recovered.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Connector Config').first().json;\nconst recs=$('Deduplicate Posts').all().map(i=>i.json);\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\nconst invalid=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst hard=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst dup=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst allow=fixtureMode?(Array.isArray(cfg.channel_allowlist)?cfg.channel_allowlist:[]):(Array.isArray(cfg.live_channel_allowlist)?cfg.live_channel_allowlist:[]);\nconst cap=Math.min(Number(cfg.live_max_channels)||2,2);\nconst transport=str(cfg.live_transport)||'firecrawl';\nconst liveChannels=fixtureMode?0:Math.min(allow.length,cap);\nconst costNote=fixtureMode?'fixture: $0':(transport==='firecrawl'?'firecrawl credits — cost_not_recovered (record Firecrawl usage after the run; unknown != free)':'http_get public preview — no per-call fee ($0), bandwidth only');\nreturn [{ json: {\n  run_id:str(cfg.run_id),\n  created_at:str(cfg.created_at),\n  workflow:'WF11 - Social Source Connector (Telegram Preview)',\n  source_family:'social_channel',\n  platform:'telegram',\n  mode:fixtureMode?'fixture':'live',\n  approval_token_used:fixtureMode?'no':(str(cfg.live_approval_token)?'yes':'no'),\n  source_allowlist:allow.join(', '),\n  max_items:Number(fixtureMode?cfg.pipeline_limit:cfg.live_max_posts_per_channel)||10,\n  items_received:recs.length,\n  items_relevant:recs.length-invalid-hard,\n  items_written_raw:writeDupAudit?(unique+dup):unique,\n  items_written:writeDupAudit?(unique+dup):unique,\n  items_unique:unique,\n  items_duplicate:dup,\n  hard_skipped:hard,\n  external_calls:fixtureMode?0:liveChannels,\n  estimated_source_cost_usd:0,\n  llm_calls:0,\n  estimated_llm_cost_usd:0,\n  status:'completed',\n  error_summary:'',\n  operator_next_action:(unique>0?'Inspect raw_market_records, then run WF08 manually with agent_request_id_filter ('+str(cfg.agent_request_id)+'). Skipped false positives (no post-level finance evidence) are not handed off.':'No unique posts; review the list of tracked channels / relevance config; do NOT run WF08.'),\n  notes:'stage_3_source_foundation_telegram_public_preview; transport='+(fixtureMode?'fixture':transport)+'; source_cost: '+costNote+'; t.me/s public preview pages only; no MTProto/groups/private chats; no member extraction; no outreach.'\n}}];"
       },
       "id": "wf11-runlog-build",
       "name": "Build live_source_runs Row",
@@ -403,7 +403,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -484,7 +484,7 @@
       "credentials": {
         "httpHeaderAuth": {
           "id": "PASTE_FIRECRAWL_CREDENTIAL_ID",
-          "name": "Firecrawl API (header auth) - placeholder"
+          "name": "Firecrawl API - Marketing Scout"
         }
       },
       "id": "wf11-live-firecrawl-placeholder",
@@ -496,6 +496,123 @@
         620
       ],
       "notes": "LIVE gated transport (DEC-135): unreachable unless the LIVE Preview Approval Gate passes (live_mode=true + exact approval token + non-empty validated tracked-channel list + live_transport='firecrawl') and a Firecrawl credential is bound. POST public t.me/s/<channel> preview to Firecrawl scrape (html). No login, no MTProto, public preview only. Safety is the approval gate + tracked-channel validation + caps, NOT manual node disabling."
+    },
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "agent_request_id",
+              "type": "string"
+            },
+            {
+              "name": "source_run_id",
+              "type": "string"
+            },
+            {
+              "name": "workflow_run_id",
+              "type": "string"
+            },
+            {
+              "name": "data_mode",
+              "type": "string"
+            },
+            {
+              "name": "channels",
+              "type": "string"
+            },
+            {
+              "name": "max_posts",
+              "type": "string"
+            },
+            {
+              "name": "approval_token",
+              "type": "string"
+            },
+            {
+              "name": "transport",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1160,
+        480
+      ],
+      "id": "wf11-subtrig",
+      "name": "When Called by Agent"
+    },
+    {
+      "id": "b1000000-0000-0000-0000-000000anyrow",
+      "name": "Any Rows To Write?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1210,
+        160
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-anyrow",
+              "leftValue": "={{ $json.ms_no_rows === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1000000-0000-0000-0000-000000legacy",
+      "name": "Write Legacy Request Row?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1650,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-legacy",
+              "leftValue": "={{ $json.ms_agent_mode === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
     }
   ],
   "connections": {
@@ -587,7 +704,7 @@
       "main": [
         [
           {
-            "node": "Append raw_market_records",
+            "node": "Any Rows To Write?",
             "type": "main",
             "index": 0
           }
@@ -625,7 +742,7 @@
       "main": [
         [
           {
-            "node": "Append agent_requests",
+            "node": "Write Legacy Request Row?",
             "type": "main",
             "index": 0
           }
@@ -721,6 +838,53 @@
         [
           {
             "node": "Parse Live Preview Posts (inert)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Set Connector Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Rows To Write?": {
+      "main": [
+        [
+          {
+            "node": "Append raw_market_records",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build agent_requests Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Legacy Request Row?": {
+      "main": [
+        [
+          {
+            "node": "Append agent_requests",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build live_source_runs Row",
             "type": "main",
             "index": 0
           }

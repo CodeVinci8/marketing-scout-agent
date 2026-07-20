@@ -141,8 +141,12 @@ function deliver(adapterRaw, report) {
   const run = H.makeRun();
   H.inject(run, 'Resolve Agent Config', [CFG_FULL]);
   H.runCodeNode(run, WF20, 'Approval & Budget Gate', [{ json: { request: { agent_request_id: 'req_1', state: 'approved', approved: true, chat_id: '555' }, plan: { sources: ['website'], source: 'website', est_items: 10, est_external_calls: 4, est_source_cost_usd: 0.05, est_llm_cost_usd: 0.1 } } }]);
-  H.runCodeNode(run, WF20, 'Normalize Adapter Result', [{ json: { live_source_run: adapterRaw } }]);
-  H.runCodeNode(run, WF20, 'Build Execution Summary', [{ json: { report: report } }]);
+  H.runCodeNode(run, WF20, 'Normalize Website Result', [{ json: { live_source_run: adapterRaw } }]);
+  // STAGE-F-INTEGRATION: the summary now reads WF12 BY NAME (the Stage-F analysis chain sits in between), so the
+  // deterministic report can never be displaced by an analyst result. Analyst disabled here => deterministic path.
+  H.inject(run, 'Run WF12 Report', [report]);
+  H.inject(run, 'Merge Analyses', [{ analysis: { analyses: [], count_enriched: 0, count_reused: 0, count_fallback: 0, analysis_cost_usd: 0, reason: 'disabled' } }]);
+  H.runCodeNode(run, WF20, 'Build Execution Summary', [{ json: {} }]);
   return H.runCodeNode(run, WF20, 'Build Delivery Outbox', [])[0].json;
 }
 A.section('WF20 delivery — proactive continuation attached to the actual outbox/send path');
@@ -150,7 +154,10 @@ const okAdapter = { agent_request_id: 'req_1', source_run_id: 'firecrawl_X', ite
 const okReport = { report_id: 'rep1', report_markdown: 'ФАКТ: 2 конкурента, ставка от 0,1%/день.', rows_after_filters: 2, records_unique: 2, records_eligible: 2, records_analyzed: 2, llm_primary_calls: 0, llm_repair_calls: 0 };
 const okOut = deliver(okAdapter, okReport);
 const okBody = JSON.parse(okOut.telegram_send_body);
-A.ok('delivery preserves the immutable report facts verbatim', /ФАКТ: 2 конкурента/.test(okBody.text));
+// REPORT-TRUTH-C: Telegram now gets the compact structured answer — the full report markdown stays in the
+// XLSX and the stored bundle, so raw markdown must NOT be delivered verbatim anymore.
+A.ok('delivery is the compact structured answer (markdown stays in XLSX/bundle)',
+  !/ФАКТ: 2 конкурента/.test(okBody.text) && okBody.text.length <= 1500 && /📊/.test(okBody.text));
 A.ok('delivery includes a proactive continuation', /Просто напишите, что сделать дальше/.test(okBody.text));
 A.ok('proactive_text exposed on the node output', /Просто напишите/.test(okOut.proactive_text));
 const finalBody = JSON.parse(okOut.telegram_send_bodies)[JSON.parse(okOut.telegram_send_bodies).length - 1];

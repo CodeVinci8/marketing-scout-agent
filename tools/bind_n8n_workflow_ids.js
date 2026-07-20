@@ -72,6 +72,40 @@ function allInactive(loaded) {
   return Object.keys(loaded.byName).every(name => loaded.byName[name].json.active === false);
 }
 
+// ACTIVATION-POLICY-001: verify the exported active set against the manifest activation POLICY instead of blanket
+// inactivity. Two rules, both fail-closed:
+//   1. only workflows in the activation plan (feature-flag aware) or the callable-target set may be active —
+//      anything else active (legacy WF18, QA workflows, WF23/WF25 with their flags off) fails the report;
+//   2. DISPATCH-PUBLISH-001 invariant: if any trigger workflow from the activation plan is active, EVERY callable
+//      dispatch target must be published (active) too — n8n 2.23 refuses executeWorkflow on an unpublished target,
+//      so an active gateway with an unpublished target is a broken production ("Workflow is not active and cannot
+//      be executed" at dispatch time).
+// Pre-activation states (everything inactive) pass rule 2 vacuously, so --apply and disposable smokes still verify.
+function activationPolicyCheck(loaded) {
+  const flag = v => String(process.env[v] || '').toLowerCase() === 'true';
+  const planFiles = L.activationPlan({ monitoring: flag('MS_MONITORING_ENABLED'), weeklyDigest: flag('MS_WEEKLY_DIGEST_ENABLED') });
+  const callableFiles = L.callableTargets();
+  const nameOf = f => L.workflowName(f);
+  const planNames = new Set(planFiles.map(nameOf));
+  const callableNames = callableFiles.map(nameOf);
+  const allowed = new Set([...planNames, ...callableNames]);
+  const activeNames = Object.keys(loaded.byName).filter(n => loaded.byName[n].json.active === true);
+  const unexpectedActive = activeNames.filter(n => !allowed.has(n)).sort();
+  let unpublishedTargets = [];
+  if (activeNames.some(n => planNames.has(n))) {
+    unpublishedTargets = callableFiles.filter(f => {
+      const entry = loaded.byName[nameOf(f)];
+      return !entry || entry.json.active !== true;
+    }).sort();
+  }
+  return {
+    active_count: activeNames.length,
+    unexpected_active: unexpectedActive,
+    unpublished_dispatch_targets: unpublishedTargets,
+    ok: unexpectedActive.length === 0 && unpublishedTargets.length === 0
+  };
+}
+
 // Resolve the eight manifest edges into concrete caller-node/target-id operations against the exported dir.
 function planBindings(loaded) {
   const edges = L.bindingEdges();
@@ -145,6 +179,7 @@ function bindDir(dir, opts) {
   // recount placeholders against the (possibly mutated) in-memory state
   const placeholders = countPlaceholders(loaded);
 
+  const policy = activationPolicyCheck(loaded);
   const report = {
     bindings_expected: expected,
     bindings_resolved: resolved,
@@ -153,6 +188,10 @@ function bindDir(dir, opts) {
     ambiguous_targets: plan.ambiguousTargets,
     duplicate_workflows: duplicateWorkflows,
     all_inactive: allInactive(loaded),
+    active_count: policy.active_count,
+    unexpected_active: policy.unexpected_active,
+    unpublished_dispatch_targets: policy.unpublished_dispatch_targets,
+    activation_policy_ok: policy.ok,
     edges: edgeReport,
     errors: plan.errors,
     files_written: write ? Array.from(touched.keys()).map(p => path.basename(p)) : []
@@ -163,13 +202,13 @@ function bindDir(dir, opts) {
     report.missing_targets === 0 &&
     report.ambiguous_targets === 0 &&
     report.duplicate_workflows === 0 &&
-    report.all_inactive === true &&
+    report.activation_policy_ok === true &&
     report.errors.length === 0;
   report.ok = okClose;
   return report;
 }
 
-module.exports = { loadExportedDir, countPlaceholders, allInactive, planBindings, bindDir, EXECUTE_WORKFLOW, PLACEHOLDER };
+module.exports = { loadExportedDir, countPlaceholders, allInactive, activationPolicyCheck, planBindings, bindDir, EXECUTE_WORKFLOW, PLACEHOLDER };
 
 if (require.main === module) {
   const args = process.argv.slice(2);

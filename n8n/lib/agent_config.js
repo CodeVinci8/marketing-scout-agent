@@ -22,6 +22,8 @@ function bool(v, d) {
   return d;
 }
 function list(v) { return str(v).split(/[\s,;]+/).filter(Boolean); }
+// phrase list: split ONLY on ; or | (items may contain spaces, e.g. Avito search queries)
+function phraseList(v) { return str(v).split(/[;|]/).map(s => s.trim()).filter(Boolean); }
 
 // Production-safe defaults: fail-closed (approval + source-health required), website-only allowlist,
 // LLM features OFF, tight budgets. Everything is overridable by env or explicit override.
@@ -40,6 +42,30 @@ const DEFAULTS = {
   require_source_health: true,
   enable_llm_planner: false,
   enable_llm_summary: false,
+  enable_llm_analysis: true,   // Stage-F WF28 evidence-bound analysis (still gated by enable_claude + credential)
+  // WF08-LLM-GATE-001: WF08's LEGACY per-record Claude classifier predates the Stage-F gateway characterization
+  // (it assumes honoured max_tokens / plain-JSON text output — neither of which the measured gateway provides) and
+  // costs one 16-28s call PER RECORD (~12/run). Enabling the Stage-F role must not silently arm it too, so it now
+  // has its OWN default-OFF gate instead of riding on enable_llm_analysis. Set MS_ENABLE_WF08_LLM=true to opt in.
+  enable_wf08_llm: false,
+  // SOURCE-EXEC-001: how long a collected snapshot stays "current" before we pay to collect it again. The old
+  // url_registry check was PERMANENT (no time component), so a source could never be re-analyzed. The product's
+  // cadence is weekly (WF25 digest, WF23 monitor) and a competitor's public positioning moves on a weeks-to-months
+  // scale, so 7 days is current without re-paying for every repeat question. Override: MS_SOURCE_FRESHNESS_DAYS.
+  source_freshness_days: 7,
+  // Stage F: how many logical sources one approved run may send to WF28. Bounds the analysis fan-out (and its
+  // cost) — never a per-row call explosion.
+  llm_max_analyses_per_run: 5,
+  // §7 provider unit prices (observed 2026-07: Firecrawl ~1 credit/page, Apify ~$0.01/search, small
+  // sonnet call ~$0.01-0.02). Overridable: MS_COST_FIRECRAWL_PAGE_USD / MS_COST_APIFY_SEARCH_USD / MS_COST_CLAUDE_CALL_USD.
+  cost_firecrawl_page_usd: 0.01,
+  cost_apify_search_usd: 0.01,
+  cost_claude_call_usd: 0.02,
+  // Stage F MEASURED price of ONE evidence-bound WF28 source analysis. The gateway injects a large hidden context
+  // (~465-2200 tokens) and always runs extended thinking, so a real single-source call measured $0.063 (clean) and
+  // $0.084 (with one repair) — an order of magnitude above cost_claude_call_usd. Quoting $0.02 for it would
+  // understate an approved spend. Overridable: MS_COST_CLAUDE_ANALYSIS_USD.
+  cost_claude_analysis_usd: 0.07,
   report_data_mode: 'live',
   // ---- Stage 4 free-path / zero-paid-call guards (all fail-closed) -------------------------------------------
   // Telegram conversation is allowed; every PAID external action is OFF by default. The free path runs the full
@@ -51,11 +77,39 @@ const DEFAULTS = {
   enable_telegram: false,
   enable_external_actions: false,   // master switch for any paid collection/analysis
   enable_claude: false,             // Claude (planner/summary) only when explicitly enabled
+  claude_key_present: false,        // MS_CLAUDE_API_KEY in the process env (NOT how production authenticates)
+  // CAP-CLAUDE-001: production Claude auth is an n8n CREDENTIAL bound to the HTTP node, invisible to a Code node.
+  // An operator MAY declare it (MS_CLAUDE_CREDENTIAL_AVAILABLE=true) for a fresh install, but the authoritative
+  // signal is the system's own llm_analysis_telemetry proof — see n8n/lib/llm_capability.js.
+  claude_credential_declared: false,
   enable_apify: false,
   enable_firecrawl: false,
   enable_vk: false,
+  // DISCOVERY: evidence validation (Firecrawl Scrape of top candidates) is ON by default; LLM enrichment of the
+  // top validated candidates is Stage F and OFF by default (no Claude call until Stage F is explicitly authorized).
+  enable_discovery_validation: true,
+  discovery_llm_enrichment: false,
+  discovery_validate_max: 5,
+  // AVITO-BLOCK-001: Avito is an OPTIONAL source that is operator-infra-blocked until a Residential proxy is
+  // provisioned on a paid Apify plan (AVITO_SOURCE_QUALITY=BLOCKED_OPTIONAL_OPERATOR_INFRA_PREREQUISITE). The
+  // WF09 implementation + tests + evidence stay in the repo, but the bot must NOT offer/plan/select/run Avito
+  // for users while blocked. Default OFF => Avito is stripped from the resolved runtime source_allowlist (the
+  // one gate every downstream surface derives availability from). RE-ENABLE PATH: set MS_AVITO_ENABLED=true
+  // once Residential proxy access exists — nothing is deleted, so re-enabling restores the full Avito path.
+  avito_enabled: false,
+  // Stage 5: Telegram PUBLIC channel preview collector (t.me/s/<channel>, no per-call fee but still an external
+  // fetch — gated like every collector). Distinct from enable_telegram (the bot ingress).
+  enable_telegram_collector: false,
   monitoring_enabled: false,
-  weekly_digest_enabled: false
+  weekly_digest_enabled: false,
+  // Stage 5 MVP source targets (overridable by env; NON-secret). Avito queries are phrases (split on ';').
+  avito_queries: ['кредитный брокер Москва', 'помощь в получении кредита Москва', 'кредит под ПТС Москва'],
+  telegram_channels: ['mfo_market', 'da_credit', 'broker_Aleksey'],
+  vk_communities: ['kredit874', 'da_credit', 'anna_findoctor'],
+  // real Moscow competitor sites for the website source (set via MS_WEBSITE_COMPETITOR_URLS; https only)
+  // MVP v1 verified Moscow credit-broker competitor sites (live-checked 2026-07-03: помощь в получении
+  // кредита / залог / ПТС / рефинансирование / ипотека, все https). MS_WEBSITE_COMPETITOR_URLS overrides.
+  website_competitor_urls: ['https://www.lioncredit.ru/', 'https://finardi.ru/', 'https://mkbkfin.ru/']
 };
 
 // Map env var -> resolved config. Unknown/blank env falls back to DEFAULTS; explicit overrides win last.
@@ -72,6 +126,10 @@ function resolveConfig(env, overrides) {
     max_external_calls: num(env.MS_MAX_EXTERNAL_CALLS, DEFAULTS.max_external_calls),
     source_budget_usd: num(env.MS_SOURCE_BUDGET_USD, DEFAULTS.source_budget_usd),
     llm_budget_usd: num(env.MS_LLM_BUDGET_USD, DEFAULTS.llm_budget_usd),
+    // §7 operator-controlled provider unit prices (cost_model.js) — the ONE place unit prices live.
+    cost_firecrawl_page_usd: num(env.MS_COST_FIRECRAWL_PAGE_USD, DEFAULTS.cost_firecrawl_page_usd),
+    cost_apify_search_usd: num(env.MS_COST_APIFY_SEARCH_USD, DEFAULTS.cost_apify_search_usd),
+    cost_claude_call_usd: num(env.MS_COST_CLAUDE_CALL_USD, DEFAULTS.cost_claude_call_usd),
     default_region: str(env.MS_DEFAULT_REGION) || DEFAULTS.default_region,
     default_niche: str(env.MS_DEFAULT_NICHE) || DEFAULTS.default_niche,
     source_allowlist: allowlist.length ? allowlist : DEFAULTS.source_allowlist.slice(),
@@ -79,23 +137,42 @@ function resolveConfig(env, overrides) {
     require_source_health: bool(env.MS_REQUIRE_SOURCE_HEALTH, DEFAULTS.require_source_health),
     enable_llm_planner: bool(env.MS_ENABLE_LLM_PLANNER, DEFAULTS.enable_llm_planner),
     enable_llm_summary: bool(env.MS_ENABLE_LLM_SUMMARY, DEFAULTS.enable_llm_summary),
+    enable_llm_analysis: bool(env.MS_ENABLE_LLM_ANALYSIS, DEFAULTS.enable_llm_analysis),
+    enable_wf08_llm: bool(env.MS_ENABLE_WF08_LLM, DEFAULTS.enable_wf08_llm),
+    source_freshness_days: num(env.MS_SOURCE_FRESHNESS_DAYS, DEFAULTS.source_freshness_days),
+    llm_max_analyses_per_run: num(env.MS_LLM_MAX_ANALYSES_PER_RUN, DEFAULTS.llm_max_analyses_per_run),
+    cost_claude_analysis_usd: num(env.MS_COST_CLAUDE_ANALYSIS_USD, DEFAULTS.cost_claude_analysis_usd),
     report_data_mode: str(env.MS_REPORT_DATA_MODE) || DEFAULTS.report_data_mode,
     timezone: str(env.MS_TIMEZONE) || DEFAULTS.timezone,
     enable_telegram: bool(env.MS_ENABLE_TELEGRAM, DEFAULTS.enable_telegram),
     enable_external_actions: bool(env.MS_ENABLE_EXTERNAL_ACTIONS, DEFAULTS.enable_external_actions),
     enable_claude: bool(env.MS_ENABLE_CLAUDE, DEFAULTS.enable_claude),
+    // COST-LLM-001: whether a Claude API key is actually present. Pre-Stage-F there is none, so even when the
+    // enrichment flags are on, Claude cannot run — the cost estimate must not quote an AI cost for work that
+    // will not execute. Consumed by cost_model to decide whether Claude is a real planned call.
+    claude_key_present: str(env.MS_CLAUDE_API_KEY) !== '',
+    claude_credential_declared: bool(env.MS_CLAUDE_CREDENTIAL_AVAILABLE, DEFAULTS.claude_credential_declared),
     enable_apify: bool(env.MS_ENABLE_APIFY, DEFAULTS.enable_apify),
     enable_firecrawl: bool(env.MS_ENABLE_FIRECRAWL, DEFAULTS.enable_firecrawl),
     enable_vk: bool(env.MS_ENABLE_VK, DEFAULTS.enable_vk),
+    enable_discovery_validation: bool(env.MS_ENABLE_DISCOVERY_VALIDATION, DEFAULTS.enable_discovery_validation),
+    discovery_llm_enrichment: bool(env.MS_DISCOVERY_LLM_ENRICHMENT, DEFAULTS.discovery_llm_enrichment),
+    discovery_validate_max: num(env.MS_DISCOVERY_VALIDATE_MAX, DEFAULTS.discovery_validate_max),
+    avito_enabled: bool(env.MS_AVITO_ENABLED, DEFAULTS.avito_enabled),
+    enable_telegram_collector: bool(env.MS_ENABLE_TELEGRAM_COLLECTOR, DEFAULTS.enable_telegram_collector),
     monitoring_enabled: bool(env.MS_MONITORING_ENABLED, DEFAULTS.monitoring_enabled),
-    weekly_digest_enabled: bool(env.MS_WEEKLY_DIGEST_ENABLED, DEFAULTS.weekly_digest_enabled)
+    weekly_digest_enabled: bool(env.MS_WEEKLY_DIGEST_ENABLED, DEFAULTS.weekly_digest_enabled),
+    avito_queries: (phraseList(env.MS_AVITO_QUERIES).length ? phraseList(env.MS_AVITO_QUERIES) : DEFAULTS.avito_queries.slice()).slice(0, 3),
+    telegram_channels: (list(env.MS_TELEGRAM_CHANNELS).length ? list(env.MS_TELEGRAM_CHANNELS) : DEFAULTS.telegram_channels.slice()).slice(0, 3),
+    vk_communities: (list(env.MS_VK_COMMUNITIES).length ? list(env.MS_VK_COMMUNITIES) : DEFAULTS.vk_communities.slice()).slice(0, 3),
+    website_competitor_urls: (list(env.MS_WEBSITE_COMPETITOR_URLS).length ? list(env.MS_WEBSITE_COMPETITOR_URLS) : DEFAULTS.website_competitor_urls.slice()).filter(u => /^https:\/\//i.test(u)).slice(0, 3)
   };
   for (const k in overrides) {
     if (Object.prototype.hasOwnProperty.call(overrides, k)) cfg[k] = overrides[k];
   }
   // fail-closed reconciliation: Claude master switch gates the LLM features; the external-actions master switch
   // (or a zero call ceiling) forces the effective paid-call budget to zero so no approval can spend.
-  if (!cfg.enable_claude) { cfg.enable_llm_planner = false; cfg.enable_llm_summary = false; }
+  if (!cfg.enable_claude) { cfg.enable_llm_planner = false; cfg.enable_llm_summary = false; cfg.enable_llm_analysis = false; cfg.enable_wf08_llm = false; }
   // WF19-LLM-001: there is NO in-graph Claude intent-classifier node in WF18, so the intent router's guarded
   // LLM branch is unreachable by construction. Pin enable_llm_intent=false in the resolved config so the router
   // always resolves deterministically or asks ONE clarification — we never advertise a classification path that
@@ -103,6 +180,20 @@ function resolveConfig(env, overrides) {
   cfg.enable_llm_intent = false;
   cfg.zero_paid_mode = (cfg.enable_external_actions !== true) || (Number(cfg.max_external_calls) <= 0);
   cfg.effective_max_external_calls = cfg.zero_paid_mode ? 0 : Number(cfg.max_external_calls);
+  // scope_preview/collector naming alias — one flag, two historical names
+  cfg.enable_vk_collector = cfg.enable_vk === true;
+  // AVITO-BLOCK-001 (see DEFAULTS.avito_enabled): the ONE canonical Avito gate. While Avito is blocked it is
+  // removed from the resolved runtime allowlist AND recorded in cfg.blocked_sources, so the request planner can
+  // tell a user who explicitly asks for Avito that it is temporarily unavailable (never a silent drop). Every
+  // surface that derives availability from source_allowlist — planner, capability registry, tracked sources,
+  // scope preview, refresh policy, per-collector gate — inherits the block from here.
+  cfg.avito_enabled = cfg.avito_enabled === true;
+  cfg.blocked_sources = [];
+  if (!cfg.avito_enabled) {
+    cfg.source_allowlist = (cfg.source_allowlist || []).filter(s => String(s).toLowerCase() !== 'avito');
+    cfg.blocked_sources.push('avito');
+    cfg.avito_block_reason = 'residential_proxy_required';
+  }
   // completeness check the orchestrator surfaces in the execution summary — never starts paid work blind
   cfg.missing = [];
   if (!cfg.spreadsheet_id) cfg.missing.push('MS_SPREADSHEET_ID');
@@ -126,7 +217,12 @@ function paidCallsAllowed(cfg) {
 function collectorEnabled(cfg, source) {
   if (!paidCallsAllowed(cfg)) return false;
   const s = String(source).toLowerCase();
-  const flag = { website: 'enable_firecrawl', firecrawl: 'enable_firecrawl', apify: 'enable_apify', avito: 'enable_apify', vk: 'enable_vk' }[s];
+  const flag = {
+    website: 'enable_firecrawl', firecrawl: 'enable_firecrawl',
+    apify: 'enable_apify', avito: 'enable_apify',
+    vk: 'enable_vk', vk_community: 'enable_vk',
+    telegram: 'enable_telegram_collector', telegram_channel: 'enable_telegram_collector'
+  }[s];
   return sourceAllowed(cfg, s) && (flag ? cfg[flag] === true : false);
 }
 function llmAllowed(cfg) { return !!(cfg && cfg.enable_claude === true && (cfg.enable_llm_planner === true || cfg.enable_llm_summary === true)); }
@@ -138,7 +234,10 @@ function freePathStatus(cfg) {
     paid_calls_allowed: paidCallsAllowed(cfg),
     llm_allowed: llmAllowed(cfg),
     effective_max_external_calls: cfg ? Number(cfg.effective_max_external_calls) : 0,
-    collectors: { firecrawl: collectorEnabled(cfg, 'website'), apify: collectorEnabled(cfg, 'apify'), vk: collectorEnabled(cfg, 'vk') }
+    collectors: {
+      firecrawl: collectorEnabled(cfg, 'website'), apify: collectorEnabled(cfg, 'apify'),
+      vk: collectorEnabled(cfg, 'vk'), avito: collectorEnabled(cfg, 'avito'), telegram: collectorEnabled(cfg, 'telegram')
+    }
   };
 }
 

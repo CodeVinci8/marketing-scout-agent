@@ -15,6 +15,9 @@
 // and then a TEST/FIXTURE watermark MUST be shown.
 'use strict';
 
+// RUN-LINEAGE-001: the ONE resolver every consumer shares (destructured so the embed step inlines it).
+const { resolveRunLineage } = require('./run_lineage.js');
+
 function str(v) { return v == null ? '' : String(v).trim(); }
 function low(v) { return str(v).toLowerCase(); }
 function bool(v) {
@@ -56,7 +59,12 @@ function decideRun(h, cfg) {
   if (data_mode === 'fixture') { if (allowFixture) warning = 'fixture'; else reasons.push(EXCLUDE.FIXTURE); }
   if (data_mode === 'manual_test') { if (allowFixture) warning = warning || 'manual_test'; else reasons.push(EXCLUDE.MANUAL_TEST); }
   if (quality_status === 'quarantined') reasons.push(EXCLUDE.QUARANTINED);
-  if (review_status === 'pending' || /(^|; )pending_review/.test(flags)) reasons.push(EXCLUDE.PENDING);
+  // PENDING-MINORITY-001: a run-level `pending_review` FLAG only means SOME records in the run are pending —
+  // WF16 sets report_eligible=false ONLY when the WHOLE run is pending (pending===total), which is enforced
+  // below via NOT_ELIGIBLE. So a minority-pending run must stay eligible here and let the per-record gate
+  // (rowEligible) drop the individual pending rows; otherwise one pending sibling poisons every clean,
+  // report_candidate record from the same source run. Only a run-level review_status=pending excludes the run.
+  if (review_status === 'pending') reasons.push(EXCLUDE.PENDING);
   if (/semantic_validation_failed/.test(flags)) reasons.push(EXCLUDE.SEMANTIC);
   if (/(^|; )stale_source/.test(flags)) reasons.push(EXCLUDE.STALE);
 
@@ -120,7 +128,11 @@ function rowEligible(row, elig, cfg) {
   const allowFixture = cfg.allow_fixture_report === true;
   const allowDegraded = cfg.allow_degraded_report === true;
   const allowUnverified = cfg.allow_unverified_source === true; // explicit non-production/operator fail-open
-  const id = str(row.source_run_id);
+  // RUN-LINEAGE-001: the row's identity comes from the SHARED resolver, not from one field. WF04's queue rows
+  // carry the family ONLY in run_id, so reading source_run_id alone reported `no_lineage` for a row that had
+  // perfectly good lineage (live: WF10 exec 932). Same defect class as ISO-ARID-001 / ISO-RUNID-001.
+  const __lin = resolveRunLineage(row);
+  const id = __lin.source_run_id || __lin.agent_request_id;
   const reasons = [];
   let warning = '';
 
@@ -153,8 +165,11 @@ function rowEligible(row, elig, cfg) {
   if (/(^|; )stale_source/.test(flags)) reasons.push(EXCLUDE.STALE);
 
   // --- verification gate: production requires affirmative eligibility evidence (fail closed) ---
+  // PARSE-OUTCOME-001 (operator decision): a SINGLE successful bounded repair whose payload passed full local
+  // validation is `accepted_with_repair` — audited and confidence-capped, but reportable exactly like healthy.
+  // A failed repair / fallback-only / invalid result still lands in degraded|quarantined and stays fail-closed.
   const selfAttestsLive = (dm === 'live' || dm === 'production') &&
-    (qs === '' || qs === 'healthy' || (qs === 'degraded' && allowDegraded)) && !reportFalse;
+    (qs === '' || qs === 'healthy' || qs === 'accepted_with_repair' || (qs === 'degraded' && allowDegraded)) && !reportFalse;
   // explicit operator opt-in to a fixture/manual report verifies that data too (it is watermarked downstream)
   const fixtureOptedIn = allowFixture && (dm === 'fixture' || dm === 'manual_test');
   const verified = (healthMatched && healthEligible) || (selfAttestsLive && cfg.require_source_health !== true) || fixtureOptedIn;

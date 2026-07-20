@@ -87,10 +87,11 @@ A.eq('contacts_detected=1', noBase.rep.contacts_detected, 1);
 A.eq('contacts_excluded_from_report=1', noBase.rep.contacts_excluded_from_report, 1);
 A.eq('contacts_redacted=1', noBase.rep.contacts_redacted, 1);
 
-// ---- VK wording (C1-D3) ----
-A.section('WF12 — corrected VK wording');
-A.ok('VK line scopes to C.1 / requires C.4 live smoke', /C\.4 live-smoke/.test(noBase.rep.notes) || /live-smoke C\.4/.test(noBase.rep.notes));
-A.ok('does NOT claim VK does not block MVP generally', !/не блокирует MVP-закрытие/.test(noBase.rep.notes));
+// ---- VK wording: clean user-facing phrasing, no internal Stage/C.x/live-smoke codes (REPORT-CLEAN-001) ----
+A.section('WF12 — VK source action is clean user-facing Russian');
+A.ok('VK source action present in clean Russian', /VK: сбор из публичных сообществ/.test(noBase.rep.report_markdown));
+A.ok('no internal Stage/C.x/live-smoke codes leak', !/C\.\d|live-smoke|Stage C/.test(noBase.rep.report_markdown));
+A.ok('does NOT claim VK does not block MVP generally', !/не блокирует MVP-закрытие/.test(noBase.rep.report_markdown));
 
 // ---- website fallback (S2-D20): degraded/raw-markdown snapshot excluded ----
 const withDeg = buildReport([plan(CUR, NICHE, 5)], [angle(CUR, 34)], {}, [cleanSnap, degradedSnap]);
@@ -116,5 +117,29 @@ const degRep = buildReport([plan(CUR, NICHE, 5)], [angle(CUR, 34)], { allow_degr
 A.section('WF12 — degraded opt-in renders a visible quality warning');
 A.eq('report_contains_degraded_data=true with opt-in', degRep.rep.report_contains_degraded_data, true);
 A.ok('quality warning rendered', /QUALITY WARNING/.test(degRep.rep.notes) && /DEGRADED/.test(degRep.rep.quality_warning));
+
+// REPORT-CLEAN-001: the report_markdown is sent VERBATIM to the Telegram user (WF20 deliveryBody), so it must
+// carry business content but expose NO internal identifiers, enums, workflow names, run stamps or DEC codes.
+A.section('WF12 — REPORT-CLEAN-001: user-facing report_markdown exposes no internal diagnostics');
+{
+  const md = String(noBase.rep.report_markdown || '');
+  const forbidden = [
+    [/\bWF\d/, 'workflow name (WFnn)'],
+    [/DEC-\d/, 'DEC code'],
+    [/rows_after_filters\s*=/, 'rows_after_filters= diagnostic'],
+    [/trend_status\s*=/, 'trend_status= enum'],
+    [/report_contains_\w+\s*=/, 'report_contains_*= diagnostic'],
+    [/outreach_allowed\s*=|review_status\s*=|manual_review|aggregate_only|no_data_notice/, 'internal flag/enum name'],
+    [/wf10_\d/, 'wf10_ run stamp'],
+    [/report_\d{8}/, 'raw report_id'],
+    [/req_\d/, 'request id'],
+    [/::/, 'source_run_id family separator'],
+    [/executive_digest|competitor_snapshot|top_offers_and_prices|market_angles_summary|source_collection_actions|manager_review_actions|content_actions/, 'english section enum']
+  ];
+  for (const [re, label] of forbidden) A.ok('no ' + label + ' in user report', !re.test(md));
+  // still content-ful: keeps the real business sections + a real competitor name + a source URL.
+  A.ok('report still has a competitor section', /Снапшот конкурентов|Топ конкурентов/.test(md));
+  A.ok('report still names a real competitor', /Брокер|LionCredit|finance|Кредитн/i.test(md));
+}
 
 A.report('wf12-closure');

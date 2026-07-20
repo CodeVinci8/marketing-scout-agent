@@ -77,14 +77,27 @@ function actionButtons(availableCaps) {
 // --- proactive post-report continuation (attached to the REAL delivery path) -------------------------------
 // Conversational phrasing per capability for the proactive section. (Claude may rephrase, but the action set
 // comes from the deterministic registry — never invented here.)
+// Sentence phrasing (lowercase) — reads naturally inside "Я могу <phrase>, <phrase>. …".
 const PROACTIVE_LABELS = {
-  deep_competitor_analysis: 'подробнее сравнить этих конкурентов',
-  generate_ideas: 'предложить идеи для вашего оффера',
-  add_source: 'добавить их источники в мониторинг',
+  deep_competitor_analysis: 'подробнее сравнить конкурентов',
+  generate_ideas: 'предложить идеи для оффера',
+  add_source: 'добавить источники в мониторинг',
   rerun_request: 'проверить изменения повторно',
   compare_periods: 'сравнить с прошлым периодом',
-  manage_sources: 'настроить или проверить источники'
+  manage_sources: 'настроить или проверить источники',
+  competitor_discovery: 'найти новые источники-конкуренты'
 };
+// RQ-BUTTONS-001: button captions are proper-cased and concise (a button is a title, not a mid-sentence clause).
+const PROACTIVE_BUTTON_LABELS = {
+  deep_competitor_analysis: 'Подробнее сравнить конкурентов',
+  generate_ideas: 'Предложить идеи для оффера',
+  add_source: 'Добавить источники в мониторинг',
+  rerun_request: 'Проверить изменения повторно',
+  compare_periods: 'Сравнить с прошлым периодом',
+  manage_sources: 'Настроить источники',
+  competitor_discovery: 'Найти новые источники'
+};
+function btnCap(s) { s = str(s); return s ? (s.charAt(0).toUpperCase() + s.slice(1)) : s; }
 // State-aware action set, drawn ONLY from available capabilities. A success report offers the rich set; a
 // partial/no-data report offers recovery actions instead of "success" actions.
 function proactiveActions(state, availableCaps) {
@@ -92,11 +105,15 @@ function proactiveActions(state, availableCaps) {
   const noData = state === 'no_data';
   const partial = state === 'partial';
   let wanted;
-  if (noData) wanted = ['rerun_request', 'manage_sources', 'add_source'];
-  else if (partial) wanted = ['rerun_request', 'generate_ideas', 'manage_sources', 'compare_periods'];
+  if (noData) wanted = ['competitor_discovery', 'rerun_request', 'manage_sources', 'add_source'];
+  else if (partial) wanted = ['rerun_request', 'competitor_discovery', 'generate_ideas', 'manage_sources', 'compare_periods'];
   else wanted = ['deep_competitor_analysis', 'generate_ideas', 'add_source', 'rerun_request', 'compare_periods'];
   const byId = {}; (availableCaps || []).forEach(c => { if (c) byId[c.id] = c; });
-  return wanted.filter(id => byId[id] && byId[id].available).map(id => ({ id: id, label: PROACTIVE_LABELS[id] || (byId[id].name) }));
+  return wanted.filter(id => byId[id] && byId[id].available).map(id => ({
+    id: id,
+    label: PROACTIVE_LABELS[id] || (byId[id].name),
+    button_label: PROACTIVE_BUTTON_LABELS[id] || btnCap(PROACTIVE_LABELS[id] || byId[id].name)
+  }));
 }
 // The proactive sentence — useful WITHOUT buttons, ending with the natural-language invitation.
 function proactiveText(state, availableCaps) {
@@ -108,24 +125,87 @@ function proactiveText(state, availableCaps) {
 // attaches this to the FINAL message chunk only.
 function proactiveKeyboard(state, availableCaps) {
   const acts = proactiveActions(state, availableCaps);
-  return acts.length ? { inline_keyboard: acts.map(a => [{ text: a.label, callback_data: 'intent:' + a.id }]) } : null;
+  return acts.length ? { inline_keyboard: acts.map(a => [{ text: a.button_label || a.label, callback_data: 'intent:' + a.id }]) } : null;
 }
 // The full delivery body: IMMUTABLE report facts first (verbatim, never rewritten), then a state-aware
 // proactive continuation. Partial/no-data get an honest one-line status before the continuation.
+// DEFECT-4: the report is authored in GitHub-flavoured Markdown (# headings, ** bold, - lists) which Telegram
+// does NOT render — the user sees raw "# Отчёт" / "**". Convert to clean plain text (no parse_mode, so there is
+// no escaping/formatting failure mode): drop heading hashes, unwrap bold/italic/code, bullets -> •, links ->
+// "text (url)". Structure and facts are preserved; only the markup characters go.
+function plainifyForTelegram(md) {
+  let s = str(md);
+  if (!s) return s;
+  s = s.split('\n').map(function (ln) {
+    let t = ln.replace(/^\s{0,3}#{1,6}\s+/, '');   // headings
+    t = t.replace(/^(\s*)[-*+]\s+/, '$1• ');        // list bullets
+    t = t.replace(/^\s{0,3}>\s?/, '');              // blockquote
+    return t;
+  }).join('\n');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/__([^_]+)__/g, '$1'); // bold
+  // B5: strip single-underscore italics (_текст_) that Telegram would otherwise render literally, WITHOUT
+  // touching snake_case identifiers — the opening _ must follow start/space/punct and the closing _ must be
+  // followed by end/space/punct, so source_run_id / min_lead_score stay intact.
+  s = s.replace(/(^|[\s(])_([^_\n]{1,300}?)_(?=$|[\s.,;:!?)])/g, '$1$2');
+  s = s.replace(/`([^`]+)`/g, '$1');                                     // inline code
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '$1 ($2)');     // links
+  s = s.replace(/\n{3,}/g, '\n\n');
+  return s.trim();
+}
+// COST-SPLIT-001: one honest cost line from the canonical actual components. A run where the deep analysis was
+// cached ($0) but the WF12 summary AI ran is NEVER called "$0" — each component that actually cost money is named.
+// Components are observed actuals; absent/unparseable totals render nothing (no fabricated $0).
+function costFmt(n) { const r = Math.round(num(n, 0) * 10000) / 10000; return String(r); }
+function costLine(summary) {
+  summary = summary || {};
+  const t = Number(summary.actual_cost_usd);
+  if (!isFinite(t)) return '';
+  const parts = [];
+  const add = (v, label) => { const n = num(v, 0); if (n > 0) parts.push(label + ' $' + costFmt(n)); };
+  add(summary.actual_collection_usd, 'сбор данных');
+  add(summary.actual_summary_ai_usd, 'AI-сводка');
+  add(summary.actual_deep_analysis_usd, 'AI-анализ');
+  add(summary.actual_repair_usd, 'восстановление ответа');
+  return '💰 Фактическая стоимость: ' + (parts.length ? parts.join(' + ') + ' = ' : '') + '$' + costFmt(t) + '.';
+}
 function deliveryBody(report, summary, availableCaps) {
   report = report || {}; summary = summary || {};
   const state = str(summary.final_state).toLowerCase() || 'completed';
   const noData = num(summary.records_reported, 0) === 0 && state !== 'completed';
-  const facts = str(report.report_markdown) || str(report.summary_text) ||
-    ('Итог: ' + (str(summary.final_state) || 'completed') + '. Записей в отчёте: ' + num(summary.records_reported, 0) + '.');
+  // UX-RU-002: final_state is an internal enum — the fallback line maps it to Russian, never prints it raw.
+  const stateRu = { completed: 'анализ завершён', partial: 'анализ завершён частично', no_data: 'данных не собрано', failed: 'анализ остановлен' };
+  const facts = plainifyForTelegram(str(report.report_markdown)) || str(report.summary_text) ||
+    ('Итог: ' + (stateRu[state] || 'анализ завершён') + '. Записей в отчёте: ' + num(summary.records_reported, 0) + '.');
+  // B6: name the REQUESTED sources that failed (user-safe Russian names; never raw keys/adapter errors).
+  const RU_SRC = { website: 'сайты', telegram: 'Telegram-каналы', vk: 'VK-сообщества', avito: 'Avito' };
+  const failedNames = (Array.isArray(summary.failed_sources) ? summary.failed_sources : [])
+    .map(k => RU_SRC[str(k).toLowerCase()] || str(k)).filter(Boolean);
   const lines = [facts];
-  if (noData || state === 'no_data') lines.push('Подходящих данных не собрано.');
-  else if (state === 'partial') lines.push('Отчёт частичный — часть источников не отработала.');
+  // SOURCE-REUSE-001: when a source was answered from a saved accepted snapshot, say so EXPLICITLY, with the real
+  // collection time — the user must never believe a $0 reuse was a fresh scrape.
+  const reusedList = Array.isArray(summary.reused_sources) ? summary.reused_sources : [];
+  if (reusedList.length) {
+    const when = reusedList.map(r => {
+      const src = RU_SRC[str(r.source).toLowerCase()] || str(r.source);
+      const m = str(r.original_collected_at).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+      return src + (m ? (' (сбор от ' + m[3] + '.' + m[2] + '.' + m[1] + ' ' + m[4] + ':' + m[5] + ' МСК)') : '');
+    }).join(', ');
+    lines.push('💾 Использованы сохранённые данные: ' + when + '. Новый сбор не выполнялся — стоимость сбора $0.');
+  }
+  if (state === 'failed') lines.push(failedNames.length
+    ? ('Не удалось собрать данные по запрошенным источникам: ' + failedNames.join(', ') + '. Попробуйте позже или измените источники.')
+    : 'Не удалось собрать данные по запрошенным источникам. Попробуйте позже.');
+  else if (noData || state === 'no_data') lines.push('Подходящих данных не собрано.');
+  else if (state === 'partial') lines.push(failedNames.length
+    ? ('Отчёт частичный — не удалось собрать: ' + failedNames.join(', ') + '.')
+    : 'Отчёт частичный — часть источников не отработала.');
+  const cl = costLine(summary);
+  if (cl) lines.push(cl);
   lines.push(proactiveText(noData ? 'no_data' : state, availableCaps));
   return lines.join('\n\n');
 }
 
 module.exports = {
   buildConversationalReply, clarificationReply, followupSuggestions, postReportReply,
-  approvalButtons, actionButtons, proactiveActions, proactiveText, proactiveKeyboard, deliveryBody, str, num
+  approvalButtons, actionButtons, proactiveActions, proactiveText, proactiveKeyboard, deliveryBody, plainifyForTelegram, costLine, str, num
 };

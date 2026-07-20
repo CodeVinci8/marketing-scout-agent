@@ -46,7 +46,7 @@ function runChecks(m) {
   const runtime = new Set(d.runtime_closure);
   for (const f of d.runtime_closure) ok('runtime file present: ' + f, onDisk.has(f));
   ok('runtime_workflow_count matches closure length', d.runtime_workflow_count === d.runtime_closure.length);
-  ok('runtime closure has exactly 15 workflows', d.runtime_closure.length === 15);
+  ok('runtime closure has exactly 19 workflows (+WF28 Claude Analyst)', d.runtime_closure.length === 19);
 
   // import order must be a permutation of the closure, with every callable target before any caller that binds it
   ok('import_order is a permutation of the runtime closure',
@@ -74,7 +74,7 @@ function runChecks(m) {
 
   // binding edges: count, target presence, caller node + type, target trigger, no edge without a runtime dependency
   ok('binding_edge_count matches edges length', d.binding_edge_count === d.binding_edges.length);
-  ok('exactly 13 runtime binding edges', d.binding_edges.length === 13);
+  ok('exactly 18 runtime binding edges (+WF20 -> WF28 Claude Analyst)', d.binding_edges.length === 18);
   for (const e of d.binding_edges) {
     const caller = wf[e.caller_workflow];
     ok('binding caller exists in runtime: ' + e.caller_workflow, !!caller && runtime.has(e.caller_workflow));
@@ -113,7 +113,7 @@ function runChecks(m) {
     const flagged = d.activation.when_monitoring.indexOf(f) >= 0 || d.activation.when_weekly_digest.indexOf(f) >= 0;
     ok('scheduled runtime workflow is gated by a feature flag: ' + f, flagged);
   }
-  ok('callable_trigger_count equals callable target count (11)', d.activation.callable_trigger_count === 11);
+  ok('callable_trigger_count equals callable target count (15)', d.activation.callable_trigger_count === 15);
 
   return { passed, failed, fails };
 }

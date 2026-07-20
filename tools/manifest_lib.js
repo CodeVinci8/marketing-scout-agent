@@ -66,12 +66,12 @@ if (require.main === module) {
   const d = deployment();
   switch (cmd) {
     case 'import-order': importOrder().forEach(f => console.log(f)); break;
-    case 'runtime-count': console.log(d.runtime_workflow_count); break;
+    case 'runtime-count': console.log(String(d.runtime_workflow_count)); break;
     case 'n8n-version': console.log(d.n8n_version); break;
     case 'binding-edges': console.log(JSON.stringify(bindingEdges(), null, 2)); break;
-    case 'binding-count': console.log(d.binding_edge_count); break;
+    case 'binding-count': console.log(String(d.binding_edge_count)); break;
     case 'callable-targets': callableTargets().forEach(f => console.log(f)); break;
-    case 'callable-count': console.log(d.callable_targets.length); break;
+    case 'callable-count': console.log(String(d.callable_targets.length)); break;
     case 'activation': activationPlan(opts).forEach(f => console.log(f)); break;
     case 'plan-json':
       console.log(JSON.stringify({

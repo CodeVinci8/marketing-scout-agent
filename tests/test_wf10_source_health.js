@@ -8,7 +8,9 @@ const RG = require('../n8n/lib/report_gate.js');
 
 const wf = H.loadWorkflow('10_competitor_audience_intelligence_aggregator.json');
 
-const WHEN = '2026-06-15T10:00:00+03:00';
+// Freshness fixture must stay INSIDE WF10's 30-day window (created_at >= now-30d), so it is anchored 5 days
+// before "now" rather than a fixed date that silently goes stale and breaks the suite as wall-clock advances.
+const WHEN = new Date(Date.now() - 5 * 86400000).toISOString().replace('Z', '+03:00');
 function comp(source_run_id, extra) {
   return Object.assign({
     entity_type: 'competitor', company_name: 'Брокер ' + source_run_id, platform: 'avito', service_type: 'credit_broker',
@@ -101,5 +103,46 @@ A.eq('isolation keeps only run_healthy rows', iso.out.stats.rows_after_isolation
 A.eq('then health gate yields 1 clean row', iso.out.stats.rows_after_filters, 1);
 const isoNone = aggregate({ source_run_id_filter: 'run_quar' });
 A.eq('isolating a quarantined run yields 0 report rows', isoNone.out.stats.rows_after_filters, 0);
+
+// ---------- ISO-ARID-001 regression: queue rows carry no agent_request_id column ----------
+// Live defect (exec 411): WF08 writes monitor/review_queue rows WITHOUT an agent_request_id column, but the
+// orchestrator passes agent_request_id_filter=<request root> AND source_run_id_filter=<idempotency_key>.
+// The old strict `r.agent_request_id === filter` dropped EVERY row (all had ''), so rows_after_isolation=0
+// and the report was empty although the records were genuinely relevant + healthy. Isolation must key off the
+// request family embedded in source_run_id (req_x::source::slot[::sub]) when the column is absent.
+A.section('WF10 — ISO-ARID-001: isolate by source_run_id family when queue rows lack agent_request_id');
+function aggregateWith(rows, healthRows, cfgOverride) {
+  const run = H.makeRun();
+  const cfg = H.runCodeNode(run, wf, 'Set Aggregator Config', [])[0].json;
+  Object.assign(cfg, cfgOverride || {});
+  run.outputs['Set Aggregator Config'] = [{ json: cfg }];
+  H.inject(run, 'Read monitor_queue', rows);
+  H.inject(run, 'Read content_queue', []);
+  H.inject(run, 'Read review_queue', []);
+  H.inject(run, 'Read source_confidence_rules', []);
+  H.inject(run, 'Read source_health', healthRows);
+  return H.runCodeNode(run, wf, 'Aggregate Market Intelligence', [])[0].json;
+}
+const REQ = 'req_90112771';
+const TG = REQ + '::website::a1::telegram';   // real telegram source-run form (family child of the idempotency key)
+const WEB = REQ + '::website::a1';             // the idempotency key itself
+// competitor rows as WF08 persists them: real source_run_id, but NO agent_request_id field at all.
+const famRows = [
+  comp(TG, { agent_request_id: undefined, company_name: 'Брокер ТГ 1' }),
+  comp(TG, { agent_request_id: undefined, company_name: 'Брокер ТГ 2' })
+];
+const famHealth = [
+  { source_run_id: TG, data_mode: 'live', quality_status: 'healthy', report_eligible: true, quality_flags: 'cost_unknown' }
+];
+// Orchestrator passes BOTH filters (mirrors WF20 -> WF10 exactly): request root + idempotency key.
+const fam = aggregateWith(famRows, famHealth, { agent_request_id_filter: REQ, source_run_id_filter: WEB });
+A.eq('family rows survive isolation despite the missing agent_request_id column', fam.stats.rows_after_isolation, 2);
+A.eq('and clear the source_health gate', fam.stats.rows_after_filters, 2);
+A.eq('so a content-ful competitor profile is produced (not an empty report)', fam.competitor_profiles.length >= 1, true);
+// strictness preserved: a row from a DIFFERENT request is still dropped.
+const otherRows = famRows.concat([comp('req_OTHER::website::a1::telegram', { agent_request_id: undefined, company_name: 'Чужой' })]);
+const otherHealth = famHealth.concat([{ source_run_id: 'req_OTHER::website::a1::telegram', data_mode: 'live', quality_status: 'healthy', report_eligible: true, quality_flags: '' }]);
+const strict = aggregateWith(otherRows, otherHealth, { agent_request_id_filter: REQ, source_run_id_filter: WEB });
+A.eq('a foreign request is still isolated out (no cross-request leakage)', strict.stats.rows_after_isolation, 2);
 
 A.report('wf10-source-health');

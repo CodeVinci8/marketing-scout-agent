@@ -4,7 +4,143 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-06-26, session 28) — Stage 8 release-path INTEGRATION REPAIR done (DISPOSABLE_DEPLOY=PASS) → WF18 rearchitecture next
+## CURRENT PRIORITY (2026-07-17, session 59) — HEALTH-LINEAGE-001 is a QUALITY POLICY: needs an operator decision
+
+Session 59 traced the empty-report chain to its end. **It is not a bug and not the absent-field class.** The full
+verified chain (run req_1784255157):
+
+  WF04 929: scrape OK → Claude primary parse FAILED, repair SUCCEEDED → parse_method="repaired_json"
+  → WF04 stamps quality_status="degraded", review_status="pending"   (data itself is excellent:
+     competitor_name="Автоломбард №1", full offer_text, service_hint="pts_loan", is_detail=true, unique)
+  → WF16 930 Assemble Run Bundles: pending → report_candidate=false; degraded=true
+  → WF16 computeRunHealth: report_candidate===0 && degraded>0 → flag `no_detail_records` (CRITICAL)
+     → quality_status="quarantined" DESPITE quality_score=81
+  → and independently: pending===total → report_eligible=false
+  → WF10 932: iso=1 → rows_after_filters=0 → empty bundle → WF28 never runs
+
+**THE DECISION YOU NEED TO MAKE — should a SUCCESSFULLY repaired parse block a report?**
+Our own two contracts contradict each other:
+- WF04: `repaired_json` ⇒ degraded + pending human review ⇒ unreportable.
+- WF28 (Stage F): `repaired` ⇒ quality_status='repaired', enriched=true, analysis SHIPS (live-proven exec 834).
+The resilient router is designed as primary → repair → fallback; a successful repair means it worked and produced
+schema-valid data. Options:
+  (a) **RECOMMENDED** — align WF04 with WF28: a successful repair is acceptable, keep a NON-critical flag
+      (`repaired_parse`) for visibility. Removes a contradiction between our own contracts rather than lowering a
+      bar. Unblocks the E2E.
+  (b) `allow_degraded_report=true` — weaker and explicitly discouraged; do not do this.
+  (c) improve the WF04 prompt so the primary parse succeeds — real, slower, no guarantee.
+  (d) keep the policy: any repaired record needs manual review before it can be reported.
+This was NOT changed unilaterally because the standing instruction is "do not disable quality controls".
+
+**Independent real defect, safe to fix now (does NOT unblock on its own):**
+- **`no_detail_records` is a misnomer that misfires.** Its condition (`report_candidate===0 && degraded>0`, in
+  `n8n/lib/quality_gate.js:124` + its WF16 embedded mirror) never checks whether detail records actually exist.
+  This record IS a detail record (is_detail=true, search_card=false). Being CRITICAL, it quarantines a score-81
+  run and makes operator_next_action tell the operator to investigate a flag that is not true. Fix: require a real
+  absence of detail records. Keep the mirrors byte-identical (WF16 is hand-maintained; the generator does NOT
+  regenerate it).
+- **`no_lineage`** (`n8n/lib/report_gate.js:127`, `const id = str(row.source_run_id)`) is still real — the queue
+  row carries the family only in `run_id`. Build the shared `resolveRunLineage(row)` resolver
+  (`source_run_id || agent_request_id || run_id`) and use it in report_gate + WF10 isolation + WF16 detail lookup.
+  Fixing it changes the exclusion reason from `no_lineage` to `run_excluded:no_detail_records` — necessary, not
+  sufficient.
+
+**After the decision, the E2E is one approve away:** «обнови данные и сделай анализ autolombardn1.ru» — everything
+upstream is proven (refresh re-scrapes; access classifier passes a real page; explicit-source scope keeps the row;
+WF10 iso=1; plan terminates correctly).
+
+**Then:** concise renderer (2082 chars today); reuse mode; source_analysis vs change_report; TG + VK; synthesis;
+WF27 enrichment; lead interpretation; repair-rate ≥5. **Stage F.5 NOT started. Stage G NOT started.**
+
+**Do NOT start Stage H.**
+
+**Exact next command:**
+```
+sed -n '120,128p' n8n/lib/quality_gate.js
+```
+
+---
+
+## PRIOR PRIORITY (2026-07-16, session 53) — pre-F debt CLOSED → Stage F PRODUCTION INTEGRATION next
+
+All fixable pre-Stage-F deterministic debt is CLOSED, deployed and (B4) live-proven: **B4** plan-fingerprint dedup
+(efe0daf), **B6** requested-source terminal status (00bc4bf), **B7** Russian XLSX + hidden technical sheet (e67ece1).
+Prod: 16 active, webhook ok, `make test` ALL SUITES PASS. The Stage F Claude CORE (adapter/contracts/evidence/analysis)
+is built + live-proven (session 52). **Remaining = wire it into production:**
+
+1. **WF28 — Claude Analyst** callable workflow per `docs/STAGE_F_RUNBOOK.md` §"Wiring into n8n" (Build Evidence Package
+   → Claude HTTP w/ cred OEen8Vl1tdWtv7v4, 90s timeout, retryOnFail → Parse+Validate → ≤1 repair → merge/fallback →
+   persist). Feature-flag `enable_llm_analysis && claude_key_present`, default OFF.
+2. **Sheets tabs** `llm_analysis_results` + `llm_analysis_telemetry` (contracts in the prompt §4) + bootstrap/manifest
+   + tab-count/contract tests.
+3. **Report + XLSX enrichment** — «Подтверждённые факты / Аналитические выводы / Рекомендации / Доказательства и
+   ограничения»; deterministic report+XLSX still ship on LLM failure (now with the Russian sheet names from B7).
+4. **Prompt hardening** — force ASCII English schema keys in CA_SYSTEM_PROMPT (the one live repair was a Cyrillic
+   `text_ю` key) to drive the repair rate toward 0.
+5. **Multi-source synthesis** (ccSynthesisTool) + **candidate enrichment** (ccCandidateTool, top 3–5) + **public lead
+   interpretation**.
+6. **CodeVinci AI Pilot** conversational agent — `analyst_agent`/`analyst_tools`, read-only tool auto-select,
+   approval-gated mutations, bounded loop; `/status`/`/cancel`/`/help` stay deterministic.
+7. **§16 live scenario matrix** (only #1 website analysis proven so far).
+8. **Operator/infra:** harden SSH (brute-force flood) + reclaim VPS disk.
+
+**Do NOT start Stage F.5 (Opportunity Radar) or Stage G.**
+
+---
+
+## PRIOR PRIORITY (2026-07-16, session 52) — Stage F CORE built + live-proven → continue Stage F integration
+
+Stage F is authorized and STARTED (commit d5ea56e). The Claude adapter + contracts + evidence package + analysis
+engine are built, unit-tested (77), and LIVE-PROVEN (single-source analysis on the real endpoint, one bounded repair,
+Russian, evidence-bound). Full status + what remains: `docs/STAGE_F_ACCEPTANCE.md`. How to operate/extend:
+`docs/STAGE_F_RUNBOOK.md`. Measured endpoint behavior: `docs/STAGE_F_API_CAPABILITY_MATRIX.md`.
+
+**Continue Stage F in this order (nothing else needs re-deriving):**
+1. **WF28 — Claude Analyst** callable workflow per the runbook topology (Build Evidence Package → Claude HTTP w/ cred
+   OEen8Vl1tdWtv7v4 → Parse+Validate → ≤1 repair → merge/fallback → persist telemetry). Feature-flag on
+   `enable_llm_analysis && claude_key_present`, default OFF.
+2. **Report + XLSX integration** — «Подтверждённые факты / Аналитические выводы / Рекомендации / Доказательства и
+   ограничения»; deterministic report+XLSX still ship on LLM failure.
+3. **llm_telemetry lib + `llm_analysis_telemetry` Sheets tab** (schema/prompt version, model, package hash, tokens,
+   cache, repair, cost).
+4. **Multi-source synthesis** (ccSynthesisTool exists) + **candidate enrichment** (ccCandidateTool exists, top 3–5
+   only) + **public lead interpretation**.
+5. **Conversational analyst agent** — `analyst_agent` / `analyst_tools` (CodeVinci AI Pilot), read-only tool
+   auto-selection, approval-gated mutations, bounded loop; `/status`/`/cancel`/`/help` stay deterministic.
+6. **§14 live scenario matrix** (only #1 website analysis proven so far).
+7. **Still-open pre-F debt B4 / B6 / B7** (below) — deterministic-path polish, does not block Stage F.
+8. **Operator/infra:** harden SSH (brute-force flood was filling logs) + reclaim VPS disk.
+
+**Do NOT start Stage F.5 (Opportunity Radar) or Stage G.**
+
+---
+
+## PRIOR PRIORITY (2026-07-14, session 51) — Stage E2 live-proven + pre-F backlog closed → Stage F is READY (do not start without approval)
+
+Stage E2 closed with real n8n execs + real Sheets. Pre-Stage-F user-facing defects fixed, deployed and LIVE-PROVEN:
+**B1** single-source report scoping (exec 812: "сайты конкурентов: 1" + historical block, was 4); **B2/B3** request-
+shaped plan wording + honest deterministic cost band; **COST-LLM-001** AI cost shown only with a real key (exec 818:
+"AI-анализ: пока выключен"); **B5** terminology/italics; **B8** memory-forget regexes. Contracts written:
+`docs/STAGE_F_EVIDENCE_BOUND_LLM_ANALYSIS.md`, `docs/STAGE_F5_OPPORTUNITY_RADAR_AGENT.md`. `make test` ALL SUITES PASS
+($0). Prod: 16 active, WF18 webhook healthy, WF12/19/20/22 deployed.
+
+**Do the remaining fixable debt, then Stage F:**
+1. **B4** — pending-plan fingerprint dedup (a repeat identical request must reuse/supersede, not create a 2nd
+   `awaiting_approval`; `/status` shows one logical pending). Reproduced live (plans 816+818). Touch `request_lifecycle`
+   + WF18/WF19 plan upsert + a fingerprint over owner/chat/intent/normalized sources/platform/niche/region/scope/flags.
+2. **B6-partial** — partial/completed state must be driven by the REQUESTED sources, not optional/preset branches
+   (`source_adapter.rollupCollection` + WF20 state); name which source failed.
+3. **B7-RU-names** — Russian sheet names (Сводка/Конкуренты/…) + a hidden Технические-данные sheet (high test blast
+   radius — update the XLSX asserters together).
+4. **Operator/infra:** reclaim VPS disk (root was 100% full — containerd/journal/usr), then Stage F.
+5. `docker restart n8n-n8n-1` re-registers the WF18 webhook (needed after any WF18 re-import).
+
+**Then Stage F** per its contract doc — evidence-bound Claude, strict JSON, one repair, fail-closed, budget-gated.
+**Do not start Stage F without explicit operator approval.**
+
+---
+
+## PRIOR PRIORITY (2026-06-26, session 28) — Stage 8 release-path INTEGRATION REPAIR done (DISPOSABLE_DEPLOY=PASS) → WF18 rearchitecture next
 
 Branch `fix/stage8-release-integration` off `main` @ `2ee4a71`. The first release-core session's standalone tools
 were **not wired into the real deploy path**; this repair connected them into ONE shared, ordered, fail-closed,

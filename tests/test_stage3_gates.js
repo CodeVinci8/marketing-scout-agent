@@ -131,25 +131,42 @@ function gate(cfgOver, rep) {
   return H.runCodeNode(run, WF12, 'Claude Summary Approval Gate', [{ json: rep || {} }]);
 }
 const eligibleRep = { rows_after_filters: 2, report_eligible: true };
-let g1 = false; try { gate({ enable_llm_summary: false }, eligibleRep); } catch (e) { g1 = /enable_llm_summary/.test(e.message); }
-A.ok('gate blocks when enable_llm_summary!=true', g1);
-let g2 = false; try { gate({ enable_llm_summary: true, llm_approval_token: '' }, eligibleRep); } catch (e) { g2 = /approval token/.test(e.message); }
-A.ok('summary ON requires the approval token', g2);
-let g3 = false; try { gate({ enable_llm_summary: true, llm_approval_token: 'I_APPROVE_CLAUDE_REPORT_SUMMARY' }, { rows_after_filters: 0 }); } catch (e) { g3 = /no eligible facts/.test(e.message); }
-A.ok('gate blocks a report with no eligible facts', g3);
-let g4 = false; try { gate({ enable_llm_summary: true, llm_approval_token: 'I_APPROVE_CLAUDE_REPORT_SUMMARY' }, Object.assign({ llm_summary_status: 'summarized' }, eligibleRep)); } catch (e) { g4 = /idempotency/.test(e.message); }
-A.ok('gate blocks an already-summarized report (idempotency)', g4);
-let g5 = true; try { gate({ enable_llm_summary: true, llm_approval_token: 'I_APPROVE_CLAUDE_REPORT_SUMMARY' }, eligibleRep); } catch (e) { g5 = false; }
-A.ok('fully approved + eligible + not-summarized => gate passes', g5);
-// budget guard throws BEFORE the HTTP node
-let gb = false;
-try {
+// WF12-LLMGATE-001: the gate is a DECISION (llm_gate_allowed), never a chain-killing throw.
+function gdec(cfgOver, rep) { return gate(cfgOver, rep)[0].json; }
+A.eq('gate declines when enable_llm_summary!=true (no throw)', gdec({ enable_llm_summary: false }, eligibleRep).llm_gate_allowed, false);
+A.eq('declined flag reason: llm_summary_disabled', gdec({ enable_llm_summary: false }, eligibleRep).llm_gate_reason, 'llm_summary_disabled');
+A.eq("string 'true' from executeWorkflow arms the gate", gdec({ enable_llm_summary: 'true', llm_approval_token: 'I_APPROVE_CLAUDE_REPORT_SUMMARY' }, eligibleRep).llm_gate_allowed, true);
+A.eq('summary ON still requires the approval token', gdec({ enable_llm_summary: true, llm_approval_token: '' }, eligibleRep).llm_gate_reason, 'approval_token_missing');
+A.eq('no eligible facts => declined', gdec({ enable_llm_summary: true, llm_approval_token: 'I_APPROVE_CLAUDE_REPORT_SUMMARY' }, { rows_after_filters: 0 }).llm_gate_reason, 'no_eligible_facts');
+A.eq('already summarized => declined (idempotency)', gdec({ enable_llm_summary: true, llm_approval_token: 'I_APPROVE_CLAUDE_REPORT_SUMMARY' }, Object.assign({ llm_summary_status: 'summarized' }, eligibleRep)).llm_gate_reason, 'already_summarized_idempotency');
+A.eq('fully approved + eligible => allowed', gdec({ enable_llm_summary: true, llm_approval_token: 'I_APPROVE_CLAUDE_REPORT_SUMMARY' }, eligibleRep).llm_gate_allowed, true);
+// gate decline routes to the deterministic append (topology), and the API node degrades on HTTP error
+const gconn = WF12.connections['Claude Summary Approval Gate'].main[0][0].node;
+A.eq('gate output feeds the routing IF', gconn, 'Claude Gate Allowed?');
+A.eq('declined gate routes to the deterministic report append', WF12.connections['Claude Gate Allowed?'].main[1][0].node, 'Append market_intelligence_reports');
+A.eq('over-budget prompt routes to the deterministic report append', WF12.connections['LLM Budget OK?'].main[1][0].node, 'Append market_intelligence_reports');
+const apiNode = WF12.nodes.find(n => n.name === 'Claude Summary API Request');
+A.eq('Claude API node degrades on HTTP error (onError=continueRegularOutput)', apiNode.onError, 'continueRegularOutput');
+A.eq('Claude API node binds the real httpHeaderAuth credential', apiNode.parameters.nodeCredentialType, 'httpHeaderAuth');
+A.ok('no raw x-api-key placeholder header remains', JSON.stringify(apiNode.parameters.headerParameters).indexOf('x-api-key') < 0);
+// budget guard SKIPS (llm_budget_blocked) before the HTTP node — deterministic report survives
+const gbRun = H.makeRun();
+H.inject(gbRun, 'Set Report Config', [Object.assign({}, rcfg, { llm_max_estimated_cost_usd: 0.0000001 })]);
+H.inject(gbRun, 'Build Deterministic Report', [{ report_id: 'rep1', rows_after_filters: 2, report_eligible: true, top_competitors: 'a', top_angles: 'b' }]);
+const gbOut = H.runCodeNode(gbRun, WF12, 'Build Claude Summary Prompt', [{ json: { report_id: 'rep1', rows_after_filters: 2 } }])[0].json;
+A.eq('over-budget marks llm_budget_blocked (no throw, no HTTP body)', gbOut.llm_budget_blocked, true);
+A.ok('over-budget item carries no llm_request_body', gbOut.llm_request_body === undefined);
+// missing API response (HTTP error passthrough) => deterministic fallback, never a throw
+const nores = (function () {
   const run = H.makeRun();
-  H.inject(run, 'Set Report Config', [Object.assign({}, rcfg, { llm_max_estimated_cost_usd: 0.0000001 })]);
-  H.inject(run, 'Build Deterministic Report', [{ report_id: 'rep1', rows_after_filters: 2, report_eligible: true, top_competitors: 'a', top_angles: 'b' }]);
-  H.runCodeNode(run, WF12, 'Build Claude Summary Prompt', [{ json: { report_id: 'rep1', rows_after_filters: 2 } }]);
-} catch (e) { gb = /budget guard/.test(e.message); }
-A.ok('budget guard throws before any HTTP call', gb);
+  H.inject(run, 'Set Report Config', [rcfg]);
+  const rep = { report_id: 'rep1', rows_after_filters: 2, report_eligible: true, top_competitors: 'CASHMOTOR', notes: 'det' };
+  H.inject(run, 'Build Deterministic Report', [rep]);
+  H.inject(run, 'Build Claude Summary Prompt', [Object.assign({ llm_facts_string: '{}' }, rep)]);
+  return H.runCodeNode(run, WF12, 'Merge Claude Summary Into Report', [{ json: { error: 'http 401' } }])[0].json;
+})();
+A.eq('no API response => deterministic fallback status', nores.llm_status, 'fallback_deterministic');
+A.ok('no API response fallback flags it', /no_api_response/.test(nores.llm_quality_flags));
 // invalid (non-JSON) Claude response => deterministic fallback (facts unchanged)
 const merged = (function () {
   const run = H.makeRun();

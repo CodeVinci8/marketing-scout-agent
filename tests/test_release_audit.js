@@ -14,6 +14,15 @@ function sheetsNodes(wf) {
   }));
 }
 function hasSheet(wf, tab, op) { return sheetsNodes(wf).some(s => s.tab === tab && s.op === op); }
+// SHEETS-READ-AMPLIFICATION-001: WF18 now reads via ONE values:batchGet (predefined googleApi) + a per-tab Code
+// extractor instead of per-tab Get-Rows. "reads a tab" => a legacy googleSheets read OR the batchGet covers the tab
+// AND a "Read <tab>" extractor projects it.
+function readsTab(wf, tab) {
+  if (hasSheet(wf, tab, 'read')) return true;
+  const batch = (wf.nodes || []).some(n => n.type === 'n8n-nodes-base.httpRequest' && /\/values:batchGet/.test(String((n.parameters || {}).url || '')) && String((n.parameters || {}).url || '').indexOf(tab) >= 0);
+  const extractor = (wf.nodes || []).some(n => n.type === 'n8n-nodes-base.code' && /Batch Read Sheets/.test(String((n.parameters || {}).jsCode || '')) && String((n.parameters || {}).jsCode || '').indexOf(tab) >= 0);
+  return batch && extractor;
+}
 function edge(wf, from, to) {
   const c = wf.connections[from]; if (!c || !c.main) return false;
   return c.main.some(arr => (arr || []).some(e => e.node === to));
@@ -23,6 +32,26 @@ function edge(wf, from, to) {
 A.section('Part 7 — static sub-workflow + trigger audit');
 const R = audit();
 A.eq('no hard import/resolution errors', R.errors.length, 0);
+A.eq('every executeWorkflow node with workflowInputs is typeVersion>=1.2 (below 1.2 n8n silently drops the named-input mapping)', (R.exec_wf_typeversion_violations || ['audit-field-missing']).length, 0);
+// SHEETS-DOCID-001 (live-observed: WF04 'Append to Dynamic Route Sheet' 404'd on the literal
+// PASTE_SPREADSHEET_ID_HERE placeholder): every googleSheets documentId and sheets.googleapis.com URL in a
+// RUNTIME workflow must resolve the spreadsheet id from $env.MS_SPREADSHEET_ID, never a literal placeholder.
+{
+  const fs0 = require('fs'); const path0 = require('path');
+  const manifest = JSON.parse(fs0.readFileSync(path0.join(__dirname, '..', 'config', 'workflow_manifest.json'), 'utf8'));
+  const runtimeFiles = Object.values(manifest.runtime_identity).map(v => v.file);
+  const bad = [];
+  for (const base of runtimeFiles) {
+    const wf = JSON.parse(fs0.readFileSync(path0.join(__dirname, '..', 'n8n', 'workflows', base), 'utf8'));
+    for (const n of (wf.nodes || [])) {
+      const p = n.parameters || {};
+      const d = p.documentId;
+      if (d && typeof d.value === 'string' && d.value.indexOf('$env.MS_SPREADSHEET_ID') < 0) bad.push(base + '::' + n.name + ' documentId=' + d.value.slice(0, 40));
+      if (typeof p.url === 'string' && p.url.indexOf('sheets.googleapis.com') >= 0 && p.url.indexOf('$env.MS_SPREADSHEET_ID') < 0) bad.push(base + '::' + n.name + ' url');
+    }
+  }
+  A.eq('runtime spreadsheet ids all resolve from $env.MS_SPREADSHEET_ID (' + bad.join('; ') + ')', bad.length, 0);
+}
 A.eq('all workflows inactive', R.active_violations.length, 0);
 A.eq('all node types recognized (n8n-nodes-base)', R.unrecognized_types.length, 0);
 A.eq('no unresolved sub-workflow references', R.unresolved_refs.length, 0);
@@ -99,8 +128,8 @@ const WF20 = H.loadWorkflow('20_agent_orchestrator.json');
 const WF22 = H.loadWorkflow('22_conversation_control.json');
 const WF23 = H.loadWorkflow('23_scheduled_source_monitor.json');
 
-A.ok('WF18 reads conversation_state', hasSheet(WF18, 'conversation_state', 'read'));
-A.ok('WF18 reads conversation_messages', hasSheet(WF18, 'conversation_messages', 'read'));
+A.ok('WF18 reads conversation_state', readsTab(WF18, 'conversation_state'));
+A.ok('WF18 reads conversation_messages', readsTab(WF18, 'conversation_messages'));
 A.ok('WF18 appends conversation_messages', hasSheet(WF18, 'conversation_messages', 'append'));
 A.ok('WF18 upserts conversation_state (appendOrUpdate)', hasSheet(WF18, 'conversation_state', 'appendOrUpdate'));
 A.ok('WF18 conversation_state upsert matches on conversation_id', sheetsNodes(WF18).some(s => s.tab === 'conversation_state' && s.op === 'appendOrUpdate' && s.match.indexOf('conversation_id') >= 0));
@@ -120,12 +149,14 @@ A.ok('WF20 appends telegram_outbox', hasSheet(WF20, 'telegram_outbox', 'append')
 A.ok('WF20 appends execution_summaries', hasSheet(WF20, 'execution_summaries', 'append'));
 
 A.section('Part 5 — context is reconstructable from Sheets (write-then-read loop exists)');
-A.ok('WF18 both reads AND upserts conversation_state', hasSheet(WF18, 'conversation_state', 'read') && hasSheet(WF18, 'conversation_state', 'appendOrUpdate'));
-A.ok('WF18 both reads AND appends conversation_messages', hasSheet(WF18, 'conversation_messages', 'read') && hasSheet(WF18, 'conversation_messages', 'append'));
+A.ok('WF18 both reads AND upserts conversation_state', readsTab(WF18, 'conversation_state') && hasSheet(WF18, 'conversation_state', 'appendOrUpdate'));
+A.ok('WF18 both reads AND appends conversation_messages', readsTab(WF18, 'conversation_messages') && hasSheet(WF18, 'conversation_messages', 'append'));
 
 // ============================================================================================================
 A.section('Part 8 — Telegram delivery proof (outbox before send; dedup; persisted fields)');
-A.ok('WF20: outbox row persisted before send (Append telegram_outbox -> Send Telegram Report)', edge(WF20, 'Append telegram_outbox', 'Send Telegram Report'));
+// DELIVERY-CHUNKS-001: the chunk fan-out sits between the persisted outbox row and the send.
+A.ok('WF20: outbox row persisted before send (Append telegram_outbox -> Expand Telegram Chunks -> Send Telegram Report)',
+  edge(WF20, 'Append telegram_outbox', 'Expand Telegram Chunks') && edge(WF20, 'Expand Telegram Chunks', 'Send Telegram Report'));
 A.ok('WF20: delivery built before outbox append (Build Delivery Outbox -> Append telegram_outbox)', edge(WF20, 'Build Delivery Outbox', 'Append telegram_outbox'));
 const dlv = tio.makeDelivery('req_1', 'rep_1', '555', 'body');
 A.ok('delivery row carries a telegram_message_id slot', Object.prototype.hasOwnProperty.call(dlv, 'telegram_message_id'));

@@ -70,6 +70,13 @@ A malformed boolean is a **warning** (dry-run continues) — but activation fail
 `MS_SOURCE_ALLOWLIST` (subset of `website vk telegram avito reviews forum classifieds social`),
 `MS_DEFAULT_REGION`, `MS_DEFAULT_NICHE`.
 
+**`MS_AVITO_ENABLED`** (default `false`) — AVITO-BLOCK-001 product gate. Avito is operator-infra-blocked (needs a
+Residential proxy on a paid Apify plan). While `false`, Avito is **stripped from the resolved `source_allowlist`**
+even if listed in `MS_SOURCE_ALLOWLIST`, so the bot never offers/plans/selects/runs it and an explicit Avito request
+gets an honest "temporarily unavailable" reply. Re-enable: provision the Residential proxy, then set
+`MS_AVITO_ENABLED=true` (and keep `avito` in `MS_SOURCE_ALLOWLIST`) — no code change. See
+`docs/STAGE_D_SOURCE_QUALITY_ACCEPTANCE.md` → AVITO-BLOCK-001.
+
 ## Secrets — credential store only (never env, never JSON)
 
 `MS_TELEGRAM_BOT_TOKEN`, Google service-account JSON, Claude/Anthropic key, Apify token, Firecrawl key, VK access

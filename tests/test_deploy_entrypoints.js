@@ -93,6 +93,7 @@ try {
     { id: 'cg', name: 'Google Sheets - Marketing Scout Service Account', type: 'googleApi' },
     { id: 'cc', name: 'Claude API - Marketing Scout', type: 'httpHeaderAuth' },
     { id: 'cf', name: 'Firecrawl API - Marketing Scout', type: 'httpHeaderAuth' },
+    { id: 'ca', name: 'Apify API - Marketing Scout', type: 'httpHeaderAuth' },
     { id: 'cv', name: 'HTTP Query Auth - VK Access Token', type: 'httpQueryAuth' }
   ];
   const credsFile = path.join(work, 'creds.json'); fs.writeFileSync(credsFile, JSON.stringify(creds));
@@ -143,10 +144,45 @@ try {
   A.ok('host-stub dry-run performs real reconciliation (PRODUCTION_DRY_RUN_CREDENTIALS=PASS)', /PRODUCTION_DRY_RUN_CREDENTIALS=PASS/.test(dr.out));
   A.ok('host-stub dry-run RELEASE_PLAN=OK', /RELEASE_PLAN=OK/.test(dr.out));
   A.ok('host-stub dry-run reconcile_credentials is reconciled (not "deferred to apply")', !/reconciliation deferred to apply/.test(dr.out));
-  A.ok('host-stub dry-run reconciles 92 references, 0 deferred', /PRODUCTION_CREDENTIAL_DEFERRED=0/.test(dr.out) && /PRODUCTION_CREDENTIAL_REFERENCES=92/.test(dr.out));
+  // derive the expected reference count from the canonical workflows so a legitimate node change (e.g. the WF18
+  // batchGet read refactor: 6 googleApi read refs -> 1) updates the expectation instead of silently breaking.
+  const expectedRefs = (() => {
+    const L = require('../tools/manifest_lib.js'); const fs = require('fs'); const path = require('path');
+    let n = 0;
+    for (const f of L.importOrder()) { const wf = JSON.parse(fs.readFileSync(path.join(L.WF_DIR, f), 'utf8')); (wf.nodes || []).forEach(nd => { if (nd.credentials) n += Object.keys(nd.credentials).length; }); }
+    return n;
+  })();
+  A.ok('host-stub dry-run reconciles ' + expectedRefs + ' canonical references, 0 deferred', /PRODUCTION_CREDENTIAL_DEFERRED=0/.test(dr.out) && new RegExp('PRODUCTION_CREDENTIAL_REFERENCES=' + expectedRefs + '\\b').test(dr.out));
   if (/PRODUCTION_DRY_RUN_CREDENTIALS=PASS/.test(dr.out) && dr.code === 0) console.log('PRODUCTION_DRY_RUN_ENTRYPOINT=PASS');
 
   fs.rmSync(work, { recursive: true, force: true });
 } catch (e) { stubOk = false; A.ok('host-stub entrypoint harness ran', false, String(e && e.message)); }
+
+// ------------------------------------------------------------------------------------------------------------
+A.section('DISPATCH-PUBLISH-001 — callable dispatch targets are publishable (n8n 2.x refuses unpublished sub-wf)');
+{
+  const fs2 = require('fs'); const path2 = require('path');
+  const deploy = fs2.readFileSync(path2.join(__dirname, '..', 'scripts', 'deploy_n8n.sh'), 'utf8');
+  A.ok('deploy exposes --publish-callables', /--publish-callables\) MODE="publish-callables"/.test(deploy) && /publish_callables\(\)/.test(deploy));
+  A.ok('deploy exposes --unpublish-callables (rollback)', /--unpublish-callables\) MODE="unpublish-callables"/.test(deploy) && /unpublish_callables\(\)/.test(deploy));
+  A.ok('publish-callables fail-closes on a public/scheduled trigger', /assert_callable_no_public_surface/.test(deploy) && /refusing to publish/.test(deploy));
+  A.ok('publish set comes from the manifest callable targets (no hand list)', /for f in "\$\{CALLABLE_TARGETS\[@\]\}"/.test(deploy));
+  // every manifest callable must indeed carry ONLY executeWorkflow/manual triggers — the runtime precondition
+  const L2 = require('../tools/manifest_lib.js');
+  for (const f of L2.callableTargets()) {
+    const wf = JSON.parse(fs2.readFileSync(path2.join(L2.WF_DIR, f), 'utf8'));
+    const bad = (wf.nodes || []).filter(n => /trigger|webhook|cron|interval/i.test(String(n.type)) && !/executeWorkflowTrigger|manualTrigger/.test(String(n.type)));
+    A.eq(f + ' has no public/scheduled trigger (safe to publish)', bad.map(n => n.type).join(','), '');
+    // TRIGGER-INPUTS-001: the trigger's workflowInputs is a fixedCollection { values:[{name,type}] } with
+    // minRequiredFields=1. The caller-style resourceMapper ({mappingMode,value,schema}) counts as ZERO fields —
+    // checkForWorkflowIssues then kills every server-side dispatch with WorkflowHasIssuesError (live-observed).
+    const trg = (wf.nodes || []).find(n => /executeWorkflowTrigger/.test(String(n.type)));
+    const wi = (trg && trg.parameters && trg.parameters.workflowInputs) || {};
+    A.ok(f + ' trigger declares >=1 fixedCollection input field (no resourceMapper shape)',
+      Array.isArray(wi.values) && wi.values.length >= 1 && wi.values.every(v => v && v.name) && wi.mappingMode === undefined && wi.schema === undefined);
+  }
+  // WF23/WF25 are NOT callables — publishing callables must never touch the scheduled workflows
+  A.ok('WF23/WF25 are not in the callable publish set', L2.callableTargets().every(f => !/^2[35]_/.test(f)));
+}
 
 A.report('deploy-entrypoints');

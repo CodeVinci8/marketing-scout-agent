@@ -1,7 +1,7 @@
 {
   "generated_by": "tools/gen_workflow_manifest.js",
   "purpose": "Single source of truth for capability/archive classification AND the production deployment plan (runtime closure, import order, sub-workflow binding edges, activation policy). Derived from the workflow Execute Sub-workflow graph + the POLICY block in the generator; the deploy/smoke tooling consumes deployment.* so the runtime set is defined in exactly one place.",
-  "workflow_count": 31,
+  "workflow_count": 33,
   "capability_classes": [
     "production_entrypoint",
     "production_dependency",
@@ -26,7 +26,9 @@
     "runtime_closure": [
       "04_firecrawl_url_list_resilient.json",
       "08_touchpoint_analyzer.json",
+      "09_avito_classifieds_listing_connector.json",
       "10_competitor_audience_intelligence_aggregator.json",
+      "11_social_source_connector_foundation.json",
       "12_market_intelligence_report_builder.json",
       "16_source_quality_gate_health_score.json",
       "17_agent_settings_config.json",
@@ -38,14 +40,38 @@
       "23_scheduled_source_monitor.json",
       "24_report_export_delivery.json",
       "25_weekly_digest.json",
-      "26_vk_public_community_collector.json"
+      "26_vk_public_community_collector.json",
+      "27_competitor_discovery.json",
+      "28_claude_analyst.json"
     ],
-    "runtime_workflow_count": 15,
+    "runtime_workflow_count": 19,
     "import_order": [
       "17_agent_settings_config.json",
       "04_firecrawl_url_list_resilient.json",
       "08_touchpoint_analyzer.json",
+      "09_avito_classifieds_listing_connector.json",
       "10_competitor_audience_intelligence_aggregator.json",
+      "11_social_source_connector_foundation.json",
+      "12_market_intelligence_report_builder.json",
+      "16_source_quality_gate_health_score.json",
+      "19_request_planner.json",
+      "21_deep_competitor_analysis.json",
+      "22_conversation_control.json",
+      "24_report_export_delivery.json",
+      "26_vk_public_community_collector.json",
+      "27_competitor_discovery.json",
+      "28_claude_analyst.json",
+      "20_agent_orchestrator.json",
+      "18_telegram_agent_gateway.json",
+      "23_scheduled_source_monitor.json",
+      "25_weekly_digest.json"
+    ],
+    "callable_targets": [
+      "04_firecrawl_url_list_resilient.json",
+      "08_touchpoint_analyzer.json",
+      "09_avito_classifieds_listing_connector.json",
+      "10_competitor_audience_intelligence_aggregator.json",
+      "11_social_source_connector_foundation.json",
       "12_market_intelligence_report_builder.json",
       "16_source_quality_gate_health_score.json",
       "19_request_planner.json",
@@ -54,22 +80,8 @@
       "22_conversation_control.json",
       "24_report_export_delivery.json",
       "26_vk_public_community_collector.json",
-      "18_telegram_agent_gateway.json",
-      "23_scheduled_source_monitor.json",
-      "25_weekly_digest.json"
-    ],
-    "callable_targets": [
-      "04_firecrawl_url_list_resilient.json",
-      "08_touchpoint_analyzer.json",
-      "10_competitor_audience_intelligence_aggregator.json",
-      "12_market_intelligence_report_builder.json",
-      "16_source_quality_gate_health_score.json",
-      "19_request_planner.json",
-      "20_agent_orchestrator.json",
-      "21_deep_competitor_analysis.json",
-      "22_conversation_control.json",
-      "24_report_export_delivery.json",
-      "26_vk_public_community_collector.json"
+      "27_competitor_discovery.json",
+      "28_claude_analyst.json"
     ],
     "binding_edges": [
       {
@@ -123,6 +135,46 @@
         "required": true
       },
       {
+        "caller_workflow": "18_telegram_agent_gateway.json",
+        "caller_wf": "WF18",
+        "caller_node": "Run WF27 (Discovery)",
+        "target_workflow": "27_competitor_discovery.json",
+        "target_wf": "WF27",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "20_agent_orchestrator.json",
+        "caller_wf": "WF20",
+        "caller_node": "Run Avito Source (WF09)",
+        "target_workflow": "09_avito_classifieds_listing_connector.json",
+        "target_wf": "WF09",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "20_agent_orchestrator.json",
+        "caller_wf": "WF20",
+        "caller_node": "Run Telegram Source (WF11)",
+        "target_workflow": "11_social_source_connector_foundation.json",
+        "target_wf": "WF11",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "20_agent_orchestrator.json",
+        "caller_wf": "WF20",
+        "caller_node": "Run VK Source (WF26)",
+        "target_workflow": "26_vk_public_community_collector.json",
+        "target_wf": "WF26",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
         "caller_workflow": "20_agent_orchestrator.json",
         "caller_wf": "WF20",
         "caller_node": "Run WF08 Analyzer",
@@ -158,6 +210,16 @@
         "caller_node": "Run WF16 Quality Gate",
         "target_workflow": "16_source_quality_gate_health_score.json",
         "target_wf": "WF16",
+        "expected_caller_type": "n8n-nodes-base.executeWorkflow",
+        "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+        "required": true
+      },
+      {
+        "caller_workflow": "20_agent_orchestrator.json",
+        "caller_wf": "WF20",
+        "caller_node": "Run WF28 (Claude Analyst)",
+        "target_workflow": "28_claude_analyst.json",
+        "target_wf": "WF28",
         "expected_caller_type": "n8n-nodes-base.executeWorkflow",
         "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
         "required": true
@@ -203,7 +265,7 @@
         "required": true
       }
     ],
-    "binding_edge_count": 13,
+    "binding_edge_count": 18,
     "activation": {
       "always": [
         "18_telegram_agent_gateway.json"
@@ -217,7 +279,9 @@
       "never_callable": [
         "04_firecrawl_url_list_resilient.json",
         "08_touchpoint_analyzer.json",
+        "09_avito_classifieds_listing_connector.json",
         "10_competitor_audience_intelligence_aggregator.json",
+        "11_social_source_connector_foundation.json",
         "12_market_intelligence_report_builder.json",
         "16_source_quality_gate_health_score.json",
         "19_request_planner.json",
@@ -225,9 +289,11 @@
         "21_deep_competitor_analysis.json",
         "22_conversation_control.json",
         "24_report_export_delivery.json",
-        "26_vk_public_community_collector.json"
+        "26_vk_public_community_collector.json",
+        "27_competitor_discovery.json",
+        "28_claude_analyst.json"
       ],
-      "callable_trigger_count": 11
+      "callable_trigger_count": 15
     },
     "requires_runtime": {
       "xlsx_zlib": [
@@ -248,8 +314,6 @@
       "05_apify_search_candidate_discovery.json",
       "06_approved_candidates_runner.json",
       "07_manual_touchpoint_intake.json",
-      "09_avito_classifieds_listing_connector.json",
-      "11_social_source_connector_foundation.json",
       "13_public_discussion_or_reviews_connector_foundation.json",
       "14_public_lead_signal_triage.json",
       "15_live_source_run_logger.json"
@@ -295,10 +359,36 @@
       "canonical_id": null,
       "id_source": "operator_local"
     },
+    "WF09": {
+      "wf": "WF09",
+      "file": "09_avito_classifieds_listing_connector.json",
+      "name": "09 - Avito Classifieds Listing Connector",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
     "WF10": {
       "wf": "WF10",
       "file": "10_competitor_audience_intelligence_aggregator.json",
       "name": "10 - Competitor Audience Intelligence Aggregator",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF11": {
+      "wf": "WF11",
+      "file": "11_social_source_connector_foundation.json",
+      "name": "11 - Social Source Connector Foundation (Telegram Public Channel Preview)",
       "role": "callable_dependency",
       "callable": true,
       "trigger_entrypoint": false,
@@ -344,40 +434,6 @@
       "activation_flag": "never",
       "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
       "binding_calls": [],
-      "canonical_id": null,
-      "id_source": "operator_local"
-    },
-    "WF20": {
-      "wf": "WF20",
-      "file": "20_agent_orchestrator.json",
-      "name": "20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)",
-      "role": "callable_dependency",
-      "callable": true,
-      "trigger_entrypoint": false,
-      "activation_flag": "never",
-      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
-      "binding_calls": [
-        {
-          "caller_node": "Run WF08 Analyzer",
-          "target_wf": "WF08"
-        },
-        {
-          "caller_node": "Run WF10 Aggregator",
-          "target_wf": "WF10"
-        },
-        {
-          "caller_node": "Run WF12 Report",
-          "target_wf": "WF12"
-        },
-        {
-          "caller_node": "Run WF16 Quality Gate",
-          "target_wf": "WF16"
-        },
-        {
-          "caller_node": "Run Website Source (WF04)",
-          "target_wf": "WF04"
-        }
-      ],
       "canonical_id": null,
       "id_source": "operator_local"
     },
@@ -438,6 +494,82 @@
       "canonical_id": null,
       "id_source": "operator_local"
     },
+    "WF27": {
+      "wf": "WF27",
+      "file": "27_competitor_discovery.json",
+      "name": "27 — Cross-Source Competitor Discovery (Firecrawl Search, bounded)",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF28": {
+      "wf": "WF28",
+      "file": "28_claude_analyst.json",
+      "name": "28 — Claude Analyst (Stage F, evidence-bound, feature-gated)",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
+    "WF20": {
+      "wf": "WF20",
+      "file": "20_agent_orchestrator.json",
+      "name": "20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)",
+      "role": "callable_dependency",
+      "callable": true,
+      "trigger_entrypoint": false,
+      "activation_flag": "never",
+      "expected_target_trigger": "n8n-nodes-base.executeWorkflowTrigger",
+      "binding_calls": [
+        {
+          "caller_node": "Run Avito Source (WF09)",
+          "target_wf": "WF09"
+        },
+        {
+          "caller_node": "Run Telegram Source (WF11)",
+          "target_wf": "WF11"
+        },
+        {
+          "caller_node": "Run VK Source (WF26)",
+          "target_wf": "WF26"
+        },
+        {
+          "caller_node": "Run WF08 Analyzer",
+          "target_wf": "WF08"
+        },
+        {
+          "caller_node": "Run WF10 Aggregator",
+          "target_wf": "WF10"
+        },
+        {
+          "caller_node": "Run WF12 Report",
+          "target_wf": "WF12"
+        },
+        {
+          "caller_node": "Run WF16 Quality Gate",
+          "target_wf": "WF16"
+        },
+        {
+          "caller_node": "Run WF28 (Claude Analyst)",
+          "target_wf": "WF28"
+        },
+        {
+          "caller_node": "Run Website Source (WF04)",
+          "target_wf": "WF04"
+        }
+      ],
+      "canonical_id": null,
+      "id_source": "operator_local"
+    },
     "WF18": {
       "wf": "WF18",
       "file": "18_telegram_agent_gateway.json",
@@ -467,6 +599,10 @@
         {
           "caller_node": "Run WF24 (Reporting)",
           "target_wf": "WF24"
+        },
+        {
+          "caller_node": "Run WF27 (Discovery)",
+          "target_wf": "WF27"
         }
       ],
       "canonical_id": null,
@@ -512,15 +648,19 @@
     "17_agent_settings_config.json",
     "04_firecrawl_url_list_resilient.json",
     "08_touchpoint_analyzer.json",
+    "09_avito_classifieds_listing_connector.json",
     "10_competitor_audience_intelligence_aggregator.json",
+    "11_social_source_connector_foundation.json",
     "12_market_intelligence_report_builder.json",
     "16_source_quality_gate_health_score.json",
     "19_request_planner.json",
-    "20_agent_orchestrator.json",
     "21_deep_competitor_analysis.json",
     "22_conversation_control.json",
     "24_report_export_delivery.json",
     "26_vk_public_community_collector.json",
+    "27_competitor_discovery.json",
+    "28_claude_analyst.json",
+    "20_agent_orchestrator.json",
     "18_telegram_agent_gateway.json",
     "23_scheduled_source_monitor.json",
     "25_weekly_digest.json"
@@ -940,30 +1080,34 @@
       "file": "09_avito_classifieds_listing_connector.json",
       "wf_number": "WF09",
       "name": "09 - Avito Classifieds Listing Connector",
-      "node_count": 21,
+      "node_count": 24,
       "active": false,
       "trigger_classes": [
-        "manualTrigger"
+        "manualTrigger",
+        "executeWorkflowTrigger"
       ],
       "classification": [
-        "manual-only"
+        "callable",
+        "manual-diagnostic"
       ],
-      "capability_class": "optional_source_adapter",
-      "deployment_role": "optional_source_adapter",
-      "runtime": false,
-      "activation_flag": "n/a",
+      "capability_class": "production_dependency",
+      "deployment_role": "callable_dependency",
+      "runtime": true,
+      "activation_flag": "never",
       "expected_active": false,
-      "called_by": [],
+      "called_by": [
+        "20_agent_orchestrator.json"
+      ],
       "calls": [],
       "binding_nodes": [],
       "requires_runtime": [],
-      "imported_by_deploy": false,
+      "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
       "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test",
+      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
@@ -1004,37 +1148,41 @@
       "file": "11_social_source_connector_foundation.json",
       "wf_number": "WF11",
       "name": "11 - Social Source Connector Foundation (Telegram Public Channel Preview)",
-      "node_count": 23,
+      "node_count": 26,
       "active": false,
       "trigger_classes": [
-        "manualTrigger"
+        "manualTrigger",
+        "executeWorkflowTrigger"
       ],
       "classification": [
-        "manual-only"
+        "callable",
+        "manual-diagnostic"
       ],
-      "capability_class": "optional_source_adapter",
-      "deployment_role": "optional_source_adapter",
-      "runtime": false,
-      "activation_flag": "n/a",
+      "capability_class": "production_dependency",
+      "deployment_role": "callable_dependency",
+      "runtime": true,
+      "activation_flag": "never",
       "expected_active": false,
-      "called_by": [],
+      "called_by": [
+        "20_agent_orchestrator.json"
+      ],
       "calls": [],
       "binding_nodes": [],
       "requires_runtime": [],
-      "imported_by_deploy": false,
+      "imported_by_deploy": true,
       "trigger_always": false,
       "trigger_when_monitoring": false,
       "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "referenced_by_test",
+      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     },
     {
       "file": "12_market_intelligence_report_builder.json",
       "wf_number": "WF12",
       "name": "12 - Market Intelligence Report Builder (Stakeholder v0.3)",
-      "node_count": 24,
+      "node_count": 26,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1098,13 +1246,15 @@
       "file": "14_public_lead_signal_triage.json",
       "wf_number": "WF14",
       "name": "14 - Lead Scout Triage & Scoring (Deterministic, Stage 3.5)",
-      "node_count": 15,
+      "node_count": 16,
       "active": false,
       "trigger_classes": [
-        "manualTrigger"
+        "manualTrigger",
+        "executeWorkflowTrigger"
       ],
       "classification": [
-        "manual-only"
+        "callable",
+        "manual-diagnostic"
       ],
       "capability_class": "legacy_referenced",
       "deployment_role": "manual_diagnostic",
@@ -1222,7 +1372,7 @@
       "file": "18_telegram_agent_gateway.json",
       "wf_number": "WF18",
       "name": "18 — Telegram Agent Gateway (secure dispatcher)",
-      "node_count": 51,
+      "node_count": 68,
       "active": false,
       "trigger_classes": [
         "webhook"
@@ -1241,7 +1391,8 @@
         "20_agent_orchestrator.json",
         "21_deep_competitor_analysis.json",
         "22_conversation_control.json",
-        "24_report_export_delivery.json"
+        "24_report_export_delivery.json",
+        "27_competitor_discovery.json"
       ],
       "binding_nodes": [
         {
@@ -1263,6 +1414,10 @@
         {
           "node": "Run WF24 (Reporting)",
           "target": "WF24"
+        },
+        {
+          "node": "Run WF27 (Discovery)",
+          "target": "WF27"
         }
       ],
       "requires_runtime": [],
@@ -1279,7 +1434,7 @@
       "file": "19_request_planner.json",
       "wf_number": "WF19",
       "name": "19 — Request Planner (deterministic + guarded Claude)",
-      "node_count": 10,
+      "node_count": 11,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1313,7 +1468,7 @@
       "file": "20_agent_orchestrator.json",
       "wf_number": "WF20",
       "name": "20 — Agent Orchestrator (approval→collect→WF16→WF08→WF10→WF12→deliver)",
-      "node_count": 26,
+      "node_count": 65,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1334,11 +1489,27 @@
       "calls": [
         "04_firecrawl_url_list_resilient.json",
         "08_touchpoint_analyzer.json",
+        "09_avito_classifieds_listing_connector.json",
         "10_competitor_audience_intelligence_aggregator.json",
+        "11_social_source_connector_foundation.json",
         "12_market_intelligence_report_builder.json",
-        "16_source_quality_gate_health_score.json"
+        "16_source_quality_gate_health_score.json",
+        "26_vk_public_community_collector.json",
+        "28_claude_analyst.json"
       ],
       "binding_nodes": [
+        {
+          "node": "Run Avito Source (WF09)",
+          "target": "WF09"
+        },
+        {
+          "node": "Run Telegram Source (WF11)",
+          "target": "WF11"
+        },
+        {
+          "node": "Run VK Source (WF26)",
+          "target": "WF26"
+        },
         {
           "node": "Run WF08 Analyzer",
           "target": "WF08"
@@ -1354,6 +1525,10 @@
         {
           "node": "Run WF16 Quality Gate",
           "target": "WF16"
+        },
+        {
+          "node": "Run WF28 (Claude Analyst)",
+          "target": "WF28"
         },
         {
           "node": "Run Website Source (WF04)",
@@ -1415,7 +1590,7 @@
       "file": "22_conversation_control.json",
       "wf_number": "WF22",
       "name": "22 — Conversation Control & Sources",
-      "node_count": 21,
+      "node_count": 22,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1565,7 +1740,7 @@
       "file": "26_vk_public_community_collector.json",
       "wf_number": "WF26",
       "name": "26 — VK Public Community Collector (bounded, official API)",
-      "node_count": 24,
+      "node_count": 31,
       "active": false,
       "trigger_classes": [
         "manualTrigger",
@@ -1581,6 +1756,7 @@
       "activation_flag": "never",
       "expected_active": false,
       "called_by": [
+        "20_agent_orchestrator.json",
         "23_scheduled_source_monitor.json"
       ],
       "calls": [],
@@ -1592,7 +1768,73 @@
       "trigger_when_weekly_digest": false,
       "referenced_by_test": true,
       "archive_safe_candidate": false,
-      "retain_reason": "called_by:23_scheduled_source_monitor.json; referenced_by_test; in_runtime_closure",
+      "retain_reason": "called_by:20_agent_orchestrator.json,23_scheduled_source_monitor.json; referenced_by_test; in_runtime_closure",
+      "action": "retain"
+    },
+    {
+      "file": "27_competitor_discovery.json",
+      "wf_number": "WF27",
+      "name": "27 — Cross-Source Competitor Discovery (Firecrawl Search, bounded)",
+      "node_count": 17,
+      "active": false,
+      "trigger_classes": [
+        "manualTrigger",
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable",
+        "manual-diagnostic"
+      ],
+      "capability_class": "production_dependency",
+      "deployment_role": "callable_dependency",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
+      "called_by": [
+        "18_telegram_agent_gateway.json"
+      ],
+      "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "called_by:18_telegram_agent_gateway.json; referenced_by_test; in_runtime_closure",
+      "action": "retain"
+    },
+    {
+      "file": "28_claude_analyst.json",
+      "wf_number": "WF28",
+      "name": "28 — Claude Analyst (Stage F, evidence-bound, feature-gated)",
+      "node_count": 16,
+      "active": false,
+      "trigger_classes": [
+        "executeWorkflowTrigger"
+      ],
+      "classification": [
+        "callable"
+      ],
+      "capability_class": "production_dependency",
+      "deployment_role": "callable_dependency",
+      "runtime": true,
+      "activation_flag": "never",
+      "expected_active": false,
+      "called_by": [
+        "20_agent_orchestrator.json"
+      ],
+      "calls": [],
+      "binding_nodes": [],
+      "requires_runtime": [],
+      "imported_by_deploy": true,
+      "trigger_always": false,
+      "trigger_when_monitoring": false,
+      "trigger_when_weekly_digest": false,
+      "referenced_by_test": true,
+      "archive_safe_candidate": false,
+      "retain_reason": "called_by:20_agent_orchestrator.json; referenced_by_test; in_runtime_closure",
       "action": "retain"
     }
   ]

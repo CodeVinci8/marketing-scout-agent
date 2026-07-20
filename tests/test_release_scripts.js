@@ -103,9 +103,9 @@ A.section('RELEASE-004 — release lock: acquire / contention / stale steal / re
 A.section('RELEASE-003 / SECURITY-005 — release evidence is sanitized (no raw ids/secrets)');
 {
   const attempt = {
-    runtime_workflows_found: 15, bindings_resolved: RR.MANIFEST_BINDINGS, placeholders_remaining: 0,
+    runtime_workflows_found: RR.MANIFEST_RUNTIME, bindings_resolved: RR.MANIFEST_BINDINGS, placeholders_remaining: 0,
     credential_audit: 'PASS', active_workflows: 0, result: 'PASS',
-    runtime_id_coverage: '15/15', runtime_id_map_checksum: 'abc123',
+    runtime_id_coverage: RR.MANIFEST_RUNTIME + '/' + RR.MANIFEST_RUNTIME, runtime_id_map_checksum: 'abc123',
     backup_sha256: 'deadbeef',
     detail: {
       bot_token: '123456789:SUPER_SECRET_TOKEN_kkkkkkkkkkkkkkkk',
@@ -129,8 +129,8 @@ A.section('RELEASE-003 / SECURITY-005 — release evidence is sanitized (no raw 
 
 A.section('RELEASE-003 / Phase 5 — release result is DERIVED, fail-closed (never PASS on unknown/deferred creds)');
 {
-  const B = RR.MANIFEST_BINDINGS; // 13 — from the manifest, not a stale hardcode
-  const ok = { runtime_workflows_found: 15, bindings_resolved: B, placeholders_remaining: 0, active_workflows: 0 };
+  const B = RR.MANIFEST_BINDINGS; // 16 — from the manifest, not a stale hardcode
+  const ok = { runtime_workflows_found: RR.MANIFEST_RUNTIME, bindings_resolved: B, placeholders_remaining: 0, active_workflows: 0 };
   // The exact lie this fixes: caller claims PASS but the credential audit is unknown -> BLOCKED, never PASS.
   A.eq('claimed PASS + credential_audit unknown -> BLOCKED',
     RR.buildRecord(Object.assign({}, ok, { credential_audit: 'unknown', result: 'PASS' })).result, 'BLOCKED');
@@ -147,12 +147,12 @@ A.section('RELEASE-003 / Phase 5 — release result is DERIVED, fail-closed (nev
   A.eq('active workflow on an inactive deploy -> FAIL',
     RR.buildRecord(Object.assign({}, ok, { active_workflows: 1, credential_audit: 'PASS', result: 'PASS' })).result, 'FAIL');
   A.eq('missing workflow -> FAIL',
-    RR.buildRecord(Object.assign({}, ok, { runtime_workflows_found: 14, credential_audit: 'PASS', result: 'PASS' })).result, 'FAIL');
+    RR.buildRecord(Object.assign({}, ok, { runtime_workflows_found: RR.MANIFEST_RUNTIME - 1, credential_audit: 'PASS', result: 'PASS' })).result, 'FAIL');
   A.eq('ABORTED claim is preserved verbatim',
     RR.buildRecord(Object.assign({}, ok, { credential_audit: 'PASS', result: 'ABORTED' })).result, 'ABORTED');
   A.eq('the caller claim is recorded transparently (result_claimed)',
     RR.buildRecord(Object.assign({}, ok, { credential_audit: 'unknown', result: 'PASS' })).result_claimed, 'PASS');
-  A.eq('binding_edges_expected derives from the manifest (13, not stale 8)',
+  A.eq('binding_edges_expected derives from the manifest (16, not stale 8)',
     RR.buildRecord({}).binding_edges_expected, B);
 }
 

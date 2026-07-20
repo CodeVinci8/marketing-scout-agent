@@ -70,7 +70,7 @@
         520
       ],
       "parameters": {
-        "jsCode": "// Avito/Classifieds connector config. Deterministic ids; MSK timestamps; no external calls.\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\n// --- S3-D24 multi-query planner: declared search_queries MUST drive actor discovery, not a single URL.\nconst SEARCH_QUERIES=['кредитный брокер Москва','помощь в получении кредита Москва','кредит после отказов Москва','кредитный брокер для бизнеса Москва','помощь с кредитом ИП'];\nconst REGION='Москва/МО';\nconst ACTOR_LIMIT=10; // overall batch limit across ALL queries\nfunction _slug(r){r=String(r||'').toLowerCase();return (r.indexOf('москва')>=0)?'moskva':'moskva';}\nconst _overall=ACTOR_LIMIT;\nconst _n=Math.max(1,Math.min(SEARCH_QUERIES.length,_overall)); // never plan more queries than the overall cap\nconst _base=Math.floor(_overall/_n);let _rem=_overall-_base*_n;\nconst _plan=SEARCH_QUERIES.slice(0,_n).map(function(q,i){var a=_base+(_rem>0?1:0);if(_rem>0)_rem--;return {query_index:i+1,search_query:q,source_search_url:'https://www.avito.ru/'+_slug(REGION)+'/predlozheniya_uslug?q='+encodeURIComponent(q),allocation:Math.max(1,a)};});\nconst _startUrls=_plan.map(function(p){return p.source_search_url;});\n// Patch 5: actor_start_urls (url+userData) is kept ONLY for internal mapping/tests. The live Apify actor\n// (fatihtahta~avito-russia-scraper) receives plain string start_urls; per-record query origin is recovered in\n// Normalize from the actor parentSourceUrl matched against query_plan (NOT from these userData objects).\nconst _actorStartUrls=_plan.map(function(p){return {url:p.source_search_url,userData:{search_query:p.search_query,source_search_url:p.source_search_url,query_index:p.query_index}};});\nreturn [{ json: {\n  fixture_mode:true,\n  live_mode:false,                 // §8.1 live Apify requires fixture_mode=false AND live_mode=true AND approval token AND budget\n  data_mode:'fixture',             // fixture | live | manual_test — set with the mode you actually run (§13)\n  require_approval_token:true,     // §8.1 paid live path is BLOCKED unless approval_token === expected_approval_token\n  approval_token:'',               // operator pastes the one-time token here ONLY for an approved live run (value never logged)\n  expected_approval_token:'AVITO_LIVE_APPROVED',  // guard compares against this; logs approval_token_used=yes/no only\n  max_budget_usd:0.50,             // §8.1 hard cost guard for a live run\n  source_type:'classified',\n  platform:'avito',\n  requested_by:'operator',\n  request_type:'classified_competitor_discovery',\n  region:REGION,\n  service_focus:'credit_broker',\n  search_queries:SEARCH_QUERIES,\n  start_urls:_startUrls,\n  actor_start_urls:_actorStartUrls,\n  query_plan:_plan,\n  query_count:_plan.length,\n  overall_max_items:_overall,\n  per_query_allocation:Math.max(1,_base),\n  max_items:6,\n  actor_limit:_overall,\n  pipeline_limit:10,\n  live_max_items:10,\n  include_irrelevant_control_fixture:true,\n  approval_status_for_unique:'new',\n  write_duplicate_audit:true,\n  hard_skip_debug_audit:false,\n  duplicate_next_action:'monitor_duplicate',\n  apify_actor_id:'fatihtahta~avito-russia-scraper',\n  detail_enrichment_enabled:false, // §8.4 detail transport is STAGED/DISABLED; degraded discovery cards are preserved, not invented\n  detail_transport:'apify_detail_actor', // documented transport name; no live call without approval\n  apify_token_placeholder:'PASTE_APIFY_TOKEN_OR_USE_CREDENTIAL',\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  agent_request_id:'avito_req_'+stamp,\n  run_id:'avito_'+stamp,\n  created_at:now\n}}];"
+        "jsCode": "// Avito/Classifieds connector config. Deterministic ids; MSK timestamps; no external calls.\nfunction moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst now=moscowIsoNow();\nconst stamp=moscowStamp();\n// --- S3-D24 multi-query planner: declared search_queries MUST drive actor discovery, not a single URL.\nconst SEARCH_QUERIES=['кредитный брокер Москва','помощь в получении кредита Москва','кредит после отказов Москва','кредитный брокер для бизнеса Москва','помощь с кредитом ИП'];\nconst REGION='Москва/МО';\nconst ACTOR_LIMIT=10; // overall batch limit across ALL queries\nfunction _slug(r){r=String(r||'').toLowerCase();return (r.indexOf('москва')>=0)?'moskva':'moskva';}\nconst _overall=ACTOR_LIMIT;\nconst _n=Math.max(1,Math.min(SEARCH_QUERIES.length,_overall)); // never plan more queries than the overall cap\nconst _base=Math.floor(_overall/_n);let _rem=_overall-_base*_n;\nconst _plan=SEARCH_QUERIES.slice(0,_n).map(function(q,i){var a=_base+(_rem>0?1:0);if(_rem>0)_rem--;return {query_index:i+1,search_query:q,source_search_url:'https://www.avito.ru/'+_slug(REGION)+'/predlozheniya_uslug?q='+encodeURIComponent(q),allocation:Math.max(1,a)};});\nconst _startUrls=_plan.map(function(p){return p.source_search_url;});\n// Patch 5: actor_start_urls (url+userData) is kept ONLY for internal mapping/tests. The live Apify actor\n// (fatihtahta~avito-russia-scraper) receives plain string start_urls; per-record query origin is recovered in\n// Normalize from the actor parentSourceUrl matched against query_plan (NOT from these userData objects).\nconst _actorStartUrls=_plan.map(function(p){return {url:p.source_search_url,userData:{search_query:p.search_query,source_search_url:p.source_search_url,query_index:p.query_index}};});\nvar base = ({\n  fixture_mode:true,\n  live_mode:false,                 // §8.1 live Apify requires fixture_mode=false AND live_mode=true AND approval token AND budget\n  data_mode:'fixture',             // fixture | live | manual_test — set with the mode you actually run (§13)\n  require_approval_token:true,     // §8.1 paid live path is BLOCKED unless approval_token === expected_approval_token\n  approval_token:'',               // operator pastes the one-time token here ONLY for an approved live run (value never logged)\n  expected_approval_token:'AVITO_LIVE_APPROVED',  // guard compares against this; logs approval_token_used=yes/no only\n  max_budget_usd:0.50,             // §8.1 hard cost guard for a live run\n  source_type:'classified',\n  platform:'avito',\n  requested_by:'operator',\n  request_type:'classified_competitor_discovery',\n  region:REGION,\n  service_focus:'credit_broker',\n  search_queries:SEARCH_QUERIES,\n  start_urls:_startUrls,\n  actor_start_urls:_actorStartUrls,\n  query_plan:_plan,\n  query_count:_plan.length,\n  overall_max_items:_overall,\n  per_query_allocation:Math.max(1,_base),\n  max_items:6,\n  actor_limit:_overall,\n  pipeline_limit:10,\n  live_max_items:10,\n  include_irrelevant_control_fixture:true,\n  approval_status_for_unique:'new',\n  write_duplicate_audit:true,\n  hard_skip_debug_audit:false,\n  duplicate_next_action:'monitor_duplicate',\n  apify_actor_id:'fatihtahta~avito-russia-scraper',\n  proxy_config:{useApifyProxy:true,apifyProxyGroups:['RESIDENTIAL']}, // AVITO-PROXY-001: Avito anti-bot -> residential proxy\n  detail_enrichment_enabled:false, // §8.4 detail transport is STAGED/DISABLED; degraded discovery cards are preserved, not invented\n  detail_transport:'apify_detail_actor', // documented transport name; no live call without approval\n  apify_token_placeholder:'PASTE_APIFY_TOKEN_OR_USE_CREDENTIAL',\n  spreadsheet_id_placeholder:'PASTE_SPREADSHEET_ID',\n  agent_request_id:'avito_req_'+stamp,\n  run_id:'avito_'+stamp,\n  created_at:now\n});\n\n// --- Stage 5 agent-called mode: WF20 passes the APPROVED plan bounds. Live runs still pass ONLY through the\n// --- same LIVE Apify Safety Gate (fixture stays the default when data_mode!=='live').\nvar __ci=null;try{var __c=$('When Called by Agent').first().json;if(__c&&String(__c.agent_request_id||'').length)__ci=__c;}catch(e){__ci=null;}\nif(__ci){\n  var __qs=String(__ci.search_queries||'').split(/[;|]/).map(function(s){return s.trim();}).filter(Boolean).slice(0,3);\n  if(!__qs.length)__qs=base.search_queries.slice(0,3);\n  var __per=Math.min(Math.max(1,Number(__ci.max_items)||30),30);\n  var __overall=Math.min(__per*__qs.length,90);\n  var __mk=function(q){return 'https://www.avito.ru/moskva/predlozheniya_uslug?q='+encodeURIComponent(q);};\n  var __live=String(__ci.data_mode||'fixture').toLowerCase()==='live';\n  base.agent_called=true;\n  base.requested_by='agent';\n  base.agent_request_id=String(__ci.agent_request_id);\n  base.run_id=String(__ci.source_run_id||base.run_id);\n  base.workflow_run_id=String(__ci.workflow_run_id||'');\n  base.data_mode=__live?'live':'fixture';\n  base.fixture_mode=!__live;\n  base.live_mode=__live;\n  base.approval_token=String(__ci.approval_token||'');\n  base.max_budget_usd=Math.min((Number(__ci.max_budget_usd)>0?Number(__ci.max_budget_usd):base.max_budget_usd),1);\n  base.search_queries=__qs;\n  base.query_plan=__qs.map(function(q,i){return {query_index:i+1,search_query:q,source_search_url:__mk(q),allocation:__per};});\n  base.start_urls=base.query_plan.map(function(pp){return pp.source_search_url;});\n  base.actor_start_urls=base.query_plan.map(function(pp){return {url:pp.source_search_url,userData:{search_query:pp.search_query,source_search_url:pp.source_search_url,query_index:pp.query_index}};});\n  base.query_count=__qs.length;\n  base.per_query_allocation=__per;\n  base.max_items=__per;\n  base.live_max_items=__overall;\n  base.actor_limit=__overall;\n  base.overall_max_items=__overall;\n  base.pipeline_limit=__overall;\n}\nreturn [{ json: base }];\n"
       }
     },
     {
@@ -136,7 +136,7 @@
         "url": "=https://api.apify.com/v2/acts/{{ $json.apify_actor_id }}/run-sync-get-dataset-items",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"limit\": {{ $json.actor_limit || 10 }},\n  \"startUrls\": {{ JSON.stringify($json.start_urls) }}\n}",
+        "jsonBody": "={\n  \"limit\": {{ $json.actor_limit || 10 }},\n  \"startUrls\": {{ JSON.stringify($json.start_urls) }},\n  \"proxyConfiguration\": {{ JSON.stringify($json.proxy_config || {\"useApifyProxy\":true}) }}\n}",
         "options": {},
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth"
@@ -177,7 +177,7 @@
         "operation": "read",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -220,7 +220,7 @@
         520
       ],
       "parameters": {
-        "jsCode": "// Build raw_market_records rows (Workflow 07 schema + §13 runtime observability columns). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst cfg=$('Set Avito Connector Config').first().json;\nconst reqId=str(cfg.agent_request_id);\nconst created=str(cfg.created_at);\nconst stamp=str(cfg.run_id).replace(/^avito_/,'')||moscowStamp();\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst hardDebug=(cfg.hard_skip_debug_audit===true||str(cfg.hard_skip_debug_audit).toLowerCase()==='true');\nconst recs=$('Deduplicate Listings').all().map(i=>i.json);\nconst out=[];let idx=0;\nfor(const r of recs){\n  idx++;\n  const ds0=str(r.dedup_status);\n  if(ds0==='invalid'||ds0==='over_pipeline_limit')continue;\n  // DEC-095: hard-skipped live false positives are NOT written by default (no raw pollution); debug audit opt-in.\n  if(ds0==='hard_skipped'&&!hardDebug)continue;\n  if(!writeDupAudit && ds0!=='unique')continue;\n  out.push({ json: {\n    record_id:'avito_rec_'+stamp+'_'+idx,\n    agent_request_id:reqId,\n    source_run_id:str(cfg.run_id)||reqId,\n    data_mode:str(cfg.data_mode)||'live',\n    quality_status:str(r.quality_status)||'healthy',\n    report_eligible:(r.report_eligible===true||str(r.report_eligible).toLowerCase()===\"true\"),\n    review_status:((r.detail_fetch_required===true||str(r.detail_fetch_required).toLowerCase()===\"true\")?\"pending\":\"confirmed\"),\n    quality_flags:str(r.quality_flags),\n    llm_eligible:(r.llm_eligible===true||str(r.llm_eligible).toLowerCase()==='true'),\n    is_detail:(r.is_detail===true||str(r.is_detail).toLowerCase()==='true'),\n    placeholder_title:(r.placeholder_title===true||str(r.placeholder_title).toLowerCase()==='true'),\n    detail_fetch_required:(r.detail_fetch_required===true||str(r.detail_fetch_required).toLowerCase()==='true'),\n    detail_fetch_status:str(r.detail_fetch_status),\n    exact_evidence_url:(r.exact_evidence_url===true||str(r.exact_evidence_url).toLowerCase()==='true'),\n    search_query:str(r.search_query),\n    source_search_url:str(r.source_search_url),\n    activity_subtype:str(r.activity_subtype),\n    skip_reason:str(r.skip_reason),\n    created_at:created,\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    profile_name:str(r.profile_name),\n    author_handle:str(r.author_handle),\n    published_at:str(r.published_at),\n    region_hint:str(r.region_hint),\n    service_hint:str(r.service_hint),\n    query:str(r.query),\n    text_context:str(r.text_context),\n    comment_text:str(r.comment_text),\n    contact_public:str(r.contact_public),\n    contact_channel:str(r.contact_channel),\n    dedup_key:str(r.dedup_key),\n    record_type_hint:str(r.record_type_hint),\n    touchpoint_type:str(r.touchpoint_type),\n    lead_intent_hint:str(r.lead_intent_hint),\n    urgency_hint:str(r.urgency_hint),\n    interest_topic:str(r.interest_topic),\n    probable_need:str(r.probable_need),\n    competitor_related:(r.competitor_related===true||str(r.competitor_related).toLowerCase()==='true'),\n    competitor_name:str(r.competitor_name),\n    semantic_keywords:str(r.semantic_keywords),\n    ad_channel_hint:str(r.ad_channel_hint),\n    confidence_score:Number(r.confidence_score)||0,\n    lead_temperature:str(r.lead_temperature),\n    next_action:str(r.next_action),\n    responsible:str(r.responsible),\n    dedup_status:str(r.dedup_status),\n    approval_status:str(r.approval_status),\n    approved_by:'',\n    approved_at:'',\n    estimated_analysis_cost_usd:Number(r.estimated_analysis_cost_usd)||0,\n    manager_note:str(r.manager_note),\n    notes:'stage_3_3_avito_classifieds_connector'\n  }});\n}\nreturn out;"
+        "jsCode": "// Build raw_market_records rows (Workflow 07 schema + §13 runtime observability columns). No external calls.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction moscowStamp(){var z=function(n){return String(n).padStart(2,'0');};var m=new Date(Date.now()+10800000);return m.getUTCFullYear()+z(m.getUTCMonth()+1)+z(m.getUTCDate())+'_'+z(m.getUTCHours())+z(m.getUTCMinutes())+z(m.getUTCSeconds());}\nconst cfg=$('Set Avito Connector Config').first().json;\nconst reqId=str(cfg.agent_request_id);\nconst created=str(cfg.created_at);\nconst stamp=str(cfg.run_id).replace(/^avito_/,'')||moscowStamp();\nconst writeDupAudit=(cfg.write_duplicate_audit===true||str(cfg.write_duplicate_audit).toLowerCase()==='true');\nconst hardDebug=(cfg.hard_skip_debug_audit===true||str(cfg.hard_skip_debug_audit).toLowerCase()==='true');\nconst recs=$('Deduplicate Listings').all().map(i=>i.json);\nconst out=[];let idx=0;\nfor(const r of recs){\n  idx++;\n  const ds0=str(r.dedup_status);\n  if(ds0==='invalid'||ds0==='over_pipeline_limit')continue;\n  // DEC-095: hard-skipped live false positives are NOT written by default (no raw pollution); debug audit opt-in.\n  if(ds0==='hard_skipped'&&!hardDebug)continue;\n  if(!writeDupAudit && ds0!=='unique')continue;\n  out.push({ json: {\n    record_id:'avito_rec_'+stamp+'_'+idx,\n    agent_request_id:reqId,\n    source_run_id:str(cfg.run_id)||reqId,\n    data_mode:str(cfg.data_mode)||'live',\n    quality_status:str(r.quality_status)||'healthy',\n    report_eligible:(r.report_eligible===true||str(r.report_eligible).toLowerCase()===\"true\"),\n    review_status:((r.detail_fetch_required===true||str(r.detail_fetch_required).toLowerCase()===\"true\")?\"pending\":\"confirmed\"),\n    quality_flags:str(r.quality_flags),\n    llm_eligible:(r.llm_eligible===true||str(r.llm_eligible).toLowerCase()==='true'),\n    is_detail:(r.is_detail===true||str(r.is_detail).toLowerCase()==='true'),\n    placeholder_title:(r.placeholder_title===true||str(r.placeholder_title).toLowerCase()==='true'),\n    detail_fetch_required:(r.detail_fetch_required===true||str(r.detail_fetch_required).toLowerCase()==='true'),\n    detail_fetch_status:str(r.detail_fetch_status),\n    exact_evidence_url:(r.exact_evidence_url===true||str(r.exact_evidence_url).toLowerCase()==='true'),\n    search_query:str(r.search_query),\n    source_search_url:str(r.source_search_url),\n    activity_subtype:str(r.activity_subtype),\n    skip_reason:str(r.skip_reason),\n    created_at:created,\n    source_type:str(r.source_type),\n    platform:str(r.platform),\n    source_url:str(r.source_url),\n    post_url:str(r.post_url),\n    profile_url:str(r.profile_url),\n    profile_name:str(r.profile_name),\n    author_handle:str(r.author_handle),\n    published_at:str(r.published_at),\n    region_hint:str(r.region_hint),\n    service_hint:str(r.service_hint),\n    query:str(r.query),\n    text_context:str(r.text_context),\n    comment_text:str(r.comment_text),\n    contact_public:str(r.contact_public),\n    contact_channel:str(r.contact_channel),\n    dedup_key:str(r.dedup_key),\n    record_type_hint:str(r.record_type_hint),\n    touchpoint_type:str(r.touchpoint_type),\n    lead_intent_hint:str(r.lead_intent_hint),\n    urgency_hint:str(r.urgency_hint),\n    interest_topic:str(r.interest_topic),\n    probable_need:str(r.probable_need),\n    competitor_related:(r.competitor_related===true||str(r.competitor_related).toLowerCase()==='true'),\n    competitor_name:str(r.competitor_name),\n    semantic_keywords:str(r.semantic_keywords),\n    ad_channel_hint:str(r.ad_channel_hint),\n    confidence_score:Number(r.confidence_score)||0,\n    lead_temperature:str(r.lead_temperature),\n    next_action:str(r.next_action),\n    responsible:str(r.responsible),\n    dedup_status:str(r.dedup_status),\n    approval_status:str(r.approval_status),\n    approved_by:'',\n    approved_at:'',\n    estimated_analysis_cost_usd:Number(r.estimated_analysis_cost_usd)||0,\n    manager_note:str(r.manager_note),\n    notes:'stage_3_3_avito_classifieds_connector'\n  }});\n}\n// AGENT-SUMMARY-001: 0 collected rows must NOT kill the summary/ledger chain — emit a marker\n// item so the run still writes its live_source_runs ledger row (WF16/08/10/12 trust the ledger).\nif(out.length===0){return [{json:{ms_no_rows:true}}];}\nreturn out;"
       }
     },
     {
@@ -237,7 +237,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -290,7 +290,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -326,7 +326,7 @@
         660
       ],
       "parameters": {
-        "jsCode": "// One agent_requests row (exactly 21 columns). status=completed. No external calls.\n// DEC-094/095: result_summary reports actor_items_received / structurally_valid_items / invalid_items /\n// business_relevant_items / hard_skipped_items / unique / duplicates / over_pipeline_limit.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nconst cfg=$('Set Avito Connector Config').first().json;\nconst recs=$('Deduplicate Listings').all().map(i=>i.json);\nconst actor_items_received=recs.length;\nconst invalid_items=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst structurally_valid_items=actor_items_received-invalid_items;\nconst hard_skipped_items=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst business_relevant_items=structurally_valid_items-hard_skipped_items;\nconst over_pipeline_limit=recs.filter(r=>str(r.dedup_status)==='over_pipeline_limit').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst skipped=recs.filter(r=>str(r.predicted_route)==='skipped_log'&&['invalid','over_pipeline_limit','hard_skipped'].indexOf(str(r.dedup_status))<0).length;\nconst queries=Array.isArray(cfg.search_queries)?cfg.search_queries.join('; '):str(cfg.query);\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\nlet notes='No auto-handoff in v0.1. Competitor Ad / Semantic Intelligence connector. Source: '+(fixtureMode?'fixture':'apify_live')+'.';\nif(invalid_items>0){\n  notes+=' Live Apify returned item(s), but no valid listing_url/title/price fields were found. Inspect Apify node output and actor schema.';\n  const firstInvalid=recs.filter(r=>str(r.dedup_status)==='invalid')[0];\n  if(firstInvalid){ notes+=' raw_response_preview: '+cut(str(firstInvalid.text_context||firstInvalid.query),300); }\n}\nif(hard_skipped_items>0){\n  notes+=' hard_skipped_items='+hard_skipped_items+' live false positive(s) (hard-negative/query-only, DEC-095) filtered BEFORE pipeline_limit; not written to raw_market_records or market_record_registry.';\n  const firstHard=recs.filter(r=>str(r.dedup_status)==='hard_skipped')[0];\n  if(firstHard){ notes+=' first_hard_skip: '+cut(str(firstHard.title||firstHard.source_url),120)+' ['+cut(str(firstHard.relevance_reason),160)+']'; }\n}\nif(over_pipeline_limit>0){ notes+=' over_pipeline_limit='+over_pipeline_limit+' (business-relevant listings beyond pipeline_limit were not written).'; }\nreturn [{ json: {\n  agent_request_id:str(cfg.agent_request_id),\n  created_at:str(cfg.created_at),\n  requested_by:str(cfg.requested_by)||'operator',\n  request_text:'Avito/classified competitor discovery: '+queries,\n  request_type:str(cfg.request_type)||'classified_competitor_discovery',\n  source_scope:'classified_listings',\n  platforms:'avito',\n  query:queries,\n  region:str(cfg.region)||'Москва/МО',\n  service_focus:str(cfg.service_focus)||'credit_broker',\n  requested_limit:fixtureMode?actor_items_received:(Number(cfg.pipeline_limit)||Number(cfg.live_max_items)||10),\n  status:'completed',\n  plan_summary:'Avito/Classifieds listing connector ('+(fixtureMode?'fixture mode':'live Apify mode')+') -> raw_market_records for the Touchpoint Analyzer (Workflow 08).',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:0,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:'actor_items_received='+actor_items_received+'; structurally_valid_items='+structurally_valid_items+'; invalid_items='+invalid_items+'; business_relevant_items='+business_relevant_items+'; hard_skipped_items='+hard_skipped_items+'; unique='+unique+'; duplicates='+duplicate+'; over_pipeline_limit='+over_pipeline_limit+'.',\n  next_action:(unique>0?'Run Workflow 08 on collected raw records manually':(business_relevant_items>0?'All business-relevant items were duplicates; registry unchanged — review duplicates, no Workflow 08 run needed':'Do NOT run Workflow 08 (no business-relevant unique rows): inspect Apify output / relevance filter, then re-run live smoke')),\n  notes:notes\n}}];"
+        "jsCode": "// One agent_requests row (exactly 21 columns). status=completed. No external calls.\n// DEC-094/095: result_summary reports actor_items_received / structurally_valid_items / invalid_items /\n// business_relevant_items / hard_skipped_items / unique / duplicates / over_pipeline_limit.\nfunction str(v){return v==null?'':String(v).trim();}\nfunction cut(s,n){s=str(s);return s.length>n?s.slice(0,n):s;}\nconst cfg=$('Set Avito Connector Config').first().json;\n// agent-called mode: the canonical agent_requests row was already written by WF18 — never a second (legacy-shaped) one.\nif(cfg.agent_called===true){return [{json:{ms_agent_mode:true}}];} // AGENT-SUMMARY-001: marker keeps the ledger chain alive; the IF below bypasses the legacy append\nconst recs=$('Deduplicate Listings').all().map(i=>i.json);\nconst actor_items_received=recs.length;\nconst invalid_items=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst structurally_valid_items=actor_items_received-invalid_items;\nconst hard_skipped_items=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst business_relevant_items=structurally_valid_items-hard_skipped_items;\nconst over_pipeline_limit=recs.filter(r=>str(r.dedup_status)==='over_pipeline_limit').length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst duplicate=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst skipped=recs.filter(r=>str(r.predicted_route)==='skipped_log'&&['invalid','over_pipeline_limit','hard_skipped'].indexOf(str(r.dedup_status))<0).length;\nconst queries=Array.isArray(cfg.search_queries)?cfg.search_queries.join('; '):str(cfg.query);\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\nlet notes='No auto-handoff in v0.1. Competitor Ad / Semantic Intelligence connector. Source: '+(fixtureMode?'fixture':'apify_live')+'.';\nif(invalid_items>0){\n  notes+=' Live Apify returned item(s), but no valid listing_url/title/price fields were found. Inspect Apify node output and actor schema.';\n  const firstInvalid=recs.filter(r=>str(r.dedup_status)==='invalid')[0];\n  if(firstInvalid){ notes+=' raw_response_preview: '+cut(str(firstInvalid.text_context||firstInvalid.query),300); }\n}\nif(hard_skipped_items>0){\n  notes+=' hard_skipped_items='+hard_skipped_items+' live false positive(s) (hard-negative/query-only, DEC-095) filtered BEFORE pipeline_limit; not written to raw_market_records or market_record_registry.';\n  const firstHard=recs.filter(r=>str(r.dedup_status)==='hard_skipped')[0];\n  if(firstHard){ notes+=' first_hard_skip: '+cut(str(firstHard.title||firstHard.source_url),120)+' ['+cut(str(firstHard.relevance_reason),160)+']'; }\n}\nif(over_pipeline_limit>0){ notes+=' over_pipeline_limit='+over_pipeline_limit+' (business-relevant listings beyond pipeline_limit were not written).'; }\nreturn [{ json: {\n  agent_request_id:str(cfg.agent_request_id),\n  created_at:str(cfg.created_at),\n  requested_by:str(cfg.requested_by)||'operator',\n  request_text:'Avito/classified competitor discovery: '+queries,\n  request_type:str(cfg.request_type)||'classified_competitor_discovery',\n  source_scope:'classified_listings',\n  platforms:'avito',\n  query:queries,\n  region:str(cfg.region)||'Москва/МО',\n  service_focus:str(cfg.service_focus)||'credit_broker',\n  requested_limit:fixtureMode?actor_items_received:(Number(cfg.pipeline_limit)||Number(cfg.live_max_items)||10),\n  status:'completed',\n  plan_summary:'Avito/Classifieds listing connector ('+(fixtureMode?'fixture mode':'live Apify mode')+') -> raw_market_records for the Touchpoint Analyzer (Workflow 08).',\n  estimated_source_cost_usd:0,\n  estimated_analysis_cost_usd:0,\n  approval_required:false,\n  approved_by:'',\n  approved_at:'',\n  result_summary:'actor_items_received='+actor_items_received+'; structurally_valid_items='+structurally_valid_items+'; invalid_items='+invalid_items+'; business_relevant_items='+business_relevant_items+'; hard_skipped_items='+hard_skipped_items+'; unique='+unique+'; duplicates='+duplicate+'; over_pipeline_limit='+over_pipeline_limit+'.',\n  next_action:(unique>0?'Run Workflow 08 on collected raw records manually':(business_relevant_items>0?'All business-relevant items were duplicates; registry unchanged — review duplicates, no Workflow 08 run needed':'Do NOT run Workflow 08 (no business-relevant unique rows): inspect Apify output / relevance filter, then re-run live smoke')),\n  notes:notes\n}}];"
       }
     },
     {
@@ -343,7 +343,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -392,7 +392,7 @@
         900
       ],
       "parameters": {
-        "jsCode": "function moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\n// WF09 live_source_runs ledger (23 cols, DEC-126). Avito connector; fixture=$0/no calls, live=Apify.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Avito Connector Config').first().json||{};\nconst recs=$('Deduplicate Listings').all().map(i=>i.json);\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\nconst received=recs.length;\nconst invalid=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst hard=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst valid=received-invalid;\nconst relevant=valid-hard;\n// §6 items_relevant counts only CONFIRMED detail offers — a search card is never a confirmed relevant offer.\nconst confirmedOffers=recs.filter(function(x){return String(x.record_type_hint)==='competitor_activity'&&(x.is_detail===true||String(x.is_detail).toLowerCase()==='true')&&x.detail_fetch_required!==true&&['invalid','over_pipeline_limit','hard_skipped'].indexOf(String(x.dedup_status))<0;}).length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst dup=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst queries=Array.isArray(cfg.search_queries)?cfg.search_queries.join('; '):str(cfg.query);\n// Obj1: approval_token_used is taken from the live safety gate (yes only when it validated the token); value never stored.\nvar approvalTokenUsed='no';\ntry{ var _gate=$('LIVE Apify Safety Gate').first().json; if(_gate&&str(_gate.approval_token_used))approvalTokenUsed=str(_gate.approval_token_used); }catch(e){}\nconst externalCalls=(fixtureMode?0:1);\nconst llmCalls=0;\n// §12 cost: a paid external call whose provider cost was NOT recovered is 'unknown' (never 0 / not_applicable).\nconst sourceCostStatus=(externalCalls>0?'unknown':'not_applicable');\nconst llmCostStatus=(llmCalls>0?'unknown':'not_applicable');\nconst costStatus=((sourceCostStatus==='unknown'||llmCostStatus==='unknown')?'unknown':'not_applicable');\nreturn [{ json: {\n  run_id:str(cfg.run_id)||('avito_'+Date.now()),\n  source_run_id:str(cfg.run_id),\n  agent_request_id:str(cfg.agent_request_id),\n  created_at:moscowIsoNow(),\n  workflow:'WF09 - Avito Classifieds Connector',\n  source_family:'classifieds',\n  platform:'avito',\n  mode:(fixtureMode?'fixture':'live'),\n  approval_token_used:approvalTokenUsed,\n  source_allowlist:queries,\n  max_items:Number(cfg.pipeline_limit)||Number(cfg.live_max_items)||10,\n  items_received:received,\n  items_relevant:confirmedOffers,\n  items_written_raw:unique+dup,\n  items_unique:unique,\n  items_duplicate:dup,\n  hard_skipped:hard,\n  external_calls:externalCalls,\n  estimated_source_cost_usd:0,\n  actual_source_cost_usd:null,\n  source_cost_status:sourceCostStatus,\n  llm_calls:llmCalls,\n  estimated_llm_cost_usd:0,\n  actual_llm_cost_usd:null,\n  llm_cost_status:llmCostStatus,\n  cost_status:costStatus,\n  status:'completed',\n  error_summary:(invalid>0?('invalid_items='+invalid+' (inspect Apify actor schema)'):''),\n  operator_next_action:(unique>0?'Run WF08 on collected raw records':'No unique business-relevant rows; inspect relevance/Apify output'),\n  notes:'Avito '+(fixtureMode?'fixture':'live Apify')+' run; '+(fixtureMode?'$0, no external calls':'cost not recovered (apify_avito)')+'.'\n}}];"
+        "jsCode": "function moscowIsoNow(){var m=new Date(Date.now()+10800000);return m.toISOString().replace('Z','+03:00');}\n// WF09 live_source_runs ledger (23 cols, DEC-126). Avito connector; fixture=$0/no calls, live=Apify.\nfunction str(v){return v==null?'':String(v).trim();}\nconst cfg=$('Set Avito Connector Config').first().json||{};\nconst recs=$('Deduplicate Listings').all().map(i=>i.json);\nconst fixtureMode=(cfg.fixture_mode===true||str(cfg.fixture_mode).toLowerCase()==='true');\nconst received=recs.length;\nconst invalid=recs.filter(r=>str(r.dedup_status)==='invalid').length;\nconst hard=recs.filter(r=>str(r.dedup_status)==='hard_skipped').length;\nconst valid=received-invalid;\nconst relevant=valid-hard;\n// §6 items_relevant counts only CONFIRMED detail offers — a search card is never a confirmed relevant offer.\nconst confirmedOffers=recs.filter(function(x){return String(x.record_type_hint)==='competitor_activity'&&(x.is_detail===true||String(x.is_detail).toLowerCase()==='true')&&x.detail_fetch_required!==true&&['invalid','over_pipeline_limit','hard_skipped'].indexOf(String(x.dedup_status))<0;}).length;\nconst unique=recs.filter(r=>str(r.dedup_status)==='unique').length;\nconst dup=recs.filter(r=>str(r.dedup_status).indexOf('duplicate')===0).length;\nconst queries=Array.isArray(cfg.search_queries)?cfg.search_queries.join('; '):str(cfg.query);\n// Obj1: approval_token_used is taken from the live safety gate (yes only when it validated the token); value never stored.\nvar approvalTokenUsed='no';\ntry{ var _gate=$('LIVE Apify Safety Gate').first().json; if(_gate&&str(_gate.approval_token_used))approvalTokenUsed=str(_gate.approval_token_used); }catch(e){}\nconst externalCalls=(fixtureMode?0:1);\nconst llmCalls=0;\n// §12 cost: a paid external call whose provider cost was NOT recovered is 'unknown' (never 0 / not_applicable).\nconst sourceCostStatus=(externalCalls>0?'unknown':'not_applicable');\nconst llmCostStatus=(llmCalls>0?'unknown':'not_applicable');\nconst costStatus=((sourceCostStatus==='unknown'||llmCostStatus==='unknown')?'unknown':'not_applicable');\nreturn [{ json: {\n  run_id:str(cfg.run_id)||('avito_'+Date.now()),\n  source_run_id:str(cfg.run_id),\n  agent_request_id:str(cfg.agent_request_id),\n  created_at:moscowIsoNow(),\n  workflow:'WF09 - Avito Classifieds Connector',\n  source_family:'classifieds',\n  platform:'avito',\n  mode:(fixtureMode?'fixture':'live'),\n  approval_token_used:approvalTokenUsed,\n  source_allowlist:queries,\n  max_items:Number(cfg.pipeline_limit)||Number(cfg.live_max_items)||10,\n  items_received:received,\n  items_relevant:confirmedOffers,\n  items_written_raw:unique+dup,\n  items_written:unique+dup,\n  items_unique:unique,\n  items_duplicate:dup,\n  hard_skipped:hard,\n  external_calls:externalCalls,\n  estimated_source_cost_usd:0,\n  actual_source_cost_usd:null,\n  source_cost_status:sourceCostStatus,\n  llm_calls:llmCalls,\n  estimated_llm_cost_usd:0,\n  actual_llm_cost_usd:null,\n  llm_cost_status:llmCostStatus,\n  cost_status:costStatus,\n  status:'completed',\n  error_summary:(invalid>0?('invalid_items='+invalid+' (inspect Apify actor schema)'):''),\n  operator_next_action:(unique>0?'Run WF08 on collected raw records':'No unique business-relevant rows; inspect relevance/Apify output'),\n  notes:'Avito '+(fixtureMode?'fixture':'live Apify')+' run; '+(fixtureMode?'$0, no external calls':'cost not recovered (apify_avito)')+'.'\n}}];"
       }
     },
     {
@@ -409,7 +409,7 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "PASTE_SPREADSHEET_ID_HERE",
+          "value": "={{ $env.MS_SPREADSHEET_ID || \"PASTE_SPREADSHEET_ID\" }}",
           "mode": "id"
         },
         "sheetName": {
@@ -447,6 +447,123 @@
         640,
         420
       ]
+    },
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "agent_request_id",
+              "type": "string"
+            },
+            {
+              "name": "source_run_id",
+              "type": "string"
+            },
+            {
+              "name": "workflow_run_id",
+              "type": "string"
+            },
+            {
+              "name": "data_mode",
+              "type": "string"
+            },
+            {
+              "name": "search_queries",
+              "type": "string"
+            },
+            {
+              "name": "max_items",
+              "type": "string"
+            },
+            {
+              "name": "approval_token",
+              "type": "string"
+            },
+            {
+              "name": "max_budget_usd",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1160,
+        480
+      ],
+      "id": "wf09-subtrig",
+      "name": "When Called by Agent"
+    },
+    {
+      "id": "a9000000-0000-0000-0000-000000anyrow",
+      "name": "Any Rows To Write?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1850,
+        380
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-anyrow",
+              "leftValue": "={{ $json.ms_no_rows === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a9000000-0000-0000-0000-000000legacy",
+      "name": "Write Legacy Request Row?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2290,
+        520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-legacy",
+              "leftValue": "={{ $json.ms_agent_mode === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
     }
   ],
   "connections": {
@@ -549,7 +666,7 @@
       "main": [
         [
           {
-            "node": "Append raw_market_records",
+            "node": "Any Rows To Write?",
             "type": "main",
             "index": 0
           }
@@ -587,7 +704,7 @@
       "main": [
         [
           {
-            "node": "Append agent_requests",
+            "node": "Write Legacy Request Row?",
             "type": "main",
             "index": 0
           }
@@ -626,6 +743,53 @@
         [
           {
             "node": "Apify Avito Classifieds Actor Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Called by Agent": {
+      "main": [
+        [
+          {
+            "node": "Set Avito Connector Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Rows To Write?": {
+      "main": [
+        [
+          {
+            "node": "Append raw_market_records",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build agent_requests Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Legacy Request Row?": {
+      "main": [
+        [
+          {
+            "node": "Append agent_requests",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build live_source_runs Row",
             "type": "main",
             "index": 0
           }

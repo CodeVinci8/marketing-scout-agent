@@ -168,7 +168,12 @@ H.inject(run, 'Resolve Agent Config', [{ enable_vk_collector: false }]);
 const gate = H.runCodeNode(run, WF26, 'VK Credential Gate', [{ json: { community: 'vk.com/example', owner_user_id: '100200300' } }])[0].json;
 A.ok('disabled collector -> not configured (HTTP branch skipped)', gate.configured === false && gate.credential.status === 'setup_required');
 const setupReply = H.runCodeNode(run, WF26, 'Build Setup-Required Reply', [])[0].json;
-A.ok('setup reply states no collection happened, no spend', setupReply.status === 'setup_required' && setupReply.external_calls === 0 && /средства не потрачены/.test(JSON.parse(setupReply.telegram_send_body).text));
+// UX-RU-002: the user-facing reply is the plain Russian settling message; the internal reason + $0 stay in
+// execution data (status/reason/external_calls), never in the Telegram text.
+A.ok('setup reply: no collection, no spend recorded internally; user text is the settling message',
+  setupReply.status === 'setup_required' && setupReply.external_calls === 0 &&
+  /пока настраивается/.test(JSON.parse(setupReply.telegram_send_body).text) &&
+  !/токен|credential|vk_setup_required/i.test(JSON.parse(setupReply.telegram_send_body).text));
 
 A.section('WF26 runtime — configured path parses wall + detects changes ($0)');
 run = H.makeRun();
@@ -179,7 +184,10 @@ H.runCodeNode(run, WF26, 'Parse Community', [{ json: { response: { groups: [{ id
 const prevRec100 = V.buildRecord({ id: 100, owner_id: -42, date: 1718000000, text: 'old' }, { community_id: 42, owner_id: -42 }, { owner_user_id: '100200300' });
 H.inject(run, 'Read vk_post_state', [{ owner_user_id: '100200300', community_id: 42, owner_id: -42, post_id: 100, post_version: prevRec100.post_version, content_hash: prevRec100.content_hash }]);
 H.inject(run, 'Read source_change_events', []);
-const detOut = H.runCodeNode(run, WF26, 'Parse Wall & Detect Changes', [{ json: { response: { count: 2, items: [{ id: 100, owner_id: -42, date: 1718000000, text: 'old' }, { id: 200, owner_id: -42, date: 1719000000, text: 'Новый' }] } } }])[0].json;
+// VK-PARSE-001: the wall response is read from the VK wall.get node, NOT from $json (whose real main input is
+// the Read source_change_events row). Inject the wall response on VK wall.get; feed a change-events row as $json.
+H.inject(run, 'VK wall.get', [{ response: { count: 2, items: [{ id: 100, owner_id: -42, date: 1718000000, text: 'old' }, { id: 200, owner_id: -42, date: 1719000000, text: 'Новый' }] } }]);
+const detOut = H.runCodeNode(run, WF26, 'Parse Wall & Detect Changes', [{ json: { change_id: 'legacy_row', row_number: 1 } }])[0].json;
 A.ok('parses records + finds the one new post', detOut.ok === true && detOut.records.length === 2 && detOut.new_count === 1);
 A.ok('does not re-alert the already-known post 100', !detOut.events.some(e => e.post_id === 100));
 A.ok('WF26 emits canonical evidence URL for the change', /vk\.com\/wall-42_200/.test(JSON.stringify(detOut.events)));

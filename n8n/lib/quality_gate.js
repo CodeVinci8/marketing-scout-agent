@@ -50,6 +50,7 @@ function computeRunHealth(run, records, cfg) {
 
   const total = records.length;
   let search_card = 0;
+  let detail_records = 0;
   let structurally_valid = 0, invalid = 0, unique = 0, duplicate = 0, hard_skipped = 0, irrelevant = 0,
     report_candidate = 0, placeholder = 0, missing_desc = 0, missing_id = 0, missing_pub = 0,
     has_evidence_url = 0, unknown_service = 0, generic_offer = 0, parse_failure = 0, repaired = 0,
@@ -63,6 +64,8 @@ function computeRunHealth(run, records, cfg) {
     if (r.irrelevant === true) irrelevant++;
     if (r.report_candidate === true) report_candidate++;
     if (r.search_card === true) search_card++;
+    if (!(r.search_card === true) && r.is_detail !== false &&
+        !(r.placeholder_title === true && r.missing_description === true)) detail_records++;
     if (r.placeholder_title === true) placeholder++;
     if (r.missing_description === true) missing_desc++;
     if (r.missing_seller_identity === true) missing_id++;
@@ -121,7 +124,15 @@ function computeRunHealth(run, records, cfg) {
   if (total > 0 && placeholder === total) flags.push('placeholder_titles');
   else if (placeholder > 0) flags.push('placeholder_titles');
   if (total > 0 && report_candidate === 0 && ((search_card > 0 && (search_card + irrelevant + hard_skipped) >= total) || (placeholder + missing_desc) >= total)) flags.push('search_cards_only');
-  if (total > 0 && report_candidate === 0 && hard_skipped < total && (degraded > 0)) flags.push('no_detail_records');
+  // DETAIL-QUALITY-001: this flag is CRITICAL (it quarantines the run), so it must mean what it says — the run
+  // produced NO detail record. It previously fired on `report_candidate===0 && degraded>0`, which is a statement
+  // about ELIGIBILITY, not about record existence: a genuine detail record that was merely pending or degraded
+  // quarantined a score-81 run and told the operator to investigate a flag that was not true (live: WF16 exec 930,
+  // autolombardn1.ru — is_detail=true, search_card=false, repaired but valid).
+  // Detail presence is judged from the RECORD's own shape, never from a downstream eligibility verdict:
+  // a search card, or a placeholder title with no description (the Avito search-card shape), is not a detail
+  // record; anything else that reached us is. Low quality / pending / repaired all still raise their OWN flags.
+  if (total > 0 && detail_records === 0 && hard_skipped < total) flags.push('no_detail_records');
   if (rates.missing_identity_rate >= 60) flags.push('missing_seller_identity');
   if (rates.missing_description_rate >= 60) flags.push('missing_descriptions');
   if (rates.missing_published_at_rate >= 60) flags.push('missing_published_at');

@@ -193,6 +193,10 @@ test-js:
 	node tests/test_stage567_topology.js
 	node tests/test_claude_endpoint.js
 	node tests/test_source_parity.js
+	node tests/test_sheets_access.js
+	node tests/test_wf18_sheets_budget.js
+	node tests/test_google_http_credential.js
+	node tests/test_idempotency_persist.js
 
 test-wf:
 	python3 scripts/validate_workflows.py

@@ -1,5 +1,5 @@
 'use strict';
-// test_xlsx_writer.js — real OOXML/XLSX validity: ZIP container, required parts, all 8 sheets, headers, cell
+// test_xlsx_writer.js — real OOXML/XLSX validity: ZIP container, required parts, every sheet, headers, cell
 // values, hyperlinks, styling basics, freeze/filter, formula-injection safety, report isolation, determinism
 // (Sections 3.2 / 21). Re-opens the produced workbook and inspects it.
 const A = require('./_assert.js');
@@ -24,7 +24,7 @@ const parts = W.readZip(buf);
 A.section('required OOXML parts');
 ['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels', 'xl/styles.xml'].forEach(p =>
   A.ok('part ' + p, !!parts[p]));
-for (let i = 1; i <= 8; i++) A.ok('worksheet sheet' + i, !!parts['xl/worksheets/sheet' + i + '.xml']);
+for (let i = 1; i <= P.SHEET_NAMES.length; i++) A.ok('worksheet sheet' + i, !!parts['xl/worksheets/sheet' + i + '.xml']);
 
 A.section('sheet names (fixed order)');
 const wb = parts['xl/workbook.xml'].toString('utf8');
@@ -32,15 +32,15 @@ P.SHEET_NAMES.forEach(n => A.ok('workbook lists ' + n, wb.indexOf('name="' + n +
 A.eq('package sheet_names', pkg.sheet_names, P.SHEET_NAMES);
 
 A.section('row counts');
-A.eq('Competitors rows', pkg.row_counts.Competitors, 3);
-A.eq('Offers rows', pkg.row_counts.Offers_Prices, 3);
-A.eq('Evidence rows', pkg.row_counts.Evidence, 2);
-A.eq('Summary single row', pkg.row_counts.Summary, 1);
+A.eq('Competitors rows', pkg.row_counts['Конкуренты'], 3);
+A.eq('Offers rows', pkg.row_counts['Офферы и цены'], 3);
+A.eq('Evidence rows', pkg.row_counts['Доказательства'], 2);
+A.eq('Summary single row', pkg.row_counts['Сводка'], 1);
 
 A.section('headers + cell values');
 const comp = parts['xl/worksheets/sheet2.xml'].toString('utf8'); // Competitors
-A.ok('header Competitor', comp.indexOf('>Competitor<') >= 0);
-A.ok('header Source link', comp.indexOf('>Source link<') >= 0);
+A.ok('header Конкурент (RU headers, Stage F §6)', comp.indexOf('>Конкурент<') >= 0);
+A.ok('header Ссылка на источник', comp.indexOf('>Ссылка на источник<') >= 0);
 A.ok('Cashmotor cell', comp.indexOf('>Cashmotor<') >= 0);
 A.ok('numeric score 8.5 stored as <v>', comp.indexOf('<v>8.5</v>') >= 0);
 A.ok('Москва preserved', comp.indexOf('Москва') >= 0);
@@ -80,10 +80,13 @@ A.ok('no live <f> formula', offers.indexOf('<f>') < 0);
 
 A.section('no fabricated zero / unknown stays empty');
 A.ok('AvtoDengi empty score -> empty cell (no <v>0</v> forced)', true); // score null rendered empty (checked structurally below)
-A.ok('Run_Metadata unknown cost', parts['xl/worksheets/sheet8.xml'].toString('utf8').indexOf('unknown') >= 0);
+// Технические данные is the LAST sheet; Stage F inserted «Аналитические выводы»/«Боли и сигналы» before it, so
+// resolve it by position rather than a frozen sheet number.
+const techIdx = pkg.sheet_names.indexOf('Технические данные') + 1;
+A.ok('Технические данные unknown cost', parts['xl/worksheets/sheet' + techIdx + '.xml'].toString('utf8').indexOf('unknown') >= 0);
 
 A.section('report metadata embedded');
-A.ok('report id in metadata sheet', parts['xl/worksheets/sheet8.xml'].toString('utf8').indexOf('report_20260621_101500') >= 0);
+A.ok('report id in metadata sheet', parts['xl/worksheets/sheet' + techIdx + '.xml'].toString('utf8').indexOf('report_20260621_101500') >= 0);
 
 A.section('report isolation + determinism');
 let threw = false;
@@ -93,5 +96,24 @@ A.eq('deterministic bytes', W.crc32(buf), W.crc32(P.buildReportPackage(F.current
 
 A.section('size sanity');
 A.ok('reasonable size (<1MB)', pkg.size_bytes > 1000 && pkg.size_bytes < 1024 * 1024);
+
+A.section('XLSX-OMIT-EMPTY-001 — opt-in omit_empty drops header-only sheets (defect D)');
+// default (no opt) is unchanged: the full fixed workbook, so existing consumers/tests are unaffected.
+A.eq('default keeps all sheets', P.buildReportPackage(F.currentReport(), scope).sheet_names.length, P.SHEET_NAMES.length);
+// a sparse run: only competitors + source_quality have data; offers/evidence/recs/changes are empty.
+const sparse = Object.assign({}, F.currentReport(), { offers: [], evidence: [], recommendations: [], changes: [] });
+const sp = P.buildReportPackage(sparse, F.scopeOf(sparse), { omit_empty: true });
+A.ok('empty Offers_Prices omitted', sp.sheet_names.indexOf('Офферы и цены') < 0, sp.sheet_names.join(','));
+A.ok('empty Evidence omitted', sp.sheet_names.indexOf('Evidence') < 0);
+A.ok('empty Recommendations omitted', sp.sheet_names.indexOf('Recommendations') < 0);
+A.ok('empty Changes omitted', sp.sheet_names.indexOf('Changes') < 0);
+A.ok('non-empty Competitors kept', sp.sheet_names.indexOf('Конкуренты') >= 0);
+A.ok('Summary always kept (never a contentless file)', sp.sheet_names.indexOf('Сводка') >= 0);
+A.ok('Run_Metadata always kept', sp.sheet_names.indexOf('Технические данные') >= 0);
+// a totally empty run still yields a valid, openable workbook (Summary + Run_Metadata only)
+const empty = { report_id: sparse.report_id, agent_request_id: sparse.agent_request_id, owner_user_id: sparse.owner_user_id, created_at: sparse.created_at, summary: {} };
+const ep = P.buildReportPackage(empty, F.scopeOf(empty), { omit_empty: true });
+A.eq('empty run keeps exactly Сводка + Технические данные', ep.sheet_names.slice().sort().join(','), ['Сводка','Технические данные'].sort().join(','));
+A.ok('empty-run workbook is still a valid ZIP', ep.buffer[0] === 0x50 && ep.buffer[1] === 0x4b);
 
 A.report('xlsx-writer');

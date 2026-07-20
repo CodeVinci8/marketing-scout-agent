@@ -18,6 +18,15 @@ const JS_SUITES = [
   ['lineage-e2e', 'test_lineage_e2e.js'],
   ['wf04-processed', 'test_wf04_processed.js'],
   ['wf04-accounting', 'test_wf04_accounting.js'],
+  ['wf04-relevance-score', 'test_wf04_relevance_score.js'],
+  ['wf04-force-reprocess', 'test_wf04_force_reprocess.js'],
+  ['wf11-channel-fairness', 'test_wf11_channel_fairness.js'],
+  ['wf09-avito-proxy', 'test_wf09_avito_proxy.js'],
+  ['wf26-vk-enable', 'test_wf26_vk_enable.js'],
+  ['wf26-vk-parse', 'test_wf26_vk_parse.js'],
+  ['wf26-generator-sync', 'test_wf26_generator_sync.js'],
+  ['wf26-vk-rmr-mapping', 'test_wf26_vk_rmr_mapping.js'],
+  ['wf26-vk-comments', 'test_wf26_vk_comments.js'],
   ['wf05-classify', 'test_wf05_classify.js'],
   ['wf09-searchcard', 'test_wf09_searchcard.js'],
   ['wf06-processed', 'test_wf06_processed.js'],
@@ -25,16 +34,57 @@ const JS_SUITES = [
   ['wf09-multiquery', 'test_wf09_multiquery.js'],
   ['wf10-source-health', 'test_wf10_source_health.js'],
   ['wf12-closure', 'test_wf12_closure.js'],
+  ['stage-d3-report-quality', 'test_stage_d3_report_quality.js'],
   // --- Stage C Runtime Patch 4: first real WF09 -> WF16 live execution regression ---
   ['wf16-runtime-searchcards', 'test_wf16_runtime_searchcards.js'],
   // --- Stage C Runtime Patch 5: WF09 Apify actor-input regression (string startUrls, query origin) ---
   ['wf09-actor-input', 'test_wf09_actor_input.js'],
+  // --- AGENT-SUMMARY-001: connector ledger chain survives agent mode / empty collections ---
+  ['agent-summary-ledger', 'test_agent_summary_ledger.js'],
   // --- Stage 3 closure: canonical identity/lineage contract + WF16 boolean fidelity ---
   ['lineage-contract', 'test_lineage_contract.js'],
   // --- Stage 3 closure: WF04 -> WF16 -> WF08 website source quality & analysis pipeline ---
   ['website-pipeline', 'test_website_pipeline.js'],
   // --- Stage 3 closure: production analysis/aggregation/reporting gates (WF05/06/08/09/10/12) ---
   ['stage3-gates', 'test_stage3_gates.js'],
+  ['cost-model', 'test_cost_model.js'],
+  ['fast-lane', 'test_fast_lane.js'],
+  ['progress-lifecycle', 'test_progress_lifecycle.js'],
+  ['request-lifecycle', 'test_request_lifecycle.js'],
+  ['live-defects', 'test_live_defects.js'],
+  ['stage-e-persistence', 'test_stage_e_persistence.js'],
+  // --- AVITO-BLOCK-001: feature-flagged temporary Avito disablement in the bot/product UX ---
+  ['avito-block', 'test_avito_block.js'],
+  // --- DETERMINISTIC-RUN-001: WF20 fail-safe caller override to force paid LLM off for a bounded run ---
+  ['deterministic-run', 'test_deterministic_run.js'],
+  // --- RQ-v2: report-quality repair (Avito leak, placeholders, entities, empty sections, trend, counts, buttons) ---
+  ['report-quality-v2', 'test_report_quality_v2.js'],
+  // --- B1/B6: explicit single-website report scoping (current-run vs historical context) ---
+  ['single-source-scope', 'test_single_source_scope.js'],
+  // --- B4: owner-scoped plan-fingerprint dedup (equivalent request reuses one awaiting_approval plan) ---
+  ['plan-dedup', 'test_plan_dedup.js'],
+  ['source-rollup-b6', 'test_source_rollup_b6.js'],
+  // --- Stage F core: Claude adapter (tool_use transport), contracts/validators, evidence package, cost, analysis
+  //     orchestration (validate -> one repair -> deterministic fallback). Offline, injected fetchFn, $0. ---
+  ['stage-f-core', 'test_stage_f_core.js'],
+  ['wf28-claude-analyst', 'test_wf28_claude_analyst.js'],
+  ['stage-f-integration', 'test_stage_f_integration.js'],
+  ['reuse-observability', 'test_reuse_observability.js'],
+  ['analysis-modes', 'test_analysis_modes.js'],
+  ['report-truth-quality', 'test_report_truth_quality.js'],
+  ['approval-ux', 'test_approval_ux.js'],
+  ['source-outcomes', 'test_source_outcomes.js'],
+  ['stage-f-report', 'test_stage_f_report.js'],
+  ['error-sanitizer', 'test_error_sanitizer.js'],
+  ['source-execution-policy', 'test_source_execution_policy.js'],
+  ['source-access', 'test_source_access.js'],
+  ['plan-terminal', 'test_plan_terminal.js'],
+  ['scope-policy', 'test_scope_policy.js'],
+  ['parse-outcome', 'test_parse_outcome.js'],
+  // --- WF24 XLSX export/delivery fixes (EXPORT-CHAT-001 caller scope + EXPORT-CHART-001 chart tolerance) ---
+  ['wf24-export', 'test_wf24_export.js'],
+  // --- SOURCE-OP-001: NL monitored-source registry (parseSourceOp -> list/add/pause/resume/remove/check) ---
+  ['source-registry', 'test_source_registry.js'],
   // --- Stage 5: guarded provider adapter contract (real runAdapter path + parsers + cost + acceptance) ---
   ['stage5-adapters', 'test_stage5_adapters.js'],
   // --- Stage 4: single-user Telegram agent MVP (libs + generated WF17-20) ---
@@ -136,6 +186,18 @@ const JS_SUITES = [
   ['claude-endpoint', 'test_claude_endpoint.js'],
   // --- RELEASE-SOURCE-PARITY-001: the content-parity verifier (prod export vs staged canonical) ---
   ['source-parity', 'test_source_parity.js'],
+  // --- SHEETS-READ-AMPLIFICATION-001: bounded batchGet read projection + WF18 request budget ---
+  ['sheets-access', 'test_sheets_access.js'],
+  ['wf18-sheets-budget', 'test_wf18_sheets_budget.js'],
+  // --- GOOGLE-HTTP-CREDENTIAL-001: batchGet predefined-cred durability (reconcile can't strip httpNode/scopes) ---
+  ['google-http-credential', 'test_google_http_credential.js'],
+  ['idempotency-persist', 'test_idempotency_persist.js'],
+  // --- IDEMP-001: atomic append-then-verify claim (concurrent-safe without N8N_CONCURRENCY=1) ---
+  ['idempotency-claim', 'test_idempotency_claim.js'],
+  // --- UX-RU-001: single humanized Russian approval message, no internal enums, zero-source fail-closed ---
+  ['plan-render-ru', 'test_plan_render_ru.js'],
+  ['ux-messages-ru', 'test_ux_messages_ru.js'],
+  ['llm-ru-guard', 'test_llm_ru_guard.js'],
 ];
 
 let failed = 0;

@@ -18,7 +18,10 @@ const WF09 = H.loadWorkflow('09_avito_classifieds_listing_connector.json');
 const WF08 = H.loadWorkflow('08_touchpoint_analyzer.json');
 const WF10 = H.loadWorkflow('10_competitor_audience_intelligence_aggregator.json');
 const WF12 = H.loadWorkflow('12_market_intelligence_report_builder.json');
-const WHEN = '2026-06-15T10:00:00+03:00';
+// Anchored 5 days before "now" so the record stays inside WF10's 30-day freshness window as wall-clock advances
+// (a fixed date silently ages out of the window and breaks the suite). WHEN_DATE is the date-only form.
+const WHEN = new Date(Date.now() - 5 * 86400000).toISOString().replace('Z', '+03:00');
+const WHEN_DATE = WHEN.slice(0, 10);
 
 // Run the REAL WF09 -> WF08 path and return a production-shaped monitor_queue row.
 function queueRow(dataMode) {
@@ -26,7 +29,7 @@ function queueRow(dataMode) {
   const c9 = H.runCodeNode(r9, WF09, 'Set Avito Connector Config', [])[0].json;
   c9.fixture_mode = false; c9.data_mode = dataMode;
   r9.outputs['Set Avito Connector Config'] = [{ json: c9 }];
-  const listing = { listing_id: '4379480780', isDetail: true, title: 'Кредитный брокер', description: 'Поможем получить кредит после отказов, работаем по договору, оплата за результат.', url: 'https://www.avito.ru/moskva/predlozheniya_uslug/kreditnyy_broker_4379480780', price: 'от 30 000 ₽', location: 'Москва', seller_name: 'Финанс Групп', published_at: '2026-06-15', category: 'Предложения услуг', query: c9.query_plan[0].search_query, parentSourceUrl: c9.query_plan[0].source_search_url };
+  const listing = { listing_id: '4379480780', isDetail: true, title: 'Кредитный брокер', description: 'Поможем получить кредит после отказов, работаем по договору, оплата за результат.', url: 'https://www.avito.ru/moskva/predlozheniya_uslug/kreditnyy_broker_4379480780', price: 'от 30 000 ₽', location: 'Москва', seller_name: 'Финанс Групп', published_at: WHEN_DATE, category: 'Предложения услуг', query: c9.query_plan[0].search_query, parentSourceUrl: c9.query_plan[0].source_search_url };
   const norm = H.runCodeNode(r9, WF09, 'Normalize Avito Listings', [{ json: listing }]);
   H.inject(r9, 'Read market_record_registry', []);
   const raw = H.runCodeNode(r9, WF09, 'Build raw_market_records Rows', H.runCodeNode(r9, WF09, 'Deduplicate Listings', norm))[0].json;

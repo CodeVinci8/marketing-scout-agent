@@ -9,23 +9,27 @@ const { runChecks } = require('../tools/validate_workflow_manifest.js');
 
 const EXPECTED_CLOSURE = [
   '04_firecrawl_url_list_resilient.json', '08_touchpoint_analyzer.json',
-  '10_competitor_audience_intelligence_aggregator.json', '12_market_intelligence_report_builder.json',
+  '09_avito_classifieds_listing_connector.json', '10_competitor_audience_intelligence_aggregator.json',
+  '11_social_source_connector_foundation.json', '12_market_intelligence_report_builder.json',
   '16_source_quality_gate_health_score.json', '17_agent_settings_config.json', '18_telegram_agent_gateway.json',
   '19_request_planner.json', '20_agent_orchestrator.json', '21_deep_competitor_analysis.json',
   '22_conversation_control.json', '23_scheduled_source_monitor.json', '24_report_export_delivery.json',
-  '25_weekly_digest.json', '26_vk_public_community_collector.json'
+  '25_weekly_digest.json', '26_vk_public_community_collector.json', '27_competitor_discovery.json',
+  // STAGE-F-INTEGRATION: WF20 now calls the Claude analyst on the approved-run path, so WF28 is runtime, not an
+  // orphan callable.
+  '28_claude_analyst.json'
 ];
-const TEST_ONLY = ['00_healthcheck_manual_test.json', '01_google_sheets_append_row_test.json', '09_avito_classifieds_listing_connector.json', '15_live_source_run_logger.json'];
+const TEST_ONLY = ['00_healthcheck_manual_test.json', '01_google_sheets_append_row_test.json', '15_live_source_run_logger.json'];
 
 function freshManifest() { return JSON.parse(JSON.stringify(L.loadManifest())); }
 
-A.section('QA-001 — runtime closure (15) is the single source of truth');
+A.section('QA-001 — the runtime closure is the single source of truth');
 const closure = L.runtimeClosure().slice().sort();
-A.eq('runtime closure is exactly the 15 expected workflows', closure, EXPECTED_CLOSURE.slice().sort());
-A.eq('runtime-count == 15', L.deployment().runtime_workflow_count, 15);
-// 13 = 8 legacy collection/analysis edges + 5 new WF18 dispatch edges (WF19/20/21/22/24); DEC-161 rearchitecture.
-A.eq('binding edges == 13', L.bindingEdges().length, 13);
-A.eq('callable targets == 11', L.callableTargets().length, 11);
+A.eq('runtime closure is exactly the 19 expected workflows', closure, EXPECTED_CLOSURE.slice().sort());
+A.eq('runtime-count == 19', L.deployment().runtime_workflow_count, 19);
+// 18 = 13 (DEC-161) + Stage 5 fan-out (WF20 -> WF09 Avito / WF11 Telegram / WF26 VK) + Stage F (WF20 -> WF28).
+A.eq('binding edges == 18', L.bindingEdges().length, 18);
+A.eq('callable targets == 15', L.callableTargets().length, 15);
 A.eq('expected n8n version', L.expectedN8nVersion(), '2.23.3');
 for (const f of ['04_firecrawl_url_list_resilient.json', '08_touchpoint_analyzer.json', '10_competitor_audience_intelligence_aggregator.json', '12_market_intelligence_report_builder.json', '16_source_quality_gate_health_score.json'])
   A.ok('callable dependency in closure: ' + f, closure.indexOf(f) >= 0);
@@ -34,7 +38,7 @@ for (const f of TEST_ONLY) A.ok('test/manual workflow excluded from runtime: ' +
 A.section('QA-001 — import order is topological (every callable bound before its caller)');
 const order = L.importOrder();
 const posn = {}; order.forEach((f, i) => { posn[f] = i; });
-A.eq('import order is a permutation of the closure (15, unique)', order.length === 15 && new Set(order).size === 15, true);
+A.eq('import order is a permutation of the closure (19, unique)', order.length === 19 && new Set(order).size === 19, true);
 for (const e of L.bindingEdges())
   A.ok('dependency before caller: ' + e.target_wf + ' < ' + e.caller_wf, posn[e.target_workflow] < posn[e.caller_workflow]);
 
@@ -46,7 +50,7 @@ A.ok('weekly digest adds WF25', L.activationPlan({ weeklyDigest: true }).indexOf
 A.ok('WF25 is NOT in the always set', L.deployment().activation.always.indexOf('25_weekly_digest.json') < 0);
 const fullPlan = L.activationPlan({ monitoring: true, weeklyDigest: true });
 A.ok('no callable target ever appears in an activation plan', fullPlan.every(f => !callable.has(f)));
-A.eq('callable_trigger_count == 11', L.deployment().activation.callable_trigger_count, 11);
+A.eq('callable_trigger_count == 15', L.deployment().activation.callable_trigger_count, 15);
 
 A.section('manifest validator passes on the committed manifest');
 A.eq('runChecks(committed) has zero failures', runChecks(freshManifest()).failed, 0);
@@ -57,15 +61,15 @@ function rejects(label, mutate) {
   const r = runChecks(m);
   A.ok(label, r.failed > 0);
 }
-rejects('rejects a runtime closure of 14 (dropped workflow)', d => { d.runtime_closure = d.runtime_closure.slice(0, 14); d.runtime_workflow_count = 14; });
+rejects('rejects a runtime closure of 17 (dropped workflow)', d => { d.runtime_closure = d.runtime_closure.slice(0, 17); d.runtime_workflow_count = 17; });
 rejects('rejects a callable placed in activation.always', d => { d.activation.always = d.activation.always.concat(['04_firecrawl_url_list_resilient.json']); });
 rejects('rejects 7 binding edges (missing edge)', d => { d.binding_edges = d.binding_edges.slice(0, 7); d.binding_edge_count = 7; });
 rejects('rejects a binding edge with an unknown caller node', d => { d.binding_edges[0].caller_node = 'No Such Node'; });
-rejects('rejects a binding target outside the runtime closure', d => { d.binding_edges[0].target_workflow = '09_avito_classifieds_listing_connector.json'; });
-rejects('rejects an import order that is not a permutation of the closure', d => { d.import_order = d.import_order.slice(0, 14); });
+rejects('rejects a binding target outside the runtime closure', d => { d.binding_edges[0].target_workflow = '15_live_source_run_logger.json'; });
+rejects('rejects an import order that is not a permutation of the closure', d => { d.import_order = d.import_order.slice(0, 17); });
 rejects('rejects a test-only workflow injected into the runtime set', (d, m) => {
-  d.runtime_closure = d.runtime_closure.concat(['09_avito_classifieds_listing_connector.json']); d.runtime_workflow_count = 16;
-  const e = (m.workflows || []).find(w => w.file === '09_avito_classifieds_listing_connector.json'); if (e) e.deployment_role = 'manual_diagnostic';
+  d.runtime_closure = d.runtime_closure.concat(['15_live_source_run_logger.json']); d.runtime_workflow_count = 18;
+  const e = (m.workflows || []).find(w => w.file === '15_live_source_run_logger.json'); if (e) e.deployment_role = 'manual_diagnostic';
 });
 rejects('rejects callable_trigger_count != 6', d => { d.activation.callable_trigger_count = 5; });
 

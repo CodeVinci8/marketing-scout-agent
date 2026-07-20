@@ -83,7 +83,10 @@ H.inject(run3, 'Read market_record_registry', []);
 const dedup3 = H.runCodeNode(run3, wf, 'Deduplicate Listings', norm3.map(j => ({ json: j }))).map(i => i.json);
 A.eq('dedup marks it invalid', dedup3[0].dedup_status, 'invalid');
 const raw3 = H.runCodeNode(run3, wf, 'Build raw_market_records Rows', dedup3.map(j => ({ json: j }))).map(i => i.json);
-A.eq('ZERO raw_market_records rows written from the malformed item', raw3.length, 0);
+// AGENT-SUMMARY-001: an all-invalid batch now emits ONE ms_no_rows marker (routed away from the
+// append by 'Any Rows To Write?') so the ledger chain stays alive — still zero rows written.
+A.eq('ZERO real raw_market_records rows from the malformed item (marker only)', raw3.filter(j => j.ms_no_rows !== true).length, 0);
+A.eq('marker item keeps the summary/ledger chain alive', raw3.length === 1 && raw3[0].ms_no_rows, true);
 const reg3 = H.runCodeNode(run3, wf, 'Build market_record_registry Rows', dedup3.map(j => ({ json: j }))).map(i => i.json);
 A.eq('ZERO market_record_registry rows written', reg3.length, 0);
 const ar3 = H.runCodeNode(run3, wf, 'Build agent_requests Row', dedup3.map(j => ({ json: j })))[0].json;

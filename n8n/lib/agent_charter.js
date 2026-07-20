@@ -48,6 +48,12 @@ const CAPABILITIES = [
     platforms: ['website'], requires_approval: true, external_calls: true, requires_history: false
   },
   {
+    id: 'competitor_discovery', name: 'Поиск новых источников-конкурентов',
+    intent_examples: ['найди новых конкурентов по ПТС в Москве в Telegram', 'найди VK сообщества конкурентов', 'find new competitor channels'],
+    required_config: ['source_allowlist'], required_credentials: ['apify_or_firecrawl'],
+    platforms: ['website'], requires_approval: false, external_calls: true, requires_history: false
+  },
+  {
     id: 'deep_competitor_analysis', name: 'Глубокий анализ конкурентов',
     intent_examples: ['сравни первых двух подробнее', 'deep analysis of that competitor'],
     required_config: ['source_allowlist'], required_credentials: ['apify_or_firecrawl'],

@@ -14,12 +14,12 @@ function num(v, d) { const n = Number(v); return isFinite(n) ? n : d; }
 // The ONLY routable intent IDs (mirrors agent_charter capability IDs + the request-lifecycle callbacks). A
 // contract test asserts this set stays in sync with the capability registry.
 const INTENT_IDS = [
-  'competitor_search', 'deep_competitor_analysis', 'clarify_request', 'report_followup', 'generate_ideas',
+  'competitor_search', 'competitor_discovery', 'deep_competitor_analysis', 'clarify_request', 'report_followup', 'generate_ideas',
   'add_source', 'manage_sources', 'compare_periods', 'rerun_request', 'status', 'cancel', 'help', 'manage_memory',
   // reporting UX intents (operate on the last report / stored data)
   'export_report', 'show_chart', 'show_evidence', 'filter_report', 'refresh_sources', 'weekly_digest', 'manage_digest'
 ];
-const REQUESTED_ACTIONS = ['build_plan', 'answer_from_context', 'manage_sources', 'manage_memory', 'approve', 'reject', 'status', 'cancel', 'help', 'clarify'];
+const REQUESTED_ACTIONS = ['build_plan', 'discovery', 'answer_from_context', 'manage_sources', 'manage_memory', 'approve', 'reject', 'status', 'cancel', 'help', 'clarify'];
 const APPROVAL_INTENTS = ['competitor_search', 'deep_competitor_analysis', 'rerun_request', 'refresh_sources'];
 const CONTEXT_INTENTS = ['deep_competitor_analysis', 'report_followup', 'generate_ideas', 'compare_periods', 'add_source', 'manage_sources', 'rerun_request',
   'export_report', 'show_chart', 'show_evidence', 'filter_report'];
@@ -40,7 +40,10 @@ const TEXT_RULES = [
   ['compare_periods', /сравн[а-яё]*\s*(с\s*)?(прошл|предыдущ|раньше|last|previous|прошлым)|по сравнению с прошл/i],
   ['generate_ideas', /иде[ия]|придум|адаптир|adapt|what ideas|ideas (we|to)|контент-?план/i],
   ['add_source', /(добав|подключ|включ|add|track|мониторинг).{0,30}(сайт|канал|сообществ|источник|telegram|телеграм|vk|вконтакте|http|url)|добавь (их|это|этот)/i],
-  ['manage_sources', /(покажи|список|list|какие).{0,20}источник|tracked sources|пауз|останов|возобнов|resume|pause|убери источник|удали источник|проверь источник|поставь.{0,10}паузу/i],
+  ['manage_sources', /(покажи|список|list|какие).{0,20}источник|tracked sources|пауз|останов|возобнов|resume|pause|убери источник|удали источник|проверь источник|поставь.{0,10}паузу|проверь\s+отслеживаем|отслеживаем[а-яё]*\s+(сайт|канал|источник|сообществ)/i],
+  // MEMORY-INTENT-001: natural-language memory questions ("что ты помнишь", "покажи память", "какие предпочтения
+  // сохранены") must reach the memory view — NOT fall through to competitor clarification.
+  ['manage_memory', /что\s+(ты\s+)?(обо\s+мне\s+)?(помн|знаешь\s+обо\s+мне)|покажи\s*(мою\s*)?памят|мою\s*памят|очисти\s*памят|забудь\s+(всё|все)|какие\s*(мои\s*)?предпочтени|что\s*(у\s*тебя\s*)?сохранен|что\s*ты\s*запомнил/i],
   ['rerun_request', /запусти.{0,10}снова|повтор|сделай снова|again|rerun|перезапус|next week|на след/i],
   ['report_followup', /(что по|расскажи (о|про)|объясни|подробнее о|поясни|explain|what about|tell me about).{0,40}(конкурент|перв|втор|компан|first|second|them|их)/i],
   ['competitor_search', /найд|поищ|ищ[уи]|подбери|find|search|конкурент|competitor|рынок|market/i],
@@ -101,7 +104,8 @@ function buildIntent(intentId, conf, entities, ctx) {
   const requiresContext = CONTEXT_INTENTS.indexOf(intentId) >= 0;
   const requiresApproval = APPROVAL_INTENTS.indexOf(intentId) >= 0;
   let action = 'answer_from_context';
-  if (APPROVAL_INTENTS.indexOf(intentId) >= 0) action = 'build_plan';
+  if (intentId === 'competitor_discovery') action = 'discovery';
+  else if (APPROVAL_INTENTS.indexOf(intentId) >= 0) action = 'build_plan';
   else if (intentId === 'add_source' || intentId === 'manage_sources') action = 'manage_sources';
   else if (intentId === 'manage_memory') action = 'manage_memory';
   else if (intentId === 'status') action = 'status';
@@ -156,6 +160,38 @@ function deterministicIntent(parsed, ctx) {
   // "compare the first two (more deeply)" -> deep analysis using prior report
   if ((ent.competitor_refs.length && /подробн|глубж|детальн|deep|more detail/i.test(text))) {
     return Object.assign(buildIntent('deep_competitor_analysis', 0.9, ent, ctx), { from: 'rule' });
+  }
+  // URL-INTAKE-002 / E2-ROUTE-001: a named PUBLIC source is an explicit-source ANALYSIS request — route to
+  // competitor_search (the plan path extracts + targets exactly those sources), never source-add or discovery.
+  // Covers a pasted URL, t.me / vk.com, AND a BARE domain ("дай отчёт по autolombardn1.ru") — the latter used to
+  // fall through to a source-add clarification. A bare domain needs a real TLD so ordinary text never trips it.
+  const BARE_DOMAIN = /(^|[\s(«"'“„])([a-z0-9][a-z0-9-]{0,62}\.)+(ru|рф|com|net|org|io|su|by|kz|ua|info|biz|pro|site|online|store|shop|club|team|app)\b/i;
+  // E2-ROUTE-001 guard: a source-MANAGEMENT command ("убери/добавь/проверь/поставь на паузу/возобнови источник X",
+  // "добавь X в мониторинг", "убери отслеживаемый …") keeps its domain/URL but is NOT an analysis request — let it
+  // fall through to the manage_sources rule instead of being intercepted as single-source analysis.
+  const __isSourceOp = /(убери|удали|добав|подключ|включ|проверь|поставь|возобнов|пауз|останов|track|отслеж)[а-яё\s]{0,25}(источник|канал|сообществ|мониторинг)|в\s+мониторинг/i.test(text);
+  if (!__isSourceOp && (/https?:\/\/[^\s]+|(^|\s)t\.me\/[a-z0-9_]|(^|\s)vk\.com\/[a-z0-9_]/i.test(text) || BARE_DOMAIN.test(text))) {
+    return Object.assign(buildIntent('competitor_search', 0.9, ent, ctx), { from: 'rule' });
+  }
+  // DISCOVERY-003: a "find/поищи ..." request routes to DISCOVERY (new-source search via WF27) ONLY on an explicit
+  // discovery signal — "новых", "telegram-каналы/vk-сообщества/сайты конкурентов", an explicit platform ("в тг/vk"),
+  // or "найди и добавь". A PLAIN "найди конкурентов" stays competitor_search (the analysis/plan path). A pasted
+  // URL/@channel is explicit-source analysis (handled above); "проверь отслеживаемые …" is a tracked-source check.
+  const __discoverySignal =
+    /нов[а-яё]*\s+(источник|конкурент|канал|сообществ|сайт)/i.test(text)
+    || /(telegram|телеграм|(^|\s)tg(\s|$))\s*-?\s*канал/i.test(text)
+    || /(vk|вк|вконтакте)\s*-?\s*сообществ/i.test(text)
+    || /канал[а-яё]*\s+(кредитн|брокер|конкурент|мфо|займ)/i.test(text)
+    || /сообществ[а-яё]*\s+(кредитн|брокер|конкурент|по\s+кредит|по\s+займ)/i.test(text)
+    // DEFECT-8: a find-request naming "сайт(ы)" is website discovery — "сайты конкурентов", "кредитных брокеров
+    // сайты", "новые сайты …". A pasted URL is routed to analysis above; "проанализируй эти сайты" has no find-verb.
+    || /сайт[а-яё]*/i.test(text)
+    || /(в|во)\s+(тг|телеграм|telegram|вк|vk|вконтакте)(\s|$|,|\.)/i.test(text)
+    || /найди?\s*и\s*добав|добавь\s*найден/i.test(text);
+  if (/(найд|поищ|ищ[уи]|подбер|собери|find|search)/i.test(text)
+    && __discoverySignal
+    && !/отслеживаем|в\s+мониторинг[еа]|мои\s+источник|уже\s+добавл/i.test(text)) {
+    return Object.assign(buildIntent('competitor_discovery', 0.9, ent, ctx), { from: 'rule' });
   }
   for (const [intentId, rx] of TEXT_RULES) {
     if (rx.test(text)) {

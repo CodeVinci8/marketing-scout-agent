@@ -10,6 +10,19 @@ const WF13 = H.loadWorkflow('13_public_discussion_or_reviews_connector_foundatio
 const WF14 = H.loadWorkflow('14_public_lead_signal_triage.json');
 const FIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'lead_signals_fixtures.json'), 'utf8'));
 
+// Keep the fixture leads inside WF14's rolling 30-day recency window as wall-clock advances (freshness feeds the
+// lead score → high/medium band). Shift every published_at so the MOST RECENT fixture sits ~1 day before "now",
+// preserving the relative time structure between leads; an intentionally-stale lead stays proportionally stale.
+(function reanchorFixtureDates() {
+  const rows = (FIX && FIX.rows) || [];
+  const pick = (r) => (r && r.raw && r.raw.published_at != null) ? r.raw : (r || {});
+  let maxT = -Infinity;
+  rows.forEach(r => { const o = pick(r); const t = Date.parse(o.published_at); if (!isNaN(t)) maxT = Math.max(maxT, t); });
+  if (!isFinite(maxT)) return;
+  const delta = (Date.now() - 2 * 3600000) - maxT;
+  rows.forEach(r => { const o = pick(r); const t = Date.parse(o.published_at); if (!isNaN(t)) o.published_at = new Date(t + delta).toISOString().replace('Z', '+03:00'); });
+})();
+
 // ---- run the real WF13 fixture path -> array of raw_market_records json rows ------------------
 function runWf13Fixture() {
   const run = H.makeRun();

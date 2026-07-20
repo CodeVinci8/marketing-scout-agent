@@ -128,6 +128,11 @@ function ingressDecision(args) {
   const not_bot = !parsed.from_is_bot;
   const authorized = isAuthorized(parsed, cfg.telegram_allowed_user_ids);
   const idempotency_key = updateIdempotencyKey(parsed);
+  // IDEMP-003: persist the idempotency key ON the parsed record so every downstream consumer that shapes the
+  // agent_requests row and the agent_request_events claim event (which read p.idempotency_key) writes the SAME
+  // stable key. Without this the claim event stored an EMPTY key, so a re-delivered update_id was never detected
+  // as a duplicate (the Claim Idempotency `seen` set was always empty).
+  parsed.idempotency_key = idempotency_key;
 
   let stop_reason = '';
   if (!secret_ok) stop_reason = 'bad_secret';
@@ -196,9 +201,10 @@ function parseCallback(data) {
   return { action: m[1], agent_request_id: str(m[2]) };
 }
 function approvalKeyboard(agentRequestId) {
+  // UX-RU-001: plain-word buttons; the callback_data contract (approve:/reject:<id>) is load-bearing — keep it.
   return { inline_keyboard: [[
-    { text: '✅ Запустить', callback_data: 'approve:' + str(agentRequestId) },
-    { text: '✖ Отклонить', callback_data: 'reject:' + str(agentRequestId) }
+    { text: 'Запустить', callback_data: 'approve:' + str(agentRequestId) },
+    { text: 'Отклонить', callback_data: 'reject:' + str(agentRequestId) }
   ]] };
 }
 

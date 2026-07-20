@@ -2970,3 +2970,29 @@ no credentials, active=false, all positions, all required names, connection inte
 **Decisions made:** DEC-001 through DEC-005 (see `docs/DECISIONS.md`)
 
 **Next session should start with:** `core/hot/recent.md` → `docs/NEXT_ACTIONS.md`
+
+---
+
+## Session 34 — 2026-07-05 — Empty-report root cause fixed (ISO-ARID-001 + PENDING-MINORITY-001)
+
+**Branch:** `fix/stage4-live-final-acceptance` · **HEAD:** `63c1d87` (1 commit, not pushed) · `make test` ALL PASS · $0.
+
+**Problem:** approved agent runs delivered an empty "NO DATA" report (rows_after_filters=0) despite green executions.
+
+**Root causes (both in aggregation):**
+- **ISO-ARID-001** — WF10 run-isolation strict-compared `r.agent_request_id` (a column WF08 queue rows don't have)
+  → rows_after_isolation 28→0. Fixed to isolate by the request family in `source_run_id` via `runFamilyMatch`.
+- **PENDING-MINORITY-001** — one pending-review sibling triggered a run-level `pending_review` flag that excluded the
+  whole website source run, dropping confirmed mkbkfin.ru/lioncredit.ru records. Run-level gate now excludes only on
+  run-level `review_status=pending`; per-record gate still drops the individual pending row; fully-pending stays fail-closed.
+
+**Changed:** `n8n/lib/report_gate.js`, WF10 + WF12 embedded mirrors (byte-identical resync), `tests/test_report_gate.js`,
+`tests/test_wf10_source_health.js` (focused regressions).
+
+**Deployed + live-proven** (surgical jsCode splice import, cred bindings/ids/active preserved; zero recollection):
+WF10 exec 414 rows_after_isolation=12, rows_after_filters=11, competitor_profiles=3, market_angles=5; WF12 report
+content-ful (МКБК finance/LionCredit/Кредитный брокер Москва; sites+prices; angles; audience). Prod preserved:
+secure WF18 active, legacy WF18/WF23/WF25 inactive, webhook+menu healthy.
+
+**Next:** user-facing report cleanliness — WF12 `Build Deterministic Report` `report_markdown` leaks diagnostics
+(L405/409/410/430/434/444 + section enums); WF24 XLSX is report_markdown-independent so cleaning is safe.

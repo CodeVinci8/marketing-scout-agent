@@ -20,11 +20,17 @@ A.eq('default LLM summary OFF', def.enable_llm_summary, false);
 A.eq('default source allowlist = website only', def.source_allowlist.join(','), 'website');
 A.eq('blank env => config_complete false (missing id + users)', def.config_complete, false);
 A.ok('missing names surfaced', def.missing.indexOf('MS_SPREADSHEET_ID') >= 0 && def.missing.indexOf('MS_TELEGRAM_ALLOWED_USER_IDS') >= 0);
-const env = { MS_SPREADSHEET_ID: 'SHEET123', MS_TELEGRAM_ALLOWED_USER_IDS: '111,222', MS_LLM_BUDGET_USD: '0.75', MS_SOURCE_ALLOWLIST: 'website, avito' };
+const env = { MS_SPREADSHEET_ID: 'SHEET123', MS_TELEGRAM_ALLOWED_USER_IDS: '111,222', MS_LLM_BUDGET_USD: '0.75', MS_SOURCE_ALLOWLIST: 'website, avito, telegram' };
 const live = CFG.resolveConfig(env);
 A.eq('env spreadsheet id resolved once', live.spreadsheet_id, 'SHEET123');
 A.eq('env llm budget parsed', live.llm_budget_usd, 0.75);
-A.eq('env allowlist parsed', live.source_allowlist.join(','), 'website,avito');
+// AVITO-BLOCK-001: the allowlist is parsed from env, but Avito is stripped by default (operator-infra-blocked)
+// so the bot never offers/plans/runs it; MS_AVITO_ENABLED=true restores it once a Residential proxy exists.
+A.eq('env allowlist parsed, Avito stripped while blocked', live.source_allowlist.join(','), 'website,telegram');
+A.ok('Avito recorded as blocked source', (live.blocked_sources || []).indexOf('avito') >= 0);
+const liveAvito = CFG.resolveConfig(Object.assign({}, env, { MS_AVITO_ENABLED: 'true' }));
+A.eq('MS_AVITO_ENABLED=true re-enables Avito in allowlist', liveAvito.source_allowlist.join(','), 'website,avito,telegram');
+A.eq('re-enabled => no blocked sources', (liveAvito.blocked_sources || []).length, 0);
 A.eq('config_complete when id+users present', live.config_complete, true);
 A.ok('allowed user check', CFG.isAllowedUser(live, '111') && !CFG.isAllowedUser(live, '999'));
 A.ok('source allowed check', CFG.sourceAllowed(live, 'website') && !CFG.sourceAllowed(live, 'vk'));

@@ -28,6 +28,7 @@ function audit() {
     trigger_classes: {}, callable_targets: [], subworkflow_trigger_gaps: [],
     callable_contracts: {}, classification: {}, public_trigger_callables: [], errors: []
   };
+  report.exec_wf_typeversion_violations = [];
   const typeSet = {};
   for (const { file, wf } of all) {
     if (wf.active !== false) report.active_violations.push(file);
@@ -37,6 +38,11 @@ function audit() {
       if (!/^n8n-nodes-base\./.test(n.type)) report.unrecognized_types.push(file + ' :: ' + n.type);
       if (TRIGGER_TYPES.indexOf(n.type) >= 0) triggers.push(n.type.replace('n8n-nodes-base.', ''));
       if (n.type === 'n8n-nodes-base.executeWorkflow') {
+        // workflowInputs (defineBelow named-contract mapping) only exists at typeVersion >= 1.2; below that the
+        // running n8n silently ignores it and passes items through, breaking every named dispatch contract.
+        if (n.parameters && n.parameters.workflowInputs && !(Number(n.typeVersion) >= 1.2)) {
+          report.exec_wf_typeversion_violations.push(file + ' :: ' + n.name + ' (typeVersion=' + n.typeVersion + ' < 1.2 with workflowInputs)');
+        }
         const note = (n.parameters && n.parameters.workflowId && (n.parameters.workflowId.cachedResultName || n.parameters.workflowId.value)) || '';
         const idVal = (n.parameters && n.parameters.workflowId && n.parameters.workflowId.value) || '';
         if (idVal === 'PASTE_WORKFLOW_ID' || /PASTE_/.test(String(idVal))) report.placeholder_bindings.push({ workflow: file, node: n.name, target_hint: note });
@@ -87,7 +93,8 @@ function audit() {
     .concat(report.unrecognized_types.map(t => 'unrecognized node type: ' + t))
     .concat(report.unresolved_refs.map(r => 'unresolved sub-workflow ref: ' + r.workflow + ' :: ' + r.node + ' (' + r.hint + ')'))
     .concat(report.subworkflow_trigger_gaps.map(g => 'callable target missing Execute Sub-workflow Trigger: ' + g.target + ' (has: ' + g.has.join(',') + ')'))
-    .concat(report.public_trigger_callables.map(f => 'callable sub-workflow exposed via public webhook: ' + f));
+    .concat(report.public_trigger_callables.map(f => 'callable sub-workflow exposed via public webhook: ' + f))
+    .concat(report.exec_wf_typeversion_violations.map(v => 'executeWorkflow named-input mapping silently dropped (needs typeVersion>=1.2): ' + v));
   return report;
 }
 

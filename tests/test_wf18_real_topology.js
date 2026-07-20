@@ -70,6 +70,10 @@ A.eq('5c. duplicate branch reaches ZERO Telegram business sends', nodeIn(WF18, n
 A.ok('webhook responds fast: Telegram Webhook -> Respond 200 -> Ingress Security Gate', edges(WF18).some(e => e.from === 'Telegram Webhook' && e.to === 'Respond 200') && edges(WF18).some(e => e.from === 'Respond 200' && e.to === 'Ingress Security Gate'));
 A.ok('webhook configured for responseNode (explicit Respond) ', (nodeByName(WF18, 'Telegram Webhook').parameters || {}).responseMode === 'responseNode');
 A.eq('Respond 200 is reachable before any Sheets write (fast ack)', nodeIn(WF18, reachable(WF18, 'Telegram Webhook')).filter(isSheetsWrite).length >= 0 && nodeByName(WF18, 'Respond 200').type, 'n8n-nodes-base.respondToWebhook');
+// WEBHOOK-PATH-001: without a node-level webhookId, n8n 2.x registers the FALLBACK dynamic path
+// "<workflowId>/<node name>/<path>" (live-observed in webhook_entity) and /webhook/ms-telegram-agent 404s.
+A.ok('webhook node carries a stable webhookId (canonical /webhook/ms-telegram-agent path)', /^[0-9a-f-]{36}$/.test(String(nodeByName(WF18, 'Telegram Webhook').webhookId || '')));
+A.eq('webhook path stays ms-telegram-agent', (nodeByName(WF18, 'Telegram Webhook').parameters || {}).path, 'ms-telegram-agent');
 
 A.section('§19.6-13 — real executeWorkflow dispatcher + callable children + resolvable bindings');
 const execNodes = (WF18.nodes || []).filter(isExecWf);
@@ -89,10 +93,11 @@ A.ok('9. approval -> WF20 orchestrator path exists', !!nodeByName(WF18, 'Run WF2
 A.ok('10. deep approval -> WF21 path exists', !!nodeByName(WF18, 'Run WF21 (Deep Analysis)'));
 A.ok('11. control/memory/source/cancel -> WF22 path exists', !!nodeByName(WF18, 'Run WF22 (Control)'));
 A.ok('12. report operations -> WF24 path exists', !!nodeByName(WF18, 'Run WF24 (Reporting)'));
+A.ok('12b. discovery -> WF27 path exists', !!nodeByName(WF18, 'Run WF27 (Discovery)'));
 // 13: every WF18 executeWorkflow is a declared manifest binding edge (resolvable post-import, not a silent gap)
 const manifest = require('../config/workflow_manifest.json');
 const wf18Edges = manifest.deployment.binding_edges.filter(e => e.caller_workflow === '18_telegram_agent_gateway.json');
-A.eq('13. all 5 WF18 dispatch edges are declared in the manifest (resolvable)', wf18Edges.length, 5);
+A.eq('13. all 6 WF18 dispatch edges are declared in the manifest (resolvable)', wf18Edges.length, 6);
 
 A.section('§19.14-16 — durable plan before approval + real approval identifiers + callback ack');
 const planAppend = nodeByName(WF18, 'Append execution_plans');
@@ -101,7 +106,7 @@ const fromWF19 = reachable(WF18, 'Run WF19 (Planner)');
 A.ok('14. plan is persisted on the WF19 result path (after planner, before approval send)', fromWF19.has('Append execution_plans'));
 A.ok('14. awaiting_approval state is set only AFTER the plan append', reachable(WF18, 'Append execution_plans').has('Shape Awaiting State'));
 const planRes = nodeByName(WF18, 'Handle Plan Result');
-A.ok('15. approval keyboard is built from the REAL agent_request_id', /approvalKeyboard\(req\.agent_request_id\)/.test(planRes.parameters.jsCode));
+A.ok('15. approval keyboard is built from the REAL (or B4 canonical-reused) agent_request_id', /approvalKeyboard\(__arid\)/.test(planRes.parameters.jsCode) && /__arid\s*=\s*String\(req\.agent_request_id\)/.test(planRes.parameters.jsCode));
 A.ok('16. callback acknowledgement (answerCallbackQuery) node exists', (WF18.nodes || []).some(isTelegramAnswer));
 
 A.section('§19.17 — reject/cancel route to control (WF22) and make zero PAID external calls');
@@ -113,7 +118,10 @@ A.section('§19.18 — every Sheets write is fed by an explicit shape/code node 
 const writes = (WF18.nodes || []).filter(isSheetsWrite);
 A.ok('18. WF18 has multiple shaped Sheets writes', writes.length >= 5);
 for (const w of writes) {
-  const preds = predecessors(WF18, w.name).map(n => nodeByName(WF18, n));
+  let preds = predecessors(WF18, w.name).map(n => nodeByName(WF18, n));
+  // A pure IF gate that only ROUTES a single already-shaped item (e.g. B4 "Persist New Plan?") is transparent for
+  // this check — traverse through it to its own feeder, which must be the explicit shape/code node.
+  preds = preds.reduce((acc, p) => acc.concat((p && p.type === 'n8n-nodes-base.if') ? predecessors(WF18, p.name).map(n => nodeByName(WF18, n)) : [p]), []);
   A.ok('18. ' + w.name + ' is fed by a Code/shape node', preds.length > 0 && preds.every(p => p && p.type === 'n8n-nodes-base.code'));
 }
 
@@ -126,8 +134,9 @@ A.section('§19.20 — Telegram send ownership is unambiguous (children own thei
 for (const nm of ['Run WF20 (Orchestrator)', 'Run WF21 (Deep Analysis)', 'Run WF22 (Control)', 'Run WF24 (Reporting)']) {
   A.eq('20. ' + nm + ' branch has no WF18 Telegram send (child owns delivery)', nodeIn(WF18, reachable(WF18, nm)).filter(isTelegramSend).length, 0);
 }
-// WF18 only sends for: plan approval (WF19 result), and the local reply (help/clarify/answer-from-context)
-A.ok('20. WF18 owns exactly the plan-approval and local-reply sends', (WF18.nodes || []).filter(isTelegramSend).map(n => n.name).sort().join(',') === 'Send Plan Reply,Send Telegram Reply');
+// WF18 only sends for: plan approval (WF19 result), the local reply (help/clarify/answer-from-context), and the
+// §8 FAST-LANE-001 lanes (static /start,/help,who-am-I + /status render + /cancel ack) — all WF18-owned replies.
+A.ok('20. WF18 owns exactly the plan-approval, local-reply and §8 lane sends', (WF18.nodes || []).filter(isTelegramSend).map(n => n.name).sort().join(',') === 'Send Command Reply,Send Fast Reply,Send Plan Reply,Send Telegram Reply');
 
 // ============================================================================ §20 BEHAVIORAL / NEGATIVE PATHS
 A.section('§20 — fail-closed behavioral matrix (ingress decisions, every reject reveals nothing)');

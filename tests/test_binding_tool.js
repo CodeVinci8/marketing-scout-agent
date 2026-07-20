@@ -32,11 +32,11 @@ function readWf(dir, file) { return JSON.parse(fs.readFileSync(path.join(dir, fi
 const CLOSURE = L.runtimeClosure();
 const EDGES = L.bindingEdges();
 
-A.section('QA-002 — first bind resolves all 13 edges to the exact target id, zero placeholders');
+A.section('QA-002 — first bind resolves all 17 edges to the exact target id, zero placeholders');
 let env = exportDir(CLOSURE);
 const r1 = B.bindDir(env.dir, { write: true });
-A.eq('bindings_expected', r1.bindings_expected, 13);
-A.eq('bindings_resolved', r1.bindings_resolved, 13);
+A.eq('bindings_expected', r1.bindings_expected, 18);
+A.eq('bindings_resolved', r1.bindings_resolved, 18);
 A.eq('placeholders_remaining', r1.placeholders_remaining, 0);
 A.eq('missing_targets', r1.missing_targets, 0);
 A.eq('ambiguous_targets', r1.ambiguous_targets, 0);
@@ -82,7 +82,7 @@ A.section('SECURITY-005 / Phase 7 — the binding report carries FINGERPRINTS on
 A.section('QA-009 — second run is a no-op (idempotent) and verify mode passes');
 const r2 = B.bindDir(env.dir, { write: true });
 A.eq('idempotent: nothing rewritten on second run', r2.files_written.length, 0);
-A.eq('idempotent: still 13 resolved', r2.bindings_resolved, 13);
+A.eq('idempotent: still 18 resolved', r2.bindings_resolved, 18);
 const rv = B.bindDir(env.dir, { verify: true });
 A.eq('verify mode: ok', rv.ok, true);
 A.eq('verify mode: zero placeholders', rv.placeholders_remaining, 0);
@@ -114,6 +114,45 @@ const rtype = B.bindDir(env.dir, { verify: true });
 A.ok('wrong-type caller node produces an error', rtype.errors.some(e => /wrong type/.test(e)));
 A.eq('wrong-type makes report not-ok', rtype.ok, false);
 rm(env.dir);
+
+A.section('ACTIVATION-POLICY-001 — active set is verified against the manifest policy, not blanket inactivity');
+{
+  delete process.env.MS_MONITORING_ENABLED; delete process.env.MS_WEEKLY_DIGEST_ENABLED;
+  const CALLABLE = L.callableTargets();
+  const setActive = (dir, file, active) => {
+    const wf = readWf(dir, file); wf.active = active;
+    fs.writeFileSync(path.join(dir, file), JSON.stringify(wf, null, 2) + '\n');
+  };
+  // (a) post-activation production shape: WF18 + every callable target active -> ok
+  let e1 = exportDir(CLOSURE);
+  B.bindDir(e1.dir, { write: true });
+  setActive(e1.dir, '18_telegram_agent_gateway.json', true);
+  for (const f of CALLABLE) setActive(e1.dir, f, true);
+  const ra = B.bindDir(e1.dir, { verify: true });
+  A.eq('WF18 + published callables: activation_policy_ok', ra.activation_policy_ok, true);
+  A.eq('WF18 + published callables: report ok', ra.ok, true);
+  A.eq('active_count = 1 gateway + all callables', ra.active_count, 1 + CALLABLE.length);
+  A.eq('all_inactive is informational-false, not a failure', ra.all_inactive, false);
+  // (b) DISPATCH-PUBLISH-001 invariant: gateway active while a dispatch target is unpublished -> FAIL
+  setActive(e1.dir, '19_request_planner.json', false);
+  const rb = B.bindDir(e1.dir, { verify: true });
+  A.eq('unpublished target detected', rb.unpublished_dispatch_targets, ['19_request_planner.json']);
+  A.eq('gateway-active + unpublished target makes report not-ok', rb.ok, false);
+  // (c) a workflow OUTSIDE the policy active (WF23 with monitoring off) -> FAIL
+  setActive(e1.dir, '19_request_planner.json', true);
+  setActive(e1.dir, '23_scheduled_source_monitor.json', true);
+  const rc2 = B.bindDir(e1.dir, { verify: true });
+  A.eq('unexpected active workflow detected', rc2.unexpected_active.length, 1);
+  A.eq('unexpected active makes report not-ok', rc2.ok, false);
+  rm(e1.dir);
+  // (d) pre-activation state (everything inactive) still passes vacuously
+  let e2 = exportDir(CLOSURE);
+  B.bindDir(e2.dir, { write: true });
+  const rd2 = B.bindDir(e2.dir, { verify: true });
+  A.eq('all-inactive still ok (apply/disposable phase)', rd2.ok, true);
+  A.eq('no unpublished-target complaint when nothing is active', rd2.unpublished_dispatch_targets.length, 0);
+  rm(e2.dir);
+}
 
 A.section('fail-closed: a renamed/absent caller node is rejected (no positional fallback)');
 env = exportDir(CLOSURE);

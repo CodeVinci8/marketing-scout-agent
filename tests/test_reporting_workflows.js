@@ -79,7 +79,9 @@ function runExport(scopeIn, outbox, bundles) {
 const cur = F.currentReport();
 const e1 = runExport({ owner_user_id: cur.owner_user_id, agent_request_id: cur.agent_request_id, report_id: cur.report_id, action: 'export' }, [], [F.unrelatedReport(), cur]);
 A.eq('CSV scoped to the 3 competitors/offers', e1.exp.json.csv_row_count, 3);
-A.ok('real XLSX produced (>0 bytes, 8 sheets)', e1.exp.json.xlsx_size > 0 && e1.exp.json.xlsx_sheets.length === 8);
+// XLSX-OMIT-EMPTY-001: WF24 exports with omit_empty, so the empty "Changes" sheet is dropped (7 populated sheets).
+A.ok('real XLSX produced (>0 bytes)', e1.exp.json.xlsx_size > 0);
+A.ok('populated sheets present, empty Changes omitted', ['Сводка', 'Конкуренты', 'Офферы и цены', 'Доказательства', 'Технические данные'].every(n => e1.exp.json.xlsx_sheets.indexOf(n) >= 0) && e1.exp.json.xlsx_sheets.indexOf('Изменения') < 0);
 A.ok('binary document attachment present', !!(e1.exp.binary && e1.exp.binary.attachment && e1.exp.binary.attachment.data));
 A.ok('binary chart attachment present', !!(e1.exp.binary && e1.exp.binary.chart));
 A.eq('zero external calls', e1.exp.json.external_calls, 0);
