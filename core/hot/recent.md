@@ -4,6 +4,44 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 
 ---
 
+## Session: 2026-07-20 (session 65) — post-migration: COST-REUSE-002 honest deep-analysis reuse estimate (deployed, verified)
+
+First session on the NEW VPS (62.60.248.184). Verified authoritative production: git `main` @ **05490a2** clean,
+origin==local, tag `migration-pre-vps-2026-07`; n8n `n8nio/n8n:2.23.3` healthz ok; **17 active / 90 total**;
+webhook-proxy + ngrok services active; disk 15G free. Migration is DONE — not re-verified beyond this.
+
+**COST-REUSE-002 (Stage-F residual-risk #1) — CLOSED (code + tests + regression + deploy + verify).** The approval
+estimate promised «AI-анализ: $0 (будет переиспользован сохранённый анализ)» whenever the source SNAPSHOT was
+reused. Root cause: `cost_model.sourceReusePreflight` set `expect_analysis_reuse` from source reuse alone
+(`reused>=total && claudeOn`); `projectRequestCost` zeroed the deep-analysis cost. But the analysis cache key
+(`findReusableAnalysis`: owner+analysis_type+evidence_hash+schema+prompt+model, non-fallback row must EXIST) still
+MISSES on the same evidence under a different report mode/model or a never-analysed snapshot (already live-proven:
+exec 1004 same-hash change_report → fresh paid call). Fix: source reuse now yields `analysis_reuse_possible` only;
+`expect_analysis_reuse` is true **only** with explicit `opts.analysis_reuse_confirmed`. WF19 can't cheaply confirm
+a hit at approval time, so it renders the honest ceiling «• AI-анализ: ~$0.07–0.11 (спишется, если готового
+анализа под этот отчёт ещё нет)» — never a guaranteed $0. Collection reuse ($0 collection) unchanged. Confirmed-hit
+path still renders $0.
+
+**Tests/deploy:** `tests/test_approval_ux.js` → honest contract (80). Regenerated stage-4 workflows (drift green:
+stage4-workflows 144, cost-model 87). `make test` ALL SUITES PASS ($0). New **canonical** deploy tool
+`tools/deploy_workflow_jscode.js` (replaces the lost scratchpad `deploy_sync.js`; syncs jsCode + executeWorkflow
+`workflowInputs`, preserves ids/creds/connections/`workflowId`/active/webhookId, **aborts on structural mismatch**).
+Deployed **WF19 only** (`d0ffU5QxNb8zpwKW`) backup-first (`scratchpad/backup/wf19_prod_20260720_210727.json`):
+exactly 1 node changed (`Build Approval Message`, +1892 B), fresh-export byte-verified, 17 active / 90 total, health
+ok, no restart (callable). WF18/20/21/22/26 embeds regenerated + committed but NOT deployed — behavior-identical on
+their paths (WF18 estimate render is a preflight-less fallback; WF20 uses `actualRequestCost`), self-heal on next
+functional deploy. NOT a fault.
+
+**Live confirmation** deferred to the §9 live-role matrix (every real scenario surfaces the approval estimate); no
+disposable exec created (no clean CLI delete → would break the 90-total invariant), no unprompted Telegram sent.
+
+**Next (this mission, in order):** (1) canonical STRUCTURAL workflow deploy tool (jsCode-only is done; node-add/rewire
+still needs a canonical in-repo tool — scratchpad `graft_topology.js` is gone); (2) Telegram/VK social evidence must
+reach source analysis even without a full competitor profile (Stage-E/G defer); (3) §9 live-role matrix; (4) §10 ≥5
+fresh analyses metrics; (5) formal Stage F gate → then Stage F.5 → Stage G. Do NOT start Stage H/I.
+
+---
+
 ## Session: 2026-07-19 (session 64) — REPORT-TRUTH B+C+D closed, deployed, live-proven
 
 Branch `fix/stage4-live-final-acceptance`, HEAD **b2e39ba** (D closure code), NOT pushed. Prod healthy, **17

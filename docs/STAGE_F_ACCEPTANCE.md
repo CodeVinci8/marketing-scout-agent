@@ -138,3 +138,27 @@ Live repair stats so far (WF28 + session-52 harness): 2 analyses, **0 JSON-synta
 2. §8 typed source outcomes for TG/VK connectors (website done).
 3. §9 live roles: TG-channel, VK-community, 3-source synthesis, WF27 enrichment, public-lead interpretation, failure matrix (blocked carmoney.ru, timeout, repair-fail→fallback, context-too-long, owner-isolation negative), terminal-plan idempotency, callback idempotency.
 4. §10 ≥5 fresh analyses → repair/latency/cost metrics.
+
+## Session 65 (2026-07-20) — post-migration: COST-REUSE-002 honest deep-analysis reuse estimate (deployed, verified)
+
+Post-VPS-migration production is authoritative (NEW VPS 62.60.248.184, n8n 2.23.3, 17 active / 90 total, health ok,
+Telegram webhook + proxy + ngrok active). git `main` @ `05490a2` clean == origin at session start. The three
+post-session-64 merged items are re-confirmed COMPLETE here (they were closed on the merged branch, tracker was
+stale): **PHASE-2 approval UX** (no public $8 cap, reuse-aware estimate, callback idempotency, neutral wording —
+commits 7f07764/9e7bc7a) and **§8 typed source outcomes for Telegram+VK** (commits f97c563/9b49074/48e1133,
+live-proven telegram exec 1087).
+
+| Item | Evidence |
+|---|---|
+| **COST-REUSE-002 — a reused source no longer promises a guaranteed $0 deep analysis** | Root cause: `cost_model.sourceReusePreflight` set `expect_analysis_reuse` from source-snapshot reuse alone (`reused >= total && claudeOn`), and `projectRequestCost` then zeroed the deep-analysis cost, so the approval rendered «AI-анализ: $0 (будет переиспользован сохранённый анализ)». But the analysis cache key (`llm_telemetry.findReusableAnalysis`) is owner+analysis_type+evidence_hash+schema+prompt+model and needs a non-fallback row to EXIST — the same evidence still MISSES under a different report mode/model or a never-analysed snapshot (already live-proven: exec 1004 same-hash `change_report` → fresh paid call). Fix: source reuse now yields `analysis_reuse_possible` only; `expect_analysis_reuse` is set true **only** when the caller passes explicit `opts.analysis_reuse_confirmed` (a confirmed cache hit). At approval time WF19 cannot cheaply confirm the hit (it needs the built evidence package + hash + an `llm_analysis_results` read), so it renders the honest ceiling: «• AI-анализ: ~$0.07–0.11 (спишется, если готового анализа под этот отчёт ещё нет)», never a $0 promise. Collection reuse ($0 collection for a reused snapshot) is unchanged and correct. The confirmed-hit path still renders $0 for a caller that can prove it. |
+| Tests | `tests/test_approval_ux.js` updated to the honest contract (asserts no `AI-анализ: $0` on an unconfirmed reuse, quotes the cost + spend-condition, and that a `analysis_reuse_confirmed` caller still gets $0) → **80 checks**. Stage-4 workflows regenerated (embed drift) → `test_stage4_workflows.js` **144**, `test_cost_model.js` **87**. `make test` **ALL SUITES PASS (external calls=0, live cost=$0)**. |
+| Deploy | New **canonical** surgical deploy tool `tools/deploy_workflow_jscode.js` (replaces the lost scratchpad `deploy_sync.js`): syncs Code-node `jsCode` + executeWorkflow `workflowInputs` from repo into a live prod export, preserving all installation-local ids/credentials/connections/`workflowId`/active/webhookId; **aborts on any structural node-set or type mismatch** (that structural case is the still-open canonical-deploy item). Deployed **WF19 only** (id `d0ffU5QxNb8zpwKW`) backup-first (backup `scratchpad/backup/wf19_prod_20260720_210727.json`): exactly one node changed (`Build Approval Message`, +1892 B), fresh-export verified to byte-contain the honest hedge + confirmation gate, ids/creds/connections preserved, **17 active / 90 total**, health ok. WF19 is callable → executeWorkflow loads it from the DB at call time, so the change is live for the WF18→WF19 path with no restart. |
+| Benign drift (documented, self-healing) | The regenerated embeds in WF18/20/21/22/26 were committed (required for the drift test) but NOT deployed: their changed regions are the whole-file embed of `cost_model`/`plan_render_ru`, and the changed FUNCTIONS are not exercised on those workflows' paths (WF18 'Handle Plan Result' renders the estimate only as a **preflight-less fallback** = byte-identical before/after; WF20 uses `actualRequestCost`, unchanged). They sync automatically on their next functional deploy. NOT a fault. |
+| Live confirmation | Deferred to the §9 live-role matrix, where every real scenario surfaces the approval estimate — a standalone exec of this deterministic, byte-verified rendering path was not created (no clean CLI delete exists; a disposable would break the 90-total invariant). No unprompted Telegram message was sent. |
+
+### Still open for the Stage F gate (in order)
+1. **Canonical STRUCTURAL workflow deploy** — `tools/deploy_workflow_jscode.js` covers jsCode-only changes; adding/rewiring nodes still lacks a canonical in-repo tool (prior sessions used scratchpad `graft_topology.js`, now gone). Needed before any future structural workflow change.
+2. **Telegram/VK social evidence must reach source analysis even when no full competitor profile exists** (the standing Stage-E/G defer: social posts collect fine but 0 become competitor-profile records downstream).
+3. §9 live roles: TG-channel, VK-community, 3-source synthesis, WF27 enrichment, public-lead interpretation, failure matrix, terminal-plan idempotency, callback idempotency.
+4. §10 ≥5 fresh analyses → repair/latency/cost metrics.
+5. Formal Stage F gate.

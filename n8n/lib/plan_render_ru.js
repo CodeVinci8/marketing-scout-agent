@@ -181,8 +181,15 @@ function planApprovalMessageRu(plan, opts) {
     // run, and must not bill for it. OFF -> say it is off, with no AI cost in the total.
     var deepUsd = ruNum(bd.claude_analysis_usd, 0) + ruNum(bd.claude_usd, 0);
     var summaryUsd = ruNum(bd.summary_ai_usd, 0);
+    var reuseAnPossible = cost.reuse_analysis_possible === true;
     if (reuseAn) {
       lines.push('• AI-анализ: $0 (будет переиспользован сохранённый анализ)');
+    } else if (reuseAnPossible && cost.llm_enabled && deepUsd > 0) {
+      // COST-REUSE-002 (§4, residual-risk #1): the source data is reused, but a saved AI-analysis is NOT
+      // guaranteed to match (a different report type/model, or a snapshot never analysed, still costs a fresh
+      // call). Quote the real cost as the ceiling and state the exact condition for the charge — never promise a
+      // $0 the run may not deliver.
+      lines.push('• AI-анализ: ' + band(deepUsd) + ' (спишется, если готового анализа под этот отчёт ещё нет)');
     } else if (cost.llm_enabled && deepUsd > 0) {
       lines.push('• AI-анализ: ' + band(deepUsd));
     } else if (cost.llm_requested && cost.llm_auth_ok === false) {
