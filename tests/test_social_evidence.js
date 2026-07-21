@@ -97,6 +97,19 @@ A.section('post-level relevance — unrelated posts are never evidence');
   A.eq('channel/system noise is dropped', sys.evidence.length, 0);
   A.eq('counted as system_event', sys.dropped.system_event, 1);
 
+  // WIP3-C: general finance vocabulary is insufficient — off-domain macro/bond/rating news that only mentions
+  // «кредитный риск»/«долг» is not primary lending evidence (regression: banksta British Steel / Oracle CDS).
+  const bonds = SE.buildSocialEvidence([tgRow({ text_context: 'Обзор рынка облигаций: растут кредитные риски эмитентов, расширяются спреды' })], CTX, {});
+  A.eq('off-domain bond/credit-risk news is not primary evidence', bonds.evidence.length, 0);
+  A.eq('counted as low_relevance (not off_topic)', bonds.dropped.low_relevance, 1);
+  const steel = SE.buildSocialEvidence([tgRow({ text_context: 'British Steel: национализация на фоне роста кредитных рисков бюджета' })], CTX, {});
+  A.eq('off-domain macro news with a finance keyword is dropped', steel.evidence.length, 0);
+  // a genuine lending post with the same broad service still passes as primary
+  const loan = SE.buildSocialEvidence([tgRow({ text_context: 'Взять потребительский кредит наличными — оформить заявку онлайн, ставка от 5%' })], CTX, {});
+  A.eq('a genuine lending post remains primary evidence', loan.evidence.length, 1);
+  A.eq('seNichePrimary keeps a specific lending service', SE.seNichePrimary('Займ под ПТС, оформить онлайн', 'pts_loan'), true);
+  A.eq('seNichePrimary drops broad catch-all off-domain', SE.seNichePrimary('доходности облигаций и кредитные риски', 'consumer_credit'), false);
+
   const empty = SE.buildSocialEvidence([tgRow({ text_context: '', comment_text: '' })], CTX, {});
   A.eq('a post with no text is dropped', empty.dropped.no_text, 1);
   const nourl = SE.buildSocialEvidence([tgRow({ post_url: '', source_url: '', profile_url: '' })], CTX, {});

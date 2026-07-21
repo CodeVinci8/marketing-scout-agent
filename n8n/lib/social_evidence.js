@@ -59,6 +59,19 @@ function seDeriveService(text) {
   if (/кредит|займ/.test(t)) return 'consumer_credit';
   return 'unknown';
 }
+// --- WIP3-C: niche-primary gate on top of the drift-asserted seDeriveService (semantic_core is NOT modified) ---
+// A post that matched ONLY the broad кредит/займ catch-all is admitted as PRIMARY lending evidence only when it is
+// actually about lending — not macro/bond/sovereign/rating news that merely mentions «кредитный риск»/«долг».
+// (regression: banksta British Steel / Oracle CDS / generic bond credit-risk must not be primary evidence.)
+var SE_OFFDOMAIN = /облигац|евробонд|\bбонд|\bcds\b|дефолтн[а-яё]* своп|кредитн[а-яё]* дефолтн|суверен|эмитент|\bспред|доходност[ьи]|национализац|british steel|oracle|индекс[а-яё]*\s+(?:мосбирж|ртс|s&p|dow)|котировк|акци[йяе]/;
+var SE_OFFER_SIGNAL = /оформ|заявк|ставка от|под залог|выда[её]м|выдач|получи(?:те|ть)? деньг|одобрени|деньги за|займ под|кредит под|рассрочк|наши услови|подать заявку/;
+function seNichePrimary(text, service) {
+  if (service !== 'consumer_credit') return true;           // specific lending services are always primary
+  var t = seLow(text);
+  if (SE_OFFER_SIGNAL.test(t)) return true;                 // a concrete loan-offer signal keeps it primary
+  if (SE_OFFDOMAIN.test(t)) return false;                   // otherwise off-domain macro/bond/rating news → not primary
+  return true;
+}
 
 // Channel/system noise ("канал переименован", pinned-message notices …) is never market evidence.
 function seIsSystemEvent(text) {
@@ -130,7 +143,7 @@ function buildSocialEvidence(rows, ctx, opts) {
   var includedRuns = Array.isArray(ctx.included_source_runs) ? ctx.included_source_runs.filter(Boolean) : [];
 
   var dropped = { foreign_request: 0, excluded_source_run: 0, not_social: 0, no_url: 0, no_text: 0,
-    system_event: 0, off_topic: 0, duplicate: 0, over_cap: 0 };
+    system_event: 0, off_topic: 0, low_relevance: 0, duplicate: 0, over_cap: 0 };
   var perSource = {};
   var seenPost = {};
   var out = [];
@@ -164,6 +177,8 @@ function buildSocialEvidence(rows, ctx, opts) {
     if (seIsSystemEvent(rawText)) { dropped.system_event++; return; }
     var service = seDeriveService(rawText);
     if (service === 'unknown') { dropped.off_topic++; return; }
+    // WIP3-C: general finance vocabulary is insufficient — off-domain macro/bond/rating news is not primary evidence.
+    if (!seNichePrimary(rawText, service)) { dropped.low_relevance++; return; }
 
     var excerpt = seClean(rawText, maxChars);
     if (!excerpt) { dropped.no_text++; return; }
@@ -219,6 +234,6 @@ function buildSocialEvidence(rows, ctx, opts) {
 }
 
 module.exports = {
-  buildSocialEvidence, seDeriveService, seIsSystemEvent, seSourceKeyOf, seFamMatch, seClean,
+  buildSocialEvidence, seDeriveService, seNichePrimary, seIsSystemEvent, seSourceKeyOf, seFamMatch, seClean,
   SE_SOCIAL_PLATFORMS
 };
