@@ -49,6 +49,16 @@ A.section('claim validation — market-wide claims from one source become scoped
     A.eq('demoted to inference: ' + t.slice(0, 30), v.item.kind, 'inference');
     A.ok('scoped as hypothesis: ' + t.slice(0, 30), /^Гипотеза/.test(v.item.text_ru));
   });
+  // WIP3-E: a single-source market superlative gets an EXPLICIT scope caveat in the user-facing text (not only a
+  // hidden audit) — «без сравнения с другими источниками нельзя подтвердить максимум/лидерство на рынке».
+  const ltv = CV.cvValidateItem({ kind: 'fact', text_ru: 'Максимальный LTV среди автоломбардов — до 90% от стоимости', dimension: 'positioning', evidence_ids: ['ev_1'] }, ctx);
+  A.eq('LTV superlative demoted', ltv.item.kind, 'inference');
+  A.ok('LTV carries the scope caveat', /без сравнения с другими источниками/i.test(ltv.item.text_ru));
+  A.ok('LTV keeps the observed value (до 90%)', /90%/.test(ltv.item.text_ru));
+  A.ok('market_claim_scoped reason recorded', ltv.reasons.indexOf('market_claim_scoped') >= 0);
+  // idempotent: re-validating the scoped text does not append the caveat twice
+  const twice = CV.cvValidateItem({ kind: 'inference', text_ru: ltv.item.text_ru, dimension: 'positioning', evidence_ids: ['ev_1'] }, ctx);
+  A.eq('scope caveat not duplicated', (twice.item.text_ru.match(/без сравнения с другими источниками/gi) || []).length, 1);
   // Idempotency: already-scoped text is never re-prefixed.
   const once = CV.cvValidateItem({ kind: 'inference', text_ru: 'Гипотеза (по одному источнику): лидер рынка автозаймов', evidence_ids: ['ev_1'] }, ctx);
   A.eq('no double prefix', once.item.text_ru.indexOf('Гипотеза (по одному источнику): Гипотеза'), -1);

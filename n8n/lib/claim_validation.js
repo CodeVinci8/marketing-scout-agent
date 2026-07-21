@@ -87,7 +87,9 @@ function cvGuardMarkdownRu(md) {
 // --- claim classification --------------------------------------------------------------------------------------
 
 // Cyrillic-safe boundaries: JS \b/\w never fire on Cyrillic — use explicit (^|[^а-яё]) style anchors.
-var CV_MARKET_ZONE = '(на рынке|в отрасли|среди конкурентов|в сегменте|по рынку)';
+// WIP3-E: «среди автоломбардов/банков/брокеров/МФО…» ranks against a competitor GROUP — as market-wide as
+// «среди конкурентов». Match «среди <competitor-category plural>», not a bare «среди клиентов».
+var CV_MARKET_ZONE = '(на рынке|в отрасли|среди конкурентов|в сегменте|по рынку|среди (?:конкурент|автоломбард|ломбард|банк|брокер|мфо|кредитор|компан|игрок|участник|сервис|площад|организац)[а-яё]*)';
 var CV_SUPERLATIVE = '(максимальн|минимальн|лучш|самы[йех]|крупнейш|единственн|наиболее|наименее)';
 var CV_RE = {
   // superlative … market (or market … superlative) within one clause
@@ -122,7 +124,7 @@ function cvClassifyClaimRu(text) {
 
 // Text that already carries honest scoping is never re-scoped (idempotency).
 function cvIsScopedRu(text) {
-  return /(гипотез|в доступном снимке|в проверенн[а-яё]+\s+страниц|данных недостаточно|требует проверки|по данным (сайта|снимка|источника)|это предположение|не измерял|внутренней метрикой|судя по|по-видимому|предположительно)/i.test(cvStr(text));
+  return /(гипотез|в доступном снимке|в проверенн[а-яё]+\s+страниц|данных недостаточно|требует проверки|требует сравнения|без сравнения с другими источниками|по данным (сайта|снимка|источника)|это предположение|не измерял|внутренней метрикой|судя по|по-видимому|предположительно)/i.test(cvStr(text));
 }
 
 // --- context ---------------------------------------------------------------------------------------------------
@@ -189,9 +191,15 @@ function cvValidateItem(item, ctx) {
   var isMarket = cats.some(function (c) { return CV_MARKET_CATS.indexOf(c) >= 0; });
 
   if (isMarket && !cvIsScopedRu(it.text_ru)) {
-    // A market-wide claim from bounded snapshots is always a hypothesis, whatever the model called it.
+    // A market-wide claim from bounded snapshots is always a hypothesis, whatever the model called it. WIP3-E:
+    // beyond the hypothesis prefix, append an explicit scope caveat so the USER-FACING text (Telegram + XLSX +
+    // stored + synthesis + Opportunity Radar) never reads as a confirmed market superlative — the unsafe original
+    // wording must not survive anywhere visible, only in the hidden claim audit.
     demote = true;
     it.text_ru = (ctx.single_source ? 'Гипотеза (по одному источнику): ' : 'Гипотеза: ') + it.text_ru;
+    it.text_ru = it.text_ru.replace(/[.\s]+$/, '') + (ctx.single_source
+      ? ' — без сравнения с другими источниками нельзя подтвердить максимум/лидерство на рынке.'
+      : ' — требует сравнения с другими источниками, это не подтверждённый факт рынка.');
     reasons.push('market_claim_scoped');
   }
   if (cats.indexOf('ad_strength') >= 0 && !ctx.has_ad_evidence && !cvIsScopedRu(it.text_ru)) {
