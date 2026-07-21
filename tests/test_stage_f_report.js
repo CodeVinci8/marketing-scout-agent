@@ -217,6 +217,27 @@ A.section('§6 — real OOXML: Russian headers, hidden technical sheet, clickabl
   A.ok('the hidden sheet DOES carry the AI cost', tech.indexOf('0.084') >= 0);
 }
 
+// WIP2b WIRING: the «Роль источника» sheet states role / relationship / direct_competitor / confidence /
+// limitations from precomputed b.source_roles — and is omit-empty when the run classified nothing.
+A.section('WIP2b wiring — «Роль источника» sheet is rendered from b.source_roles');
+{
+  const str = v => (v == null ? '' : String(v));
+  const withRoles = Object.assign({}, BUNDLE, { source_roles: [
+    { source_id: 't.me/probonds', source_url: 'https://t.me/probonds', source_type: 'telegram', source_role: 'news_source', role_confidence: 0.7, role_reason: 'Новостные публикации о рынке.', direct_competitor: false, evidence_ids: ['ev_1'], relationship_to_niche: 'публичный источник по теме ниши', limitations: ['Новостной источник, не прямой конкурент.'] }
+  ] });
+  const sheets = RP.buildSheets(withRoles);
+  const roleSheet = sheets.find(s => s.name === 'Роль источника');
+  A.ok('«Роль источника» sheet exists when roles present', !!roleSheet && (roleSheet.rows || []).length === 1);
+  const r0 = roleSheet.rows[0];
+  A.eq('role label in Russian', r0.role, 'новостной источник');
+  A.eq('direct competitor = нет', r0.direct, 'нет');
+  A.ok('states relationship to niche', str(r0.relation).length > 0);
+  A.ok('carries limitations', str(r0.limitations).length > 0);
+  // omit-empty: no source_roles -> sheet dropped from the downloadable package
+  const pkg = RP.buildReportPackage(BUNDLE, { owner_user_id: 'o1', agent_request_id: 'req_1', report_id: 'rep_1' }, { omit_empty: true });
+  A.ok('«Роль источника» omitted when empty', pkg.sheet_names.indexOf('Роль источника') < 0);
+}
+
 // WIP3-D/F WIRING: report_package must APPLY the ownership-safe + damaged-fragment guards, not just carry the lib.
 A.section('WIP3-D/F wiring — recommendations are ownership-safe and damaged offers are marked');
 {

@@ -21,7 +21,7 @@ function join(a) { return Array.isArray(a) ? a.join('; ') : str(a); }
 // Stage F adds «Аналитические выводы» + «Боли и сигналы» and FEEDS the existing «Рекомендации» / «Доказательства»
 // sheets (the deterministic bundle leaves evidence empty). Every Stage-F sheet is omit-empty: it exists only when
 // the analyst actually produced grounded rows, so a deterministic-only run ships exactly the workbook it did before.
-const SHEET_NAMES = ['Сводка', 'Конкуренты', 'Офферы и цены', 'Аналитические выводы', 'Рекомендации',
+const SHEET_NAMES = ['Сводка', 'Роль источника', 'Конкуренты', 'Офферы и цены', 'Аналитические выводы', 'Рекомендации',
   'Боли и сигналы', 'Доказательства', 'Качество данных', 'Изменения', 'Технические данные'];
 const STAGE_F_SHEETS = ['Аналитические выводы', 'Боли и сигналы'];
 
@@ -135,6 +135,9 @@ function rpShort(s, n) { s = str(s).replace(/\s+/g, ' ').trim(); return s.length
 // Observation label for an evidence row — what KIND of captured fact this quote is.
 const RP_FACT_RU = { positioning: 'позиционирование со страницы источника', offer: 'зафиксированное предложение', general: 'наблюдение из источника' };
 function rpFactRu(v) { return RP_FACT_RU[low(v)] || RP_FACT_RU.general; }
+// WIP2b: user-facing role labels — the report STATES what the source is, from evidence, never from the niche.
+const RP_ROLE_RU = { direct_competitor: 'прямой конкурент', adjacent_player: 'смежный игрок', industry_source: 'отраслевой источник', news_source: 'новостной источник', public_community: 'публичное сообщество', irrelevant_or_uncertain: 'релевантность не подтверждена' };
+function rpRoleRu(v) { return RP_ROLE_RU[low(v)] || RP_ROLE_RU.irrelevant_or_uncertain; }
 
 function buildSheets(b) {
   const sum = b.summary || {};
@@ -325,6 +328,27 @@ function buildSheets(b) {
       ],
       rows: (b.source_quality || []).map(r => Object.assign({}, r, { exclusions: join(r.exclusions) })),
       highlight: (r, c) => c.key === 'status' ? qualityHighlight(r.status) : null
+    },
+    // WIP2b: the source ROLE stated from evidence — role, relationship to the niche, whether a direct competitor,
+    // confidence and limitations. Omit-empty: only present when the run classified at least one source.
+    {
+      name: 'Роль источника', freeze_header: true, autofilter: true,
+      columns: [
+        { header: 'Источник', key: 'source', width: 32 },
+        { header: 'Тип', key: 'type', width: 12 },
+        { header: 'Роль', key: 'role', width: 24 },
+        { header: 'Прямой конкурент', key: 'direct', width: 16 },
+        { header: 'Отношение к нише', key: 'relation', width: 30 },
+        { header: 'Уверенность', key: 'confidence', type: 'number', width: 12 },
+        { header: 'Обоснование', key: 'reason', width: 50 },
+        { header: 'Ограничения', key: 'limitations', width: 50 }
+      ],
+      rows: (b.source_roles || []).map(r => ({
+        source: str(r.source_url) || str(r.source_id), type: str(r.source_type) || '—',
+        role: rpRoleRu(r.source_role), direct: r.direct_competitor === true ? 'да' : 'нет',
+        relation: str(r.relationship_to_niche), confidence: Number(r.role_confidence) || 0,
+        reason: str(r.role_reason), limitations: join(r.limitations)
+      }))
     },
     {
       name: 'Изменения', freeze_header: true, autofilter: true,
