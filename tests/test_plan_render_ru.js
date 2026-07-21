@@ -149,4 +149,36 @@ m('SINGLE_PLAN_BLOCK', true);
 m('NO_INTERNAL_ENUMS_IN_TELEGRAM', true);
 m('ZERO_SOURCE_SCAN_FAILS_CLOSED', true);
 m('CALLBACKS_PRESERVED', true);
+// WIP2 CALLBACK-UX-001 — a callback that cannot be applied gets a clean, self-contained user message; never an
+// internal code / workflow id / row number / ownership detail.
+A.section('WIP2 — callback outcome wording (no internal leakage)');
+{
+  A.eq('duplicate/already-processed -> friendly', R.approvalOutcomeRu('not_awaiting_approval:running'), 'Этот план уже запущен или завершён.');
+  A.eq('expired/stale plan -> re-request', R.approvalOutcomeRu('no_plan'), 'Этот план устарел. Отправьте запрос ещё раз, чтобы создать новый.');
+  A.eq('another request -> generic, no ids', R.approvalOutcomeRu('request_mismatch'), 'Эта кнопка относится к другому запросу. Отправьте новый запрос.');
+  A.eq('another owner -> author-only', R.approvalOutcomeRu('owner_mismatch'), 'Подтвердить запрос может только его автор.');
+  const malformed = R.approvalOutcomeRu('totally_unknown_code_xyz');
+  A.ok('malformed -> safe generic', /устарел|запрос ещё раз/i.test(malformed));
+  for (const s of ['no_plan', 'not_awaiting_approval:x', 'request_mismatch', 'owner_mismatch', 'garbage']) {
+    const t = R.approvalOutcomeRu(s);
+    A.ok('no internal code leaks for "' + s + '"', !/no_plan|not_awaiting|mismatch|plan_hash|req_|approve:|workflow|exec/i.test(t));
+    A.ok('never the old internal "план не найден" for "' + s + '"', t.indexOf('план не найден') < 0);
+  }
+}
+
+// WIP2 SOURCE-ROLE-001 — the plan goal must reflect SOURCE TYPE, never assert «конкурент» for a public social
+// source from the niche alone (regression: PRObonds/frank_media/banksta).
+A.section('WIP2 — plan goal wording by source type (not by niche)');
+{
+  const social = { intent: 'competitor_market_scan', analysis_mode: 'source_analysis', telegram_channels: ['@probonds'], vk_sources: [], websites: [] };
+  A.eq('social source -> public-source goal', R.planGoalRu(social), 'анализ публичного источника и рыночных сигналов');
+  A.ok('social plan goal is NOT «анализ конкурент…»', R.planGoalRu(social).indexOf('конкурент') < 0);
+  const web = { intent: 'competitor_market_scan', analysis_mode: 'source_analysis', telegram_channels: [], vk_sources: [], websites: ['autolombardn1.ru'] };
+  A.eq('named company website -> competitor goal', R.planGoalRu(web), 'анализ конкурента');
+  const mixed = { intent: 'competitor_market_scan', analysis_mode: 'source_analysis', telegram_channels: ['@x'], vk_sources: [], websites: ['y.ru'] };
+  A.eq('mixed -> preliminary relevance', R.planGoalRu(mixed), 'предварительная оценка релевантности публичных источников');
+  A.eq('comparison mode goal', R.planGoalRu({ analysis_mode: 'comparison', websites: ['a', 'b', 'c'] }), 'сравнение источников');
+  A.eq('discovery goal', R.planGoalRu({ intent: 'competitor_discovery' }), 'поиск новых источников и оценка их релевантности');
+}
+
 A.report('plan-render-ru');

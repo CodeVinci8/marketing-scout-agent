@@ -58,6 +58,28 @@ function ruEnum(map, key, fallback) {
   return (k && Object.prototype.hasOwnProperty.call(map, k)) ? map[k] : fallback;
 }
 function ruIntent(v) { return ruEnum(RU_INTENT, v, 'анализ конкурентов'); }
+// WIP2 SOURCE-ROLE-001: the plan goal must NOT assert «конкурент» for a public social source just because the
+// niche is credit_brokerage (regression: PRObonds/frank_media/banksta are public sources, not competitors). At
+// plan time there is no evidence yet, so the goal is a deterministic heuristic by SOURCE TYPE + analysis mode:
+// a named company WEBSITE is a candidate direct competitor (the report confirms/scopes with evidence); a
+// Telegram/VK channel is a public source of market signals; a mix is a preliminary relevance assessment. The
+// evidence-bound source_role (source_role.js) decides direct_competitor in the report, never the niche.
+function planGoalRu(plan) {
+  plan = plan || {};
+  if (ruText(plan.intent) === 'competitor_discovery') return 'поиск новых источников и оценка их релевантности';
+  var mode = ruText(plan.analysis_mode) || 'source_analysis';
+  if (mode === 'comparison') return 'сравнение источников';
+  if (mode === 'synthesis') return 'сводный анализ нескольких источников';
+  if (mode === 'change_report') return 'что изменилось у источника с прошлой проверки';
+  var tg = (Array.isArray(plan.telegram_channels) ? plan.telegram_channels : []).length;
+  var vk = (Array.isArray(plan.vk_sources) ? plan.vk_sources : []).length;
+  var web = (Array.isArray(plan.websites) ? plan.websites : []).length;
+  var social = tg + vk;
+  if (web > 0 && social === 0) return 'анализ конкурента';
+  if (social > 0 && web === 0) return 'анализ публичного источника и рыночных сигналов';
+  if (social > 0 && web > 0) return 'предварительная оценка релевантности публичных источников';
+  return ruIntent(plan.intent);
+}
 function ruNiche(v) { return ruEnum(RU_NICHE, v, 'кредитные услуги'); }
 // region values are produced in Russian by the planner; map the canonical short form to the full phrase and
 // never leak a latin/underscore internal token if one ever appears.
@@ -135,7 +157,7 @@ function planApprovalMessageRu(plan, opts) {
   var lines = [
     '🔎 План анализа',
     '',
-    'Цель: ' + ruIntent(plan.intent),
+    'Цель: ' + planGoalRu(plan),
     // REPORT-TRUTH-A: the mode is part of what the user approves — "что изменилось" and "проанализируй" are
     // different deliverables. Rendered only when it adds information beyond the default.
     (ruText(plan.analysis_mode) && plan.analysis_mode !== 'source_analysis'
@@ -253,6 +275,27 @@ var RU_APPROVAL_DUP_TOAST = {
   duplicate_closed: 'Уже закрыто'
 };
 function approvalDuplicateToastRu(kind) { return ruEnum(RU_APPROVAL_DUP_TOAST, ruText(kind), 'Уже обрабатывается'); }
+
+// WIP2 CALLBACK-UX-001: a self-contained, user-facing message for an approval callback that could not be applied
+// (a stale/expired keyboard, a button for another request, or a malformed callback). Unlike approvalFailureRu
+// (a lowercase fragment reused by the WF20 budget/gate blocked-response), this returns a COMPLETE sentence and
+// exposes NO internal code, workflow/execution id, row number, ownership detail or exception. The callback stays
+// bound to its exact agent_request_id upstream; this only chooses the words the user sees.
+var RU_APPROVAL_OUTCOME = {
+  not_awaiting_approval: 'Этот план уже запущен или завершён.',
+  no_plan: 'Этот план устарел. Отправьте запрос ещё раз, чтобы создать новый.',
+  owner_mismatch: 'Подтвердить запрос может только его автор.',
+  chat_mismatch: 'Это подтверждение пришло из другого чата.',
+  request_mismatch: 'Эта кнопка относится к другому запросу. Отправьте новый запрос.',
+  plan_hash_mismatch: 'План изменился после показа. Запросите его заново.'
+};
+function approvalOutcomeRu(reason) {
+  var first = ruText(reason).split(';')[0].trim();
+  // prefix-match: reason codes may carry a suffix (e.g. "not_awaiting_approval:running")
+  var keys = Object.keys(RU_APPROVAL_OUTCOME);
+  for (var i = 0; i < keys.length; i++) { if (first.indexOf(keys[i]) === 0) return RU_APPROVAL_OUTCOME[keys[i]]; }
+  return 'Это подтверждение устарело. Отправьте запрос ещё раз, чтобы создать новый.';
+}
 
 // ================= UX-RU-002 — Vinci persona + full user-facing message surface =========================
 // The bot's audience is a Russian-speaking credit broker, not a developer. NOTHING below may contain env var
@@ -534,7 +577,7 @@ var RU_SOURCE_STATUS = { active: 'активен', paused: 'на паузе', re
 function ruSourceStatusLabel(status) { return ruEnum(RU_SOURCE_STATUS, ruText(status), 'в обработке'); }
 
 module.exports = {
-  planApprovalMessageRu, planStatusLineRu, approvalFailureRu, approvalDuplicateRu, approvalDuplicateToastRu,
+  planApprovalMessageRu, planStatusLineRu, planGoalRu, approvalFailureRu, approvalOutcomeRu, approvalDuplicateRu, approvalDuplicateToastRu,
   ruIntent, ruNiche, ruRegion, ruSources, ruEnum, ruIntentAny,
   ruStartMessage, ruWhoAmIMessage, ruIsWhoAmI,
   ruCapabilityGroups, ruHelpMessage, ruCapLabel, ruCapAdvertisable,

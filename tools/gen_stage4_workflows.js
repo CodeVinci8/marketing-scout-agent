@@ -767,7 +767,7 @@ var utext=String((r.parsed&&r.parsed.text)||'');
 // UX-RU-002: every user-visible branch renders through the canonical Russian layer (plan_render_ru).
 // Internal reasons/enums (dispatch_reason, unavailable_reason, intent ids) stay in execution data only.
 if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_dup:')===0){text=approvalDuplicateRu(d.dispatch_reason.replace('approval_dup:',''));}
-else if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_invalid')===0){text='Это подтверждение нельзя применить: '+approvalFailureRu(d.dispatch_reason.replace('approval_invalid:',''))+'.';}
+else if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_invalid')===0){text=approvalOutcomeRu(d.dispatch_reason.replace('approval_invalid:',''));}
 else if(d.dispatch_reason==='capability_unavailable'){text=ruCapabilityUnavailableMessage(r.capability);}
 else if(r.route==='clarify'){text=clarificationReply(r.clarification);}
 else if(d.intent&&d.intent.intent==='help'){
