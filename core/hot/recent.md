@@ -2,6 +2,50 @@
 
 Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm/decisions.md`.
 
+## Session: 2026-07-21 (session 67) — SOCIAL-BRIDGE-001 deployed; Stage F still OPEN
+
+Branch `fix/stage-f-post-migration-acceptance`, `6f441b0` -> `249d16b`. **5 -> 6 commits ahead of origin/main**
+(the previous session's "4 ahead" was a miscount; `ad0b58e` is also unpushed). Worktree clean. Production after:
+90 workflows / 17 active, health ok, webhook registered to WF18, proxy + ngrok active, 11G free.
+
+**`249d16b` — SOCIAL-BRIDGE-001 (the confirmed defect B from exec 1096) is FIXED and DEPLOYED.**
+- New canonical `n8n/lib/social_evidence.js`; `analysis_bridge` now lets evidence CREATE a target (competitor
+  profile optional); WF12 gained `Read raw_market_records` wired after `Read source_health`, embeds the lib
+  verbatim, and sets `bundle.evidence = socialEvidence` (was `[]`). WF12 appended to the tab's readers.
+- `tests/test_social_evidence.js` **84/84**, including a behavioural run of the REAL WF12 Code node over
+  production-shaped rows: 3 rows in (1 relevant, 1 off-topic, 1 foreign-request) -> 1 bundle evidence row -> 1
+  WF28 target. Full regression before deploy: ALL SUITES PASS.
+- Structural deploy of WF12 `3H7SR0tG12sK_JTV` with `--inherit "Read raw_market_records=Read competitor_profiles"`.
+  Diff was exactly the intent (26->27 nodes, 1 added, 1 param change, 2 rewired, 11 creds preserved, 0
+  placeholders). Backup `scratchpad/backup/wf3H7SR0tG12sK_JTV_prod_20260721054814.json`. **Parity: OK.**
+- **DEPLOY-CLEANUP-001 (tool defect, found live and fixed):** the first `--apply` aborted between import and
+  re-publish because the container scratch-file `rm` failed (docker cp writes as root, n8n runs as `node`),
+  leaving WF12 imported but INACTIVE (active 17->16). Caught immediately, re-published, verified 17. Cleanup can
+  no longer change a deploy's outcome. **Lesson: any post-import step in a deploy tool must be non-fatal.**
+
+### STAGE F IS NOT COMPLETE. Exactly what remains, in order
+
+1. **Live proof of the social bridge — the top priority.** Deterministic proof is complete; the PAID end-to-end
+   run is not done. Needs one Telegram-channel source analysis and one VK-community source analysis through
+   WF18 -> WF19 -> approval callback -> WF20 -> WF12 -> WF28. Record request id, source_run_id, exec ids,
+   collected/accepted, source outcome, evidence hash, WF28 analysis id, report id, Telegram message ids, XLSX
+   name/hash/sheets, projected vs actual component costs, final plan state.
+2. **Discovery post-fix integration proof.** DISCOVERY-004 is deployed and byte-verified in WF18, and proven
+   offline against the verbatim production text of exec 1093. The operator authorized a SYNTHETIC WEBHOOK
+   INTEGRATION PROOF (POST the exact text «Найди телеграмм каналы по птс»). **Blocker to be aware of:** the
+   WF18 ingress gate checks a bot secret token, so the synthetic POST must carry the real
+   `X-Telegram-Bot-Api-Secret-Token`, and the run WILL send a real bot reply to chat 1188830082. Label it
+   clearly as synthetic.
+3. Stage F acceptance matrix (PASS / MISSING / EXTERNAL BLOCKER per §9 role), reusing existing evidence for
+   blocked carmoney.ru, callback idempotency, REPORT-TRUTH D, source reuse and analysis reuse.
+4. §10 quality metrics: >=5 genuinely FRESH (non-reused) analyses across source types with full telemetry.
+5. Formal Stage F gate.
+
+Then Stage F.5 (Unified Source Runtime, Unified Analysis Result, Opportunity Radar, Analyst Agent + bounded
+context capsule, durable owner-scoped memory, Monitoring Intelligence) — **not started in this session.**
+
+Nothing is pushed. CI has not re-run remotely; the hermeticity fix is proven locally only.
+
 ## Session: 2026-07-21 (session 66) — structural deploy tool, brand migration, CI hermeticity, discovery routing
 
 Branch `fix/stage-f-post-migration-acceptance`, start `ad0b58e` → four commits. Production verified healthy
