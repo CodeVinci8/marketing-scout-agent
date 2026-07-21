@@ -141,6 +141,8 @@ const JS_SUITES = [
   ['deploy-preflight', 'test_deploy_preflight.js'],
   // Canonical STRUCTURAL deploy (add/remove nodes, rewire) with installation-local preservation + parity verify.
   ['deploy-structural', 'test_deploy_structural.js'],
+  // SOCIAL-BRIDGE-001: verbatim Telegram/VK posts reach source analysis without a competitor profile.
+  ['social-evidence', 'test_social_evidence.js'],
   ['telegram-commands', 'test_telegram_commands.js'],
   ['attachment-routing', 'test_attachment_routing.js'],
   ['smoke-hardening', 'test_smoke_hardening.js'],

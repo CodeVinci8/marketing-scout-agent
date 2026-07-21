@@ -106,13 +106,37 @@ function buildAnalysisTargets(bundle, ctx, opts) {
       fact_type: 'offer', collected_at: abStr(o.collected_at), quality_status: 'accepted', relevance: 80 });
   });
 
-  // Any explicit evidence rows the bundle carries (WF12 emits [] today; a future producer may fill it).
+  // Explicit evidence rows carried by the bundle.
+  //
+  // SOCIAL-BRIDGE-001: this used to require an EXISTING target (`if (!t) return`), which silently discarded every
+  // social post — a Telegram channel or VK community deliberately never becomes a competitor profile
+  // (DEC-133/DEC-135), so `byName` was empty and 22 relevant, quality-gated posts produced ZERO analysis targets
+  // (production req_76722076, executions 1096/1101: WF28 was never called and the user was told no competitor
+  // profiles were found). Evidence with a real source and a citable excerpt is now enough to CREATE a target:
+  // a full competitor profile is optional. Website evidence still attaches to its profile exactly as before,
+  // because a matching key is looked up first.
   bundleEvidence.forEach(function (e) {
-    var url = abFirstUrl(e && e.url);
-    var key = abSourceId(url, abStr(e && e.competitor)) || abStr(e && e.competitor);
+    if (!e || !abStr(e.excerpt)) return;
+    var url = abFirstUrl(e.url);
+    // Prefer the producer's explicit logical-source key (WF12 social evidence sets it); else derive it.
+    var key = abStr(e.source_key) || abSourceId(url, abStr(e.competitor)) || abStr(e.competitor);
+    if (!key) return;
     var t = byName[key];
-    if (!t || !abStr(e.excerpt)) return;
-    t.evidence.push({ source_url: url, source_type: t.source_kind, excerpt: abStr(e.excerpt),
+    if (!t) {
+      // A source known ONLY through its evidence — the social case. It has no profile, no offers and no
+      // deterministic score, and it must not pretend otherwise: company_name is the channel/community name.
+      var kind = abStr(e.source_kind) || abStr(e.platform) || abSourceKind(url) || 'website';
+      t = byName[key] = {
+        source_key: key, source_kind: kind,
+        company_name: abStr(e.source_name) || abStr(e.competitor) || key,
+        source_url: abStr(e.profile_url) || url, source_run_id: abStr(e.source_run_id),
+        quality_status: abStr(e.source_quality) || 'accepted', positioning: '',
+        score: null, last_checked: abStr(e.collected_at), evidence: [], offers: [],
+        evidence_only: true
+      };
+    }
+    t.evidence.push({ source_url: url, source_type: abStr(e.source_kind) || abStr(e.platform) || t.source_kind,
+      excerpt: abStr(e.excerpt), evidence_id: abStr(e.evidence_id),
       fact_type: abStr(e.finding) || 'general', collected_at: abStr(e.collected_at),
       quality_status: abStr(e.source_quality) || 'accepted', relevance: 70 });
   });
@@ -125,6 +149,17 @@ function buildAnalysisTargets(bundle, ctx, opts) {
     .slice(0, maxTargets);
 
   var targets = eligible.map(function (t) {
+    // SOCIAL-BRIDGE-001: an evidence-only social source is ONE channel/community with no competitor profile.
+    // State that bound explicitly so the analyst cannot generalise it into a market claim, and so a silent
+    // comment section is never read as "the audience has no questions".
+    var lim = limitations.slice(0, 6);
+    if (t.evidence_only) {
+      lim = lim.concat([
+        'источник «' + t.source_key + '» проанализирован только по его публичным постам: карточки конкурента с офферами и ценами нет',
+        'выводы описывают только этот источник и не переносятся на рынок в целом',
+        'отсутствие комментариев/реакций не означает отсутствия интереса аудитории'
+      ]).slice(0, 9);
+    }
     return {
       source_key: t.source_key,
       source_kind: t.source_kind,
@@ -145,7 +180,7 @@ function buildAnalysisTargets(bundle, ctx, opts) {
         },
         evidence: t.evidence.slice(0, maxEvPer),
         deterministic_scores: { confidence: t.score, relevance: null },
-        limitations: limitations.slice(0, 6),
+        limitations: lim,
         // Current-run only: this bundle is already request-scoped (B1). Nothing historical is presented as current.
         historical_context: Array.isArray(opts.historical_context) ? opts.historical_context : []
       }

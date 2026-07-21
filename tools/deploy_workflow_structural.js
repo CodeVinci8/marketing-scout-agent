@@ -341,13 +341,22 @@ function loadWf(p) {
 function n8n(container, args) {
   return execFileSync('docker', ['exec', container, 'n8n'].concat(args), { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
+// DEPLOY-CLEANUP-001: removing a scratch file inside the container is HOUSEKEEPING, never part of the deploy
+// contract. `docker cp` writes as root while n8n runs as `node`, so the tidy-up `rm` fails with "Operation not
+// permitted" — and when that threw, it aborted --apply AFTER the import but BEFORE the re-publish, leaving the
+// production workflow imported-but-INACTIVE (observed live on WF12: active count 17 -> 16). Cleanup must never
+// be able to change the outcome of a deploy.
+function tryRm(container, file) {
+  try { execFileSync('docker', ['exec', '-u', '0', container, 'rm', '-f', file], { encoding: 'utf8', stdio: 'pipe' }); return true; }
+  catch (e) { console.error('  [warn] could not remove container scratch file ' + file + ' (harmless): ' + String(e.message).split('\n')[0]); return false; }
+}
 
 // A docker-mode export writes INSIDE the container (DEPLOY-001), so read it back out with `docker exec cat`.
 function exportFromProd(container, id) {
   const inner = '/tmp/ds_export_' + Date.now() + '.json';
   n8n(container, ['export:workflow', '--id=' + id, '--output=' + inner, '--pretty']);
   const raw = execFileSync('docker', ['exec', container, 'cat', inner], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  execFileSync('docker', ['exec', container, 'rm', '-f', inner], { encoding: 'utf8' });
+  tryRm(container, inner);
   const parsed = JSON.parse(raw);
   return Array.isArray(parsed) ? parsed[0] : parsed;
 }
@@ -358,8 +367,8 @@ function importToProd(container, wf) {
   const inner = '/tmp/' + path.basename(host);
   execFileSync('docker', ['cp', host, container + ':' + inner], { encoding: 'utf8' });
   const log = n8n(container, ['import:workflow', '--input=' + inner, '--activeState=false']);
-  execFileSync('docker', ['exec', container, 'rm', '-f', inner], { encoding: 'utf8' });
-  fs.unlinkSync(host);
+  tryRm(container, inner);
+  try { fs.unlinkSync(host); } catch (e) { /* housekeeping only */ }
   return log;
 }
 
@@ -414,7 +423,7 @@ if (require.main === module) {
   const prod = opt.prod ? loadWf(opt.prod).wf : exportFromProd(opt.container, opt.id);
 
   // Requirement 2: back up the production export BEFORE anything else.
-  const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15);
+  const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
   const backupDir = opt.backupDir || path.join(__dirname, '..', 'scratchpad', 'backup');
   let backupPath = null;
   if (opt.apply) {
