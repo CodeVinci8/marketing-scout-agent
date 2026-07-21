@@ -54,10 +54,31 @@ quota (429 on `Append live_source_runs`) and left 11 `finished=0` zombie executi
 code defect). Run source analyses SEQUENTIALLY with a short cooldown. `scratchpad/synthetic_tg.js` drives the
 signed webhook (message|approve|reject); secret/chat pulled from container env, never printed.
 
-**Exact next action:** decide the scope of synthesis/comparison + WF27 enrichment + public-lead interpretation —
-either build them (lib fn in `claude_analysis`/`analysis_bridge` + WF20/WF27 wiring + deploy + live proof) to
-gate Stage F standalone, OR formally re-scope them into Stage F.5's Unified Analysis Result + Analyst Agent and
-gate Stage F on the proven core. Then proceed to Stage F.5 (read `docs/STAGE_F5_OPPORTUNITY_RADAR_AGENT.md`).
+**Session 68b — WIP1 terminal-outcome arbiter (commit `810b06f`, deployed, live-proven).** The "Progress: Done"
+edit contradicted a real analysis: it said "✅ Проверка завершена. Данные для анализа не получены." whenever
+`records_reported===0` (the normal social-analysis case), alongside the delivered analysis. Fix: Progress: Done
+now reads `llm_analyses + llm_analyses_reused`; a usable analysis suppresses the no-data/failed wording. Live proof
+(reuse, $0): req `req_17846505866` WF20 1234 — Progress: Done edit = "✅ Готово. Отчёт и Excel-файл отправлены."
+with `records_reported=0 / llm_analyses=1`. Deployed WF20 backup-first (1 node, parity OK, 17 active, health ok).
+
+**Remaining mission (this branch, NOT yet done):**
+- WIP1 leftover: clean callback wording ("план не найден" → user-friendly) — batched (shared lib `plan_render_ru`).
+- WIP2: user-facing source-role classification (direct_competitor / adjacent_player / industry_source /
+  news_source / public_community / irrelevant); PRObonds must NOT be called a credit-broker competitor from niche.
+- WIP3 (6 XLSX/evidence defects): A counters (Проверено источников/LLM primary/Внешних запросов = 0 despite a real
+  fresh call); B evidence dedup (one canonical row per evidence_id/URL; raw social_post only in hidden sheet);
+  C post-level semantic relevance (banksta British Steel / Oracle CDS off-topic); D 3rd-party publish wording
+  ("Разместить в t.me/banksta" → "Подготовить для собственного канала…"); E market-wide claim scoping in
+  user-facing text (claim-validator demotion must surface); F malformed fragments ("пониженна") excluded from facts.
+- WIP4: Unified Analysis Result contract + 3 modes (3-source synthesis/comparison, WF27 top-candidate enrichment,
+  public-lead interpretation) — these close the last mandatory Stage F criteria.
+- Then Stage F gate (consolidated deploy of all changed workflows + sequential live proofs), then F.5/G/H.
+
+**Efficient strategy:** implement + offline-test + commit each defect; do ONE consolidated backup-first deploy of
+all changed workflows + sequential live proofs at the Stage F gate (avoids repeated deploys + Sheets-429 risk).
+Shared-lib changes (report_package, execution_summary, semantic_core, analysis_report_ru, claim_validation,
+plan_render_ru) force redeploy of every embedding workflow — the drift sweep in `test_stage4_workflows.js` enforces
+parity. Run source analyses SEQUENTIALLY only.
 
 ### (Historical, now resolved) blocker diagnosis
 Branch `fix/stage-f-post-migration-acceptance`, HEAD `235c4df`, **7 ahead / 0 behind** origin/main. Worktree
