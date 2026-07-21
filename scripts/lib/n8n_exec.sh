@@ -181,8 +181,15 @@ n8n_available() {
   return 1
 }
 
-# Echo the n8n version string (host or container). Empty on failure.
+# Echo the n8n version string (host or container). Empty on failure — and empty must mean EMPTY, not a fatal
+# status. CI-HERMETIC-001: this used to run `docker exec … n8n --version` unconditionally, ignoring the DRY
+# executor. Under the callers' `set -euo pipefail`, a missing docker binary (127) or an absent container (1)
+# turned the command substitution in detect_n8n_version() into a silent script-wide exit, so the deploy
+# entrypoint suite only passed on a host where a real n8n container answered — i.e. the production VPS. It
+# failed in a clean GitHub runner. Now: DRY mode executes nothing (as documented), and any failure yields the
+# empty string, which detect_n8n_version() already handles as version "unknown".
 n8n_version_string() {
-  if [ "$(n8n_resolve_mode)" = "host" ]; then n8n --version 2>/dev/null | head -1; else
-    docker exec "$(n8n_resolve_container)" n8n --version 2>/dev/null | head -1; fi
+  if [ "${MS_N8N_EXEC_DRY:-0}" = "1" ]; then return 0; fi
+  if [ "$(n8n_resolve_mode)" = "host" ]; then n8n --version 2>/dev/null | head -1 || true; else
+    docker exec "$(n8n_resolve_container)" n8n --version 2>/dev/null | head -1 || true; fi
 }
