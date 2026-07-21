@@ -117,6 +117,45 @@ parity. Run source analyses SEQUENTIALLY only.
 **VK** stays an EXTERNAL BLOCKER for fresh collection only; use stored `vk::sovcombank` (48 rows) evidence for all
 contract/classifier/comparison/report dev. **Do not run orchestrations concurrently** (Sheets 429 → zombies).
 
+## Session 68d — WIP2/WIP3/WIP4 offline foundations (all committed, NONE deployed; batched for the Stage F gate)
+
+New commits this session (from `76ebf5a`): `b4fde4a` `5bd90ff` `14ebc64` `81a0704` `9dc76ca` `0c38a77` `6116942`
+`43f89cd`. All offline-tested; production is UNCHANGED (still the WIP1-era deploy: 90/17, health ok, RestartCount=0).
+
+- `81a0704` **CALLBACK-PRIVACY-001**: `plan_render_ru.approvalOutcomeRu` collapses owner/chat/request/hash + unknown
+  + malformed → ONE neutral message (no foreign-plan/owner/chat/id leakage); only self-owned states (already-run,
+  expired) stay specific. Regenerated WF18/19/20/21/22/26.
+- `9dc76ca` **WIP2-B plan goal**: `planGoalRu` — a bare website is NOT a competitor; default «предварительная
+  оценка релевантности публичного источника»; «анализ конкурента» only with a trusted signal (operator-marked /
+  stored source_role=direct_competitor conf≥0.6). Social → «анализ публичного источника…».
+- `5bd90ff` **source_role.js** (evidence-based role classifier) — committed earlier this session.
+- `0c38a77` **unified_analysis_result.js** (`uar.v1`): canonical versioned contract + deterministic migration
+  (WF28 result + bundle + legacy) + invariants (evidence-cited, scope, direct_competitor). `uarSourceRole`.
+- `6116942` **report_text_safety.js**: WIP3-D ownershipSafeRecommendationRu (third-party publish → «для
+  собственного канала… на основе сигнала из X»); WIP3-F fragmentQuality/isDamagedFragment («пониженна» etc.).
+- `43f89cd` **WIP3-C** `social_evidence.seNichePrimary`: broad кредит/займ catch-all is primary only with a loan-
+  offer signal; off-domain bond/macro/rating news (British Steel/Oracle CDS) dropped as `low_relevance`. WF12
+  embed re-synced (isolatedModule __SE); social-evidence 90.
+
+### Remaining before the Stage F gate (exact, in order) — mostly INTEGRATION + DEPLOY
+1. **WIP3-A counters** + **WIP3-B evidence dedup** + **WIP3-E market-claim scoping in USER-FACING text**: surgery in
+   `report_package.js` / `execution_summary.js` / Shape Report Bundle (WF20) + claim_validation surfacing.
+2. **Wire** source_role + report_text_safety (D/F) + UAR into the real render/export path (`report_package`,
+   `analysis_report_ru`, `compact_report_ru`, WF28/WF20) so Telegram + XLSX + stored report expose source_role/
+   relevance/direct_competitor/limitations and the safe wording. Renderers must READ the UAR, not re-interpret.
+3. **WIP4 modes**: 3-source synthesis/comparison, WF27 top-candidate enrichment, public-lead interpretation
+   (bounded Claude + deterministic fallback), consuming the UAR.
+4. **Stage F gate**: regenerate → full regression → ONE consolidated backup-first deploy of ALL changed workflows
+   (WF12 needs the STRUCTURAL/embed tool for social_evidence; WF18-28 via jsCode) → parity/health/inventory →
+   14 SEQUENTIAL live proofs (callback dup/expired/privacy, source-role plan+report wording, counters, dedup,
+   relevance, ownership-safe rec, market-claim scoping, damaged-fragment, 3-source comparison, WF27 enrichment,
+   public-lead) → inspect Telegram+XLSX+SHA-256 → update matrix → declare.
+5. Then F.5 (`STAGE_F5_OPPORTUNITY_RADAR_AGENT.md`), canonical G, canonical H, push+PR+CI+merge.
+
+**Deploy note:** WF12 social_evidence embed is maintained by the small in-repo isolatedModule replacer (see this
+session's WF12 update), NOT gen_stage4 (which only covers WF17-28). plan_render_ru changes touch WF18/19/20/21/22/26.
+report_package/execution_summary/analysis_report_ru changes will touch WF20/24/25. Inventory ALL before deploy.
+
 ### (Historical, now resolved) blocker diagnosis
 Branch `fix/stage-f-post-migration-acceptance`, HEAD `235c4df`, **7 ahead / 0 behind** origin/main. Worktree
 carried the previous session's regenerated `20_agent_orchestrator.json` (2 embedded-lib one-liners changed).
