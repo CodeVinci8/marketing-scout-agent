@@ -189,6 +189,68 @@ A.section('compact renderer — reuse, issue, change_report honesty, hard cap');
   has('cost line survives the cap', capped.text, '$0.0512');
 }
 
+A.section('SOCIAL-DELIVERY-001 — a source_analysis with 0 deterministic records but a usable analysis is delivered');
+{
+  // A public Telegram/VK channel yields citable EVIDENCE, not a competitor profile with offers/prices, so a
+  // successful source_analysis routinely has records_reported=0 and the caller passes state='no_data'. The
+  // usable, evidence-bound analysis IS the deliverable and must NOT be suppressed. (live: rusmicrofinance
+  // an_3f6ccdb3 was wrongly delivered as "Подходящих данных не собрано".)
+  const SOCIAL_BUNDLE = {
+    analysis_mode: 'source_analysis', competitors: [], offers: [],
+    evidence: [
+      { excerpt: 'Рынок ломбардов: прогноз +35% выдач в 2026', url: 'https://t.me/rusmicrofinance/6181', collected_at: '2026-07-20T08:00:00Z' },
+      { excerpt: 'Банк России составил ренкинг МФО по числу жалоб', url: 'https://t.me/rusmicrofinance/6179', collected_at: '2026-07-20T08:00:00Z' }
+    ]
+  };
+  const SOCIAL_SUMMARY = {
+    final_state: 'no_data', records_reported: 0, analysis_mode: 'source_analysis',
+    actual_cost_usd: 0.1045, actual_summary_ai_usd: 0, actual_deep_analysis_usd: 0.1045,
+    reused_sources: [], failed_sources: [], source_outcomes: [{ outcome: 'ok', has_data: true }]
+  };
+  const SOCIAL_COST = '💰 Фактическая стоимость: AI-анализ $0.1045 = $0.1045.';
+  function mkSocial(over) {
+    return Object.assign({
+      analysis_id: 'an_soc', enriched: true, mode: 'call', quality_status: 'ok',
+      evidence_map: [{ id: 'ev_1', url: 'https://t.me/rusmicrofinance/6181' }, { id: 'ev_2', url: 'https://t.me/rusmicrofinance/6179' }],
+      analysis: {
+        executive_summary_ru: 'Канал t.me/rusmicrofinance освещает рынок МФО и ломбардов; прямых офферов и цен в постах нет, уверенность в выводах низкая.',
+        items: [
+          { kind: 'fact', text_ru: 'Канал публикует отраслевую аналитику рынка МФО и ломбардов', dimension: 'positioning', evidence_ids: ['ev_1', 'ev_2'] },
+          { kind: 'fact', text_ru: 'Прямой рекламы продуктов в проанализированных постах нет', dimension: 'advertising_angles', evidence_ids: ['ev_1'] },
+          { kind: 'inference', text_ru: 'Целевая аудитория — профессиональные участники рынка, а не конечные заёмщики', dimension: 'target_audience', evidence_ids: ['ev_2'] }
+        ],
+        recommended_actions: [{ text_ru: 'Отслеживать регуляторные сигналы Банка России по этому каналу', priority: 'medium', evidence_ids: ['ev_2'] }],
+        unknowns_ru: ['Нет данных об офферах и ценах'], overall_confidence: 0.18, used_evidence_ids: ['ev_1', 'ev_2']
+      }
+    }, over || {});
+  }
+
+  // A + D: usable analysis renders even at records=0/state=no_data — and carries the full grounded shape.
+  const soc = CR.crCompactReportRu({ bundle: SOCIAL_BUNDLE, analyses: [mkSocial()], summary: SOCIAL_SUMMARY, cost_line: SOCIAL_COST, next_action: NEXT, xlsx_expected: true, state: 'no_data' });
+  A.eq('A: usable analysis is NOT the issue profile', soc.profile, 'success');
+  A.ok('A: no false "Подходящих данных не собрано"', soc.text.indexOf('Подходящих данных не собрано') < 0);
+  A.ok('A: no false "конкурентных профилей" wording', soc.text.indexOf('конкурентных профилей') < 0);
+  has('D: source header', soc.text, '📊');
+  has('D: facts section', soc.text, '📌 Ключевые факты');
+  has('D: conclusions marked interpretation', soc.text, 'интерпретация, не факты');
+  has('D: recommendations marked suggestions', soc.text, 'предложения к проверке');
+  has('D: limitations / needs-verification visible', soc.text, 'требует проверки');
+  has('D: actual cost truthful', soc.text, '$0.1045');
+  has('D: XLSX delivery line', soc.text, 'Excel-файле');
+  A.ok('D: no internal enums/ids leak', !/ev_\d|an_[0-9a-f]{3,}|source_analysis/.test(soc.text));
+
+  // B: a GENUINE no-data run (no usable analysis) still gets the honest issue profile.
+  const genuineNoData = CR.crCompactReportRu({ bundle: {}, analyses: [], summary: { final_state: 'no_data', records_reported: 0, source_outcomes: [{ outcome: 'empty_response', has_data: false }] }, cost_line: '', next_action: NEXT, xlsx_expected: false, state: 'no_data' });
+  A.eq('B: no usable analysis -> issue profile', genuineNoData.profile, 'issue');
+  has('B: honest no-data message', genuineNoData.text, 'Подходящих данных не собрано');
+
+  // C: a deterministic fallback must NOT masquerade as a successful AI analysis — it is not "usable".
+  const fb = mkSocial({ enriched: true, fallback_used: true, quality_status: 'deterministic_fallback' });
+  const fbRender = CR.crCompactReportRu({ bundle: { analysis_mode: 'source_analysis', competitors: [], offers: [], evidence: [] }, analyses: [fb], summary: { final_state: 'no_data', records_reported: 0, source_outcomes: [{ outcome: 'ok', has_data: true }] }, cost_line: '', next_action: NEXT, xlsx_expected: false, state: 'no_data' });
+  A.eq('C: deterministic fallback is not treated as usable -> issue profile', fbRender.profile, 'issue');
+  A.ok('C: fallback does not fabricate an AI conclusions section', fbRender.text.indexOf('интерпретация, не факты') < 0);
+}
+
 A.section('live-1024/1018 regressions — string tool input, offer enum leak, competitor header');
 {
   const CA = require('../n8n/lib/claude_adapter.js');
@@ -238,6 +300,11 @@ A.section('WF20 wiring — validation + compact renderer + completion order');
   const ob = node(wf20, 'Build Delivery Outbox').parameters.jsCode;
   A.ok('outbox validates claims', ob.indexOf('cvValidateAnalyses(') >= 0);
   A.ok('outbox renders compact', ob.indexOf('crCompactReportRu(') >= 0);
+  // SOCIAL-DELIVERY-001 (E): the outbox must be analysis-aware — a usable analysis suppresses the no_data state
+  // (so the keyboard/next-action aren't the "nothing found" set) and forces xlsx_expected even at records=0.
+  A.ok('E: outbox computes a usable-analysis flag', ob.indexOf('__hasUsableAnalysis') >= 0);
+  A.ok('E: no_data is suppressed when a usable analysis exists', /noData=[^;]*&&!__hasUsableAnalysis/.test(ob));
+  A.ok('E: xlsx_expected fires for analysis/evidence even at records=0', /xlsx_expected:\([^;]*__hasUsableAnalysis[^;]*evidence/.test(ob));
   A.ok('outbox guards final text', ob.indexOf('cvGuardMarkdownRu(') >= 0);
   A.ok('outbox no longer ships the full markdown', ob.indexOf('appendAnalysisToReportRu(') < 0);
   A.ok('claim audit is observable', ob.indexOf('claim_audit') >= 0);

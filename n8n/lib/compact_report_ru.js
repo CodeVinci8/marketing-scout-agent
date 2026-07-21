@@ -145,10 +145,17 @@ function crCompactReportRu(p) {
   var state = crStr(p.state || summary.final_state).toLowerCase() || 'completed';
   var records = crNum(summary.records_reported, 0);
   var mode = crStr(bundle.analysis_mode || summary.analysis_mode) || 'source_analysis';
+  // SOCIAL-DELIVERY-001: a Telegram/VK source_analysis routinely reports ZERO deterministic records — a public
+  // channel/community is citable EVIDENCE, not a competitor profile with offers/prices (DEC-133/135). When the
+  // analyst nonetheless produced a usable, evidence-bound result, THAT is the deliverable. Without this guard the
+  // no-data profile below fires on (records===0 && state!=='completed') and silently suppresses a real analysis —
+  // live-observed: rusmicrofinance analysis an_3f6ccdb3 (18 grounded items) was delivered as "Подходящих данных
+  // не собрано". A genuine no-data/failed run has no usable analysis and still gets the honest issue profile.
+  var crHasAnalysis = analyses.some(crUsable);
   var L = [];
 
   // ---- issue profile: honest, short (250–600) --------------------------------------------------------------
-  if (state === 'failed' || state === 'no_data' || (records === 0 && state !== 'completed')) {
+  if (!crHasAnalysis && (state === 'failed' || state === 'no_data' || (records === 0 && state !== 'completed'))) {
     var RU_FAIL = { failed: 'Не удалось собрать данные по запрошенным источникам.', no_data: 'Подходящих данных не собрано.' };
     var failedNames = (Array.isArray(summary.failed_sources) ? summary.failed_sources : [])
       .map(function (k) { return CR_RU_SRC[crStr(k).toLowerCase()] || crStr(k); }).filter(Boolean);
