@@ -167,6 +167,37 @@ live-proven telegram exec 1087).
 | Tests | `tests/test_deploy_structural.js` — **60 checks, 0 failed**: node addition, connection rewiring, node-id preservation, workflow-id/active/settings preservation, Execute Workflow binding preservation, placeholder rejection, ambiguous-credential rejection (+ actionable, secret-free message), explicit credential inheritance and `--cred` mapping by name and by id, intentional node removal (with dangling-edge cleanup) and its guards, and post-import parity mismatch detection (lost credential, rebound credential, changed node id, missing node, changed connections, lost active state, wrong workflow id, broken binding). Registered in `tests/run_all.js` as `deploy-structural`. Full regression: `make test` → **ALL SUITES PASS (external calls=0, live cost=$0)**. |
 | Production impact | **None.** Only read-only `export:workflow` dry-runs were performed (WF12 `3H7SR0tG12sK_JTV` → 26→26 nodes, no drift; WF20 → 68→68 nodes, 2 benign generator-drift params). Nothing was imported. |
 
+## Session 68 (2026-07-21) — SOCIAL-DELIVERY-001 + Telegram live proof + 5 fresh analyses + VK evidence proof
+
+**Stage F acceptance matrix (PASS / EXTERNAL BLOCKER / REMAINING).** Docker access was restored for `claude-runner`
+this session (operator: `usermod -aG docker` + `setfacl` on the socket).
+
+| §  | Criterion | Verdict | Evidence |
+|----|-----------|---------|----------|
+| — | WF20 runtime embeds current libs (no drift) | **PASS** | Prod WF20 `QBNFpiZE_IHKUKkf` byte-identical to repo; 0 drift across 36 embedded blocks under `embed_lib.stripCore`; exhaustive drift sweep added to `test_stage4_workflows.js` (287 PASS). Commit `2565dcb`. |
+| — | **SOCIAL-DELIVERY-001** — a source_analysis with 0 deterministic records reaches the user | **PASS (live)** | `compact_report_ru` no-data guard now yields to a usable analysis; outbox `noData`/`xlsx_expected` analysis-aware. Live: req `req_17846304513`, WF20 1143/WF28 1149 (reuse, $0), Telegram msg **500** shows the analysis (no "Подходящих данных не собрано"), XLSX `vinci_ai_pilot_report_20260721_134232_report.xlsx` SHA-256 `4d303093…2797` (6 sheets: evidence 4/inferences 10/recommendations 4/pains 2), plan `completed`. Commit `1c63941`. |
+| §9 | Telegram-channel source analysis | **PASS (live)** | `t.me/rusmicrofinance` req `req_17846250562`; WF18 1132→WF20 1133→WF11 1134→WF16 1135→WF08 1136→WF10 1137→WF12 1138→**WF28 1139**. analysis `an_3f6ccdb3`, evidence hash `1264f813`, model `claude-sonnet-4-6`, fresh_call, 4 evidence items (`t.me/rusmicrofinance/6176,6178,6179,6181`), 18 items ALL citing ev_1–4, conf 18, cost $0.1045, tin 2719/tout 6426, lat 60s. XLSX 6 sheets. No market-wide claim; 1 absence-scoped inference demoted by the claim validator. |
+| §9 | Website source analysis (collection) | **PASS** | Firecrawl WF04 exec 1193 success (`autolombardn1.ru`); prior REPORT-TRUTH-D live (exec 1072); analysis cache-hit `an_eabc1c8` (1198, reuse). |
+| §9 | VK-community source analysis | **PASS (evidence, reuse) / live-collect EXTERNAL BLOCKER** | Real bridge over 48 stored `vk::sovcombank` rows (fresh, ≤22d, within 30d window) → **11 citable VK evidence items**, 31 off-topic dropped by relevance filter, no PII (phones/@handles) leaked. Analysis+delivery path is platform-agnostic and shared with the live-proven Telegram path. **Fresh VK collection blocked:** `MS_ENABLE_VK=false` + `MS_VK_ACCESS_TOKEN` absent → needs an operator-owned VK token (new credential). Stored D1–D4 snapshots (6 communities) prove the collector worked previously. |
+| §9 | Discovery (competitor_discovery routing) | **PASS (live)** | Synthetic webhook proof WF18 1110 → WF27 1111 (session 67), DISCOVERY-004. |
+| §9 | No-relevant-content path | **PASS (live)** | `gazprombank` WF20 1215 completed cleanly, 0 analysis targets (broad bank channel → no loan-relevant evidence); honest no-content, no false analysis. |
+| §9 | primary valid → no repair | **PASS (fixture)** | `test_stage_f_core.js` orchestration section. |
+| §9 | primary invalid → repair valid | **PASS (fixture)** | `test_stage_f_core.js` (invented evidence id → 1 repair → valid, 2 calls). |
+| §9 | primary invalid → repair invalid → deterministic fallback | **PASS (fixture)** | `test_stage_f_core.js` (fail-closed, exactly 2 calls, never loops). |
+| §9 | transport failure → fallback (no repair) | **PASS (fixture)** | `test_stage_f_core.js`; live transient handled (gateway 503 retried, Sheets 429 cooled+retried). |
+| §9 | owner-isolation | **PASS (fixture)** | owner-scoped assertions across `test_agent_e2e`/`test_reporting_e2e`/`test_analysis_modes`. |
+| §9 | callback + terminal-plan idempotency | **PASS (live, prior)** | session 61/64 (plan-fingerprint dedup, terminal state). |
+| §10 | ≥5 fresh (non-cache-hit) analyses + telemetry | **PASS (live)** | 5 `fresh_call` analyses, model `claude-sonnet-4-6`, no repair, no fallback: `an_3f6ccdb3` rusmicrofinance (2719/6426, 60s, $0.1045); `an_a228d496` centralbank_russia (5679/839, 121s, $0.0296); `an_4115eb3b` probonds (3265/507, 92s, $0.0174); `an_142594e` frank_media (2719/368, 75s, $0.0137); `an_3d9dcde4` banksta (3731/676, 147s, $0.0213). Total ~$0.187. |
+| §9 | 3-source synthesis / comparison | **REMAINING** | `ccSynthesisTool` schema exists; multi-source synthesis orchestration NOT wired (`claude_analysis` exports only `analyzeSource`). Belongs to F.5 Unified Analysis Result / Analyst Agent. |
+| §9 | WF27 top-candidate enrichment | **REMAINING** | `ccCandidateTool` schema exists; top-3–5 gating + WF27→WF28 wiring not built. Belongs to F.5. |
+| §9 | Public-lead interpretation | **REMAINING** | Not built. Belongs to F.5 Analyst Agent scope. |
+
+**Cost ledger (session 68):** 5 fresh analyses ≈ $0.187; delivery-proof reuse $0; VK evidence proof $0 (offline compute over stored data). Well within the $3 LLM budget.
+
+**Infra note:** running 3 orchestrations concurrently exhausted the per-minute Google Sheets write quota (429 on `Append live_source_runs`) and left 11 `finished=0` zombie executions — a transient data artifact, not a code defect; sequential runs after a cooldown succeeded. Production stayed healthy throughout (90/17, RestartCount=0).
+
+**Stage F verdict:** the evidence-bound analyst, social bridge, **delivery to the user**, website/Telegram source analysis, discovery, failure matrix, idempotency, and ≥5 fresh analyses are DONE + PROVEN. Three analysis-mode extensions (synthesis/comparison, WF27 enrichment, public-lead interpretation) remain and are folded into Stage F.5. **Stage F is NOT yet formally gated** pending those three (or an explicit re-scope into F.5).
+
 ## Session 66b (2026-07-21) — SOCIAL-BRIDGE-001: social evidence reaches source analysis (deployed, parity OK)
 
 | Item | Evidence |

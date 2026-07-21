@@ -23,8 +23,41 @@ regenerated `20_agent_orchestrator.json` had already been deployed to prod. Conf
 - Prod verified: 90 workflows / 17 active, WF18 webhook `POST ms-telegram-agent` registered, proxy + ngrok
   active, RestartCount=0.
 
-Next: Telegram + VK live source-analysis proofs on a fresh, non-stale accepted source run (do NOT reuse the
-`stale_source` `req_84613707` run; do NOT weaken the quality gate).
+**SOCIAL-DELIVERY-001 (commit `1c63941`) — a source_analysis with 0 deterministic records now reaches the user.**
+Telegram live proof exposed the real remaining defect: WF28 produced a full evidence-cited analysis
+(`an_3f6ccdb3`, rusmicrofinance) and the XLSX was complete, but Telegram delivered "Подходящих данных не собрано"
+because `compact_report_ru`'s no-data guard fired on `records_reported===0` (social channels have 0 competitor-
+profile records) BEFORE rendering the analysis. Fix: the no-data profile now yields to a usable analysis; the WF20
+outbox `noData`/`xlsx_expected` are analysis-aware. Live-verified via reuse ($0): Telegram msg **500** shows the
+analysis, XLSX 6 sheets, plan `completed`. Tests A–E added to `test_report_truth_quality.js` (183 PASS); full
+regression ALL PASS; deployed WF20 backup-first (parity OK, active, 90/17, RestartCount=0).
+
+**Telegram source analysis — LIVE-PROVEN end-to-end** (`req_17846250562`, WF18 1132→WF20 1133→…→WF28 1139).
+**5 fresh (non-cache-hit) analyses** with full telemetry: `an_3f6ccdb3` rusmicrofinance, `an_a228d496`
+centralbank_russia, `an_4115eb3b` probonds, `an_142594e` frank_media, `an_3d9dcde4` banksta — all `fresh_call`,
+enriched, no repair/fallback, model claude-sonnet-4-6, ~$0.187 total.
+
+**VK — evidence path proven on real data; live collection is an EXTERNAL BLOCKER.** Real `social_evidence` bridge
+over 48 stored `vk::sovcombank` rows → 11 citable VK evidence items (31 off-topic dropped, no PII leaked). Fresh
+VK collection needs an operator VK token (`MS_ENABLE_VK=false`, `MS_VK_ACCESS_TOKEN` absent). Analysis+delivery is
+platform-agnostic and shared with the live-proven Telegram path.
+
+**Stage F matrix written to `docs/STAGE_F_ACCEPTANCE.md` (session 68).** DONE+PROVEN: analyst, social bridge,
+delivery, website/Telegram analysis, discovery, no-content path, failure matrix (fixtures), idempotency, 5 fresh
+analyses. **REMAINING before the Stage F gate:** 3 analysis-mode extensions — 3-source synthesis/comparison, WF27
+top-candidate enrichment, public-lead interpretation (schemas exist in `claude_contracts`; orchestration unbuilt;
+`claude_analysis` exports only `analyzeSource`). These are folded into Stage F.5 (Analyst Agent / Unified Analysis
+Result / Opportunity Radar). **Stage F is NOT yet formally gated.** F.5 / G / H not started.
+
+**Infra lesson:** do NOT run orchestrations concurrently — 3 parallel runs hit the per-minute Google Sheets write
+quota (429 on `Append live_source_runs`) and left 11 `finished=0` zombie executions (transient artifact, not a
+code defect). Run source analyses SEQUENTIALLY with a short cooldown. `scratchpad/synthetic_tg.js` drives the
+signed webhook (message|approve|reject); secret/chat pulled from container env, never printed.
+
+**Exact next action:** decide the scope of synthesis/comparison + WF27 enrichment + public-lead interpretation —
+either build them (lib fn in `claude_analysis`/`analysis_bridge` + WF20/WF27 wiring + deploy + live proof) to
+gate Stage F standalone, OR formally re-scope them into Stage F.5's Unified Analysis Result + Analyst Agent and
+gate Stage F on the proven core. Then proceed to Stage F.5 (read `docs/STAGE_F5_OPPORTUNITY_RADAR_AGENT.md`).
 
 ### (Historical, now resolved) blocker diagnosis
 Branch `fix/stage-f-post-migration-acceptance`, HEAD `235c4df`, **7 ahead / 0 behind** origin/main. Worktree
