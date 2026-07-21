@@ -80,6 +80,43 @@ Shared-lib changes (report_package, execution_summary, semantic_core, analysis_r
 plan_render_ru) force redeploy of every embedding workflow — the drift sweep in `test_stage4_workflows.js` enforces
 parity. Run source analyses SEQUENTIALLY only.
 
+## Session 68c — WIP2 (callback UX + source roles), all offline-committed (NOT yet deployed)
+
+- `b4fde4a` **WIP2a**: `plan_render_ru.approvalOutcomeRu` — clean callback wording (no «план не найден»/internal
+  ids): already-processed / expired-stale / wrong-request / malformed. `plan_render_ru.planGoalRu` — plan goal by
+  SOURCE TYPE, never niche: social→«анализ публичного источника и рыночных сигналов», website→«анализ
+  конкурента», mixed→«предварительная оценка». Regenerated 6 workflows (18/19/20/21/22/26). Tests in
+  `test_plan_render_ru.js` (71). **Wired but NOT deployed** (batched for the gate).
+- `5bd90ff` **WIP2b**: `n8n/lib/source_role.js` — evidence-based role classifier (direct_competitor /
+  adjacent_player / industry_source / news_source / public_community / irrelevant_or_uncertain), role from
+  evidence never niche. `test_source_role.js` (16, registered `source-role`): rusmicrofinance→industry,
+  banksta→news, PRObonds NOT competitor, own-offer site→competitor. **Lib only — NOT yet wired into the report.**
+
+### Remaining before the Stage F gate (exact, in order)
+1. **WIP2b wiring**: thread `classifySourceRole` into the analysis/report so Telegram + XLSX state source_role,
+   relevance, direct_competitor(bool), confidence, limitations. (In `analysis_report_ru`/`report_package` +
+   WF28/WF20; consumed via the Unified Analysis Result.)
+2. **WIP3 A–F** (report/XLSX truth): A counters (checked_sources = unique admitted sources; llm_primary_calls /
+   llm_repair_calls from WF28 telemetry; external_requests = real network calls even at $0; reuse shows 0 new
+   calls + lineage; values agree across Telegram/XLSX/stored/summary). B evidence dedup (one canonical row per
+   evidence_id/URL in «Доказательства»; raw social_post only in hidden sheet). C post-level semantic relevance
+   (exclude general-finance-only posts — banksta British Steel/Oracle CDS — require real lending relevance).
+   D ownership-safe recommendations («Подготовить для собственного канала материал на основе сигнала из X», never
+   «Разместить в t.me/X»). E market-claim scoping in USER-FACING text (claim-validator demotion must surface, not
+   only hidden audit). F malformed-fragment exclusion («пониженна» etc. → damaged/needs_verification, never a fact).
+3. **WIP4**: `n8n/lib/unified_analysis_result.js` (minimal versioned contract) + 3 modes — 3-source
+   synthesis/comparison, WF27 top-candidate enrichment, public-lead interpretation — with deterministic fallback +
+   bounded Claude. Live-prove each sequentially over stored accepted sources.
+4. **Stage F gate**: focused suites → one full regression → verify generated exports → ONE consolidated
+   backup-first deploy of ALL changed workflows (jsCode tool; structural only for genuine topology change) →
+   parity/health/inventory/webhook/proxy/ngrok/RestartCount → 11 sequential live proofs (never concurrent) →
+   inspect Telegram text + XLSX + SHA-256 → update matrix (PASS/MISSING/EXTERNAL BLOCKER, no «substantially») →
+   commit → declare «STAGE F COMPLETE — GO FOR F.5».
+5. Then F.5 (`docs/STAGE_F5_OPPORTUNITY_RADAR_AGENT.md`), then canonical G, then canonical H, then push+PR+CI+merge.
+
+**VK** stays an EXTERNAL BLOCKER for fresh collection only; use stored `vk::sovcombank` (48 rows) evidence for all
+contract/classifier/comparison/report dev. **Do not run orchestrations concurrently** (Sheets 429 → zombies).
+
 ### (Historical, now resolved) blocker diagnosis
 Branch `fix/stage-f-post-migration-acceptance`, HEAD `235c4df`, **7 ahead / 0 behind** origin/main. Worktree
 carried the previous session's regenerated `20_agent_orchestrator.json` (2 embedded-lib one-liners changed).
