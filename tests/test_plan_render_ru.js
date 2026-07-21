@@ -151,18 +151,30 @@ m('ZERO_SOURCE_SCAN_FAILS_CLOSED', true);
 m('CALLBACKS_PRESERVED', true);
 // WIP2 CALLBACK-UX-001 — a callback that cannot be applied gets a clean, self-contained user message; never an
 // internal code / workflow id / row number / ownership detail.
-A.section('WIP2 — callback outcome wording (no internal leakage)');
+// CALLBACK-PRIVACY-001 — only self-owned safe states get a specific message; every cross-scope mismatch
+// (owner/chat/request/hash/unknown/malformed) collapses to ONE neutral message that reveals nothing about a
+// foreign plan's existence, owner, chat, id, hash, row or exception.
+A.section('CALLBACK-PRIVACY-001 — callback outcome wording (no internal/foreign leakage)');
 {
-  A.eq('duplicate/already-processed -> friendly', R.approvalOutcomeRu('not_awaiting_approval:running'), 'Этот план уже запущен или завершён.');
-  A.eq('expired/stale plan -> re-request', R.approvalOutcomeRu('no_plan'), 'Этот план устарел. Отправьте запрос ещё раз, чтобы создать новый.');
-  A.eq('another request -> generic, no ids', R.approvalOutcomeRu('request_mismatch'), 'Эта кнопка относится к другому запросу. Отправьте новый запрос.');
-  A.eq('another owner -> author-only', R.approvalOutcomeRu('owner_mismatch'), 'Подтвердить запрос может только его автор.');
-  const malformed = R.approvalOutcomeRu('totally_unknown_code_xyz');
-  A.ok('malformed -> safe generic', /устарел|запрос ещё раз/i.test(malformed));
-  for (const s of ['no_plan', 'not_awaiting_approval:x', 'request_mismatch', 'owner_mismatch', 'garbage']) {
+  const NEUTRAL = 'Не удалось применить это подтверждение. Отправьте запрос ещё раз, чтобы создать новый план.';
+  A.eq('duplicate/already-processed -> specific', R.approvalOutcomeRu('not_awaiting_approval:running'), 'Этот план уже запущен или завершён.');
+  A.eq('expired/stale plan -> specific', R.approvalOutcomeRu('no_plan'), 'Этот план устарел. Отправьте запрос ещё раз, чтобы создать новый.');
+  // every cross-scope mismatch -> the SAME neutral message (no distinguishing owner/chat/request/hash)
+  A.eq('owner_mismatch -> neutral', R.approvalOutcomeRu('owner_mismatch'), NEUTRAL);
+  A.eq('chat_mismatch -> neutral', R.approvalOutcomeRu('chat_mismatch'), NEUTRAL);
+  A.eq('request_mismatch -> neutral', R.approvalOutcomeRu('request_mismatch'), NEUTRAL);
+  A.eq('plan_hash_mismatch -> neutral', R.approvalOutcomeRu('plan_hash_mismatch'), NEUTRAL);
+  A.eq('unknown/malformed -> neutral', R.approvalOutcomeRu('totally_unknown_code_xyz'), NEUTRAL);
+  A.eq('empty reason -> neutral', R.approvalOutcomeRu(''), NEUTRAL);
+  // the four privacy-sensitive mismatches must be INDISTINGUISHABLE from each other
+  const set = new Set(['owner_mismatch', 'chat_mismatch', 'request_mismatch', 'plan_hash_mismatch'].map(r => R.approvalOutcomeRu(r)));
+  A.eq('cross-scope mismatches are indistinguishable (single message)', set.size, 1);
+  // no internal token / id leaks for ANY reason
+  for (const s of ['no_plan', 'not_awaiting_approval:x', 'request_mismatch', 'owner_mismatch:1188', 'chat_mismatch', 'plan_hash_mismatch:abc123', 'garbage', 'req_17846:approve']) {
     const t = R.approvalOutcomeRu(s);
-    A.ok('no internal code leaks for "' + s + '"', !/no_plan|not_awaiting|mismatch|plan_hash|req_|approve:|workflow|exec/i.test(t));
-    A.ok('never the old internal "план не найден" for "' + s + '"', t.indexOf('план не найден') < 0);
+    A.ok('no internal code/id leaks for "' + s + '"', !/no_plan|not_awaiting|mismatch|plan_hash|req_[0-9]|approve:|reject:|workflow|exec|row|\bid\b|1188|abc123/i.test(t));
+    A.ok('never «план не найден» for "' + s + '"', t.indexOf('план не найден') < 0);
+    A.ok('does not reveal a foreign plan/owner/chat for "' + s + '"', !/автор|чат|владел|другому/i.test(t));
   }
 }
 

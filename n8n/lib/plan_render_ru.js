@@ -281,20 +281,22 @@ function approvalDuplicateToastRu(kind) { return ruEnum(RU_APPROVAL_DUP_TOAST, r
 // (a lowercase fragment reused by the WF20 budget/gate blocked-response), this returns a COMPLETE sentence and
 // exposes NO internal code, workflow/execution id, row number, ownership detail or exception. The callback stays
 // bound to its exact agent_request_id upstream; this only chooses the words the user sees.
+// CALLBACK-PRIVACY-001: only the SAFE, self-owned cases get a specific message. Any cross-scope mismatch
+// (owner/chat/request/hash or unknown) collapses to ONE neutral result that reveals nothing about whether a
+// foreign plan exists, who owns it, which chat/request/hash it is, or any workflow/row/exec id. The exact reason
+// code stays in execution telemetry only.
 var RU_APPROVAL_OUTCOME = {
   not_awaiting_approval: 'Этот план уже запущен или завершён.',
-  no_plan: 'Этот план устарел. Отправьте запрос ещё раз, чтобы создать новый.',
-  owner_mismatch: 'Подтвердить запрос может только его автор.',
-  chat_mismatch: 'Это подтверждение пришло из другого чата.',
-  request_mismatch: 'Эта кнопка относится к другому запросу. Отправьте новый запрос.',
-  plan_hash_mismatch: 'План изменился после показа. Запросите его заново.'
+  no_plan: 'Этот план устарел. Отправьте запрос ещё раз, чтобы создать новый.'
 };
+var RU_APPROVAL_NEUTRAL = 'Не удалось применить это подтверждение. Отправьте запрос ещё раз, чтобы создать новый план.';
 function approvalOutcomeRu(reason) {
   var first = ruText(reason).split(';')[0].trim();
   // prefix-match: reason codes may carry a suffix (e.g. "not_awaiting_approval:running")
   var keys = Object.keys(RU_APPROVAL_OUTCOME);
   for (var i = 0; i < keys.length; i++) { if (first.indexOf(keys[i]) === 0) return RU_APPROVAL_OUTCOME[keys[i]]; }
-  return 'Это подтверждение устарело. Отправьте запрос ещё раз, чтобы создать новый.';
+  // owner_mismatch / chat_mismatch / request_mismatch / plan_hash_mismatch / anything else → privacy-neutral.
+  return RU_APPROVAL_NEUTRAL;
 }
 
 // ================= UX-RU-002 — Vinci persona + full user-facing message surface =========================
