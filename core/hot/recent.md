@@ -2,6 +2,67 @@
 
 Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm/decisions.md`.
 
+## Session: 2026-07-21 (session 68) — WF20 runtime-embed VERIFIED in prod (Docker blocker resolved by operator)
+
+**RESOLVED:** the operator restored Docker access for `claude-runner` (`usermod -aG docker` + `setfacl -m
+u:claude-runner:rw /var/run/docker.sock`). The blocker diagnosis below is kept for the record; access is back
+(n8n 2.23.3, `/healthz` ok, container up, RestartCount=0).
+
+**WF20 runtime-embed milestone (Stage F immediate WIP) — VERIFIED, no deploy needed.** The prior session's
+regenerated `20_agent_orchestrator.json` had already been deployed to prod. Confirmed this session:
+- Prod WF20 (`QBNFpiZE_IHKUKkf`, active=true, 68 nodes) is **byte-identical** to the worktree repo WF20 (0
+  code-node diffs) — the surgical deploy tool reports "no jsCode/workflowInputs differences — prod already
+  matches repo".
+- **0 drift** across all 36 embedded lib blocks under the canonical `embed_lib.stripCore` transform. Prod
+  `Build Analysis Inputs` carries the SOCIAL-BRIDGE-001 evidence-only target logic + limitations; `Merge
+  Analyses` embeds analysis_bridge.
+- Hardened `tests/test_stage4_workflows.js` with an **exhaustive stripCore drift sweep** over every embedded
+  block in WF17–26 (the old EMBEDS spot-check missed WF20's analysis_bridge and every require-having embed).
+  `semantic_core` excluded (taxonomy is fs-inlined by the generator; covered behaviourally by
+  `test_wf26_vk_rmr_mapping.js`). Suite **287 PASS / 0 FAIL**; sweep confirms the WF20 analysis_bridge embed.
+- Prod verified: 90 workflows / 17 active, WF18 webhook `POST ms-telegram-agent` registered, proxy + ngrok
+  active, RestartCount=0.
+
+Next: Telegram + VK live source-analysis proofs on a fresh, non-stale accepted source run (do NOT reuse the
+`stale_source` `req_84613707` run; do NOT weaken the quality gate).
+
+### (Historical, now resolved) blocker diagnosis
+Branch `fix/stage-f-post-migration-acceptance`, HEAD `235c4df`, **7 ahead / 0 behind** origin/main. Worktree
+carried the previous session's regenerated `20_agent_orchestrator.json` (2 embedded-lib one-liners changed).
+Production HTTP health `{"status":"ok"}`, webhook proxy + ngrok both `active` (verified via curl + systemctl —
+those don't need Docker).
+
+**BLOCKER (matches mission stop condition "account-owner intervention that cannot be reproduced through an
+authorized test path"): the `claude-runner` shell user can no longer reach the Docker socket.** The prior session
+ran `docker exec n8n-n8n-1 …` freely; this session cannot. Evidence, all confirmed this session:
+- `docker ps` / `docker exec n8n-n8n-1 n8n --version` → `permission denied … unix:///var/run/docker.sock`
+  (exit 1), identical with the Bash sandbox ON and OFF — a kernel-level EACCES, not a permission-prompt issue.
+- Socket is `srw-rw---- root docker`; `getent group docker` → `docker:x:107:` (**empty — no user is a member**).
+- `sudo -n -l` → "user claude-runner may not run sudo" (sudo fully disabled). `/opt/n8n` unreadable.
+- No alternative path: no `N8N_API`/`DOCKER_HOST` env, no `~/.n8n`, no rootless socket, no API key anywhere in
+  repo/env/home; n8n `/api/v1/workflows` and `/rest/login` both return **401**.
+
+Docker is the sole mechanism for: deploying WF20, inspecting executions (sqlite via `docker exec node -e`),
+reading the webhook secret for the synthetic proof, and reading runtime env/costs. Therefore **every remaining
+mission item is blocked** — WF20 deploy+parity, live Telegram/VK/discovery/analysis proofs, all five fresh
+analyses, and every formal gate (F, F.5, G, H all require production deployment + live evidence). No honest
+offline-only progress reaches a gate, so no fabricated/speculative work was done.
+
+**To unblock (operator, as root over SSH — restores access the prior session already had):**
+- Immediate, non-persistent: `setfacl -m u:claude-runner:rw /var/run/docker.sock`
+- Persistent: `usermod -aG docker claude-runner` **then restart the Claude Code agent session** (group
+  membership is applied at login; the already-running shell won't pick it up otherwise).
+Verify with: `docker exec n8n-n8n-1 n8n --version` (should print 2.23.3).
+
+**Exact next action once Docker is restored** (continues Session-67 item 1):
+1. `docker exec n8n-n8n-1 sh -c "n8n export:workflow --id=QBNFpiZE_IHKUKkf --output=/tmp/wf20_prod.json"` then
+   `docker cp n8n-n8n-1:/tmp/wf20_prod.json scratchpad/backup/wf20_prod_<stamp>.json` (backup-first).
+2. Diff prod WF20's embedded `analysis_bridge` against `n8n/lib/analysis_bridge.js`; if stale, deploy via
+   `node tools/deploy_workflow_jscode.js` (topology unchanged), import + publish, re-export, verify parity + that
+   prod WF20 contains SOCIAL-BRIDGE-001 (evidence-only target creation) and active=1.
+3. Then run the Telegram + VK live source-analysis proofs on a **fresh, non-stale** accepted source run (do NOT
+   reuse the `stale_source`-flagged `req_84613707` run; do NOT weaken the quality gate).
+
 ## Session: 2026-07-21 (session 67) — SOCIAL-BRIDGE-001 deployed; Stage F still OPEN
 
 Branch `fix/stage-f-post-migration-acceptance`, `6f441b0` -> `249d16b`. **5 -> 6 commits ahead of origin/main**

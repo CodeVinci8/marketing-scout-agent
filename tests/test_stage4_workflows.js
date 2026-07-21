@@ -46,6 +46,54 @@ for (const [file, node, libs] of EMBEDS) {
   }
 }
 
+// ----- authoritative, EXHAUSTIVE drift sweep ----------------------------------------------------------------
+// The hand-maintained EMBEDS list above only spot-checks a few nodes with the naive libCore() stripper, which
+// cannot handle a lib that require()s a sibling (report_package/xlsx_writer). SOCIAL-BRIDGE-001 added the
+// analysis_bridge embed to WF20's "Build Analysis Inputs"/"Merge Analyses" — neither was covered. This sweep
+// walks EVERY `// embedded n8n/lib/<x>.js … // --- end embedded <x> ---` block in every generated stage4/5
+// workflow and asserts it equals embed_lib.stripCore(<x>) — the exact transform the generator applies — so any
+// embed drift (require-having libs included) fails closed here regardless of the EMBEDS list.
+{
+  const { stripCore } = require('../tools/embed_lib.js');
+  const strippedCache = {};
+  function libStripped(name) {
+    if (!(name in strippedCache)) {
+      strippedCache[name] = stripCore(fs.readFileSync(path.join(__dirname, '..', 'n8n', 'lib', name + '.js'), 'utf8')).trim();
+    }
+    return strippedCache[name];
+  }
+  const SWEEP_FILES = ['17_agent_settings_config.json', '18_telegram_agent_gateway.json', '19_request_planner.json',
+    '20_agent_orchestrator.json', '21_deep_competitor_analysis.json', '22_conversation_control.json',
+    '23_scheduled_source_monitor.json', '24_report_export_delivery.json', '25_weekly_digest.json',
+    '26_vk_public_community_collector.json'];
+  // semantic_core is NOT a plain stripCore embed: the generator inlines config/taxonomy.json (it reads it via fs
+  // at load time, which an n8n Code node cannot do), so its embed is intentionally larger than stripCore(core).
+  // Its drift is proven behaviourally instead by tests/test_wf26_vk_rmr_mapping.js (embedded classifyOffline ==
+  // library classifyOffline, byte-for-byte core). Excluded here to avoid a false positive.
+  const SWEEP_SKIP_LIBS = new Set(['semantic_core']);
+  const blockRe = /\/\/ embedded n8n\/lib\/([a-z0-9_]+)\.js[^\n]*\n([\s\S]*?)\n\/\/ --- end embedded \1 ---/g;
+  let sweptBlocks = 0;
+  let sweptBridge = false;
+  for (const f of SWEEP_FILES) {
+    const wf = H.loadWorkflow(f);
+    for (const n of (wf.nodes || [])) {
+      const code = String((n.parameters || {}).jsCode || '');
+      if (!code) continue;
+      let m;
+      blockRe.lastIndex = 0;
+      while ((m = blockRe.exec(code))) {
+        const name = m[1];
+        if (SWEEP_SKIP_LIBS.has(name)) continue;
+        sweptBlocks++;
+        if (f === '20_agent_orchestrator.json' && name === 'analysis_bridge') sweptBridge = true;
+        A.eq(f + ' :: ' + n.name + ' embeds ' + name + ' (stripCore, no drift)', m[2].trim(), libStripped(name));
+      }
+    }
+  }
+  A.ok('drift sweep actually walked embedded blocks', sweptBlocks >= 30);
+  A.ok('SOCIAL-BRIDGE-001: WF20 analysis_bridge embed is covered by the sweep', sweptBridge);
+}
+
 // ----- WF17: config loader runs and returns fail-closed defaults -----------------------------------------
 A.section('WF17 — config loader resolves one config object');
 const WF17 = WFS['17_agent_settings_config.json'];
