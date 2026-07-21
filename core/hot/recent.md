@@ -156,6 +156,46 @@ New commits this session (from `76ebf5a`): `b4fde4a` `5bd90ff` `14ebc64` `81a070
 session's WF12 update), NOT gen_stage4 (which only covers WF17-28). plan_render_ru changes touch WF18/19/20/21/22/26.
 report_package/execution_summary/analysis_report_ru changes will touch WF20/24/25. Inventory ALL before deploy.
 
+## Session 68e — WIP3 A–F complete offline + WIP2/WIP4 foundations (committed; STILL not deployed)
+
+New commits (from `76ebf5a`): b4fde4a, 5bd90ff, 14ebc64, 81a0704, 9dc76ca, 0c38a77, 6116942, 43f89cd, d2bbcab,
+0a4a62d, acfa4cc, 7207330 (+ this continuity). All offline-tested; production UNCHANGED (WIP1-era deploy, 90/17).
+
+WIP3 defects — ALL SIX implemented + tested offline:
+- A counters (`0a4a62d`): analysis_bridge exposes llm_primary_calls/llm_repair_calls; WF20 summary counts WF28
+  (no WF12 double-count); execution_summary emits sources_checked (unique admitted); Shape Report Bundle prefers it.
+- B evidence dedup (`acfa4cc`): report_package.rpDedupeEvidence — one canonical «Доказательства» row per
+  evidence_id/URL; WF20/24/25 regenerated.
+- C relevance (`43f89cd`): social_evidence.seNichePrimary — broad кредит/займ catch-all dropped as low_relevance
+  when off-domain (bonds/macro/rating); WF12 embed re-synced.
+- D ownership-safe recs + F damaged fragments (`6116942`): `report_text_safety.js` (LIB ONLY — **NOT yet wired**
+  into report_package recommendation/offer rendering).
+- E market-claim scoping (`7207330`): claim_validation appends «без сравнения… нельзя подтвердить максимум рынка»
+  and CV_MARKET_ZONE catches «среди автоломбардов/банков…»; surfaces in Telegram+XLSX via cvValidateAnalyses.
+WIP2: privacy (`81a0704`) + plan-goal (`9dc76ca`) WIRED (WF18/19/…); source_role.js (`5bd90ff`) LIB — NOT wired.
+WIP4: unified_analysis_result.js (`0c38a77`) contract+migration LIB — NOT wired; the 3 modes NOT built.
+
+### EXACT remaining before the Stage F gate (in order)
+1. **Wire the built libs into the render/export path (currently inert):**
+   - report_text_safety D/F → `report_package.js` (apply ownershipSafeRecommendationRu to recRows/recommendation
+     text; isDamagedFragment to offer/fact fields → mark damaged/exclude) + `compact_report_ru` crRecs for
+     Telegram. Add `report_text_safety` to the embed lists of the nodes that embed report_package/compact_report_ru
+     (WF20 Build Report XLSX + Build Delivery Outbox, WF24 Build Exports & Outbox, WF25 Build Digest Attachments)
+     BEFORE the dependent lib; report_package/compact_report_ru `require('./report_text_safety.js')` (stripped on
+     embed). Add focused wiring tests.
+   - source_role (WIP2b) → thread classifySourceRole into the analysis/report so Telegram+XLSX+stored expose
+     source_role/relationship_to_niche/direct_competitor/confidence/limitations (via the UAR).
+2. **WIP4 modes** (build on unified_analysis_result): 3-source synthesis/comparison, WF27 top-candidate
+   enrichment, public-lead interpretation (bounded Claude + deterministic fallback).
+3. **Stage F gate**: regenerate → full regression → ONE consolidated backup-first deploy of ALL changed
+   workflows (WF12 via isolatedModule replacer; WF18-28 via deploy_workflow_jscode.js) → parity/health/inventory
+   → 14 SEQUENTIAL live proofs → inspect Telegram+XLSX+SHA-256 → update matrix → declare.
+4. Then F.5 / canonical G / canonical H / push+PR+CI+merge.
+
+**Workflows changed by regeneration so far this session (need deploy at the gate):** WF12 (social_evidence),
+WF18/19/20/21/22/26 (plan_render_ru), WF20 (analysis_bridge, execution_summary, claim_validation, Progress: Done,
+outbox), WF24/25 (report_package). Re-inventory with `git`/regeneration before the consolidated deploy.
+
 ### (Historical, now resolved) blocker diagnosis
 Branch `fix/stage-f-post-migration-acceptance`, HEAD `235c4df`, **7 ahead / 0 behind** origin/main. Worktree
 carried the previous session's regenerated `20_agent_orchestrator.json` (2 embedded-lib one-liners changed).
