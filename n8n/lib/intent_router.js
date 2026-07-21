@@ -177,16 +177,29 @@ function deterministicIntent(parsed, ctx) {
   // discovery signal — "новых", "telegram-каналы/vk-сообщества/сайты конкурентов", an explicit platform ("в тг/vk"),
   // or "найди и добавь". A PLAIN "найди конкурентов" stays competitor_search (the analysis/plan path). A pasted
   // URL/@channel is explicit-source analysis (handled above); "проверь отслеживаемые …" is a tracked-source check.
+  // DISCOVERY-004 (live defect, exec 1093 «Найди телеграмм каналы по птс»): the platform word must tolerate the
+  // ordinary Russian spelling variants. `телеграм` alone does NOT match «телеграмм каналы» — after consuming
+  // "телеграм" the next character is the second "м", so the following `\s*-?\s*канал` fails and the whole
+  // discovery signal collapses. The request then fell through to competitor_search, i.e. the user asked to FIND
+  // channels and got an approval prompt for a competitor ANALYSIS instead. One letter changed the intent.
+  const __TG = '(?:telegram|телеграм{1,2}|телега|(?:^|\\s)tg(?=\\s|$)|(?:^|\\s)тг(?=\\s|$|-))';
+  const __VK = '(?:vk|вк|вконтакте)';
   const __discoverySignal =
     /нов[а-яё]*\s+(источник|конкурент|канал|сообществ|сайт)/i.test(text)
-    || /(telegram|телеграм|(^|\s)tg(\s|$))\s*-?\s*канал/i.test(text)
-    || /(vk|вк|вконтакте)\s*-?\s*сообществ/i.test(text)
+    || new RegExp(__TG + '\\s*-?\\s*канал', 'i').test(text)
+    || new RegExp(__VK + '\\s*-?\\s*(сообществ|групп|паблик)', 'i').test(text)
+    // A platform word ANYWHERE together with its source-type word ("тг … каналы", "паблики вк") is a source hunt,
+    // not an analysis — word order in Russian is free, so adjacency must not be required.
+    || (new RegExp(__TG, 'i').test(text) && /канал[а-яё]*/i.test(text))
+    || (new RegExp(__VK, 'i').test(text) && /(сообществ|групп|паблик)[а-яё]*/i.test(text))
     || /канал[а-яё]*\s+(кредитн|брокер|конкурент|мфо|займ)/i.test(text)
     || /сообществ[а-яё]*\s+(кредитн|брокер|конкурент|по\s+кредит|по\s+займ)/i.test(text)
     // DEFECT-8: a find-request naming "сайт(ы)" is website discovery — "сайты конкурентов", "кредитных брокеров
     // сайты", "новые сайты …". A pasted URL is routed to analysis above; "проанализируй эти сайты" has no find-verb.
     || /сайт[а-яё]*/i.test(text)
-    || /(в|во)\s+(тг|телеграм|telegram|вк|vk|вконтакте)(\s|$|,|\.)/i.test(text)
+    // "… в тг" / "… во вконтакте": the platform word already follows a space here, so use the bare alternatives
+    // (the boundary-guarded __TG would demand a second leading space and never match).
+    || new RegExp('(в|во)\\s+(тг|телеграм{1,2}|telegram|вк|vk|вконтакте)(\\s|$|,|\\.)', 'i').test(text)
     || /найди?\s*и\s*добав|добавь\s*найден/i.test(text);
   if (/(найд|поищ|ищ[уи]|подбер|собери|find|search)/i.test(text)
     && __discoverySignal

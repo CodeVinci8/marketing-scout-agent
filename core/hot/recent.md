@@ -2,6 +2,59 @@
 
 Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm/decisions.md`.
 
+## Session: 2026-07-21 (session 66) — structural deploy tool, brand migration, CI hermeticity, discovery routing
+
+Branch `fix/stage-f-post-migration-acceptance`, start `ad0b58e` → four commits. Production verified healthy
+throughout (n8n 2.23.3, 90 workflows / 17 active, `/healthz` ok, proxy + ngrok active, 15G free).
+
+1. **`cf5432b` — canonical STRUCTURAL deploy tool** (`tools/deploy_workflow_structural.js`). Grafts the repo
+   topology onto a live export; preserves workflow id, active, settings, node ids, real credentials, webhookId
+   and **Execute Workflow bindings**. Found and fixed a real safety bug in the draft: it adopted repo
+   `parameters` wholesale, and since the repo ships `PASTE_WORKFLOW_ID`, a graft would have overwritten live
+   sub-workflow bindings — a read-only dry-run on prod WF20 shows *9* bindings protected. Credential resolution
+   for new nodes is fail-closed: explicit `--cred`, `--inherit` from a named sibling, an already-real repo id, or
+   a UNIQUE type match; ≥2 candidates aborts with an actionable, secret-free error. Modes: offline rehearsal,
+   live read-only dry-run with a structural diff, `--apply` (backup → import → re-export → parity → rollback
+   command), `--restore`. `tests/test_deploy_structural.js` 60/60.
+2. **`4273a54` — brand migration to Vinci AI Pilot.** Remote repointed to `CodeVinci8/Vinci-Ai-Pilot`. Product
+   prose, bot self-identification, and BRAND-001 user-visible file names (`vinci_ai_pilot_*` for XLSX/CSV/SVG).
+   `docs/BRANDING.md` records what stays as a **technical legacy alias** (credential names, systemd units, the
+   `/opt/marketing-scout-agent` path, the `marketing_scout_bootstrap` Sheets key, `marketing-scout/*/v1` schema
+   strings, `meta.instanceId`, archived v0 module, historical evidence). Directory NOT renamed — invisible to
+   users, would require touching live systemd units.
+3. **`a762af2` — CI root cause fixed.** GitHub Actions `offline-regression` had failed since 2026-06-28; the one
+   failing suite was `deploy-entrypoints`. `scripts/lib/n8n_exec.sh n8n_version_string()` ran `docker exec … n8n
+   --version` unconditionally, ignoring `MS_N8N_EXEC_DRY`; under the callers' `set -euo pipefail` a missing
+   docker (127) or absent container (1) made `detect_n8n_version()`'s substitution abort the whole script
+   SILENTLY, so `--credential-audit` never reached its own accounting. The suite only passed where a real n8n
+   container answered — the VPS. Fix honours DRY and never propagates a failure (empty ⇒ version "unknown",
+   already handled). CI-HERMETIC-001 guard added. Verified locally under both clean-runner conditions.
+4. **`?` — DISCOVERY-004, defect A of the live report.** Traced the real interaction: prod exec **1093**
+   (2026-07-19 04:09 UTC), message «Найди телеграмм каналы по птс» → `Route Intent` classified it
+   **competitor_search** (0.85, from=rule) instead of `competitor_discovery`. Root cause is one letter: the
+   signal regex `телеграм` cannot match «телеграмм каналы» — the second "м" breaks the following
+   `\s*-?\s*канал`. The user asked to FIND channels and got an analysis approval prompt. Fixed with tolerant
+   platform patterns (`телеграм{1,2}`, `тг`, `телега`, and platform+source-type presence regardless of word
+   order). 13 phrasings × 3 platforms locked in `tests/test_discovery_routing.js` (96/96). Deployed to prod WF18
+   backup-first (`scratchpad/backup/wf18_prod_20260721_052519.json`); 5 jsCode nodes updated (Route Intent plus
+   the 4 self-healing benign-drift embeds); ids/creds/connections/webhookIds identical; **n8n restarted** —
+   genuinely required, WF18 is the active trigger so its Code nodes are served from the in-memory cache. After
+   restart: health ok, 90/17, webhook registered to WF18, proxy + ngrok active.
+
+**Defect B is confirmed independent and still open (= WIP 4 / the next item).** Same request, exec **1096**:
+Telegram collection *worked* — 30 received, 22 written, 22 relevant, `source_outcome=collected_with_data` — but
+`Build Analysis Inputs` produced **0 targets**, so WF28 never ran (`records_analyzed: 0`, `llm_analyses: 0`,
+cost $0) and the report fell back to "no competitor profiles with offers/prices". `analysis_bridge`
+derives targets only from competitor profiles/offers, and social posts deliberately never become profiles
+(DEC-133/135 quality policy). Fix direction: canonical `Read raw_market_records` node in WF12 (deploy it with
+the new structural tool, inheriting the credential from an existing WF12 Sheets read node), bounded verbatim
+excerpts into `Build Deterministic Report`, and let `analysis_bridge` CREATE a social `source_analysis` target
+without a competitor profile.
+
+**Not live-proven yet:** the discovery fix end-to-end. It needs one real Telegram message from the operator's
+account — I will not spoof a user update or send unprompted messages. The fix is proven offline against the
+verbatim production text and byte-verified in the deployed export.
+
 ---
 
 ## Session: 2026-07-20 (session 65) — post-migration: COST-REUSE-002 honest deep-analysis reuse estimate (deployed, verified)
