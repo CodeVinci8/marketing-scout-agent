@@ -48,6 +48,18 @@ function buildExecutionSummary(parts) {
     sources_completed: num(roll.sources_ok, adapters.filter(a => a.status === 'ok').length),
     sources_failed: num(roll.sources_failed, adapters.filter(a => a.status === 'failed').length),
     sources_quarantined: num(roll.sources_quarantined, adapters.filter(a => a.quarantined).length),
+    // WIP3-A checked_sources: unique admitted sources actually used for THIS request — a source that produced
+    // data or was accepted/reused, keyed by source_run_id (fallback: source key). A social source_analysis that
+    // yields 0 competitor-profile rows still checked 1 source; this must never read 0 for a real collection.
+    sources_checked: (function () {
+      var seen = {};
+      adapters.forEach(function (a) {
+        if (!a) return;
+        var admitted = a.status === 'ok' || a.execution_mode === 'reuse' || a.source_outcome === 'reused_snapshot' || a.outcome_has_data === true || num(a.items_written, 0) > 0;
+        if (admitted) seen[str(a.source_run_id) || str(a.source) || JSON.stringify(a)] = true;
+      });
+      return Object.keys(seen).length;
+    })(),
     records_received: num(roll.items_written, adapters.reduce((a, r) => a + num(r.items_received, 0), 0)),
     records_unique: num(analysis.records_unique, 0),
     records_eligible: num(analysis.records_eligible, 0),

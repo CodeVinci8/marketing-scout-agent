@@ -222,6 +222,11 @@ function collectAnalyses(returns) {
     any_enriched: enriched.length > 0,
     count_total: rows.length, count_enriched: enriched.length,
     count_reused: reused, count_repaired: repaired, count_fallback: fallbacks,
+    // WIP3-A: truthful WF28 provider-call counts. A reuse (cache hit) makes ZERO provider calls; every other
+    // analysis (enriched OR deterministic-fallback) made exactly one PRIMARY attempt; a repaired analysis made
+    // one additional repair call. These are the canonical llm_primary_calls / llm_repair_calls for the summary.
+    llm_primary_calls: rows.length - reused,
+    llm_repair_calls: repaired,
     analysis_cost_usd: Math.round(cost * 1e6) / 1e6,
     // COST-SPLIT-001: the repair share of the analysis cost, its own canonical component downstream.
     analysis_repair_cost_usd: Math.round(repairCost * 1e6) / 1e6,
