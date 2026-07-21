@@ -217,6 +217,25 @@ A.section('§6 — real OOXML: Russian headers, hidden technical sheet, clickabl
   A.ok('the hidden sheet DOES carry the AI cost', tech.indexOf('0.084') >= 0);
 }
 
+// WIP3-D/F WIRING: report_package must APPLY the ownership-safe + damaged-fragment guards, not just carry the lib.
+A.section('WIP3-D/F wiring — recommendations are ownership-safe and damaged offers are marked');
+{
+  const str = v => (v == null ? '' : String(v));
+  const b = Object.assign({}, BUNDLE, {
+    recommendations: [{ recommendation: 'Разместить в канале t.me/banksta контент о снижении ставок', linked_finding_ids: 'ev_1', priority: 'high' }],
+    offers: [{ competitor: 'X', offer: 'Ставка пониженна', price_rate: 'пониженна', collected_at: NOW, evidence_url: 'https://x.ru' }]
+  });
+  const sheets = RP.buildSheets(b);
+  const rec = sheets.find(s => s.name === 'Рекомендации');
+  const recText = (rec.rows || []).map(r => str(r.recommendation)).join(' | ');
+  A.ok('third-party publish reframed to own channel', /Подготовить для собственного канала/.test(recText));
+  A.ok('no «Разместить в канале t.me/banksta»', recText.indexOf('Разместить в канале t.me/banksta') < 0);
+  const off = sheets.find(s => s.name === 'Офферы и цены');
+  const offText = (off.rows || []).map(r => str(r.offer) + ' ' + str(r.price_rate)).join(' | ');
+  A.ok('damaged offer/rate marked, not presented as fact', /повреждены|требует проверки/.test(offText));
+  A.ok('the raw «пониженна» fragment is not a confirmed rate', !/^пониженна$/.test(str((off.rows[0] || {}).price_rate)));
+}
+
 // WIP3-B: the visible «Доказательства» sheet has ONE canonical row per evidence_id / normalized URL — never the
 // same post as both a raw social_post and a numbered analyst row.
 A.section('WIP3-B — evidence deduplication (one canonical row per evidence_id/URL)');

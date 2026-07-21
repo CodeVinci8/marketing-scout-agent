@@ -10,6 +10,9 @@
 
 const { assertScope, safeReportId } = require('./report_export.js');
 const { workbookBuffer } = require('./xlsx_writer.js');
+// WIP3-D/F: ownership-safe recommendations + damaged-fragment exclusion. Embedded alongside report_package in the
+// generated nodes (require stripped on embed); the functions resolve from the shared node scope.
+const { ownershipSafeRecommendationRu, isDamagedFragment } = require('./report_text_safety.js');
 
 function str(v) { return v == null ? '' : String(v); }
 function low(v) { return str(v).trim().toLowerCase(); }
@@ -60,6 +63,9 @@ function rpDedupOffers(offers) {
   const seen = {}; const out = [];
   (offers || []).forEach(o => {
     const clean = Object.assign({}, o, { offer: rpCleanOffer(o && o.offer) });
+    // WIP3-F: never present a damaged/incomplete fragment as a confirmed offer/rate.
+    if (isDamagedFragment(clean.offer)) clean.offer = 'данные повреждены — требует проверки';
+    if (isDamagedFragment(clean.price_rate)) clean.price_rate = 'требует проверки';
     const key = rpNorm(str(clean.competitor) + '|' + str(clean.offer) + '|' + str(clean.price_rate));
     if (seen[key]) return; seen[key] = true;
     out.push(clean);
@@ -152,7 +158,9 @@ function buildSheets(b) {
     })))
     .filter(r => str(r.recommendation).trim())
     .map(r => (str(r.linked_finding_ids).trim() ? r
-      : Object.assign({}, r, { rationale: (str(r.rationale) ? str(r.rationale) + ' — ' : '') + 'гипотеза (без прямых доказательств в этом отчёте)' })));
+      : Object.assign({}, r, { rationale: (str(r.rationale) ? str(r.rationale) + ' — ' : '') + 'гипотеза (без прямых доказательств в этом отчёте)' })))
+    // WIP3-D: never tell the user to publish INSIDE a third-party source — reframe as own-channel material.
+    .map(r => Object.assign({}, r, { recommendation: ownershipSafeRecommendationRu(r.recommendation) }));
   const summaryRecs = [].concat(sum.key_recommendations || []).map(str).filter(s => s.trim());
   const recsCell = summaryRecs.length ? join(summaryRecs)
     : recRows.slice(0, 3).map(r => rpShort(r.recommendation, 120)).join('; ');
