@@ -66,6 +66,46 @@ function rpDedupOffers(offers) {
   });
   return out;
 }
+// WIP3-B: the visible «Доказательства» sheet must carry ONE canonical row per evidence_id / normalized public URL.
+// The Stage-F bundle historically CONCATENATED the raw social_evidence rows (b.evidence) with the analyst's
+// numbered evidence (an.evidence), so the same Telegram/VK post appeared twice (a raw social_post + a normalized
+// numbered row). Dedup keyed by evidence_id, else normalized URL, else an excerpt fingerprint. The analyst row is
+// preferred (it carries [n] ref / observation kind / quality); a raw row only fills a URL the analyst never cited.
+// The strongest (longest) excerpt and a real collection timestamp are preserved.
+function rpNormUrl(u) { return str(u).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[?#].*$/, '').replace(/\/+$/, ''); }
+function rpEvKey(id, url, excerpt) {
+  var k = str(id).trim(); if (k) return 'id:' + k;
+  var nu = rpNormUrl(url); if (nu) return 'u:' + nu;
+  return 'x:' + rpNorm(excerpt).slice(0, 60);
+}
+function rpDedupeEvidence(bundleEv, analysisEv) {
+  var byKey = {}; var order = [];
+  function put(k, row) { if (!byKey[k]) { byKey[k] = row; order.push(k); } else {
+    var cur = byKey[k];
+    if (str(row.excerpt).length > str(cur.excerpt).length && !/цитата не сохранена/.test(str(row.excerpt))) cur.excerpt = row.excerpt;
+    if (!cur.ref && row.ref) cur.ref = row.ref;
+    if (!cur.finding && row.finding) cur.finding = row.finding;
+    if (!cur.collected_at && row.collected_at) cur.collected_at = row.collected_at;
+    if (!cur.source_quality && row.source_quality) cur.source_quality = row.source_quality;
+  } }
+  (analysisEv || []).forEach(function (e) {
+    // key by the stable evidence_id, else the normalized URL — NEVER the display ref ([1]/[2]), which is not a
+    // cross-source identity and would defeat URL-based dedup against the raw bundle rows.
+    put(rpEvKey(e.evidence_id, e.url, e.excerpt), {
+      ref: str(e.ref), finding: rpFactRu(e.fact_type) + (str(e.type) ? ' (' + str(e.type) + ')' : ''),
+      competitor: str(e.source), excerpt: str(e.excerpt) || 'цитата не сохранена при сборе — ограничение данных',
+      url: str(e.url), source_quality: str(e.quality), collected_at: str(e.collected_at)
+    });
+  });
+  (bundleEv || []).forEach(function (e) {
+    put(rpEvKey(e.evidence_id, e.url || e.profile_url, e.excerpt), {
+      ref: str(e.ref) || '', finding: str(e.finding) || '', competitor: str(e.competitor) || str(e.source_name) || str(e.source_key),
+      excerpt: str(e.excerpt), url: str(e.url) || str(e.profile_url), source_quality: str(e.source_quality || e.quality),
+      collected_at: str(e.collected_at || e.published_at)
+    });
+  });
+  return order.map(function (k) { return byKey[k]; });
+}
 // Execution data mode: reuse vs fresh collection, from the reused_sources audit. ONE derivation feeds both the
 // user-facing Russian label and the canonical technical value — the two sheets can never disagree (§D).
 function rpDataMode(sum, b) {
@@ -260,14 +300,8 @@ function buildSheets(b) {
       // REPORT-TRUTH-D: each row carries the captured contract — bounded quote, observation kind, collection
       // time, source quality. A quote we did NOT capture is an explicit stated limitation, never a silent blank
       // that makes the evidence look complete — and never a fabricated excerpt.
-      rows: (b.evidence || []).concat((an.evidence || []).map(e => ({
-        ref: str(e.ref),
-        finding: rpFactRu(e.fact_type) + (str(e.type) ? ' (' + str(e.type) + ')' : ''),
-        competitor: str(e.source),
-        excerpt: str(e.excerpt) || 'цитата не сохранена при сборе — ограничение данных',
-        url: str(e.url),
-        source_quality: str(e.quality), collected_at: str(e.collected_at)
-      }))),
+      // WIP3-B: ONE canonical row per evidence_id / normalized URL — no raw+numbered duplicate of the same post.
+      rows: rpDedupeEvidence(b.evidence, an.evidence),
       highlight: (r, c) => c.key === 'source_quality' ? qualityHighlight(r.source_quality) : null
     },
     {
@@ -412,4 +446,4 @@ function shouldSendAttachment(existing, delivery) {
   return { send: true, reason: '' };
 }
 
-module.exports = { buildReportPackage, buildSheets, SHEET_NAMES, STAGE_F_SHEETS, ALWAYS_KEEP_SHEETS, qualityHighlight, attachmentDelivery, shouldSendAttachment, djb2 };
+module.exports = { buildReportPackage, buildSheets, SHEET_NAMES, STAGE_F_SHEETS, ALWAYS_KEEP_SHEETS, qualityHighlight, attachmentDelivery, shouldSendAttachment, djb2, rpDedupeEvidence, rpNormUrl };

@@ -217,4 +217,32 @@ A.section('§6 — real OOXML: Russian headers, hidden technical sheet, clickabl
   A.ok('the hidden sheet DOES carry the AI cost', tech.indexOf('0.084') >= 0);
 }
 
+// WIP3-B: the visible «Доказательства» sheet has ONE canonical row per evidence_id / normalized URL — never the
+// same post as both a raw social_post and a numbered analyst row.
+A.section('WIP3-B — evidence deduplication (one canonical row per evidence_id/URL)');
+{
+  const bundleEv = [
+    { evidence_id: 'ev_1', competitor: 'rusmicrofinance', url: 'https://t.me/rusmicrofinance/6176', excerpt: 'Полная дословная цитата поста про рынок МФО', published_at: '2026-07-07' },
+    { evidence_id: 'ev_2', competitor: 'rusmicrofinance', url: 'https://t.me/rusmicrofinance/6179', excerpt: 'Второй пост', published_at: '2026-07-08' }
+  ];
+  const analysisEv = [
+    { ref: '[1]', fact_type: 'positioning', source: 'rusmicrofinance', excerpt: 'цитата', url: 'https://t.me/rusmicrofinance/6176', quality: 'ok', collected_at: '2026-07-07', evidence_id: 'ev_1' },
+    { ref: '[3]', fact_type: 'risks', source: 'rusmicrofinance', excerpt: 'третий', url: 'https://t.me/rusmicrofinance/6181', quality: 'ok', collected_at: '2026-07-09', evidence_id: 'ev_3' }
+  ];
+  const rows = RP.rpDedupeEvidence(bundleEv, analysisEv);
+  const urls = rows.map(r => RP.rpNormUrl(r.url));
+  A.eq('no duplicate rows for the same URL', new Set(urls).size, urls.length);
+  A.eq('canonical row count = distinct evidence (6176,6179,6181)', rows.length, 3);
+  const r6176 = rows.find(r => /6176/.test(r.url));
+  A.eq('shared post keeps the analyst ref [1]', r6176.ref, '[1]');
+  A.ok('shared post keeps the strongest excerpt', r6176.excerpt.length >= 'цитата'.length);
+  A.ok('bundle-only URL (6179) is present', rows.some(r => /6179/.test(r.url)));
+  A.ok('analyst-only URL (6181) is present', rows.some(r => /6181/.test(r.url)));
+  // trailing-slash / query variants normalize to one key
+  const variants = RP.rpDedupeEvidence(
+    [{ evidence_id: '', url: 'https://t.me/x/1/', excerpt: 'a' }],
+    [{ ref: '[1]', url: 'https://t.me/x/1?utm=1', excerpt: 'aaaa', fact_type: 'x' }]);
+  A.eq('url variants (slash/query) dedupe to one row', variants.length, 1);
+}
+
 A.report('stage-f-report');
