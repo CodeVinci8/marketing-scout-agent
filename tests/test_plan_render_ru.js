@@ -180,15 +180,24 @@ A.section('CALLBACK-PRIVACY-001 — callback outcome wording (no internal/foreig
 
 // WIP2 SOURCE-ROLE-001 — the plan goal must reflect SOURCE TYPE, never assert «конкурент» for a public social
 // source from the niche alone (regression: PRObonds/frank_media/banksta).
-A.section('WIP2 — plan goal wording by source type (not by niche)');
+A.section('WIP2/PLAN-GOAL — goal reflects source type + proven signal, NEVER the niche');
 {
-  const social = { intent: 'competitor_market_scan', analysis_mode: 'source_analysis', telegram_channels: ['@probonds'], vk_sources: [], websites: [] };
+  const base = { intent: 'competitor_market_scan', analysis_mode: 'source_analysis' };
+  const social = Object.assign({}, base, { telegram_channels: ['@probonds'], vk_sources: [], websites: [] });
   A.eq('social source -> public-source goal', R.planGoalRu(social), 'анализ публичного источника и рыночных сигналов');
   A.ok('social plan goal is NOT «анализ конкурент…»', R.planGoalRu(social).indexOf('конкурент') < 0);
-  const web = { intent: 'competitor_market_scan', analysis_mode: 'source_analysis', telegram_channels: [], vk_sources: [], websites: ['autolombardn1.ru'] };
-  A.eq('named company website -> competitor goal', R.planGoalRu(web), 'анализ конкурента');
-  const mixed = { intent: 'competitor_market_scan', analysis_mode: 'source_analysis', telegram_channels: ['@x'], vk_sources: [], websites: ['y.ru'] };
-  A.eq('mixed -> preliminary relevance', R.planGoalRu(mixed), 'предварительная оценка релевантности публичных источников');
+  // WIP2-B: a bare website is NOT a competitor by existence/type/niche — default preliminary.
+  const web = Object.assign({}, base, { telegram_channels: [], vk_sources: [], websites: ['autolombardn1.ru'] });
+  A.eq('bare website -> preliminary relevance (not competitor)', R.planGoalRu(web), 'предварительная оценка релевантности публичного источника');
+  A.ok('bare website goal is NOT «анализ конкурента»', R.planGoalRu(web).indexOf('анализ конкурента') < 0);
+  const newsWeb = Object.assign({}, base, { websites: ['banki.ru'] });
+  A.eq('news/aggregator website -> preliminary', R.planGoalRu(newsWeb), 'предварительная оценка релевантности публичного источника');
+  // «анализ конкурента» ONLY with a trusted signal:
+  A.eq('operator-marked competitor -> competitor goal', R.planGoalRu(Object.assign({}, base, { websites: ['x.ru'], known_competitor: true })), 'анализ конкурента');
+  A.eq('stored direct_competitor (conf>=0.6) -> competitor goal', R.planGoalRu(Object.assign({}, base, { websites: ['x.ru'], source_roles: [{ source_role: 'direct_competitor', role_confidence: 0.7 }] })), 'анализ конкурента');
+  A.eq('stored direct_competitor but LOW confidence -> preliminary', R.planGoalRu(Object.assign({}, base, { websites: ['x.ru'], source_roles: [{ source_role: 'direct_competitor', role_confidence: 0.3 }] })), 'предварительная оценка релевантности публичного источника');
+  const mixed = Object.assign({}, base, { telegram_channels: ['@x'], vk_sources: [], websites: ['y.ru'] });
+  A.eq('mixed (no proof) -> preliminary relevance', R.planGoalRu(mixed), 'предварительная оценка релевантности публичного источника');
   A.eq('comparison mode goal', R.planGoalRu({ analysis_mode: 'comparison', websites: ['a', 'b', 'c'] }), 'сравнение источников');
   A.eq('discovery goal', R.planGoalRu({ intent: 'competitor_discovery' }), 'поиск новых источников и оценка их релевантности');
 }

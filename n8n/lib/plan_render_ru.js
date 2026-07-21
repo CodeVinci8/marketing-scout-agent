@@ -75,10 +75,20 @@ function planGoalRu(plan) {
   var vk = (Array.isArray(plan.vk_sources) ? plan.vk_sources : []).length;
   var web = (Array.isArray(plan.websites) ? plan.websites : []).length;
   var social = tg + vk;
-  if (web > 0 && social === 0) return 'анализ конкурента';
+  if (social + web === 0) return ruIntent(plan.intent); // no explicit source: niche competitor scan
+  // «анализ конкурента» requires a TRUSTED competitor signal in the approved input — NEVER a website's mere
+  // existence, source type or the niche (regression: a public/news/aggregator website is not a competitor). The
+  // signal is: operator marked it known; a stored owner-scoped source_role=direct_competitor with confidence; or
+  // deterministic own-offer evidence already in the plan. Evidence-confirmed role is decided in the report.
+  var provenCompetitor = plan.known_competitor === true || plan.direct_competitor === true ||
+    (Array.isArray(plan.source_roles) && plan.source_roles.some(function (r) {
+      return r && (r.direct_competitor === true || ruText(r.source_role) === 'direct_competitor') && Number(r.role_confidence) >= 0.6;
+    }));
+  if (provenCompetitor) return 'анализ конкурента';
+  // social-only feeds are public sources of market signals by nature; a website (or a mix) with no proven
+  // competitor status is a preliminary relevance assessment until evidence classifies it.
   if (social > 0 && web === 0) return 'анализ публичного источника и рыночных сигналов';
-  if (social > 0 && web > 0) return 'предварительная оценка релевантности публичных источников';
-  return ruIntent(plan.intent);
+  return 'предварительная оценка релевантности публичного источника';
 }
 function ruNiche(v) { return ruEnum(RU_NICHE, v, 'кредитные услуги'); }
 // region values are produced in Russian by the planner; map the canonical short form to the full phrase and
