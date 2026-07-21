@@ -314,6 +314,14 @@ A.section('WF20 wiring — validation + compact renderer + completion order');
   const bx = node(wf20, 'Build Report XLSX').parameters.jsCode;
   A.ok('skipped workbook still emits an item', bx.indexOf('xlsx_skipped:true') >= 0);
   A.ok('XLSX Ready? gate exists', !!node(wf20, 'XLSX Ready?'));
+  // SOCIAL-DELIVERY-001 (terminal arbiter): the "Progress: Done" edit must be analysis-aware. A social
+  // source_analysis has records_reported=0 yet a usable enriched/reused WF28 analysis — the terminal progress
+  // edit must NOT say «Данные для анализа не получены» over a real analysis (live: the contradictory transcript).
+  const pd = node(wf20, 'Progress: Done').parameters.jsCode;
+  A.ok('Progress: Done reads llm_analyses + reused for the terminal state', /llm_analyses/.test(pd) && /llm_analyses_reused/.test(pd));
+  A.ok('Progress: Done computes a usable-analysis flag', pd.indexOf('var hasAnalysis=(an+ar)>0') >= 0);
+  A.ok('Progress: Done no-data wording is guarded by !hasAnalysis', /!hasAnalysis&&\(fs===.no_data.\|\|rec===0\)/.test(pd));
+  A.ok('Progress: Done still has an honest no-data branch', pd.indexOf('Данные для анализа не получены') >= 0);
   const conn = wf20.connections;
   const to = (from, idx) => (((conn[from] || {}).main || [])[idx || 0] || []).map(c => c.node);
   A.ok('Build Report XLSX -> XLSX Ready?', to('Build Report XLSX').indexOf('XLSX Ready?') >= 0);
