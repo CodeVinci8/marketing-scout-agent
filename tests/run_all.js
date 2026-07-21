@@ -139,6 +139,8 @@ const JS_SUITES = [
   ['workflow-manifest', 'test_workflow_manifest.js'],
   ['binding-tool', 'test_binding_tool.js'],
   ['deploy-preflight', 'test_deploy_preflight.js'],
+  // Canonical STRUCTURAL deploy (add/remove nodes, rewire) with installation-local preservation + parity verify.
+  ['deploy-structural', 'test_deploy_structural.js'],
   ['telegram-commands', 'test_telegram_commands.js'],
   ['attachment-routing', 'test_attachment_routing.js'],
   ['smoke-hardening', 'test_smoke_hardening.js'],
