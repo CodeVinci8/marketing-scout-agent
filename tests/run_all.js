@@ -145,6 +145,7 @@ const JS_SUITES = [
   ['social-evidence', 'test_social_evidence.js'],
   ['source-role', 'test_source_role.js'],
   ['unified-analysis-result', 'test_unified_analysis_result.js'],
+  ['report-text-safety', 'test_report_text_safety.js'],
   ['telegram-commands', 'test_telegram_commands.js'],
   ['attachment-routing', 'test_attachment_routing.js'],
   ['smoke-hardening', 'test_smoke_hardening.js'],
