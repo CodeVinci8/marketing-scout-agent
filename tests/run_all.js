@@ -144,6 +144,7 @@ const JS_SUITES = [
   // SOCIAL-BRIDGE-001: verbatim Telegram/VK posts reach source analysis without a competitor profile.
   ['social-evidence', 'test_social_evidence.js'],
   ['source-role', 'test_source_role.js'],
+  ['unified-analysis-result', 'test_unified_analysis_result.js'],
   ['telegram-commands', 'test_telegram_commands.js'],
   ['attachment-routing', 'test_attachment_routing.js'],
   ['smoke-hardening', 'test_smoke_hardening.js'],
