@@ -1,4 +1,4 @@
-# ROADMAP.md — Marketing Scout Stages
+# ROADMAP.md — Vinci AI Pilot Stages
 
 ## STAGE MODEL — LOCKED (DEC-138, 2026-06-17, session 10)
 
@@ -140,7 +140,7 @@ The MVP is **not Avito-only output** (DEC-113). Canonical pipeline:
 
 ---
 
-## Stage 1 — Marketing Scout v0.1 (Current)
+## Stage 1 — Vinci AI Pilot v0.1 (Current)
 
 **Status:** In progress
 **Module directory:** `modules/marketing-scout-v0/`

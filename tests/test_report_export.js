@@ -28,7 +28,7 @@ A.eq('plain unquoted', X.csvCell('plain'), 'plain');
 
 A.section('competitors view');
 const comp = X.exportCsv(b, 'competitors', scope);
-A.ok('filename pattern', comp.filename === 'marketing_scout_report_20260621_101500_competitors.csv');
+A.ok('filename pattern', comp.filename === 'vinci_ai_pilot_report_20260621_101500_competitors.csv');
 A.ok('has BOM', comp.bom === true && comp.content.charCodeAt(0) === 0xFEFF);
 A.ok('mime csv', /text\/csv/.test(comp.mime));
 A.eq('row count', comp.row_count, 3);

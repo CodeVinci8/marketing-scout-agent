@@ -1,10 +1,10 @@
-# Marketing Scout — Project Root
+# Vinci AI Pilot — Project Root
 
 AI-powered marketing intelligence automation running on a self-hosted VPS stack.
 
 ## What This Is
 
-Marketing Scout monitors public web sources — competitor sites, classifieds, social media —
+Vinci AI Pilot monitors public web sources — competitor sites, classifieds, social media —
 extracts lead signals and content ideas, scores them with Claude API, stores results in
 Google Sheets, and delivers a Telegram summary.
 

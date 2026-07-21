@@ -291,7 +291,7 @@ function ruIntentAny(v) {
 // /start — concise welcome; NEVER the internal capability matrix.
 function ruStartMessage() {
   return [
-    'Здравствуйте! Я Vinci — помощник по анализу конкурентов и рынка.',
+    'Здравствуйте! Я Vinci AI Pilot — помощник по анализу конкурентов и рынка.',
     '',
     'Я могу:',
     '• находить и сравнивать конкурентов;',
@@ -308,7 +308,7 @@ function ruStartMessage() {
 // «кто ты?» / «представься» — short self-description, no command list.
 function ruWhoAmIMessage() {
   return [
-    'Я Vinci — бизнес-помощник по анализу конкурентов и рынка.',
+    'Я Vinci AI Pilot — бизнес-помощник по анализу конкурентов и рынка.',
     '',
     'Я собираю информацию из открытых источников, сравниваю предложения, выделяю важные факты и готовлю понятный отчёт.'
   ].join('\n');

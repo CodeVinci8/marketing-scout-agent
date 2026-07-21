@@ -24,14 +24,14 @@ function leaks(text) { return FORBIDDEN.filter(t => String(text).indexOf(t) >= 0
 // /commands and t.me/vk.com refs that are user data, not internal vocabulary).
 function nonRussianWords(text) {
   const cleaned = String(text)
-    .replace(/Vinci|Excel|CSV|XLSX|Telegram|VK|t\.me\/[\w/]+|vk\.com\/[\w/]+|https?:\/\/\S+|\/[a-z_]+/g, '');
+    .replace(/Vinci AI Pilot|Vinci|Excel|CSV|XLSX|Telegram|VK|t\.me\/[\w/]+|vk\.com\/[\w/]+|https?:\/\/\S+|\/[a-z_]+/g, '');
   return (cleaned.match(/[A-Za-z]{2,}/g) || []);
 }
 
 A.section('UX-RU-002 — /start: concise Vinci welcome, no internal flags, no capability matrix');
 {
   const t = R.ruStartMessage();
-  A.ok('greets as Vinci', t.indexOf('Здравствуйте! Я Vinci — помощник по анализу конкурентов и рынка.') === 0);
+  A.ok('greets as Vinci', t.indexOf('Здравствуйте! Я Vinci AI Pilot — помощник по анализу конкурентов и рынка.') === 0);
   A.ok('lists the 5 abilities', ['находить и сравнивать конкурентов', 'анализировать сайты, объявления и публичные сообщества',
     'выделять предложения, цены и сильные стороны', 'сохранять результаты в таблицу', 'готовить краткие отчёты и Excel-файлы']
     .every(x => t.indexOf(x) >= 0));
@@ -43,7 +43,7 @@ A.section('UX-RU-002 — /start: concise Vinci welcome, no internal flags, no ca
 A.section('UX-RU-002 — «кто ты?»: short self-description, detected from natural phrasings');
 {
   const t = R.ruWhoAmIMessage();
-  A.ok('self-description', t.indexOf('Я Vinci — бизнес-помощник по анализу конкурентов и рынка.') === 0);
+  A.ok('self-description', t.indexOf('Я Vinci AI Pilot — бизнес-помощник по анализу конкурентов и рынка.') === 0);
   A.ok('explains the open-source-data workflow in plain words', t.indexOf('открытых источников') >= 0 && t.indexOf('понятный отчёт') >= 0);
   A.eq('no internals', leaks(t), []);
   for (const q of ['кто ты?', 'Ты кто такой', 'кто вы', 'представься', 'расскажи о себе', 'что такое Vinci', 'who are you']) {

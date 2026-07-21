@@ -382,7 +382,8 @@ function buildReportPackage(bundle, scope, opts) {
   const row_counts = {};
   sheets.forEach(s => { row_counts[s.name] = (s.rows || []).length; });
   return {
-    filename: 'marketing_scout_' + safeReportId(bundle.report_id) + '_report.xlsx',
+    // BRAND-001: user-visible attachment name carries the current public product name (Vinci AI Pilot).
+    filename: 'vinci_ai_pilot_' + safeReportId(bundle.report_id) + '_report.xlsx',
     mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     buffer: buffer, sheet_names: sheets.map(s => s.name), row_counts: row_counts, size_bytes: buffer.length,
     report_id: str(bundle.report_id).trim(), agent_request_id: str(bundle.agent_request_id).trim()

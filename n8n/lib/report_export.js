@@ -45,8 +45,10 @@ function safeReportId(id) {
   const s = trim(id).replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
   return s || 'report';
 }
+// BRAND-001: the export filename is delivered to the user in Telegram, so it carries the current public
+// product name (Vinci AI Pilot). Historical evidence files keep their original `marketing_scout_…` names.
 function exportFilename(reportId, view, ext) {
-  return 'marketing_scout_' + safeReportId(reportId) + '_' + view + '.' + (ext || 'csv');
+  return 'vinci_ai_pilot_' + safeReportId(reportId) + '_' + view + '.' + (ext || 'csv');
 }
 
 // ---- canonical user-facing views (Section 19) --------------------------------------------------------

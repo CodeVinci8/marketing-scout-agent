@@ -1,4 +1,4 @@
-# Marketing Scout Agent — offline regression ($0, no network, no paid APIs).
+# Vinci AI Pilot — offline regression ($0, no network, no paid APIs).
 .PHONY: test test-js test-wf test-taxonomy help \
 	release-help release-discovery release-setup-check release-preflight release-preflight-activate \
 	release-core-acceptance release-backup release-restore-validate release-smoke runtime-acceptance umask-permission-smoke \
