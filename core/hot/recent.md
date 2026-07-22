@@ -180,8 +180,15 @@ WIP4: unified_analysis_result.js (`0c38a77`) contract+migration LIB — NOT wire
    `ac0f9f0` WIP2b source_role wired — WF20 Shape Report Bundle sets b.source_roles, report_package renders the
    «Роль источника» sheet (omit-empty), WF20 outbox states «🏷 Роль источника…» in Telegram. All 6 WIP3 defects
    (A counters, B dedup, C relevance, D own-channel recs, E market-scoping, F damaged) implemented + wired + tested.
+1b. **DONE this continuation:** `9cc356d` CANONICAL-ROLE-001 — source_role computed ONCE in WF20 Build Execution
+   Summary (summary.source_roles); Shape Report Bundle + Telegram outbox only READ it (no recompute, no divergence;
+   consistency wiring test in report-truth-quality 197). `df81d16` WIP3-A precision — llm_primary_calls counts
+   only WF28 mode==='call' (reuse/disabled/no_evidence make 0 provider calls; a no-call deterministic fallback is
+   no longer miscounted); reuse-observability 85.
 2. **WIP4 modes** (build on unified_analysis_result): 3-source synthesis/comparison, WF27 top-candidate
-   enrichment, public-lead interpretation (bounded Claude + deterministic fallback).
+   enrichment, public-lead interpretation (bounded Claude + deterministic fallback). Also: make uar.v1 the
+   canonical normalized result the renderers read (currently the bundle carries analysis/source_roles/evidence and
+   renderers read those bundle fields — UAR migration exists in the lib but is not yet the single production carrier).
 3. **Stage F gate**: regenerate → full regression → ONE consolidated backup-first deploy of ALL changed
    workflows (WF12 via isolatedModule replacer; WF18-28 via deploy_workflow_jscode.js) → parity/health/inventory
    → 14 SEQUENTIAL live proofs → inspect Telegram+XLSX+SHA-256 → update matrix → declare.
