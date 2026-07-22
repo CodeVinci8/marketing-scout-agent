@@ -329,6 +329,16 @@ A.section('WF20 wiring — validation + compact renderer + completion order');
   // edit must NOT say «Данные для анализа не получены» over a real analysis (live: the contradictory transcript).
   const pd = node(wf20, 'Progress: Done').parameters.jsCode;
   A.ok('Progress: Done reads llm_analyses + reused for the terminal state', /llm_analyses/.test(pd) && /llm_analyses_reused/.test(pd));
+  // WIP2b CANONICAL-ROLE-001: source_role is computed in EXACTLY ONE node (Build Execution Summary); the report
+  // bundle and the Telegram outbox READ summary.source_roles — they must never recompute (no renderer divergence).
+  const summ = node(wf20, 'Build Execution Summary').parameters.jsCode;
+  const sb2 = node(wf20, 'Shape Report Bundle').parameters.jsCode;
+  const ob2 = node(wf20, 'Build Delivery Outbox').parameters.jsCode;
+  A.ok('Build Execution Summary computes source_roles once (classifySourceRole present)', /classifySourceRole\(/.test(summ) && /source_roles:__srows/.test(summ));
+  A.ok('Shape Report Bundle does NOT recompute source roles', !/classifySourceRole\(/.test(sb2));
+  A.ok('Shape Report Bundle reads summary.source_roles', /__sum\.source_roles/.test(sb2));
+  A.ok('Telegram outbox does NOT recompute source roles', !/classifySourceRole\(/.test(ob2));
+  A.ok('Telegram outbox reads summary.source_roles', /s\.summary&&s\.summary\.source_roles/.test(ob2));
   A.ok('Progress: Done computes a usable-analysis flag', pd.indexOf('var hasAnalysis=(an+ar)>0') >= 0);
   A.ok('Progress: Done no-data wording is guarded by !hasAnalysis', /!hasAnalysis&&\(fs===.no_data.\|\|rec===0\)/.test(pd));
   A.ok('Progress: Done still has an honest no-data branch', pd.indexOf('Данные для анализа не получены') >= 0);
