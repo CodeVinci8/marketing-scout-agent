@@ -2,6 +2,91 @@
 
 Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm/decisions.md`.
 
+## Session 71 (2026-07-22) — Stage F slices F-1, F-3, F-6, F-9 CLOSED (deployed + verified). F-2/F-4/F-5/F-7/F-8 OPEN.
+
+**VERIFIED CHECKPOINT AT WRITE TIME:** branch `fix/stage-f-post-migration-acceptance`, HEAD `60cfcd9`,
+worktree clean, origin/main `05490a2`, **45 ahead / 0 behind**, NOT pushed. Production: health ok,
+**90 total / 17 active**, webhook registered (1 row), ingress POST 200, proxy+ngrok active, RestartCount=0,
+StartedAt 2026-07-22T21:43:51Z, disk 8.4 G. **FULL 20-workflow parity sweep: ZERO drift.**
+Full regression `node tests/run_all.js` → **ALL SUITES PASS, 7806 assertions, external calls=0, $0.**
+
+### Commits this session
+- `f2a1153` F-6 TOOLUSE-COERCE-002 — WF28 node code kept the RAW payload
+- `b60f657` F-1 runtime-integrity guard
+- `fb5199e` F-9 drift (WF17/WF27) + tracked_sources test debt
+- `2a9d59e` F-3 damaged Russian text + stuttering headings
+- `60cfcd9` F-3 ENUM-RU-001 internal enums in user-facing cells
+
+### F-6 — the session-70 fix was only HALF deployed (the mission's hypothesis, but in the NODE code)
+`validateAnalysisResult` normalizes internally and returns `v.value`, but WF28's generated `Parse Primary` /
+`Parse Repair` did `out.analysis = res.content` — the RAW payload. Validation passed on the coerced object
+while the un-coerced one was persisted, rendered and cached. Session 70's live proof (exec 1268) only passed
+because that run did not need coercion — the quirk is intermittent. A run that DID need it would have stored a
+broken analysis marked `enriched=true`, i.e. WORSE than the fallback. Fixed in the generator; `coerced_paths`
+now flows Parse → Finalize → typed return. `ccNormalizeStructured` is now **PURE** (it mutated its input, which
+is exactly how the telemetry went missing). Tests: `wf28-coercion-nodes` 28 (runs the REAL node source in a VM),
+`tooluse-coercion` 61 (purity + primary AND repair for all four modes).
+
+### F-1 — a deploy can no longer leave the ingress dead
+`tools/runtime_integrity_lib.js` (pure) + `tools/verify_runtime_integrity.js` (CLI) + `runtime-integrity` (26).
+Catches **H1 DEACTIVATED_BY_IMPORT** (`import:workflow` deactivates — hit 3× this session) and
+**H2 RUNTIME_WEBHOOK_MISSING** (`active=1` but `webhook_entity` empty → the session-70 3-hour outage).
+Runbook rewritten (`docs/STAGE_F_RUNBOOK.md`): backup → merge → import → **republish** → **mandatory gate**.
+Callable sub-workflows need no restart; **an active trigger workflow (WF18) does.**
+**The guard proved itself live:** after this session's WF18 deploy it reported `registered_webhooks=0` →
+exit 1; one controlled restart → OK. Without it that outage would have shipped again.
+Probe is benign: POST `{}` with NO secret header → WF18 ingress terminates after 6 nodes (exec 1271), no
+message/plan/cost. **Session 70's `approve <bogus-id>` probe DID land in the operator chat as «Этот план
+устарел…» (msg 557) — unlabelled. Do not repeat; use the unauthenticated probe or label the text.**
+
+### F-3 — damaged Russian text, stuttering headings, internal enums
+- «…до 90% от рыночно»: WF10 `Aggregate Market Intelligence` used `cut(r.offer_text,140)` =
+  `s.slice(0,n)` — no word boundary, no ellipsis. Traced: `Read monitor_queue` had the COMPLETE text, WF10
+  emitted the damaged one (exactly 140 chars). WIP3-F never caught it because it inspects the ANALYSIS text
+  while the damage was manufactured upstream in deterministic aggregation.
+- «📊 Залог 24 — Залог 24 (zalog24h.ru) — …»: the inline dedup regex required the separator to follow the name
+  immediately; the parenthetical defeated it.
+- Canonical: `report_text_safety.safeShortenRu` (sentence boundary ≥60% of budget, else word boundary, strips
+  dangling punctuation, ellipsis ONLY when something was removed) + `dedupeHeadingRu`/`headingWithBodyRu`;
+  `evidence_package.epTrim` word-safe; WF10's own `cut()` word-safe (WF10 has NO generator — its JSON is
+  canonical); `compact_report_ru` calls the canonical helper.
+- ENUM-RU-001: `plan_render_ru.ruSourceLabel`/`ruQualityLabel` (unknown latin/underscore token is BLANKED, never
+  echoed); `report_package` renders the scope via `ruNiche`; generator co-embeds `plan_render_ru` in the XLSX
+  nodes; WF10 says «средняя оценка заметности N» not «avg competitor_strength N».
+- `text-safety-f3` 62 checks.
+
+### F-9 — drift closed
+WF17 (1 node) + WF27 (3 nodes) stale `agent_config` embeds were pure deploy lag (both generator-owned).
+Deployed; WF17 deliberately left INACTIVE. `tracked-sources` 47 checks added (the lib is embedded in NINE
+workflows and had no suite).
+
+### STILL OPEN — exact remaining Stage F work, in mission order
+- **F-2 terminal lifecycle / Telegram ordering.** NOT started. Ordering is already correct (report → XLSX →
+  then «Готово»), but «✅ Готово» is written by EDITING the early progress message, so it keeps its old chat
+  position and reads as if completion was announced first. Required: send the terminal message as a NEW
+  message after delivery; no duplicate terminal on retry/redelivery.
+- **F-4 telemetry/cost truthfulness.** NOT started. `llm_primary_calls` is now correct (=1 live), but the
+  **summary-AI $0.0318 still has no visible call/analysis id, provider request id, model, tokens, latency or
+  call mode**, and workbook `Run IDs` carries one application run rather than lineage.
+- **F-5 evidence-bound claim quality.** NOT started. Review the retained/demoted claims of `an_2fbe6e74`
+  (one-source market-wide statements, audience assumptions, absence-as-proof).
+- **F-7 canonical `analysis_type` routing.** NOT started and MANDATORY. WF28 still invokes only
+  `analyzeSource`; `analysis_type` is a cache-key component, never a router. WF20 has no multi-source evidence
+  package. `request_planner` already maps 2 named sources → `comparison`, ≥3 → `synthesis`, and
+  `plan_render_ru` PROMISES «сравнение указанных источников» in the approval — so this is an exposed,
+  currently-broken user path.
+- **F-8 contextual routing / discovery truthfulness.** NOT started.
+- Live acceptance: only 4 of the 22 required scenarios are proven (benign runtime probe exec 1271; expired
+  callback msg 557 — but see the labelling defect; approval-required + single-source analysis
+  `req_17847532270`; automatic Telegram+XLSX delivery msgs 564/565).
+- VK fresh collection: `MS_ENABLE_VK=false`, no token → BLOCKED_EXTERNAL (unchanged).
+
+### Exact next action
+F-7 shared enabler: route on `analysis_type` in WF28 `Prepare Analysis` (comparison/synthesis →
+`buildComparisonCall`/`analyzeComparison`), leaving `source_analysis` byte-identical; then WF20 must build a
+real MULTI-source evidence package when the plan is comparison/synthesis with ≥2 (resp. ≥3) contributing
+sources. Deploy with the canonical procedure + gate; WF18 changes require a restart.
+
 ## Session 70 (2026-07-22) — PRODUCTION OUTAGE FIXED + TOOLUSE-COERCE-001 (deployed, live-proven)
 
 **VERIFIED START STATE:** branch `fix/stage-f-post-migration-acceptance`, HEAD `50f62ce`, worktree clean,
