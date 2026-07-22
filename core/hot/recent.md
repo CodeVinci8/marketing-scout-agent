@@ -195,6 +195,33 @@ WIP4: unified_analysis_result.js (`0c38a77`) contract+migration LIB — NOT wire
    **mode 3** public-lead interpretation (public evidence only, fact vs interpretation, evidence-bound
    need/pain/intent, low-info excluded). Also: make uar.v1 the single canonical carrier the renderers read
    (migration lib exists; bundle-field path currently works).
+
+### Session 69 close — OFFLINE WIP1/2/3/4 BATCH COMPLETE + FULL REGRESSION GREEN (nothing deployed)
+All three WIP4 mode LIBS are built + tested + committed: `5a51f72` analyzeComparison (synthesis-analysis 23),
+`f28809b` enrichCandidate + interpretPublicLead (enrich-lead 22), on `0c38a77` uar.v1. `c5c40a6` fixed the
+«Роль источника» SHEET_NAMES order. **`node tests/run_all.js` → ALL SUITES PASS ($0).** HEAD 36 ahead of
+origin/main; worktree clean; production still WIP1-era (90/17, healthy).
+
+**EXACT remaining (needs a live-deploy session — do NOT half-migrate production):**
+1. **Orchestration wiring of the 3 mode libs** (structural, un-provable offline — verify via live proof):
+   - Synthesis: WF20 — after Merge Analyses, if analysis_mode∈{comparison,synthesis} AND ≥3 sources have
+     enriched evidence, build a MULTI-source package and call the synthesis path; WF28 must route analysis_type=
+     'comparison' → `analyzeComparison`. Render `comparisons` into bundle/Telegram/XLSX.
+   - Enrichment: WF27 — deterministic top-3–5 gate → per-candidate `enrichCandidate` (analysis_type='candidate');
+     preserve discovery evidence; no auto paid collection/monitoring/outreach.
+   - Public-lead: a lead path calling `interpretPublicLead` (analysis_type='public_lead') on public rows.
+   (WF28 routing by analysis_type is the shared enabler — its Prepare/Finalize nodes currently hardcode the
+   source-analysis path but already embed claude_analysis with all 4 functions.)
+2. **Consolidated backup-first deploy** of the semantically-changed workflows — inventory by diffing each repo
+   workflow's Code nodes vs a fresh prod export (candidates: WF12, WF18, WF19, WF20, WF21, WF22, WF24, WF25,
+   WF26, WF28). Deploy LEAF-first then callers (WF28/WF12 before WF20) to keep prod coherent; jsCode tool for
+   code-only, structural tool only for the genuine topology adds from step 1. Verify parity/health/inventory/
+   webhook/proxy/ngrok/RestartCount after each.
+3. **16 sequential live proofs** (never concurrent; Sheets-429 → cooldown+retry): callback dup/expired/privacy;
+   source-role plan+report+Telegram; counters; dedup; relevance; ownership-safe rec; market-claim scoping;
+   damaged-fragment; 3-source comparison; WF27 enrichment; public-lead. Inspect real Telegram text/IDs + XLSX +
+   SHA-256 + stored result, not just green executions.
+4. Stage F gate → F.5 (7 subsystems + the 8-step Telegram conversation proof) → canonical G → canonical H → PR/CI/merge.
 3. **Stage F gate**: regenerate → full regression → ONE consolidated backup-first deploy of ALL changed
    workflows (WF12 via isolatedModule replacer; WF18-28 via deploy_workflow_jscode.js) → parity/health/inventory
    → 14 SEQUENTIAL live proofs → inspect Telegram+XLSX+SHA-256 → update matrix → declare.
