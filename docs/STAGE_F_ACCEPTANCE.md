@@ -253,3 +253,32 @@ this session (operator: `usermod -aG docker` + `setfacl` on the socket).
 2. §9 live roles: TG-channel, VK-community, 3-source synthesis, WF27 enrichment, public-lead interpretation, failure matrix, terminal-plan idempotency, callback idempotency.
 3. §10 ≥5 fresh analyses → repair/latency/cost metrics.
 4. Formal Stage F gate.
+
+## Session 70 (2026-07-22) — production outage fixed; TOOLUSE-COERCE-001 closed (deployed + live-proven)
+
+| Item | Verdict | Evidence |
+|---|---|---|
+| **Production webhook outage** | **FIXED** | `webhook_entity` was EMPTY, `POST ms-telegram-agent` → 404; the Telegram gateway had been down since the 17:25 UTC session-69 deploy (CLI import does not notify the running process; container up since 07-21 05:28, RestartCount=0, no execution after 11:53 UTC). Backed up 21 workflows (`prerestart_*_20260722_203440`), ONE controlled restart → health ok, **90/17**, webhook registered (1 row), proxy+ngrok active, RestartCount=0. Telegram then redelivered a queued REAL user message (exec 1254) — proof the outage was user-impacting. |
+| **Session-69 deploy actually completed** | **CONFIRMED** | All ten candidates byte-identical to repo HEAD (0 jsCode drift, connections/settings/node counts equal, 0 credential rebinds). Continuity claiming "nothing deployed" was stale. |
+| **Runtime coherence** | **PASS (live)** | Zero-cost probe reaching the affected WF18 nodes: exec **1253**, `Command Lane` lane=`approve_ack_dup`, `Build Conversational Reply` = «Этот план устарел…» (new `approvalOutcomeRu`; absent from the pre-deploy export), Telegram msg **557**. |
+| §F-1 duplicate/expired callback, friendly RU, no leakage | **PASS (live)** | Same exec 1253 / msg 557. |
+| §F-1 approval required before execution | **PASS (live)** | `req_17847532270`: WF19 **1260** rendered «Запустить анализ?» with a reuse-aware estimate; WF20 ran only after the approve callback. `MS_REQUIRE_APPROVAL=true`. |
+| §F-1 «✅ Готово» only after delivery | **PASS (live)** | exec **1262**: report msg **564** → XLSX msg **565** → *then* `Progress: Done` edit of msg 563. Also re-verified on the original failing run (553 → 554 → 552). |
+| **zalog24h "approval bypass"** | **NOT A DEFECT** | exec 1245 carries a REAL Telegram callback `approve:req_76722084` (callback_query_id `5105986326496841220`, msg 551); `Mark Plan Approved` ran. The report's claim that no confirmation was given is contradicted by production. |
+| **TOOLUSE-COERCE-001** | **PASS (live)** | Root cause of the whole zalog24h workbook regression. WF28 exec **1252** returned a complete evidence-cited analysis with `items` JSON-encoded as a STRING → `$.items: expected array, got string` → billed repair → deterministic fallback ($0.0464 for no analysis). Fixed by `ccNormalizeStructured` (pre-validation, type-exact, content-preserving) wired into all four modes. Commit `02d9339`; `tooluse-coercion` 33 checks; full regression ALL SUITES PASS (7608, $0). Deployed backup-first, parity NONE, 90/17. **Live proof `req_17847532270` / WF28 exec 1268:** `an_2fbe6e74` enriched=true quality=ok, **0 repair / 0 fallback**, 1 primary call, $0.018573 (was $0.046416), 2696/699 tokens, 69327 ms, **10 items + 4 recommendations**, XLSX **7 sheets** (was 4) incl. Аналитические выводы / Рекомендации / Доказательства, report msg **564**, XLSX msg **565** `vinci_ai_pilot_report_20260722_234918_report.xlsx`, costs reconcile «AI-сводка $0.0318 + AI-анализ $0.0186 = $0.0504». |
+
+### Still OPEN after session 70 (verified, not speculation)
+
+| Item | Status | Note |
+|---|---|---|
+| Damaged/truncated fragment | **FAIL** | «…до 90% от рыночно» still reaches «Ключевые факты» (msg 564). Origin is the DETERMINISTIC `offer_summary` truncated upstream in WF10/WF12, so the WIP3-F guard never sees it. |
+| Duplicated name in report header | **FAIL** | «📊 Залог 24 — Залог 24 (zalog24h.ru) — …». |
+| Terminal «Готово» position | **PARTIAL** | Ordering is correct, but editing the early progress message in place makes completion *look* instantaneous. Should be a new terminal message. |
+| `coerced_paths` telemetry | **PARTIAL** | WF28's typed return drops it, so a coercion event is invisible downstream. Coercion proven OFFLINE; the live run did not need it (quirk is intermittent). |
+| WF17 + WF27 stale `agent_config` embed | **MISSING** | 1 and 3 nodes respectively; pre-existing, not deployed. |
+| Mode 1/2/3 orchestration | **IMPLEMENTED_NOT_WIRED** | WF28 invokes only `analyzeSource`; `analysis_type` is a cache-key component, never a router. WF20 has no multi-source package; WF27 has no enrichment gate. |
+| Entire Stage F.5 | **MISSING** | No `opportunity_signals` / `action_candidates` tab, no `analyst_agent` / `analyst_tools`. WF23 inactive, `MS_MONITORING_ENABLED=false`. |
+| Fresh VK collection | **BLOCKED_EXTERNAL** | `MS_ENABLE_VK=false`, no token. |
+
+**Stage F is NOT gated.** The highest-value defect is closed and live-proven, but mode 1 (comparison/synthesis)
+remains mandatory Stage F work per the operator's scope ruling, and the residual truthfulness defects above are real.

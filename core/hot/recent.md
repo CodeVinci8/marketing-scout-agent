@@ -2,6 +2,104 @@
 
 Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm/decisions.md`.
 
+## Session 70 (2026-07-22) — PRODUCTION OUTAGE FIXED + TOOLUSE-COERCE-001 (deployed, live-proven)
+
+**VERIFIED START STATE:** branch `fix/stage-f-post-migration-acceptance`, HEAD `50f62ce`, worktree clean,
+origin/main `05490a2`, **37 ahead / 0 behind**, branch+HEAD absent from GitHub, disk 8.4 G free.
+Full regression re-verified green (`ALL SUITES PASS`, external calls=0, $0).
+
+### 1. The session-69 deploy DID complete — continuity was stale
+All ten candidates (WF12/18/19/20/21/22/24/25/26/28) are **byte-identical to repo HEAD** (0 jsCode drift,
+connections/settings/node-counts equal, 0 credential rebinds, 0 placeholders). The 429 interrupted the
+*verification*, not the deployment. Full 20-workflow parity sweep: 18 MATCH; **WF17 (1 node) and WF27
+(3 nodes) carry a stale `agent_config` embed** — pre-existing, NOT from that batch, still outstanding.
+
+### 2. PRODUCTION WAS DOWN — found and fixed
+`webhook_entity` was **EMPTY (0 rows)**; `POST /webhook/ms-telegram-agent` returned **404**. The Telegram
+gateway had been unreachable since the 17:25 UTC deploy: n8n CLI `import:workflow` does not notify the
+running process, and the container had run since 2026-07-21 05:28 with RestartCount=0 and **no execution
+since 11:53 UTC**. Backed up all 21 prod workflows (`scratchpad/backup/prerestart_*_20260722_203440.json`),
+performed ONE controlled restart. After: health ok, **90 total / 17 active**, webhook **registered (1 row)**,
+proxy + ngrok active, RestartCount=0. **Proof the outage was real: Telegram redelivered a queued real user
+message** («найди вк сообщества конкурентов по птс», exec 1254) the moment the webhook came back.
+**LESSON: after ANY WF18 import, the webhook must be re-verified; `active=1` in the DB does NOT mean registered.**
+
+### 3. Runtime coherence proven (not assumed)
+Zero-cost probe reaching the affected WF18 nodes: `approve <bogus-id>` → exec **1253** → `Command Lane`
+lane=`approve_ack_dup` → `Build Conversational Reply` = «Этот план устарел…» (the NEW `approvalOutcomeRu`
+wording; the pre-deploy export contains neither `approvalOutcomeRu` nor `RU_APPROVAL_NEUTRAL`) → Telegram
+msg **557**. Also a live PASS for the duplicate/expired-callback criterion (friendly RU, no id leakage).
+
+### 4. zalog24h regression (`req_76722084`) — TRACED. Two reported claims are WRONG.
+Executions **1241–1252** (11:48–11:56 UTC = 14:48–14:56 MSK; MS_TIMEZONE=Europe/Moscow).
+- **Approval WAS given.** Exec 1245 carries a REAL Telegram callback (`approve:req_76722084`,
+  callback_query_id `5105986326496841220`, msg 551) → lane `approve_ack`. `MS_REQUIRE_APPROVAL=true`.
+  `Mark Plan Approved` ran (1125 ms). There is **no approval bypass**.
+- **Delivery order was CORRECT.** report msg **553** → XLSX msg **554** → *then* `Progress: Done` edited
+  msg **552**. «Готово» never preceded delivery. The perceived "instant Готово" is a **UX artifact**: the
+  progress message is edited **in place**, so it keeps its early chat position (11:49:50) while its final
+  text is written 6 min later. Worth changing (terminal message should be new, not an early-slot edit).
+- **REAL ROOT CAUSE = TOOLUSE-COERCE-001** (below). Everything the user saw — 4 sheets, no analysis, empty
+  recommendations/limitations, `LLM primary calls = 0` beside a non-zero AI charge — follows from it.
+
+### 5. TOOLUSE-COERCE-001 — FIXED, DEPLOYED, LIVE-PROVEN (commit `02d9339`)
+WF28 exec **1252** returned a COMPLETE, correct, fully evidence-cited analysis whose `items` arrived
+**JSON-encoded as a STRING**. `validateStructured` rejected it (`$.items: expected array, got string`), a
+bounded repair was billed and came back the same shape → deterministic fallback. User paid **2 real calls
+(12217 in / 651 out, $0.0464 incl. $0.0304 repair)** for **no AI analysis**.
+Fix: `ccNormalizeStructured(obj, schema)` in `claude_contracts.js` runs BEFORE validation and coerces a
+string ONLY when the schema expects array/object, it parses as JSON, and the parsed type matches exactly.
+Content never altered — only encoding. Non-JSON / wrong-type strings are left alone so malformed payloads
+still fail honestly. Wired into ALL FOUR modes (analyzeSource / analyzeComparison / enrichCandidate /
+interpretPublicLead) so the COERCED value is what is persisted, rendered and repaired against.
+`tests/test_tooluse_coercion.js` **33 checks** (registered `tooluse-coercion`). Full regression **ALL SUITES
+PASS** (7608 assertions, $0). Only WF28 embeds these libs → regenerated, deployed backup-first
+(`scratchpad/backup/prod_mswf28claudeanalyst_20260722_204549.json`), **parity NONE, 90/17 restored**.
+**NOTE: `n8n import:workflow` DEACTIVATED WF28 (17→16); re-published with `update:workflow --active=true`
+→ 17.** Same class as DEPLOY-CLEANUP-001 — always re-check the active count after an import.
+
+**LIVE PROOF — `req_17847532270`** (WF18 1259 → WF19 **1260** → approve → WF18 1261 → WF20 **1262** →
+WF04 1263 → WF16 1264 → WF08 1265 → WF10 1266 → WF12 1267 → **WF28 1268**):
+
+| | before (exec 1252) | after (exec 1268) |
+|---|---|---|
+| enriched / quality | false / `deterministic_fallback` | **true / `ok`** |
+| repair / fallback | 1 / 1 | **0 / 0** |
+| llm_primary_calls | 0 (workbook) | **1** |
+| analysis cost | $0.046416 (incl. $0.030393 repair) | **$0.018573 (repair $0)** |
+| tokens | 12217 in / 651 out | **2696 in / 699 out**, latency 69327 ms |
+| analysis items / recs | 4 fallback facts / 0 | **10 / 4**, confidence 45 |
+| XLSX sheets | **4** (no analysis at all) | **7** — +Аналитические выводы, +Рекомендации, +Доказательства |
+
+Delivered: analysis `an_2fbe6e74`, report msg **564**, XLSX
+`vinci_ai_pilot_report_20260722_234918_report.xlsx` msg **565**, progress msg 563 → «✅ Готово».
+Telegram (1405 chars) carries «🧠 Выводы — интерпретация, не факты», honest reuse line, and
+«AI-сводка $0.0318 + AI-анализ $0.0186 = $0.0504» — reconciles. **Cost fell 60% while delivering a real
+analysis instead of nothing.** Approval was correctly REQUIRED («Запустить анализ?») with a reuse-aware
+estimate — no auto-execution.
+
+### 6. STILL OPEN (verified, not speculation)
+- **Truncated fragment persists**: «…выдача до 90% от рыночно» still reaches «Ключевые факты» (msg 564).
+  It originates in the DETERMINISTIC `offer_summary` (WF10/WF12 upstream truncation), so WIP3-F's
+  damaged-fragment guard does not catch it. Real, user-visible, unfixed.
+- Duplicated name in the report header («📊 Залог 24 — Залог 24 (zalog24h.ru) — …»).
+- `coerced_paths` is NOT forwarded by WF28's typed return, so a coercion event is invisible in telemetry.
+  (The live run needed no coercion — the quirk is intermittent — so the coercion path is proven OFFLINE
+  only; the pipeline fix is proven live.)
+- Terminal «Готово» should be a NEW message, not an edit of the early progress message.
+- **WF17 + WF27 stale `agent_config` embeds** — not yet deployed.
+- Mode 1/2/3 orchestration (comparison/synthesis, WF27 enrichment, public-lead) still **NOT wired**:
+  WF28 invokes only `analyzeSource`; `analysis_type` is a cache-key component, never a router.
+- ALL of Stage F.5 remains unimplemented (no `opportunity_signals`/`action_candidates` tab, no
+  `analyst_agent`/`analyst_tools` lib). WF23 inactive, `MS_MONITORING_ENABLED=false`.
+- VK fresh collection: `MS_ENABLE_VK=false`, no token → EXTERNAL BLOCKER (unchanged).
+
+### 7. Exact next action
+Wire the canonical `analysis_type` router in WF28 (`Prepare Analysis` + `Finalize Analysis`) so
+comparison/synthesis → `analyzeComparison`, candidate → `enrichCandidate`, public_lead →
+`interpretPublicLead`, leaving `source_analysis` byte-identical. jsCode-only; deploy with
+`deploy_workflow_jscode.js`; re-check the active count after import. Then WF20's multi-source package.
+
 ## Session: 2026-07-21 (session 68) — WF20 runtime-embed VERIFIED in prod (Docker blocker resolved by operator)
 
 **RESOLVED:** the operator restored Docker access for `claude-runner` (`usermod -aG docker` + `setfacl -m
