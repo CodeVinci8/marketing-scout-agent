@@ -151,6 +151,49 @@ function validateStructured(obj, schema, path) {
   return errs;
 }
 
+// ---- TOOLUSE-COERCE-001: tool_use payload normalization -----------------------------------------------------
+// The gateway's tool_use transport intermittently serializes a nested array/object PARAMETER as a JSON STRING
+// instead of the container itself. Observed live in production: WF28 exec 1252 (req_76722084, zalog24h.ru)
+// returned a complete, correct, fully evidence-cited analysis whose `items` arrived as a string. The validator
+// rejected it on type ("$.items: expected array, got string"), a bounded repair was billed, the repair returned
+// the same shape, and the run fell through to the deterministic fallback — the user paid for two real calls
+// (12217 in / 651 out, $0.0464) and received no AI analysis at all.
+//
+// Coercion is safe and narrowly scoped: a string is replaced ONLY when the schema expects an array/object, the
+// string parses as JSON, AND the parsed value is exactly the expected type. The CONTENT is never altered — only
+// its encoding. Anything that fails any of those conditions is left untouched so validation still fails honestly
+// (a genuinely malformed payload must still reach the repair/fallback path).
+//
+// Returns { value, coerced: [paths] }. `coerced` is surfaced as telemetry so a transport quirk stays observable
+// instead of silently disappearing.
+function ccNormalizeStructured(obj, schema, path, acc) {
+  path = path || '$'; acc = acc || [];
+  if (!schema || typeof schema !== 'object') return { value: obj, coerced: acc };
+  var t = schema.type;
+  if ((t === 'array' || t === 'object') && typeof obj === 'string') {
+    var s = obj.trim();
+    if ((t === 'array' && s.charAt(0) === '[') || (t === 'object' && s.charAt(0) === '{')) {
+      try {
+        var parsed = JSON.parse(s);
+        if (ccTypeOf(parsed) === t) { obj = parsed; acc.push(path); }
+      } catch (e) { /* not JSON — leave as-is so validateStructured reports the real type error */ }
+    }
+  }
+  if (t === 'object' && obj && typeof obj === 'object' && !Array.isArray(obj)) {
+    var props = schema.properties || {};
+    Object.keys(props).forEach(function (k) {
+      if (obj[k] === undefined) return;
+      obj[k] = ccNormalizeStructured(obj[k], props[k], path + '.' + k, acc).value;
+    });
+  }
+  if (t === 'array' && Array.isArray(obj) && schema.items) {
+    for (var i = 0; i < obj.length; i++) {
+      obj[i] = ccNormalizeStructured(obj[i], schema.items, path + '[' + i + ']', acc).value;
+    }
+  }
+  return { value: obj, coerced: acc };
+}
+
 // Collect every evidence_ids / used_evidence_ids value anywhere in the object and check membership in allowedIds.
 function collectEvidenceIds(obj, acc) {
   acc = acc || [];
@@ -177,5 +220,5 @@ module.exports = {
   CC_SCHEMA_VERSION, CC_PROMPT_VERSION, CC_DIMENSIONS, CC_KINDS, CC_PRIORITIES, CC_CANDIDATE_VERDICTS,
   CC_ANALYSIS_SCHEMA, CC_CANDIDATE_SCHEMA, CC_SYNTHESIS_SCHEMA, CC_LEAD_SCHEMA, CC_LEAD_SIGNALS,
   ccAnalysisTool, ccCandidateTool, ccSynthesisTool, ccLeadTool,
-  validateStructured, validateEvidenceIds, collectEvidenceIds
+  validateStructured, validateEvidenceIds, collectEvidenceIds, ccNormalizeStructured
 };

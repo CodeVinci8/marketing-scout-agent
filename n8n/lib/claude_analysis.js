@@ -10,7 +10,7 @@
 // co-embedded lib functions directly into the n8n Code-node scope. Do NOT switch to namespace requires — the
 // generator does not strip `var X = require('./local')` and n8n Code nodes cannot require() a local file.
 const { buildToolRequest, callClaude } = require('./claude_adapter.js');
-const { ccAnalysisTool, CC_ANALYSIS_SCHEMA, ccSynthesisTool, CC_SYNTHESIS_SCHEMA, ccCandidateTool, CC_CANDIDATE_SCHEMA, ccLeadTool, CC_LEAD_SCHEMA, validateStructured, validateEvidenceIds } = require('./claude_contracts.js');
+const { ccAnalysisTool, CC_ANALYSIS_SCHEMA, ccSynthesisTool, CC_SYNTHESIS_SCHEMA, ccCandidateTool, CC_CANDIDATE_SCHEMA, ccLeadTool, CC_LEAD_SCHEMA, validateStructured, validateEvidenceIds, ccNormalizeStructured } = require('./claude_contracts.js');
 const { renderPackagePrompt } = require('./evidence_package.js');
 const { costFromUsage, sumCosts } = require('./llm_cost.js');
 
@@ -52,10 +52,14 @@ function buildSourceAnalysisCall(pkgResult, cfg) {
 }
 
 // Local validation gate — the ONLY thing that can trigger a repair. Returns { ok, errors }.
+// TOOLUSE-COERCE-001: normalize a string-encoded array/object BEFORE validating, and hand the normalized value
+// back so the caller persists/renders the real analysis rather than the raw transport shape.
 function validateAnalysisResult(result, allowedIds, schema) {
-  var errs = validateStructured(result, schema || CC_ANALYSIS_SCHEMA);
-  errs = errs.concat(validateEvidenceIds(result, allowedIds || []));
-  return { ok: errs.length === 0, errors: errs };
+  var sch = schema || CC_ANALYSIS_SCHEMA;
+  var norm = ccNormalizeStructured(result, sch);
+  var errs = validateStructured(norm.value, sch);
+  errs = errs.concat(validateEvidenceIds(norm.value, allowedIds || []));
+  return { ok: errs.length === 0, errors: errs, value: norm.value, coerced: norm.coerced };
 }
 
 // Build the single bounded repair call: rejected object + validation errors + schema + allowed ids ONLY.
@@ -107,14 +111,14 @@ function analyzeSource(fetchFn, pkgResult, cfg) {
     record(res1);
     if (!res1.ok) return finalize(deterministicAnalysisFallback(pkgResult), { schema_mode: '', repair_used: false, repair_success: false, fallback_used: true, validation_errors: [res1.error_category], stop_reason: res1.stop_reason, request_id: res1.request_id, error_category: res1.error_category });
     var v1 = validateAnalysisResult(res1.content, allowed, built.schema);
-    if (v1.ok) return finalize(res1.content, { schema_mode: res1.schema_mode, repair_used: false, repair_success: false, fallback_used: false, validation_errors: [], stop_reason: res1.stop_reason, request_id: res1.request_id, error_category: '' });
+    if (v1.ok) return finalize(v1.value, { schema_mode: res1.schema_mode, repair_used: false, repair_success: false, fallback_used: false, validation_errors: [], stop_reason: res1.stop_reason, request_id: res1.request_id, error_category: '', coerced: v1.coerced });
     // ONE bounded repair
-    var rep = buildRepairCall(res1.content, v1.errors, allowed, cfg);
+    var rep = buildRepairCall(v1.value, v1.errors, allowed, cfg);
     return callClaude(fetchFn, rep.body, cfg).then(function (res2) {
       record(res2);
       if (res2.ok) {
         var v2 = validateAnalysisResult(res2.content, allowed, built.schema);
-        if (v2.ok) return finalize(res2.content, { schema_mode: res2.schema_mode, repair_used: true, repair_success: true, fallback_used: false, validation_errors: v1.errors, stop_reason: res2.stop_reason, request_id: res2.request_id, error_category: '' });
+        if (v2.ok) return finalize(v2.value, { schema_mode: res2.schema_mode, repair_used: true, repair_success: true, fallback_used: false, validation_errors: v1.errors, stop_reason: res2.stop_reason, request_id: res2.request_id, error_category: '', coerced: v2.coerced });
         return finalize(deterministicAnalysisFallback(pkgResult), { schema_mode: res2.schema_mode, repair_used: true, repair_success: false, fallback_used: true, validation_errors: v2.errors, stop_reason: res2.stop_reason, request_id: res2.request_id, error_category: 'validation_failed' });
       }
       return finalize(deterministicAnalysisFallback(pkgResult), { schema_mode: '', repair_used: true, repair_success: false, fallback_used: true, validation_errors: [res2.error_category], stop_reason: res2.stop_reason, request_id: res2.request_id, error_category: res2.error_category });
@@ -128,7 +132,7 @@ function analyzeSource(fetchFn, pkgResult, cfg) {
       schema_mode: meta.schema_mode || (analysis && analysis._fallback ? 'fallback' : 'tool_use'),
       repair_used: meta.repair_used, repair_success: meta.repair_success, fallback_used: meta.fallback_used,
       validation_errors: meta.validation_errors, stop_reason: meta.stop_reason, request_id: meta.request_id,
-      error_category: meta.error_category,
+      error_category: meta.error_category, coerced_paths: meta.coerced || [],
       usage: { input_tokens: totalUsage.input_tokens, output_tokens: totalUsage.output_tokens }, cost_usd: cost,
       package_hash: (pkgResult && pkgResult.package_hash) || ''
     };
@@ -211,17 +215,17 @@ function analyzeComparison(fetchFn, pkgResult, cfg) {
   var allowed = built.allowed_evidence_ids;
   var costs = [], calls = 0;
   function record(res) { calls++; costs.push(costFromUsage(res.usage, cfg)); }
-  function validate(obj) { var errs = validateStructured(obj, CC_SYNTHESIS_SCHEMA).concat(validateEvidenceIds(obj, allowed)); return { ok: errs.length === 0, errors: errs }; }
+  function validate(obj) { var n = ccNormalizeStructured(obj, CC_SYNTHESIS_SCHEMA); var errs = validateStructured(n.value, CC_SYNTHESIS_SCHEMA).concat(validateEvidenceIds(n.value, allowed)); return { ok: errs.length === 0, errors: errs, value: n.value }; }
   return callClaude(fetchFn, built.body, cfg).then(function (res1) {
     record(res1);
     if (!res1.ok) return finalize(deterministicComparisonFallback(pkgResult), { schema_mode: '', repair_used: false, repair_success: false, fallback_used: true, validation_errors: [res1.error_category], stop_reason: res1.stop_reason, request_id: res1.request_id, error_category: res1.error_category });
     var v1 = validate(res1.content);
-    if (v1.ok) return finalize(res1.content, { schema_mode: res1.schema_mode, repair_used: false, repair_success: false, fallback_used: false, validation_errors: [], stop_reason: res1.stop_reason, request_id: res1.request_id, error_category: '' });
-    var rep = buildSynthesisRepairCall(res1.content, v1.errors, allowed, cfg);
+    if (v1.ok) return finalize(v1.value, { schema_mode: res1.schema_mode, repair_used: false, repair_success: false, fallback_used: false, validation_errors: [], stop_reason: res1.stop_reason, request_id: res1.request_id, error_category: '' });
+    var rep = buildSynthesisRepairCall(v1.value, v1.errors, allowed, cfg);
     return callClaude(fetchFn, rep.body, cfg).then(function (res2) {
       record(res2);
       if (res2.ok) { var v2 = validate(res2.content);
-        if (v2.ok) return finalize(res2.content, { schema_mode: res2.schema_mode, repair_used: true, repair_success: true, fallback_used: false, validation_errors: v1.errors, stop_reason: res2.stop_reason, request_id: res2.request_id, error_category: '' });
+        if (v2.ok) return finalize(v2.value, { schema_mode: res2.schema_mode, repair_used: true, repair_success: true, fallback_used: false, validation_errors: v1.errors, stop_reason: res2.stop_reason, request_id: res2.request_id, error_category: '' });
         return finalize(deterministicComparisonFallback(pkgResult), { schema_mode: res2.schema_mode, repair_used: true, repair_success: false, fallback_used: true, validation_errors: v2.errors, stop_reason: res2.stop_reason, request_id: res2.request_id, error_category: 'validation_failed' });
       }
       return finalize(deterministicComparisonFallback(pkgResult), { schema_mode: '', repair_used: true, repair_success: false, fallback_used: true, validation_errors: [res2.error_category], stop_reason: res2.stop_reason, request_id: res2.request_id, error_category: res2.error_category });
@@ -273,18 +277,19 @@ function enrichCandidate(fetchFn, pkgResult, cfg) {
   var body = buildToolRequest({ model: caStr(cfg.llm_model) || 'claude-sonnet-4-6', system: CA_CANDIDATE_PROMPT, user: renderPackagePrompt(pkg), tool: tool, max_tokens: 1024, temperature: 0.1 });
   var costs = [], calls = 0;
   function record(res) { calls++; costs.push(costFromUsage(res.usage, cfg)); }
-  function validate(o) { var e = validateStructured(o, CC_CANDIDATE_SCHEMA).concat(validateEvidenceIds(o, allowed)); return { ok: e.length === 0, errors: e }; }
+  function validate(o) { var n = ccNormalizeStructured(o, CC_CANDIDATE_SCHEMA); var e = validateStructured(n.value, CC_CANDIDATE_SCHEMA).concat(validateEvidenceIds(n.value, allowed)); return { ok: e.length === 0, errors: e, value: n.value }; }
   return callClaude(fetchFn, body, cfg).then(function (res1) {
     record(res1);
     if (!res1.ok) return fin(deterministicCandidateFallback(pkgResult, def), { fallback_used: true, error_category: res1.error_category, request_id: res1.request_id });
     var v1 = validate(res1.content);
-    if (v1.ok) return fin(res1.content, { fallback_used: false, schema_mode: res1.schema_mode, request_id: res1.request_id });
+    if (v1.ok) return fin(v1.value, { fallback_used: false, schema_mode: res1.schema_mode, request_id: res1.request_id });
     var rtool = ccCandidateTool();
-    var ruser = ['Fix ONLY the listed problems and resubmit via the tool. Use ONLY evidence_ids: [' + allowed.join(', ') + '].', 'ERRORS:', v1.errors.map(function (e) { return '- ' + e; }).join('\n'), 'PREVIOUS:', JSON.stringify(res1.content)].join('\n');
+    var ruser = ['Fix ONLY the listed problems and resubmit via the tool. Use ONLY evidence_ids: [' + allowed.join(', ') + '].', 'ERRORS:', v1.errors.map(function (e) { return '- ' + e; }).join('\n'), 'PREVIOUS:', JSON.stringify(v1.value)].join('\n');
     var rbody = buildToolRequest({ model: caStr(cfg.llm_model) || 'claude-sonnet-4-6', system: CA_CANDIDATE_PROMPT, user: ruser, tool: rtool, max_tokens: 1024, temperature: 0 });
     return callClaude(fetchFn, rbody, cfg).then(function (res2) {
       record(res2);
-      if (res2.ok && validate(res2.content).ok) return fin(res2.content, { fallback_used: false, repair_used: true, repair_success: true, schema_mode: res2.schema_mode, request_id: res2.request_id });
+      var v2 = res2.ok ? validate(res2.content) : null;
+      if (v2 && v2.ok) return fin(v2.value, { fallback_used: false, repair_used: true, repair_success: true, schema_mode: res2.schema_mode, request_id: res2.request_id });
       return fin(deterministicCandidateFallback(pkgResult, def), { fallback_used: true, repair_used: true, error_category: 'validation_failed', request_id: res2.request_id });
     });
   });
@@ -323,17 +328,18 @@ function interpretPublicLead(fetchFn, pkgResult, cfg) {
   var body = buildToolRequest({ model: caStr(cfg.llm_model) || 'claude-sonnet-4-6', system: CA_LEAD_PROMPT, user: renderPackagePrompt(pkg), tool: tool, max_tokens: 2048, temperature: 0.2 });
   var costs = [], calls = 0;
   function record(res) { calls++; costs.push(costFromUsage(res.usage, cfg)); }
-  function validate(o) { var e = validateStructured(o, CC_LEAD_SCHEMA).concat(validateEvidenceIds(o, allowed)); return { ok: e.length === 0, errors: e }; }
+  function validate(o) { var n = ccNormalizeStructured(o, CC_LEAD_SCHEMA); var e = validateStructured(n.value, CC_LEAD_SCHEMA).concat(validateEvidenceIds(n.value, allowed)); return { ok: e.length === 0, errors: e, value: n.value }; }
   return callClaude(fetchFn, body, cfg).then(function (res1) {
     record(res1);
     if (!res1.ok) return fin(deterministicLeadFallback(), { fallback_used: true, error_category: res1.error_category, request_id: res1.request_id });
     var v1 = validate(res1.content);
-    if (v1.ok) return fin(res1.content, { fallback_used: false, schema_mode: res1.schema_mode, request_id: res1.request_id });
-    var ruser = ['Fix ONLY the listed problems and resubmit via the tool. Use ONLY evidence_ids: [' + allowed.join(', ') + '].', 'ERRORS:', v1.errors.map(function (e) { return '- ' + e; }).join('\n'), 'PREVIOUS:', JSON.stringify(res1.content)].join('\n');
+    if (v1.ok) return fin(v1.value, { fallback_used: false, schema_mode: res1.schema_mode, request_id: res1.request_id });
+    var ruser = ['Fix ONLY the listed problems and resubmit via the tool. Use ONLY evidence_ids: [' + allowed.join(', ') + '].', 'ERRORS:', v1.errors.map(function (e) { return '- ' + e; }).join('\n'), 'PREVIOUS:', JSON.stringify(v1.value)].join('\n');
     var rbody = buildToolRequest({ model: caStr(cfg.llm_model) || 'claude-sonnet-4-6', system: CA_LEAD_PROMPT, user: ruser, tool: ccLeadTool(), max_tokens: 2048, temperature: 0 });
     return callClaude(fetchFn, rbody, cfg).then(function (res2) {
       record(res2);
-      if (res2.ok && validate(res2.content).ok) return fin(res2.content, { fallback_used: false, repair_used: true, repair_success: true, schema_mode: res2.schema_mode, request_id: res2.request_id });
+      var v2 = res2.ok ? validate(res2.content) : null;
+      if (v2 && v2.ok) return fin(v2.value, { fallback_used: false, repair_used: true, repair_success: true, schema_mode: res2.schema_mode, request_id: res2.request_id });
       return fin(deterministicLeadFallback(), { fallback_used: true, repair_used: true, error_category: 'validation_failed', request_id: res2.request_id });
     });
   });

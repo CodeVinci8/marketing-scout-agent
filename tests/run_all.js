@@ -147,6 +147,7 @@ const JS_SUITES = [
   ['unified-analysis-result', 'test_unified_analysis_result.js'],
   ['synthesis-analysis', 'test_synthesis_analysis.js'],
   ['enrich-lead', 'test_enrich_lead.js'],
+  ['tooluse-coercion', 'test_tooluse_coercion.js'],
   ['report-text-safety', 'test_report_text_safety.js'],
   ['telegram-commands', 'test_telegram_commands.js'],
   ['attachment-routing', 'test_attachment_routing.js'],
