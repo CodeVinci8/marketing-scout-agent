@@ -1,4 +1,7 @@
 'use strict';
+// F-3 ENUM-RU-001: user-facing cells must never show an internal enum (credit_brokerage / website / healthy).
+// The canonical maps live in plan_render_ru; the embed step inlines them (co-embedded in the XLSX nodes).
+const { ruNiche, ruSourceLabel, ruQualityLabel } = require('./plan_render_ru.js');
 // report_package.js — assemble the user-facing XLSX report package from a stored report bundle (Sections 3.2 / 19).
 // Operational Sheets stay internal; this is the intentionally-designed user workbook. Russian sheet names AND
 // headers (B7 + Stage F §6); the only technical sheet is hidden.
@@ -146,7 +149,7 @@ function buildSheets(b) {
   // Stage-F analysis rows (analysis_report_ru.analysisXlsxData). Absent on a deterministic-only run -> every
   // Stage-F sheet stays empty and omit_empty drops it.
   const an = b.analysis || {};
-  const scopeStr = [b.niche, b.region, (b.time_window_days ? b.time_window_days + 'd' : '')].filter(Boolean).join(' · ');
+  const scopeStr = [b.niche ? ruNiche(b.niche) : '', b.region, (b.time_window_days ? b.time_window_days + ' дн.' : '')].filter(Boolean).join(' · ');
   const filterStr = b.active_filters ? join(b.active_filters) : '';
   const offers = rpDedupOffers(b.offers);
   const limitations = join(an.unknowns);

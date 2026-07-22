@@ -132,4 +132,33 @@ A.section('compact_report_ru consumes the canonical helper (no divergent inline 
   A.ok('the old inline lead regex is gone', src.indexOf("var lead = new RegExp('^' + subject") < 0);
 }
 
+
+
+A.section('F-3 ENUM-RU-001 — internal enums never reach a user-facing cell');
+{
+  const P = require('../n8n/lib/plan_render_ru.js');
+  A.eq('niche', P.ruNiche('credit_brokerage'), 'кредитный брокер');
+  A.eq('source type', P.ruSourceLabel('website'), 'сайт');
+  A.eq('telegram', P.ruSourceLabel('telegram_channel'), 'Telegram-канал');
+  A.eq('quality healthy', P.ruQualityLabel('healthy'), 'исправен');
+  A.eq('quality accepted', P.ruQualityLabel('accepted'), 'принят');
+  // An unknown LATIN/underscore token must be blanked, never echoed at the user.
+  A.eq('unknown latin enum is blanked', P.ruSourceLabel('some_new_enum'), '');
+  A.eq('unknown latin quality is blanked', P.ruQualityLabel('weird_state'), '');
+  // Russian text that is already user-ready passes through.
+  A.eq('russian passthrough', P.ruSourceLabel('сайт'), 'сайт');
+
+  const rp = require('fs').readFileSync(require('path').join(__dirname, '..', 'n8n', 'lib', 'report_package.js'), 'utf8');
+  A.ok('report_package maps the niche instead of printing the enum', rp.indexOf('ruNiche(b.niche)') > 0);
+  A.ok('the raw niche is no longer concatenated', rp.indexOf('const scopeStr = [b.niche,') < 0);
+  A.ok('the day suffix is Russian', rp.indexOf("' дн.'") > 0);
+
+  // WF10 must not emit the internal metric name inside a user-facing fact.
+  let wf = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'n8n', 'workflows', '10_competitor_audience_intelligence_aggregator.json'), 'utf8'));
+  if (Array.isArray(wf)) wf = wf[0];
+  const all = wf.nodes.map((n) => (n.parameters || {}).jsCode || '').join('\n');
+  A.ok('avg competitor_strength is gone', all.indexOf('avg competitor_strength') < 0);
+  A.ok('replaced with Russian phrasing', all.indexOf('средняя оценка заметности') > 0);
+}
+
 A.report('text-safety-f3');

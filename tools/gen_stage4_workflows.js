@@ -1309,7 +1309,7 @@ return [{json:{report_id:b.report_id,owner_user_id:b.owner_user_id,agent_request
   sheetsAppend('wf20-apbundle', 'Append report_bundles', [2160, 60], 'report_bundles'),
   // DEFECT-5: the plan promises "таблица Excel" — auto-deliver the XLSX right after the report for an approved
   // analysis run (only when the run has data; an empty workbook is never sent). Same bundle -> counts agree.
-  code('wf20-xlsx', 'Build Report XLSX', [2380, 160], ['report_export', 'xlsx_writer', 'report_text_safety', 'report_package'], `
+  code('wf20-xlsx', 'Build Report XLSX', [2380, 160], ['report_export', 'xlsx_writer', 'report_text_safety', 'plan_render_ru', 'report_package'], `
 var sb=$('Shape Report Bundle').first().json;
 var b={};try{b=JSON.parse(String(sb.bundle||'{}'));}catch(e){b={};}
 var s=$('Build Execution Summary').first().json;var summary=s.summary||{};
@@ -1604,7 +1604,7 @@ else if(action==='evidence'){out.evidence=queryEvidence(b,{text:s.filter_text},s
 else if(action==='compare'){var cands=[];try{cands=($('Read report_bundles').all()||[]).map(function(r){return J(r.json.bundle||r.json.report_bundle||r.json);}).filter(function(x){return x&&String(x.owner_user_id)===String(scope.owner_user_id)&&String(x.report_id)!==String(scope.report_id);});}catch(e){}var base=selectBaseline(b,cands,cfg);out.baseline=base.baseline||null;out.baseline_reason=base.reason;out.comparison=base.baseline?compareReports(b,base.baseline):null;}
 else if(action==='refresh'){var srcs=(b.source_quality||[]).map(function(q){return {source_id:q.source,owner_user_id:scope.owner_user_id,platform:q.platform,ref:q.source,status:'active',last_status:q.error?'error':'ok',last_success_at:q.last_success_at,last_collected_at:q.last_collected_at,fields:{hash:'h'}};});out.refresh_plan=planRefresh(srcs,{cfg:cfg,now:(new Date()).toISOString(),only_stale:true});}
 return [{json:Object.assign({},s,{result:out})}];`),
-  code('wf24-exports', 'Build Exports & Outbox', [220, 40], ['report_export', 'xlsx_writer', 'report_text_safety', 'report_package', 'report_charts', 'attachment_router', 'telegram_io'], `
+  code('wf24-exports', 'Build Exports & Outbox', [220, 40], ['report_export', 'xlsx_writer', 'report_text_safety', 'plan_render_ru', 'report_package', 'report_charts', 'attachment_router', 'telegram_io'], `
 var s=$('Apply Action').first().json;var b=s.bundle;var scope=s.scope;
 var csv=exportCsv(b,'report',scope);
 var pkg=buildReportPackage(b,scope,{omit_empty:true});
@@ -1688,7 +1688,7 @@ var res=buildWeeklyDigest({owner_user_id:owner,now:inp.now||(new Date()).toISOSt
 var dd=dedupeDigest(existing,res.digest);
 return [{json:{digest:res.digest,emit:(res.ok&&dd.emit),suppressed:res.suppressed,empty:res.empty,dedupe_reason:dd.reason,owner_user_id:owner,cfg:cfg}}];`),
   ifNode('wf25-if', 'Emit Digest?', [-220, 0], '={{ $json.emit }}'),
-  code('wf25-attach', 'Build Digest Attachments', [0, -120], ['report_export', 'xlsx_writer', 'report_text_safety', 'report_package'], `
+  code('wf25-attach', 'Build Digest Attachments', [0, -120], ['report_export', 'xlsx_writer', 'report_text_safety', 'plan_render_ru', 'report_package'], `
 var d=$('Build Weekly Digest').first().json;var cfg=d.cfg||{};var dg=d.digest;
 function J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}
 var reports=[];try{reports=($('Read report_bundles').all()||[]).map(function(r){return J(r.json.bundle||r.json.report_bundle||r.json);});}catch(e){}

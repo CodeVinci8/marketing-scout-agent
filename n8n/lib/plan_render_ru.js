@@ -588,9 +588,21 @@ function ruSourceOpFailure(reason) {
 var RU_SOURCE_STATUS = { active: 'активен', paused: 'на паузе', removed: 'удалён', pending: 'готовится' };
 function ruSourceStatusLabel(status) { return ruEnum(RU_SOURCE_STATUS, ruText(status), 'в обработке'); }
 
+
+// F-3 ENUM-RU-001 — single-source labels for report cells. A workbook cell must read «сайт», not «website»,
+// and «принят», not «accepted»/«healthy». Unknown values fall back to the raw text only when it is already
+// Russian; a latin/underscore token is never shown to a user.
+var RU_SOURCE_ONE = { website: 'сайт', avito: 'Авито', telegram: 'Telegram-канал', telegram_channel: 'Telegram-канал',
+  vk: 'сообщество VK', vk_community: 'сообщество VK', search: 'поисковая выдача', discovery: 'поиск источников' };
+var RU_QUALITY = { accepted: 'принят', healthy: 'исправен', degraded: 'с замечаниями', rejected: 'отклонён',
+  quality_rejected: 'отклонён по качеству', unknown: '', blocked: 'недоступен', stale: 'устарел' };
+function ruSafeText(v) { var t = ruText(v); return (t && !/[a-z_]/i.test(t)) ? t : ''; }
+function ruSourceLabel(v) { return ruEnum(RU_SOURCE_ONE, v, ruSafeText(v)); }
+function ruQualityLabel(v) { return ruEnum(RU_QUALITY, v, ruSafeText(v)); }
+
 module.exports = {
   planApprovalMessageRu, planStatusLineRu, planGoalRu, approvalFailureRu, approvalOutcomeRu, approvalDuplicateRu, approvalDuplicateToastRu,
-  ruIntent, ruNiche, ruRegion, ruSources, ruEnum, ruIntentAny,
+  ruIntent, ruNiche, ruRegion, ruSources, ruEnum, ruIntentAny, ruSourceLabel, ruQualityLabel,
   ruStartMessage, ruWhoAmIMessage, ruIsWhoAmI,
   ruCapabilityGroups, ruHelpMessage, ruCapLabel, ruCapAdvertisable,
   RU_CAP_LABEL, RU_CAP_GROUP,
