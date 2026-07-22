@@ -21,8 +21,8 @@ function join(a) { return Array.isArray(a) ? a.join('; ') : str(a); }
 // Stage F adds «Аналитические выводы» + «Боли и сигналы» and FEEDS the existing «Рекомендации» / «Доказательства»
 // sheets (the deterministic bundle leaves evidence empty). Every Stage-F sheet is omit-empty: it exists only when
 // the analyst actually produced grounded rows, so a deterministic-only run ships exactly the workbook it did before.
-const SHEET_NAMES = ['Сводка', 'Роль источника', 'Конкуренты', 'Офферы и цены', 'Аналитические выводы', 'Рекомендации',
-  'Боли и сигналы', 'Доказательства', 'Качество данных', 'Изменения', 'Технические данные'];
+const SHEET_NAMES = ['Сводка', 'Конкуренты', 'Офферы и цены', 'Аналитические выводы', 'Рекомендации',
+  'Боли и сигналы', 'Доказательства', 'Качество данных', 'Роль источника', 'Изменения', 'Технические данные'];
 const STAGE_F_SHEETS = ['Аналитические выводы', 'Боли и сигналы'];
 
 // quality/status -> highlight bucket (good/warn/bad). Unknown -> no highlight.
