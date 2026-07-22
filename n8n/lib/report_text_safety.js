@@ -54,6 +54,55 @@ function isDamagedFragment(text) {
   return false;
 }
 
+
+// ---- F-3 TEXT-SAFETY-001: word-safe shortening ---------------------------------------------------------------
+// Production damage (req_17847532270 / req_76722084): WF10 shortened a competitor offer with a raw
+// `s.slice(0,140)`, producing «…выдача до 90% от рыночно» — a mid-word cut, with no ellipsis, that then travelled
+// into the evidence package, the deterministic fallback, «Ключевые факты» in Telegram and the XLSX. A hard
+// character cut is never acceptable in user-facing Russian: it invents a non-word and silently changes meaning
+// («от рыночной стоимости» -> «от рыночно»).
+//
+// safeShortenRu never returns a mid-word fragment. It prefers a sentence boundary, falls back to a word
+// boundary, trims dangling punctuation, and appends '…' ONLY when something was actually removed — so a
+// shortened value is always visibly shortened, and a value that fits is returned untouched.
+function safeShortenRu(text, max) {
+  var s = tsTrim(text);
+  max = Number(max) || 0;
+  if (!s || max <= 0 || s.length <= max) return s;
+  var budget = Math.max(1, max - 1); // leave room for the ellipsis
+  var head = s.slice(0, budget);
+  // Prefer ending on a real sentence boundary when that keeps most of the budget.
+  var mSent = head.match(/^[\s\S]*[.!?…]/);
+  if (mSent && mSent[0].trim().length >= Math.floor(budget * 0.6)) return mSent[0].trim();
+  // Otherwise cut at the last whitespace so no word is broken.
+  var cut = head.replace(/\s+\S*$/, '');
+  if (!cut) cut = head; // one pathologically long token: nothing better available
+  cut = cut.replace(/[\s,;:.–—-]+$/, '');
+  return cut + '…';
+}
+
+// ---- F-3 TEXT-SAFETY-002: heading de-duplication -------------------------------------------------------------
+// The Telegram report rendered «📊 Залог 24 — Залог 24 (zalog24h.ru) — …» because the renderer prefixes the
+// competitor name and the model's executive summary independently opens with the same name. Drop the prefix
+// when the body already leads with it (tolerating a trailing domain/parenthetical), instead of stuttering.
+function dedupeHeadingRu(name, body) {
+  var n = tsTrim(name), b = tsTrim(body);
+  if (!n || !b) return b;
+  var esc = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // «Залог 24 — …», «Залог 24 (zalog24h.ru) — …», «Залог 24: …»
+  var re = new RegExp('^' + esc + '\\s*(\\([^)]*\\))?\\s*[—–:-]?\\s*', 'i');
+  if (re.test(b)) return b.replace(re, '').trim() || b;
+  return b;
+}
+
+// headingWithBodyRu(name, body) -> «Name — body» with no stutter and no empty tail.
+function headingWithBodyRu(name, body) {
+  var n = tsTrim(name), b = dedupeHeadingRu(name, body);
+  if (!n) return b;
+  if (!b) return n;
+  return n + ' — ' + b;
+}
+
 function fragmentQuality(text) { return isDamagedFragment(text) ? 'damaged' : 'ok'; }
 
-module.exports = { ownershipSafeRecommendationRu, isDamagedFragment, fragmentQuality };
+module.exports = { ownershipSafeRecommendationRu, isDamagedFragment, fragmentQuality, safeShortenRu, dedupeHeadingRu, headingWithBodyRu };

@@ -1,4 +1,5 @@
 'use strict';
+const { dedupeHeadingRu } = require('./report_text_safety.js');
 // compact_report_ru.js — REPORT-TRUTH-C: the deliberate compact Telegram answer.
 //
 // The old default pushed the full ~10–13k-char report markdown into 3–4 Telegram messages. This renderer builds
@@ -98,8 +99,10 @@ function crHeader(bundle, analyses, summary) {
   });
   if (!assess) assess = 'собрано записей: ' + crNum(summary && summary.records_reported, 0);
   // The executive summary often opens with the subject name — don't print «LionCredit — LionCredit — …».
-  var lead = new RegExp('^' + subject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[—:-]+\\s*', 'i');
-  assess = assess.replace(lead, '');
+  // Canonical de-duplication (report_text_safety.dedupeHeadingRu) also tolerates a trailing parenthetical:
+  // the live report rendered «📊 Залог 24 — Залог 24 (zalog24h.ru) — …» because the old inline regex required
+  // the separator to follow the name immediately and «(zalog24h.ru)» sat in between.
+  assess = dedupeHeadingRu(subject, assess);
   return '📊 ' + subject + ' — ' + assess;
 }
 

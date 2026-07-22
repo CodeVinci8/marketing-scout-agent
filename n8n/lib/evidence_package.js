@@ -9,7 +9,15 @@
 
 function epStr(v) { return v == null ? '' : String(v); }
 function epNum(v, d) { var n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }
-function epTrim(v, n) { var s = epStr(v).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+// F-3 TEXT-SAFETY-001: shorten on a WORD boundary. The old `slice(0, n-1)` cut mid-word, which is how
+// «от рыночной стоимости» reached users as «от рыночно». Never emit a fragment of a Russian word.
+function epTrim(v, n) {
+  var s = epStr(v).replace(/\s+/g, ' ').trim();
+  if (!(s.length > n) || !(n > 0)) return s;
+  var head = s.slice(0, Math.max(1, n - 1));
+  var cut = head.replace(/\s+\S*$/, '') || head;
+  return cut.replace(/[\s,;:.–—-]+$/, '') + '…';
+}
 
 // Redact public contact data from an excerpt — we analyze positioning/offers, never harvest contacts.
 function epScrubPii(s) {
