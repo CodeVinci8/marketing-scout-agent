@@ -88,6 +88,32 @@ function ccSynthesisTool() {
   return { name: 'submit_synthesis', description: 'Submit the cross-competitor synthesis. Every comparison/opportunity cites evidence_ids from the package. Russian narrative; no invented facts.', input_schema: CC_SYNTHESIS_SCHEMA };
 }
 
+// ---- public-lead interpretation (WIP4 mode 3) ---------------------------------------------------------------
+// PUBLIC audience/lead evidence only. Each lead separates the OBSERVED public fact from the INTERPRETATION
+// (need/pain/buying-intent), is evidence-bound, and carries confidence. No private identity inference, no contact.
+var CC_LEAD_SIGNALS = ['need', 'pain', 'buying_intent', 'none'];
+var CC_LEAD_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['overview_ru', 'leads', 'limitations_ru', 'used_evidence_ids'],
+  properties: {
+    overview_ru: { type: 'string' },
+    leads: { type: 'array', items: {
+      type: 'object', additionalProperties: false, required: ['observed_fact_ru', 'interpretation_ru', 'signal', 'confidence', 'evidence_ids'],
+      properties: {
+        observed_fact_ru: { type: 'string' },          // what the public post literally says
+        interpretation_ru: { type: 'string' },          // inferred need/pain/buying-intent (NOT a fact)
+        signal: { type: 'string', enum: CC_LEAD_SIGNALS },
+        confidence: { type: 'integer', minimum: 0, maximum: 100 },
+        evidence_ids: { type: 'array', items: { type: 'string' } }
+      } } },
+    limitations_ru: { type: 'array', items: { type: 'string' } },
+    used_evidence_ids: { type: 'array', items: { type: 'string' } }
+  }
+};
+function ccLeadTool() {
+  return { name: 'submit_public_leads', description: 'Interpret PUBLIC audience evidence only. Separate observed_fact_ru (literal public text) from interpretation_ru (inferred need/pain/buying-intent). Cite evidence_ids. Never infer private identity, never suggest contacting a person.', input_schema: CC_LEAD_SCHEMA };
+}
+
 // ---- local validator (pragmatic JSON-schema subset) ---------------------------------------------------------
 function ccTypeOf(v) {
   if (Array.isArray(v)) return 'array';
@@ -149,7 +175,7 @@ function validateEvidenceIds(obj, allowedIds) {
 
 module.exports = {
   CC_SCHEMA_VERSION, CC_PROMPT_VERSION, CC_DIMENSIONS, CC_KINDS, CC_PRIORITIES, CC_CANDIDATE_VERDICTS,
-  CC_ANALYSIS_SCHEMA, CC_CANDIDATE_SCHEMA, CC_SYNTHESIS_SCHEMA,
-  ccAnalysisTool, ccCandidateTool, ccSynthesisTool,
+  CC_ANALYSIS_SCHEMA, CC_CANDIDATE_SCHEMA, CC_SYNTHESIS_SCHEMA, CC_LEAD_SCHEMA, CC_LEAD_SIGNALS,
+  ccAnalysisTool, ccCandidateTool, ccSynthesisTool, ccLeadTool,
   validateStructured, validateEvidenceIds, collectEvidenceIds
 };

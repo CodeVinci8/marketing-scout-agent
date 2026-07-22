@@ -10,7 +10,7 @@
 // co-embedded lib functions directly into the n8n Code-node scope. Do NOT switch to namespace requires — the
 // generator does not strip `var X = require('./local')` and n8n Code nodes cannot require() a local file.
 const { buildToolRequest, callClaude } = require('./claude_adapter.js');
-const { ccAnalysisTool, CC_ANALYSIS_SCHEMA, ccSynthesisTool, CC_SYNTHESIS_SCHEMA, validateStructured, validateEvidenceIds } = require('./claude_contracts.js');
+const { ccAnalysisTool, CC_ANALYSIS_SCHEMA, ccSynthesisTool, CC_SYNTHESIS_SCHEMA, ccCandidateTool, CC_CANDIDATE_SCHEMA, ccLeadTool, CC_LEAD_SCHEMA, validateStructured, validateEvidenceIds } = require('./claude_contracts.js');
 const { renderPackagePrompt } = require('./evidence_package.js');
 const { costFromUsage, sumCosts } = require('./llm_cost.js');
 
@@ -240,8 +240,115 @@ function analyzeComparison(fetchFn, pkgResult, cfg) {
   }
 }
 
+// ============================ WIP4 mode 2: WF27 top-candidate enrichment =====================================
+// A deterministic relevance gate (top 3–5) runs in WF27 BEFORE this. This classifies ONE eligible candidate from
+// its bounded discovery evidence: verdict + confidence + Russian rationale + regional match. AI may EXPLAIN
+// relevance; it may NOT fabricate organisation facts, and every claim cites evidence in the package. Fail-closed:
+// on any failure the candidate stays 'irrelevant'/low-confidence with its discovery evidence preserved upstream.
+var CA_CANDIDATE_PROMPT = [
+  'You are CodeVinci AI Pilot classifying ONE discovery candidate for a secured-lending business in Moscow/MO.',
+  'You get a BOUNDED evidence package for this single candidate. Rules:',
+  '1. Choose exactly one verdict: competitor | lead_source | content_creator | aggregator | irrelevant — strictly',
+  '   from the evidence. Do NOT invent company facts, prices, ownership or services.',
+  '2. rationale_ru: short professional Russian explaining the verdict FROM the evidence. is_regional_match reflects',
+  '   whether the evidence ties the candidate to Moscow/Moscow Oblast.',
+  '3. evidence_ids MUST be evidence_id values present in the package. If evidence is thin, pick irrelevant/low',
+  '   confidence — never upgrade to competitor without own-offer evidence.',
+  'Return your result ONLY by calling the provided tool.'
+].join('\n');
+
+function deterministicCandidateFallback(pkgResult, def) {
+  var ev = ((pkgResult && pkgResult.package) || {}).evidence_items || [];
+  return { verdict: (def && def.verdict) || 'irrelevant', confidence: 0,
+    rationale_ru: 'ИИ-оценка кандидата недоступна — оставлена консервативная классификация по доказательствам поиска.',
+    is_regional_match: !!(def && def.is_regional_match), evidence_ids: ev.slice(0, 3).map(function (e) { return e.evidence_id; }), _fallback: true };
+}
+
+function enrichCandidate(fetchFn, pkgResult, cfg) {
+  cfg = cfg || {};
+  var pkg = (pkgResult && pkgResult.package) || {};
+  var allowed = (pkgResult && pkgResult.allowed_evidence_ids) || [];
+  var def = (pkgResult && pkgResult.deterministic_default) || {};
+  var tool = ccCandidateTool();
+  var body = buildToolRequest({ model: caStr(cfg.llm_model) || 'claude-sonnet-4-6', system: CA_CANDIDATE_PROMPT, user: renderPackagePrompt(pkg), tool: tool, max_tokens: 1024, temperature: 0.1 });
+  var costs = [], calls = 0;
+  function record(res) { calls++; costs.push(costFromUsage(res.usage, cfg)); }
+  function validate(o) { var e = validateStructured(o, CC_CANDIDATE_SCHEMA).concat(validateEvidenceIds(o, allowed)); return { ok: e.length === 0, errors: e }; }
+  return callClaude(fetchFn, body, cfg).then(function (res1) {
+    record(res1);
+    if (!res1.ok) return fin(deterministicCandidateFallback(pkgResult, def), { fallback_used: true, error_category: res1.error_category, request_id: res1.request_id });
+    var v1 = validate(res1.content);
+    if (v1.ok) return fin(res1.content, { fallback_used: false, schema_mode: res1.schema_mode, request_id: res1.request_id });
+    var rtool = ccCandidateTool();
+    var ruser = ['Fix ONLY the listed problems and resubmit via the tool. Use ONLY evidence_ids: [' + allowed.join(', ') + '].', 'ERRORS:', v1.errors.map(function (e) { return '- ' + e; }).join('\n'), 'PREVIOUS:', JSON.stringify(res1.content)].join('\n');
+    var rbody = buildToolRequest({ model: caStr(cfg.llm_model) || 'claude-sonnet-4-6', system: CA_CANDIDATE_PROMPT, user: ruser, tool: rtool, max_tokens: 1024, temperature: 0 });
+    return callClaude(fetchFn, rbody, cfg).then(function (res2) {
+      record(res2);
+      if (res2.ok && validate(res2.content).ok) return fin(res2.content, { fallback_used: false, repair_used: true, repair_success: true, schema_mode: res2.schema_mode, request_id: res2.request_id });
+      return fin(deterministicCandidateFallback(pkgResult, def), { fallback_used: true, repair_used: true, error_category: 'validation_failed', request_id: res2.request_id });
+    });
+  });
+  function fin(verdict, meta) {
+    return { ok: !meta.fallback_used, verdict: verdict, analysis_mode: 'discovery_enrichment', calls: calls,
+      repair_used: !!meta.repair_used, repair_success: !!meta.repair_success, fallback_used: !!meta.fallback_used,
+      schema_mode: meta.schema_mode || (verdict && verdict._fallback ? 'fallback' : 'tool_use'), request_id: meta.request_id || '',
+      error_category: meta.error_category || '', usage: costs.reduce(function (a, c) { return { input_tokens: a.input_tokens + c.input_tokens, output_tokens: a.output_tokens + c.output_tokens }; }, { input_tokens: 0, output_tokens: 0 }), cost_usd: sumCosts(costs) };
+  }
+}
+
+// ============================ WIP4 mode 3: public-lead interpretation =========================================
+// PUBLIC audience evidence only. Each lead separates the observed public fact from the interpretation
+// (need/pain/buying-intent). No private identity inference, no contact/outreach. Low-info content stays low
+// confidence. Fail-closed: an LLM failure yields an empty, honestly-limited result — never invented leads.
+var CA_LEAD_PROMPT = [
+  'You are CodeVinci AI Pilot interpreting PUBLIC audience signals for a secured-lending business in Moscow/MO.',
+  'You get a BOUNDED package of PUBLIC posts/comments. Rules:',
+  '1. Use ONLY public evidence. NEVER infer a private identity, contact detail, or suggest contacting anyone.',
+  '2. For each lead separate observed_fact_ru (what the post literally says) from interpretation_ru (the inferred',
+  '   need/pain/buying-intent). signal ∈ need|pain|buying_intent|none. evidence_ids MUST exist in the package.',
+  '3. Low-information content (greeting, off-topic, ambiguous) → signal "none" and low confidence, or omit it.',
+  '4. Never present an interpretation as a fact. If nothing qualifies, return an empty leads array and say so.',
+  'Return your result ONLY by calling the provided tool.'
+].join('\n');
+
+function deterministicLeadFallback() {
+  return { overview_ru: 'ИИ-интерпретация публичных сигналов недоступна — выводы не сформированы.', leads: [], limitations_ru: ['ИИ-анализ временно недоступен; интерпретация лидов не выполнена.'], used_evidence_ids: [], _fallback: true };
+}
+
+function interpretPublicLead(fetchFn, pkgResult, cfg) {
+  cfg = cfg || {};
+  var pkg = (pkgResult && pkgResult.package) || {};
+  var allowed = (pkgResult && pkgResult.allowed_evidence_ids) || [];
+  var tool = ccLeadTool();
+  var body = buildToolRequest({ model: caStr(cfg.llm_model) || 'claude-sonnet-4-6', system: CA_LEAD_PROMPT, user: renderPackagePrompt(pkg), tool: tool, max_tokens: 2048, temperature: 0.2 });
+  var costs = [], calls = 0;
+  function record(res) { calls++; costs.push(costFromUsage(res.usage, cfg)); }
+  function validate(o) { var e = validateStructured(o, CC_LEAD_SCHEMA).concat(validateEvidenceIds(o, allowed)); return { ok: e.length === 0, errors: e }; }
+  return callClaude(fetchFn, body, cfg).then(function (res1) {
+    record(res1);
+    if (!res1.ok) return fin(deterministicLeadFallback(), { fallback_used: true, error_category: res1.error_category, request_id: res1.request_id });
+    var v1 = validate(res1.content);
+    if (v1.ok) return fin(res1.content, { fallback_used: false, schema_mode: res1.schema_mode, request_id: res1.request_id });
+    var ruser = ['Fix ONLY the listed problems and resubmit via the tool. Use ONLY evidence_ids: [' + allowed.join(', ') + '].', 'ERRORS:', v1.errors.map(function (e) { return '- ' + e; }).join('\n'), 'PREVIOUS:', JSON.stringify(res1.content)].join('\n');
+    var rbody = buildToolRequest({ model: caStr(cfg.llm_model) || 'claude-sonnet-4-6', system: CA_LEAD_PROMPT, user: ruser, tool: ccLeadTool(), max_tokens: 2048, temperature: 0 });
+    return callClaude(fetchFn, rbody, cfg).then(function (res2) {
+      record(res2);
+      if (res2.ok && validate(res2.content).ok) return fin(res2.content, { fallback_used: false, repair_used: true, repair_success: true, schema_mode: res2.schema_mode, request_id: res2.request_id });
+      return fin(deterministicLeadFallback(), { fallback_used: true, repair_used: true, error_category: 'validation_failed', request_id: res2.request_id });
+    });
+  });
+  function fin(leads, meta) {
+    return { ok: !meta.fallback_used, analysis: leads, analysis_mode: 'public_lead', calls: calls,
+      repair_used: !!meta.repair_used, repair_success: !!meta.repair_success, fallback_used: !!meta.fallback_used,
+      schema_mode: meta.schema_mode || (leads && leads._fallback ? 'fallback' : 'tool_use'), request_id: meta.request_id || '',
+      error_category: meta.error_category || '', usage: costs.reduce(function (a, c) { return { input_tokens: a.input_tokens + c.input_tokens, output_tokens: a.output_tokens + c.output_tokens }; }, { input_tokens: 0, output_tokens: 0 }), cost_usd: sumCosts(costs) };
+  }
+}
+
 module.exports = {
   CA_SYSTEM_PROMPT, buildSourceAnalysisCall, validateAnalysisResult, buildRepairCall,
   deterministicAnalysisFallback, analyzeSource,
-  CA_SYNTHESIS_PROMPT, buildComparisonCall, buildSynthesisRepairCall, deterministicComparisonFallback, analyzeComparison
+  CA_SYNTHESIS_PROMPT, buildComparisonCall, buildSynthesisRepairCall, deterministicComparisonFallback, analyzeComparison,
+  CA_CANDIDATE_PROMPT, deterministicCandidateFallback, enrichCandidate,
+  CA_LEAD_PROMPT, deterministicLeadFallback, interpretPublicLead
 };
