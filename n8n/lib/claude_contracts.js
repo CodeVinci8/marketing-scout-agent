@@ -179,17 +179,26 @@ function ccNormalizeStructured(obj, schema, path, acc) {
       } catch (e) { /* not JSON — leave as-is so validateStructured reports the real type error */ }
     }
   }
+  // PURE: never mutate the caller's object. A parsed provider response may be inspected, re-validated or
+  // re-used elsewhere (and tests share fixtures) — in-place rewriting made a second normalization silently
+  // find nothing to do, which is exactly how the coercion telemetry first went missing.
   if (t === 'object' && obj && typeof obj === 'object' && !Array.isArray(obj)) {
     var props = schema.properties || {};
+    var outO = null;
     Object.keys(props).forEach(function (k) {
       if (obj[k] === undefined) return;
-      obj[k] = ccNormalizeStructured(obj[k], props[k], path + '.' + k, acc).value;
+      var r = ccNormalizeStructured(obj[k], props[k], path + '.' + k, acc);
+      if (r.value !== obj[k]) { if (!outO) { outO = {}; Object.keys(obj).forEach(function (kk) { outO[kk] = obj[kk]; }); } outO[k] = r.value; }
     });
+    if (outO) obj = outO;
   }
   if (t === 'array' && Array.isArray(obj) && schema.items) {
+    var outA = null;
     for (var i = 0; i < obj.length; i++) {
-      obj[i] = ccNormalizeStructured(obj[i], schema.items, path + '[' + i + ']', acc).value;
+      var ri = ccNormalizeStructured(obj[i], schema.items, path + '[' + i + ']', acc);
+      if (ri.value !== obj[i]) { if (!outA) outA = obj.slice(); outA[i] = ri.value; }
     }
+    if (outA) obj = outA;
   }
   return { value: obj, coerced: acc };
 }

@@ -122,7 +122,102 @@ CA.analyzeSource(fetchStringItems, pkgResult, cfg).then((r) => {
       A.eq('one call', r3.calls, 1);
       A.eq('no coercion needed', (r3.coerced_paths || []).length, 0);
       A.eq('items intact', r3.analysis.items.length, 3);
-      A.report('tooluse-coercion');
+
+// ---- purity + all-four-mode primary/repair coverage -------------------------------------------------------
+A.section('ccNormalizeStructured is PURE (a shared payload can be normalized twice)');
+{
+  const wire = Object.assign({}, GOOD, { items: JSON.stringify(ITEMS) });
+  const a1 = CC.ccNormalizeStructured(wire, CC.CC_ANALYSIS_SCHEMA);
+  const a2 = CC.ccNormalizeStructured(wire, CC.CC_ANALYSIS_SCHEMA);
+  A.eq('input untouched by the first pass', typeof wire.items, 'string');
+  A.eq('first pass coerces', a1.coerced.join(','), '$.items');
+  A.eq('second pass coerces identically (not a no-op)', a2.coerced.join(','), '$.items');
+  A.ok('both produce arrays', Array.isArray(a1.value.items) && Array.isArray(a2.value.items));
+}
+
+A.section('all four modes — primary AND repair payloads with string-encoded containers');
+{
+  const mk = (name, input, usage) => ({ status: 200, latency_ms: 1000, headers: {},
+    body: { id: 'm', model: 'claude-sonnet-4-6', stop_reason: 'tool_use',
+      content: [{ type: 'tool_use', name: name, input: input }],
+      usage: usage || { input_tokens: 100, output_tokens: 20 } } });
+
+  // --- comparison / synthesis ---
+  const cmpPkg = { package: { analysis_request: { agent_request_id: 'r' }, sources: [
+      { source_id: 'a.ru', evidence_ids: ['ev_1'] }, { source_id: 'b.ru', evidence_ids: ['ev_2'] }],
+      evidence_items: [{ evidence_id: 'ev_1', source_url: 'https://a.ru' }, { evidence_id: 'ev_2', source_url: 'https://b.ru' }] },
+    allowed_evidence_ids: ['ev_1', 'ev_2'], package_hash: 'h' };
+  const CMP = { overview_ru: 'Два источника сравнимы.',
+    comparisons: [{ aspect: 'prices', text_ru: 'Ставки различаются.', evidence_ids: ['ev_1', 'ev_2'] }],
+    recurring_pains_ru: ['ставка'], opportunities: [{ text_ru: 'калькулятор', evidence_ids: ['ev_1'] }],
+    recommended_experiments: [{ text_ru: 'A/B', priority: 'medium', evidence_ids: ['ev_2'] }],
+    used_evidence_ids: ['ev_1', 'ev_2'] };
+  const cmpWire = Object.assign({}, CMP, { comparisons: JSON.stringify(CMP.comparisons), used_evidence_ids: JSON.stringify(CMP.used_evidence_ids) });
+
+  // --- candidate ---
+  const candPkg = { package: { analysis_request: {}, evidence_items: [{ evidence_id: 'ev_1', source_url: 'https://c.ru' }] },
+    allowed_evidence_ids: ['ev_1'], package_hash: 'h2' };
+  const CAND = { verdict: 'competitor', confidence: 70, rationale_ru: 'Профиль совпадает.', is_regional_match: true, evidence_ids: ['ev_1'] };
+  const candWire = Object.assign({}, CAND, { evidence_ids: JSON.stringify(CAND.evidence_ids) });
+
+  // --- public lead ---
+  const leadPkg = { package: { analysis_request: {}, evidence_items: [{ evidence_id: 'ev_1', source_url: 'https://t.me/x/1' }] },
+    allowed_evidence_ids: ['ev_1'], package_hash: 'h3' };
+  const LEAD = { overview_ru: 'Публичные сигналы спроса.',
+    leads: [{ observed_fact_ru: 'Ищет займ под ПТС.', interpretation_ru: 'Возможная потребность.', signal: 'need', confidence: 55, evidence_ids: ['ev_1'] }],
+    limitations_ru: ['только публичные данные'], used_evidence_ids: ['ev_1'] };
+  const leadWire = Object.assign({}, LEAD, { leads: JSON.stringify(LEAD.leads) });
+
+  // PRIMARY path: one call, no repair, container coerced, value kept.
+  return CA.analyzeComparison(() => Promise.resolve(mk('submit_synthesis', cmpWire)), cmpPkg, cfg).then((rc) => {
+    A.ok('comparison primary ok', rc.ok);
+    A.ok('comparison no repair', !rc.repair_used);
+    A.eq('comparison one call', rc.calls, 1);
+    A.ok('comparisons is an array', Array.isArray(rc.analysis.comparisons));
+    A.eq('comparison coerced_paths surfaced', (rc.coerced_paths || []).length, 2);
+
+    return CA.enrichCandidate(() => Promise.resolve(mk('submit_candidate', candWire)), candPkg, cfg).then((rk) => {
+      A.ok('candidate primary ok', rk.ok);
+      A.ok('candidate no repair', !rk.repair_used);
+      A.ok('evidence_ids is an array', Array.isArray(rk.verdict.evidence_ids));
+      A.eq('candidate coerced_paths surfaced', (rk.coerced_paths || []).join(','), '$.evidence_ids');
+
+      return CA.interpretPublicLead(() => Promise.resolve(mk('submit_public_leads', leadWire)), leadPkg, cfg).then((rl) => {
+        A.ok('lead primary ok', rl.ok);
+        A.ok('leads is an array', Array.isArray(rl.analysis.leads));
+        A.eq('lead coerced_paths surfaced', (rl.coerced_paths || []).join(','), '$.leads');
+
+        // REPAIR path for each mode: primary is unrecoverable, repair returns a string-encoded container.
+        const twoStep = (bad, good, name) => { let n = 0; return () => Promise.resolve(mk(name, (n++ === 0) ? bad : good)); };
+        const cmpBad = Object.assign({}, CMP, { comparisons: 'не json' });
+        return CA.analyzeComparison(twoStep(cmpBad, cmpWire, 'submit_synthesis'), cmpPkg, cfg).then((rc2) => {
+          A.ok('comparison repair succeeded', rc2.ok && rc2.repair_used && rc2.repair_success);
+          A.eq('comparison exactly two calls', rc2.calls, 2);
+          A.ok('comparison repair value coerced', Array.isArray(rc2.analysis.comparisons));
+          A.ok('comparison repair coercion surfaced', (rc2.coerced_paths || []).length > 0);
+
+          const candBad = Object.assign({}, CAND, { evidence_ids: 'не json' });
+          return CA.enrichCandidate(twoStep(candBad, candWire, 'submit_candidate'), candPkg, cfg).then((rk2) => {
+            A.ok('candidate repair succeeded', rk2.ok && rk2.repair_used && rk2.repair_success);
+            A.eq('candidate exactly two calls', rk2.calls, 2);
+            A.ok('candidate repair value coerced', Array.isArray(rk2.verdict.evidence_ids));
+            A.ok('candidate repair coercion surfaced', (rk2.coerced_paths || []).length > 0);
+
+            const leadBad = Object.assign({}, LEAD, { leads: 'не json' });
+            return CA.interpretPublicLead(twoStep(leadBad, leadWire, 'submit_public_leads'), leadPkg, cfg).then((rl2) => {
+              A.ok('lead repair succeeded', rl2.ok && rl2.repair_used && rl2.repair_success);
+              A.eq('lead exactly two calls', rl2.calls, 2);
+              A.ok('lead repair value coerced', Array.isArray(rl2.analysis.leads));
+              A.ok('lead repair coercion surfaced', (rl2.coerced_paths || []).length > 0);
+              A.report('tooluse-coercion');
+            });
+          });
+        });
+      });
+    });
+  });
+}
+
     });
   });
 }).catch((e) => { A.ok('no exception: ' + e.message, false); A.report('tooluse-coercion'); });

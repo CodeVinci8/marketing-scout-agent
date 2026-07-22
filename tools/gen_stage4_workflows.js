@@ -2073,7 +2073,7 @@ var http={status:Number(raw.statusCode||raw.status||0)||(raw.body?200:0),body:ra
 var res=parseClaudeResponse(http,{model:prep.ctx.model});
 function lr(r){return {usage:r.usage,request_id:r.request_id,stop_reason:r.stop_reason,schema_mode:r.schema_mode,latency_ms:r.latency_ms,provider:r.provider,error_category:r.error_category};}
 var out={prep:prep,res1:lr(res)};
-if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,CC_ANALYSIS_SCHEMA);if(v.ok){out.status='valid';out.analysis=res.content;}else{out.status='repair';out.errors=v.errors;out.rejected=res.content;var rep=buildRepairCall(res.content,v.errors,prep.allowed_ids,{llm_model:prep.ctx.model});out.claude_body=rep.body;out.__t1=Date.now();}}
+if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,CC_ANALYSIS_SCHEMA);out.coerced_paths=v.coerced||[];if(v.ok){out.status='valid';out.analysis=v.value;}else{out.status='repair';out.errors=v.errors;out.rejected=v.value;var rep=buildRepairCall(v.value,v.errors,prep.allowed_ids,{llm_model:prep.ctx.model});out.claude_body=rep.body;out.__t1=Date.now();}}
 else{out.status='fail';out.error_category=res.error_category;}
 return [{json:out}];`),
   ifNode('wf28-ifrep', 'Need Repair?', [1060, -120], "={{ $json.status === 'repair' }}"),
@@ -2086,7 +2086,7 @@ var http={status:Number(raw.statusCode||raw.status||0)||(raw.body?200:0),body:ra
 var res=parseClaudeResponse(http,{model:prep.ctx.model});
 function lr(r){return {usage:r.usage,request_id:r.request_id,stop_reason:r.stop_reason,schema_mode:r.schema_mode,latency_ms:r.latency_ms,provider:r.provider,error_category:r.error_category};}
 var out={prep:prep,res1:pp.res1,res2:lr(res),repair_used:true,prev_errors:pp.errors||[]};
-if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,CC_ANALYSIS_SCHEMA);if(v.ok){out.status='repaired';out.analysis=res.content;out.repair_success=true;}else{out.status='fallback';out.repair_success=false;out.errors=v.errors;}}
+if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,CC_ANALYSIS_SCHEMA);out.coerced_paths=(pp.coerced_paths||[]).concat(v.coerced||[]);if(v.ok){out.status='repaired';out.analysis=v.value;out.repair_success=true;}else{out.status='fallback';out.repair_success=false;out.errors=v.errors;}}
 else{out.status='fallback';out.repair_success=false;out.error_category=res.error_category;}
 return [{json:out}];`),
   code('wf28-fin', 'Finalize Analysis', [1720, 0], WF28_LIBS_FULL, `
@@ -2112,7 +2112,7 @@ var evMap=((pkgRes.package&&pkgRes.package.evidence_items)||[]).map(function(e){
 // are the audit surface; analysis_id itself stays CURRENT-request lineage. repair_cost_usd feeds COST-SPLIT-001.
 var reusedRef=(prep.mode==='reuse'&&prep.reuse_ref)?prep.reuse_ref:null;
 var cacheDec=prep.cache_decision||{decision:(prep.mode==='call'?'fresh_call':String(prep.mode||'')),reason:''};
-var typedReturn={analysis_id:resultRow.analysis_id,enriched:enriched,quality_status:resultRow.quality_status,mode:prep.mode,analysis:a,overall_confidence:a.overall_confidence||0,repair_used:result.repair_used,repair_success:result.repair_success,fallback_used:result.fallback_used,error_category:result.error_category,cost_usd:result.cost_usd,repair_cost_usd:repairCost,model:String(ctx.model||''),reused_from_analysis_id:(reusedRef?String(reusedRef.reused_from_analysis_id||''):''),reused_from_created_at:(reusedRef?String(reusedRef.created_at||''):''),reused_from_model:(reusedRef?String(reusedRef.model||''):''),cache_decision:String(cacheDec.decision||''),cache_reason:String(cacheDec.reason||''),evidence_package_hash:ctx.evidence_package_hash,evidence_map:evMap,source:ctx.source_scope||{},tokens_in:((result.usage||{}).input_tokens)||0,tokens_out:((result.usage||{}).output_tokens)||0,latency_ms:result.latency_ms||0};
+var typedReturn={analysis_id:resultRow.analysis_id,enriched:enriched,quality_status:resultRow.quality_status,mode:prep.mode,analysis:a,overall_confidence:a.overall_confidence||0,repair_used:result.repair_used,repair_success:result.repair_success,fallback_used:result.fallback_used,error_category:result.error_category,cost_usd:result.cost_usd,repair_cost_usd:repairCost,model:String(ctx.model||''),reused_from_analysis_id:(reusedRef?String(reusedRef.reused_from_analysis_id||''):''),reused_from_created_at:(reusedRef?String(reusedRef.created_at||''):''),reused_from_model:(reusedRef?String(reusedRef.model||''):''),cache_decision:String(cacheDec.decision||''),cache_reason:String(cacheDec.reason||''),evidence_package_hash:ctx.evidence_package_hash,evidence_map:evMap,source:ctx.source_scope||{},tokens_in:((result.usage||{}).input_tokens)||0,tokens_out:((result.usage||{}).output_tokens)||0,latency_ms:result.latency_ms||0,coerced_paths:((pr&&pr.coerced_paths)||(pp&&pp.coerced_paths)||[])};
 return [{json:{persist:persist,result_row:resultRow,telemetry_row:telRow,typed_return:typedReturn}}];`),
   ifNode('wf28-ifpersist', 'Persist?', [1940, 0], '={{ $json.persist }}'),
   code('wf28-shaperes', 'Shape Result Row', [2160, -120], [], `return [{json:$('Finalize Analysis').first().json.result_row}];`),
