@@ -152,6 +152,7 @@ const JS_SUITES = [
   ['runtime-integrity', 'test_runtime_integrity.js'],
   ['tracked-sources', 'test_tracked_sources.js'],
   ['text-safety-f3', 'test_text_safety_f3.js'],
+  ['analysis-router', 'test_analysis_router.js'],
   ['report-text-safety', 'test_report_text_safety.js'],
   ['telegram-commands', 'test_telegram_commands.js'],
   ['attachment-routing', 'test_attachment_routing.js'],
