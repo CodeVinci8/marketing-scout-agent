@@ -2,6 +2,65 @@
 
 Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm/decisions.md`.
 
+## Session 72 (2026-07-22) — VK credential installed; F-7 router FOUNDATION landed (wiring pending); env change needs root
+
+**VERIFIED CHECKPOINT:** branch `fix/stage-f-post-migration-acceptance`, HEAD `7da0c01`, worktree clean,
+origin/main `05490a2`, **46 ahead / 0 behind**, NOT pushed. Production: health ok, **90/17**, webhook
+registered (1 row), ingress POST 200, proxy+ngrok active, RestartCount=0, StartedAt 2026-07-22T22:33:45Z.
+Full regression ALL SUITES PASS ($0). Runtime gate OK.
+
+### VK credential — INSTALLED (token type determined empirically, never printed)
+The VK token is a **credential, NOT an env var**: the canonical collector (`vk_collector.js`) states the token
+is injected by the n8n `httpQueryAuth` credential. Prod already had the slot
+`httpQueryAuth | HTTP Query Auth - VK Access Token | id=pRZcJEyp7KExTReQ`. I updated it via
+`n8n import:credentials` (payload built 0600, shredded after; token never echoed to logs/git/tests).
+**Token type = VK SERVICE token** (сервисный ключ): probed live against api.vk.com v5.199 —
+`groups.getById` OK, `wall.get` OK (items[2] total=6 on `kredit874`), `wall.getComments` OK, and
+`users.get(self)` → empty array (the service-token signature). All three methods the collector uses succeed on
+a configured public community.
+
+### Env change STILL NEEDS ROOT (I cannot write /opt/n8n/n8n.env)
+`/opt/n8n` is root-owned, no sudo. `MS_ENABLE_VK` is still `false` and `219246148` is NOT yet in
+`MS_TELEGRAM_ALLOWED_USER_IDS` (currently only `1188830082`). The env source is `/opt/n8n/n8n.env`
+(compose project `n8n`, working_dir `/opt/n8n`, config `/opt/n8n/docker-compose.yml`). The operator must run
+the command block provided in the session response (backup n8n.env → set MS_ENABLE_VK=true → append
+219246148 preserving existing ids → `docker compose up -d n8n` → verify inside container). MS_TIMEZONE stays
+Europe/Moscow. **The VK TOKEN is already in the credential store — only MS_ENABLE_VK=true is needed in the env.**
+
+### F-7 — router FOUNDATION committed (`7da0c01`), wiring NOT yet in production
+`n8n/lib/analysis_router.js` + `test_analysis_router.js` (55, registered). `resolveAnalysisMode` makes
+analysis_type an EXECUTION decision (comparison needs ≥2 CONTRIBUTING sources, synthesis ≥3; one source can
+never fake a comparison; over-request downgrades with a Russian reason). **Caught a real latent hazard:**
+analysis_bridge emits BOTH a competitor-name-keyed target AND a host-keyed evidence-only target for the SAME
+company, so naive counting let ONE source look like a 2-source comparison — `arSourceIdentity` dedupes on
+run_id→source_id→company_name. `arBuildMultiSourcePackage` builds evidence_package.multi.v1 with unique ev_N,
+per-source evidence ids, identity/lineage preserved.
+
+**WHY WIRING IS NOT DEPLOYED:** I built the WF20/WF28 wiring (Build Analysis Inputs → resolve mode → multi
+package → WF28 buildComparisonCall; Prepare/Parse/Finalize schema-switch to CC_SYNTHESIS_SCHEMA) and a
+behavioural node test, but hit context limit before the node test was fully green (the bridge fan-out made the
+fixture assertions count raw targets, not sources — a TEST issue, the router dedupe is correct). Rather than
+commit a red suite or deploy unproven code, I **reverted the generator/workflow changes** and kept only the
+proven, green, isolated router lib. Production is UNCHANGED by F-7.
+
+### EXACT NEXT STEP for F-7 (resume here)
+1. Re-apply the WF20/WF28 wiring in `tools/gen_stage4_workflows.js` (the reverted diff — see commit `7da0c01`
+   message for the shape): Build Analysis Inputs embeds `analysis_router`, calls `resolveAnalysisMode`, and for
+   a multi-source mode emits ONE target with `arBuildMultiSourcePackage` + `analysis_type:route.mode`; WF20→WF28
+   passes `$json.analysis_type` (the RESOLVED mode, not the plan label); WF28 Prepare detects
+   `schema==='evidence_package.multi.v1'`, uses `buildComparisonCall`, and Parse Primary/Repair validate against
+   `CC_SYNTHESIS_SCHEMA` when `prep.multi_source`; Finalize reports analysis_mode/multi_source/source_count.
+2. Write the behavioural test asserting on `contributing_sources` and the multi package (NOT raw target counts).
+3. Regenerate, full regression, deploy WF20+WF28 backup-first + gate (WF20 callable — no restart), live-prove a
+   real 2-source comparison and 3-source synthesis with a Telegram report + XLSX, inspecting that every
+   comparison claim cites ≥2 sources' evidence ids.
+
+### STILL OPEN (unchanged from session 71): F-2, F-4, F-5, F-8 not started; F-7 wiring pending.
+Operator UX decisions now BINDING: keep progress-message-edit terminal UX (NO separate «Готово» sendMessage —
+CANCELS the earlier F-2 proposal); XLSX must become human-readable (drop «Технические данные», no
+tokens/latency/enums/JSON/ids — keep full telemetry in Sheets only); MS_TIMEZONE=Europe/Moscow; allow
+219246148.
+
 ## Session 71 (2026-07-22) — Stage F slices F-1, F-3, F-6, F-9 CLOSED (deployed + verified). F-2/F-4/F-5/F-7/F-8 OPEN.
 
 **VERIFIED CHECKPOINT AT WRITE TIME:** branch `fix/stage-f-post-migration-acceptance`, HEAD `60cfcd9`,
