@@ -10,7 +10,7 @@
 // co-embedded lib functions directly into the n8n Code-node scope. Do NOT switch to namespace requires — the
 // generator does not strip `var X = require('./local')` and n8n Code nodes cannot require() a local file.
 const { buildToolRequest, callClaude } = require('./claude_adapter.js');
-const { ccAnalysisTool, CC_ANALYSIS_SCHEMA, validateStructured, validateEvidenceIds } = require('./claude_contracts.js');
+const { ccAnalysisTool, CC_ANALYSIS_SCHEMA, ccSynthesisTool, CC_SYNTHESIS_SCHEMA, validateStructured, validateEvidenceIds } = require('./claude_contracts.js');
 const { renderPackagePrompt } = require('./evidence_package.js');
 const { costFromUsage, sumCosts } = require('./llm_cost.js');
 
@@ -135,7 +135,113 @@ function analyzeSource(fetchFn, pkgResult, cfg) {
   }
 }
 
+// ============================ WIP4: three-source synthesis / comparison ======================================
+// Same fail-closed flow as analyzeSource, but over a MULTI-SOURCE evidence package (>=3 accepted sources): build
+// -> call (submit_synthesis) -> validate (schema + evidence ids) -> ONE repair -> deterministic fallback. Source-
+// level facts stay separately traceable via evidence_ids; each comparison item MUST cite evidence from the
+// contributing sources; no market-wide conclusion without support.
+var CA_SYNTHESIS_PROMPT = [
+  'You are CodeVinci AI Pilot, an evidence-grounded competitor and market-intelligence analyst for a secured-lending',
+  'business in Moscow and Moscow Oblast, Russia. You receive a BOUNDED MULTI-SOURCE evidence package (several',
+  'sources, each with citable evidence items). Absolute rules:',
+  '1. Ground every comparison/opportunity/experiment in evidence: evidence_ids / used_evidence_ids MUST contain only',
+  '   evidence_id values present in the package. Never invent an id, a price, a company fact, or a source.',
+  '2. Keep source-level facts SEPARATE. A comparison states a COMMON pattern, a DIFFERENCE, a CONTRADICTION or a',
+  '   MISSING-DATA gap — and cites the evidence_ids of the sources it compares.',
+  '3. Do NOT assert a market-wide conclusion (leader/maximum/"весь рынок") unless the evidence across the sources',
+  '   actually supports it; otherwise scope it or put it in recurring_pains_ru / opportunities as a hypothesis.',
+  '4. Narrative fields whose key ends in _ru MUST be natural professional Russian; keys stay exact ASCII English.',
+  '5. If the sources are too few or thin to compare, say so in overview_ru and keep comparisons conservative.',
+  '6. Do not recommend contacting private individuals or any unsolicited outreach.',
+  'Return your result ONLY by calling the provided tool.'
+].join('\n');
+
+function buildComparisonCall(pkgResult, cfg) {
+  cfg = cfg || {};
+  var pkg = (pkgResult && pkgResult.package) || {};
+  var tool = ccSynthesisTool();
+  var body = buildToolRequest({
+    model: caStr(cfg.llm_model) || 'claude-sonnet-4-6',
+    system: CA_SYNTHESIS_PROMPT, user: renderPackagePrompt(pkg), tool: tool, max_tokens: 3072, temperature: 0.2
+  });
+  return { body: body, tool: tool, schema: CC_SYNTHESIS_SCHEMA, allowed_evidence_ids: (pkgResult && pkgResult.allowed_evidence_ids) || [] };
+}
+
+function buildSynthesisRepairCall(rejected, errors, allowedIds, cfg) {
+  cfg = cfg || {};
+  var tool = ccSynthesisTool();
+  var user = [
+    'Your previous tool call failed local validation. Fix ONLY the listed problems and resubmit via the tool.',
+    'Do not add new claims. Keep every valid field. Use ONLY these evidence_ids: [' + (allowedIds || []).join(', ') + '].',
+    'VALIDATION ERRORS:', (errors || []).map(function (e) { return '- ' + e; }).join('\n'),
+    'YOUR PREVIOUS RESULT (JSON):', JSON.stringify(rejected)
+  ].join('\n');
+  return { body: buildToolRequest({ model: caStr(cfg.llm_model) || 'claude-sonnet-4-6', system: CA_SYNTHESIS_PROMPT, user: user, tool: tool, max_tokens: 3072, temperature: 0 }), tool: tool };
+}
+
+// Deterministic comparison fallback — a conservative cross-source view from the package facts, so a synthesis
+// section always survives an LLM failure. Compares by whatever facts each source exposed; cites their evidence.
+function deterministicComparisonFallback(pkgResult) {
+  var pkg = (pkgResult && pkgResult.package) || {};
+  var srcs = Array.isArray(pkg.sources) ? pkg.sources : [];
+  var ev = pkg.evidence_items || [];
+  var comparisons = [];
+  var used = [];
+  ['positioning', 'offers', 'prices'].forEach(function (aspect) {
+    var ids = [], bits = [];
+    srcs.forEach(function (s) {
+      var sid = (s.evidence_ids || []).filter(function (id) { return true; });
+      var val = aspect === 'positioning' ? s.positioning : (aspect === 'offers' ? s.offer_summary : s.prices_terms);
+      if (val && sid.length) { bits.push((s.source_name || s.source_id || 'источник') + ': ' + val); ids = ids.concat(sid.slice(0, 2)); }
+    });
+    if (bits.length >= 2) { comparisons.push({ aspect: aspect, text_ru: bits.join(' | '), evidence_ids: ids.slice(0, 6) }); used = used.concat(ids); }
+  });
+  if (!comparisons.length) { var f = ev.slice(0, 3).map(function (e) { return e.evidence_id; }); if (f.length) { comparisons.push({ aspect: 'positioning', text_ru: 'ИИ-сравнение недоступно — приведены собранные факты источников.', evidence_ids: f }); used = f; } }
+  return {
+    overview_ru: 'ИИ-сравнение временно недоступно — показан детерминированный срез по собранным источникам.',
+    comparisons: comparisons, recurring_pains_ru: [], opportunities: [],
+    recommended_experiments: [], used_evidence_ids: used.filter(function (v, i, a) { return v && a.indexOf(v) === i; }), _fallback: true
+  };
+}
+
+// analyzeComparison(fetchFn, pkgResult, cfg) -> same result envelope as analyzeSource (analysis = synthesis obj).
+function analyzeComparison(fetchFn, pkgResult, cfg) {
+  cfg = cfg || {};
+  var built = buildComparisonCall(pkgResult, cfg);
+  var allowed = built.allowed_evidence_ids;
+  var costs = [], calls = 0;
+  function record(res) { calls++; costs.push(costFromUsage(res.usage, cfg)); }
+  function validate(obj) { var errs = validateStructured(obj, CC_SYNTHESIS_SCHEMA).concat(validateEvidenceIds(obj, allowed)); return { ok: errs.length === 0, errors: errs }; }
+  return callClaude(fetchFn, built.body, cfg).then(function (res1) {
+    record(res1);
+    if (!res1.ok) return finalize(deterministicComparisonFallback(pkgResult), { schema_mode: '', repair_used: false, repair_success: false, fallback_used: true, validation_errors: [res1.error_category], stop_reason: res1.stop_reason, request_id: res1.request_id, error_category: res1.error_category });
+    var v1 = validate(res1.content);
+    if (v1.ok) return finalize(res1.content, { schema_mode: res1.schema_mode, repair_used: false, repair_success: false, fallback_used: false, validation_errors: [], stop_reason: res1.stop_reason, request_id: res1.request_id, error_category: '' });
+    var rep = buildSynthesisRepairCall(res1.content, v1.errors, allowed, cfg);
+    return callClaude(fetchFn, rep.body, cfg).then(function (res2) {
+      record(res2);
+      if (res2.ok) { var v2 = validate(res2.content);
+        if (v2.ok) return finalize(res2.content, { schema_mode: res2.schema_mode, repair_used: true, repair_success: true, fallback_used: false, validation_errors: v1.errors, stop_reason: res2.stop_reason, request_id: res2.request_id, error_category: '' });
+        return finalize(deterministicComparisonFallback(pkgResult), { schema_mode: res2.schema_mode, repair_used: true, repair_success: false, fallback_used: true, validation_errors: v2.errors, stop_reason: res2.stop_reason, request_id: res2.request_id, error_category: 'validation_failed' });
+      }
+      return finalize(deterministicComparisonFallback(pkgResult), { schema_mode: '', repair_used: true, repair_success: false, fallback_used: true, validation_errors: [res2.error_category], stop_reason: res2.stop_reason, request_id: res2.request_id, error_category: res2.error_category });
+    });
+  });
+  function finalize(analysis, meta) {
+    var totalUsage = costs.reduce(function (a, c) { return { input_tokens: a.input_tokens + c.input_tokens, output_tokens: a.output_tokens + c.output_tokens }; }, { input_tokens: 0, output_tokens: 0 });
+    return {
+      ok: !meta.fallback_used, analysis: analysis, analysis_mode: 'comparison', calls: calls,
+      schema_mode: meta.schema_mode || (analysis && analysis._fallback ? 'fallback' : 'tool_use'),
+      repair_used: meta.repair_used, repair_success: meta.repair_success, fallback_used: meta.fallback_used,
+      validation_errors: meta.validation_errors, stop_reason: meta.stop_reason, request_id: meta.request_id,
+      error_category: meta.error_category, usage: totalUsage, cost_usd: sumCosts(costs),
+      package_hash: (pkgResult && pkgResult.package_hash) || ''
+    };
+  }
+}
+
 module.exports = {
   CA_SYSTEM_PROMPT, buildSourceAnalysisCall, validateAnalysisResult, buildRepairCall,
-  deterministicAnalysisFallback, analyzeSource
+  deterministicAnalysisFallback, analyzeSource,
+  CA_SYNTHESIS_PROMPT, buildComparisonCall, buildSynthesisRepairCall, deterministicComparisonFallback, analyzeComparison
 };
