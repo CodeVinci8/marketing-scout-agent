@@ -1181,7 +1181,7 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   // request-scoped CURRENT-RUN facts — never raw pages and never the whole Sheets history. Fail-open by
   // construction: every downstream node reads WF12 by NAME, so a disabled/empty/failed analysis still delivers the
   // full deterministic report + XLSX.
-  code('wf20-anainputs', 'Build Analysis Inputs', [1500, -320], ['analysis_bridge', 'agent_config'], `
+  code('wf20-anainputs', 'Build Analysis Inputs', [1500, -320], ['analysis_bridge', 'analysis_router', 'agent_config'], `
 var g=$('Approval & Budget Gate').first().json;var cfg=g.cfg||{};
 var rep={};try{rep=$('Run WF12 Report').first().json||{};}catch(e){rep={};}
 var b={};try{b=JSON.parse(String(rep.report_bundle||'{}'));}catch(e){b={};}
@@ -1194,12 +1194,29 @@ var ctx={agent_request_id:String(req.agent_request_id||''),owner_user_id:String(
   data_mode:String(req.data_mode||'live'),requested_sources:(plan.sources||[])};
 var built=buildAnalysisTargets(b,ctx,{max_targets:Number(cfg.llm_max_analyses_per_run)||5});
 var targets=enabled?built.targets:[];
-return [{json:{do_analyze:targets.length>0,analysis_reason:enabled?built.reason:'disabled',
-  targets:targets.map(function(t){return {source_key:t.source_key,source_kind:t.source_kind,
+// F-7 ANALYSIS-ROUTE-001: the PLAN mode is a request, not a verdict. The router decides what may actually run
+// from how many DISTINCT sources genuinely contributed evidence (analysis_bridge already consolidated split
+// records under BRIDGE-IDENTITY-001), and downgrades explicitly rather than faking a comparison over one source.
+var route=resolveAnalysisMode({requested_mode:String(plan.analysis_mode||'source_analysis'),targets:targets});
+ctx.analysis_mode=route.mode;
+var shaped;
+if(route.multi_source){
+  var mp=arBuildMultiSourcePackage(targets,ctx);
+  shaped=[{source_key:'multi::'+mp.package.sources.map(function(x){return x.source_id;}).join('+'),
+    source_kind:'multi',analysis_type:route.mode,
+    evidence_input:JSON.stringify(mp.package),agent_request_id:ctx.agent_request_id,owner_user_id:ctx.owner_user_id,
+    chat_id:ctx.chat_id,report_id:ctx.report_id,niche:ctx.niche,region:ctx.region,
+    source_run_id:String(g.idempotency_key||'')+'::'+route.mode}];
+}else{
+  shaped=targets.map(function(t){return {source_key:t.source_key,source_kind:t.source_kind,analysis_type:route.mode,
     evidence_input:JSON.stringify(t.evidence_input),agent_request_id:ctx.agent_request_id,owner_user_id:ctx.owner_user_id,
     chat_id:ctx.chat_id,report_id:ctx.report_id,niche:ctx.niche,region:ctx.region,
-    source_run_id:String(g.idempotency_key||'')+'::'+t.source_key};}),
-  targets_considered:built.considered}}];`),
+    source_run_id:String(g.idempotency_key||'')+'::'+t.source_key};});
+}
+return [{json:{do_analyze:shaped.length>0,analysis_reason:enabled?built.reason:'disabled',
+  analysis_mode:route.mode,analysis_mode_requested:route.requested_mode,analysis_mode_downgraded:route.downgraded,
+  analysis_mode_reason:route.reason,analysis_mode_reason_ru:route.reason_ru,contributing_sources:route.contributing,
+  targets:shaped,targets_considered:built.considered}}];`),
   ifNode('wf20-ifana', 'Analyze Sources?', [1720, -320], '={{ $json.do_analyze }}'),
   code('wf20-anashape', 'Shape Analysis Targets', [1940, -400], [],
     "return ($('Build Analysis Inputs').first().json.targets||[]).map(function(t){return {json:t};});"),
@@ -1213,7 +1230,7 @@ return [{json:{do_analyze:targets.length>0,analysis_reason:enabled?built.reason:
     chat_id: '={{ $json.chat_id }}',
     // REPORT-TRUTH-A: the persisted plan's analysis mode IS the analysis type (matcher aliases the legacy
     // 'single_source' spelling, so pre-rename cached analyses stay reusable).
-    analysis_type: "={{ String(($('Approval & Budget Gate').first().json.plan || {}).analysis_mode || 'source_analysis') }}",
+    analysis_type: '={{ $json.analysis_type }}',
     evidence_input: '={{ $json.evidence_input }}',
     niche: '={{ $json.niche }}',
     region: '={{ $json.region }}'
@@ -2030,8 +2047,8 @@ write('27_competitor_discovery.json', wf('27 — Cross-Source Competitor Discove
 // Transport: tool_choice:auto submit tool (the measured gateway contract). Deterministic fallback always yields a
 // usable typed result. Persists llm_analysis_results + llm_analysis_telemetry with full lineage; NO secret, NO
 // thinking block ever leaves the node. Max 2 Claude calls (primary + at most one repair) — no loops.
-var WF28_LIBS_FULL = ['agent_config', 'claude_adapter', 'claude_contracts', 'evidence_package', 'llm_cost', 'claude_analysis', 'llm_telemetry'];
-var WF28_LIBS_PARSE = ['claude_adapter', 'claude_contracts', 'evidence_package', 'llm_cost', 'claude_analysis'];
+var WF28_LIBS_FULL = ['agent_config', 'claude_adapter', 'claude_contracts', 'evidence_package', 'llm_cost', 'analysis_router', 'claude_analysis', 'llm_telemetry'];
+var WF28_LIBS_PARSE = ['claude_adapter', 'claude_contracts', 'evidence_package', 'llm_cost', 'analysis_router', 'claude_analysis'];
 write('28_claude_analyst.json', wf('28 — Claude Analyst (Stage F, evidence-bound, feature-gated)', [
   subTrigger('wf28-trigger', 'When Called by Agent', [-60, 0],
     ['agent_request_id', 'source_run_id', 'report_id', 'owner_user_id', 'chat_id', 'analysis_type', 'evidence_input', 'niche', 'region']),
@@ -2040,9 +2057,21 @@ write('28_claude_analyst.json', wf('28 — Claude Analyst (Stage F, evidence-bou
 var inp=callerInput();
 var cfg=resolveConfig(__env);
 var evIn={};try{evIn=(typeof inp.evidence_input==='string')?JSON.parse(inp.evidence_input||'{}'):(inp.evidence_input||{});}catch(e){evIn={};}
-var pkgRes=buildEvidencePackage(evIn,{});
+// F-7 ANALYSIS-ROUTE-001: a MULTI-source package arrives pre-built by WF20 (schema evidence_package.multi.v1)
+// and must NOT go through the single-source builder, which would collapse it to one source.
+var __mode=arNormalizeMode(inp.analysis_type);
+var __multi=arIsMultiSource(__mode)&&String(evIn.schema||'')==='evidence_package.multi.v1';
+var pkgRes;
+if(__multi){
+  var __ids=(evIn.evidence_items||[]).map(function(e){return String(e.evidence_id||'');}).filter(Boolean);
+  pkgRes={package:evIn,allowed_evidence_ids:__ids,package_hash:epHash(JSON.stringify(evIn))};
+}else{
+  // A multi-source label whose package did not arrive multi-source cannot be honoured — fall back to single.
+  if(arIsMultiSource(__mode))__mode='source_analysis';
+  pkgRes=buildEvidencePackage(evIn,{});
+}
 var model=(cfg.llm_model||'claude-sonnet-4-6');
-var ctx={owner_user_id:String(inp.owner_user_id||''),chat_id:String(inp.chat_id||''),agent_request_id:String(inp.agent_request_id||''),source_run_id:String(inp.source_run_id||''),report_id:String(inp.report_id||''),analysis_type:String(inp.analysis_type||'single_source'),evidence_package_hash:pkgRes.package_hash,source_scope:(evIn.source||{}),schema_version:CC_SCHEMA_VERSION,prompt_version:CC_PROMPT_VERSION,model:model};
+var ctx={owner_user_id:String(inp.owner_user_id||''),chat_id:String(inp.chat_id||''),agent_request_id:String(inp.agent_request_id||''),source_run_id:String(inp.source_run_id||''),report_id:String(inp.report_id||''),analysis_type:__mode,evidence_package_hash:pkgRes.package_hash,source_scope:(__multi?{source_id:'multi',kind:'multi',source_count:(evIn.sources||[]).length}:(evIn.source||{})),schema_version:CC_SCHEMA_VERSION,prompt_version:CC_PROMPT_VERSION,model:model};
 // Runtime gate: the dedicated Stage-F rollout flag (default OFF). Auth is enforced by the n8n credential on the
 // HTTP node — a missing/invalid credential simply fails the call and falls back (claude_key_present is a
 // cost-model concern, not a runtime gate).
@@ -2056,7 +2085,7 @@ var base={ctx:ctx,pkg:{package:pkgRes.package,allowed_evidence_ids:pkgRes.allowe
 if(reuse){base.mode='reuse';base.do_call=false;base.reuse_analysis=reuse.analysis;base.reuse_ref={reused_from_analysis_id:String(reuse.reused_from_analysis_id||''),quality_status:String(reuse.quality_status||''),created_at:String(reuse.reused_created_at||''),model:String(reuse.reused_model||'')};base.cache_decision={decision:'reuse',reason:String(reuse.cache_reason||'')};}
 else if(!enabled){base.mode='disabled';base.do_call=false;base.cache_decision={decision:'skip_disabled',reason:'llm analysis disabled'};}
 else if(!haveEvidence){base.mode='no_evidence';base.do_call=false;base.cache_decision={decision:'skip_no_evidence',reason:'no allowed evidence'};}
-else{var built=buildSourceAnalysisCall(base.pkg,{llm_model:model});base.mode='call';base.do_call=true;base.claude_body=built.body;base.allowed_ids=built.allowed_evidence_ids;base.ctx.estimated_cost_usd=estimateCost((evIn.evidence||[]).length*200,700,cfg).est_cost_usd;base.cache_decision={decision:'fresh_call',reason:(reuseRows.length?'miss: no persisted analysis matched owner+analysis_type+evidence_hash+schema+prompt+model':'miss: no persisted analyses to reuse')};}
+else{var built=__multi?buildComparisonCall(base.pkg,{llm_model:model}):buildSourceAnalysisCall(base.pkg,{llm_model:model});base.mode='call';base.do_call=true;base.multi_source=__multi;base.claude_body=built.body;base.allowed_ids=built.allowed_evidence_ids;base.ctx.estimated_cost_usd=estimateCost(((__multi?evIn.evidence_items:evIn.evidence)||[]).length*200,900,cfg).est_cost_usd;base.cache_decision={decision:'fresh_call',reason:(reuseRows.length?'miss: no persisted analysis matched owner+analysis_type+evidence_hash+schema+prompt+model':'miss: no persisted analyses to reuse')};}
 // WF28-LATENCY-001: the clock the parser needs. n8n's HTTP node reports no timing, so latency is measured across
 // the node boundary or not at all — and "not at all" is what shipped: parseClaudeResponse reads http.latency_ms
 // from an object this workflow builds WITHOUT that key, so every call recorded latency_ms=0, including the
@@ -2073,7 +2102,8 @@ var http={status:Number(raw.statusCode||raw.status||0)||(raw.body?200:0),body:ra
 var res=parseClaudeResponse(http,{model:prep.ctx.model});
 function lr(r){return {usage:r.usage,request_id:r.request_id,stop_reason:r.stop_reason,schema_mode:r.schema_mode,latency_ms:r.latency_ms,provider:r.provider,error_category:r.error_category};}
 var out={prep:prep,res1:lr(res)};
-if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,CC_ANALYSIS_SCHEMA);out.coerced_paths=v.coerced||[];if(v.ok){out.status='valid';out.analysis=v.value;}else{out.status='repair';out.errors=v.errors;out.rejected=v.value;var rep=buildRepairCall(v.value,v.errors,prep.allowed_ids,{llm_model:prep.ctx.model});out.claude_body=rep.body;out.__t1=Date.now();}}
+var __schema=prep.multi_source?CC_SYNTHESIS_SCHEMA:CC_ANALYSIS_SCHEMA;
+if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,__schema);out.coerced_paths=v.coerced||[];if(v.ok){out.status='valid';out.analysis=v.value;}else{out.status='repair';out.errors=v.errors;out.rejected=v.value;var rep=buildRepairCall(v.value,v.errors,prep.allowed_ids,{llm_model:prep.ctx.model});out.claude_body=rep.body;out.__t1=Date.now();}}
 else{out.status='fail';out.error_category=res.error_category;}
 return [{json:out}];`),
   ifNode('wf28-ifrep', 'Need Repair?', [1060, -120], "={{ $json.status === 'repair' }}"),
@@ -2086,7 +2116,8 @@ var http={status:Number(raw.statusCode||raw.status||0)||(raw.body?200:0),body:ra
 var res=parseClaudeResponse(http,{model:prep.ctx.model});
 function lr(r){return {usage:r.usage,request_id:r.request_id,stop_reason:r.stop_reason,schema_mode:r.schema_mode,latency_ms:r.latency_ms,provider:r.provider,error_category:r.error_category};}
 var out={prep:prep,res1:pp.res1,res2:lr(res),repair_used:true,prev_errors:pp.errors||[]};
-if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,CC_ANALYSIS_SCHEMA);out.coerced_paths=(pp.coerced_paths||[]).concat(v.coerced||[]);if(v.ok){out.status='repaired';out.analysis=v.value;out.repair_success=true;}else{out.status='fallback';out.repair_success=false;out.errors=v.errors;}}
+var __schema=prep.multi_source?CC_SYNTHESIS_SCHEMA:CC_ANALYSIS_SCHEMA;
+if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,__schema);out.coerced_paths=(pp.coerced_paths||[]).concat(v.coerced||[]);if(v.ok){out.status='repaired';out.analysis=v.value;out.repair_success=true;}else{out.status='fallback';out.repair_success=false;out.errors=v.errors;}}
 else{out.status='fallback';out.repair_success=false;out.error_category=res.error_category;}
 return [{json:out}];`),
   code('wf28-fin', 'Finalize Analysis', [1720, 0], WF28_LIBS_FULL, `
@@ -2095,12 +2126,15 @@ var pkgRes={package:prep.pkg.package,allowed_evidence_ids:prep.pkg.allowed_evide
 var pp=null,pr=null;try{pp=$('Parse Primary').first().json;}catch(e){}try{pr=$('Parse Repair').first().json;}catch(e){}
 function agg(cs){return {input_tokens:cs.reduce(function(a,c){return a+((c&&c.input_tokens)||0);},0),output_tokens:cs.reduce(function(a,c){return a+((c&&c.output_tokens)||0);},0)};}
 function mk(analysis,meta){return {ok:!meta.fallback_used,analysis:analysis,schema_mode:meta.schema_mode||'',repair_used:!!meta.repair_used,repair_success:!!meta.repair_success,fallback_used:!!meta.fallback_used,validation_errors:meta.validation_errors||[],usage:meta.usage||{input_tokens:0,output_tokens:0},cost_usd:meta.cost_usd||0,request_id:meta.request_id||'',stop_reason:meta.stop_reason||'',error_category:meta.error_category||'',provider:'aiprimetech',latency_ms:meta.latency_ms||0};}
+// F-7: a multi-source failure must fall back to the COMPARISON deterministic shape, not a single-source one,
+// so the renderer always receives the structure its mode implies.
+function detFallback(){return prep.multi_source?deterministicComparisonFallback(pkgRes):deterministicAnalysisFallback(pkgRes);}
 var result,persist=false,enriched=false,repairCost=0;
 if(prep.mode==='reuse'){result=mk(prep.reuse_analysis,{schema_mode:'reuse',stop_reason:'reuse'});enriched=true;}
-else if(prep.mode==='disabled'||prep.mode==='no_evidence'){result=mk(deterministicAnalysisFallback(pkgRes),{fallback_used:true,error_category:prep.mode});}
-else if(pr){var cs=[costFromUsage((pp&&pp.res1&&pp.res1.usage)||{},{}),costFromUsage((pr.res2&&pr.res2.usage)||{},{})];repairCost=sumCosts([cs[1]]);if(pr.status==='repaired'){result=mk(pr.analysis,{schema_mode:(pr.res2&&pr.res2.schema_mode)||'tool_use',repair_used:true,repair_success:true,validation_errors:pr.prev_errors||[],usage:agg(cs),cost_usd:sumCosts(cs),request_id:(pr.res2&&pr.res2.request_id),stop_reason:(pr.res2&&pr.res2.stop_reason),latency_ms:(pr.res2&&pr.res2.latency_ms)});enriched=true;}else{result=mk(deterministicAnalysisFallback(pkgRes),{schema_mode:(pr.res2&&pr.res2.schema_mode)||'',repair_used:true,repair_success:false,fallback_used:true,validation_errors:pr.errors||[pr.error_category],usage:agg(cs),cost_usd:sumCosts(cs),request_id:(pr.res2&&pr.res2.request_id),stop_reason:(pr.res2&&pr.res2.stop_reason),error_category:pr.error_category||'validation_failed'});}persist=true;}
-else if(pp){var c1=[costFromUsage((pp.res1&&pp.res1.usage)||{},{})];if(pp.status==='valid'){result=mk(pp.analysis,{schema_mode:(pp.res1&&pp.res1.schema_mode)||'tool_use',usage:agg(c1),cost_usd:sumCosts(c1),request_id:(pp.res1&&pp.res1.request_id),stop_reason:(pp.res1&&pp.res1.stop_reason),latency_ms:(pp.res1&&pp.res1.latency_ms)});enriched=true;}else{result=mk(deterministicAnalysisFallback(pkgRes),{fallback_used:true,usage:agg(c1),cost_usd:sumCosts(c1),request_id:(pp.res1&&pp.res1.request_id),stop_reason:(pp.res1&&pp.res1.stop_reason),error_category:pp.error_category||'no_structured_output'});}persist=true;}
-else{result=mk(deterministicAnalysisFallback(pkgRes),{fallback_used:true,error_category:'unknown'});}
+else if(prep.mode==='disabled'||prep.mode==='no_evidence'){result=mk(detFallback(),{fallback_used:true,error_category:prep.mode});}
+else if(pr){var cs=[costFromUsage((pp&&pp.res1&&pp.res1.usage)||{},{}),costFromUsage((pr.res2&&pr.res2.usage)||{},{})];repairCost=sumCosts([cs[1]]);if(pr.status==='repaired'){result=mk(pr.analysis,{schema_mode:(pr.res2&&pr.res2.schema_mode)||'tool_use',repair_used:true,repair_success:true,validation_errors:pr.prev_errors||[],usage:agg(cs),cost_usd:sumCosts(cs),request_id:(pr.res2&&pr.res2.request_id),stop_reason:(pr.res2&&pr.res2.stop_reason),latency_ms:(pr.res2&&pr.res2.latency_ms)});enriched=true;}else{result=mk(detFallback(),{schema_mode:(pr.res2&&pr.res2.schema_mode)||'',repair_used:true,repair_success:false,fallback_used:true,validation_errors:pr.errors||[pr.error_category],usage:agg(cs),cost_usd:sumCosts(cs),request_id:(pr.res2&&pr.res2.request_id),stop_reason:(pr.res2&&pr.res2.stop_reason),error_category:pr.error_category||'validation_failed'});}persist=true;}
+else if(pp){var c1=[costFromUsage((pp.res1&&pp.res1.usage)||{},{})];if(pp.status==='valid'){result=mk(pp.analysis,{schema_mode:(pp.res1&&pp.res1.schema_mode)||'tool_use',usage:agg(c1),cost_usd:sumCosts(c1),request_id:(pp.res1&&pp.res1.request_id),stop_reason:(pp.res1&&pp.res1.stop_reason),latency_ms:(pp.res1&&pp.res1.latency_ms)});enriched=true;}else{result=mk(detFallback(),{fallback_used:true,usage:agg(c1),cost_usd:sumCosts(c1),request_id:(pp.res1&&pp.res1.request_id),stop_reason:(pp.res1&&pp.res1.stop_reason),error_category:pp.error_category||'no_structured_output'});}persist=true;}
+else{result=mk(detFallback(),{fallback_used:true,error_category:'unknown'});}
 ctx.estimated_cost_usd=prep.ctx.estimated_cost_usd||0;
 var resultRow=buildAnalysisResultRow(ctx,result,now);
 var telRow=buildTelemetryRow(ctx,result,now);
@@ -2112,7 +2146,7 @@ var evMap=((pkgRes.package&&pkgRes.package.evidence_items)||[]).map(function(e){
 // are the audit surface; analysis_id itself stays CURRENT-request lineage. repair_cost_usd feeds COST-SPLIT-001.
 var reusedRef=(prep.mode==='reuse'&&prep.reuse_ref)?prep.reuse_ref:null;
 var cacheDec=prep.cache_decision||{decision:(prep.mode==='call'?'fresh_call':String(prep.mode||'')),reason:''};
-var typedReturn={analysis_id:resultRow.analysis_id,enriched:enriched,quality_status:resultRow.quality_status,mode:prep.mode,analysis:a,overall_confidence:a.overall_confidence||0,repair_used:result.repair_used,repair_success:result.repair_success,fallback_used:result.fallback_used,error_category:result.error_category,cost_usd:result.cost_usd,repair_cost_usd:repairCost,model:String(ctx.model||''),reused_from_analysis_id:(reusedRef?String(reusedRef.reused_from_analysis_id||''):''),reused_from_created_at:(reusedRef?String(reusedRef.created_at||''):''),reused_from_model:(reusedRef?String(reusedRef.model||''):''),cache_decision:String(cacheDec.decision||''),cache_reason:String(cacheDec.reason||''),evidence_package_hash:ctx.evidence_package_hash,evidence_map:evMap,source:ctx.source_scope||{},tokens_in:((result.usage||{}).input_tokens)||0,tokens_out:((result.usage||{}).output_tokens)||0,latency_ms:result.latency_ms||0,coerced_paths:((pr&&pr.coerced_paths)||(pp&&pp.coerced_paths)||[])};
+var typedReturn={analysis_id:resultRow.analysis_id,analysis_mode:String(ctx.analysis_type||''),multi_source:!!prep.multi_source,source_count:((prep.pkg&&prep.pkg.package&&prep.pkg.package.sources)||[]).length,enriched:enriched,quality_status:resultRow.quality_status,mode:prep.mode,analysis:a,overall_confidence:a.overall_confidence||0,repair_used:result.repair_used,repair_success:result.repair_success,fallback_used:result.fallback_used,error_category:result.error_category,cost_usd:result.cost_usd,repair_cost_usd:repairCost,model:String(ctx.model||''),reused_from_analysis_id:(reusedRef?String(reusedRef.reused_from_analysis_id||''):''),reused_from_created_at:(reusedRef?String(reusedRef.created_at||''):''),reused_from_model:(reusedRef?String(reusedRef.model||''):''),cache_decision:String(cacheDec.decision||''),cache_reason:String(cacheDec.reason||''),evidence_package_hash:ctx.evidence_package_hash,evidence_map:evMap,source:ctx.source_scope||{},tokens_in:((result.usage||{}).input_tokens)||0,tokens_out:((result.usage||{}).output_tokens)||0,latency_ms:result.latency_ms||0,coerced_paths:((pr&&pr.coerced_paths)||(pp&&pp.coerced_paths)||[])};
 return [{json:{persist:persist,result_row:resultRow,telemetry_row:telRow,typed_return:typedReturn}}];`),
   ifNode('wf28-ifpersist', 'Persist?', [1940, 0], '={{ $json.persist }}'),
   code('wf28-shaperes', 'Shape Result Row', [2160, -120], [], `return [{json:$('Finalize Analysis').first().json.result_row}];`),

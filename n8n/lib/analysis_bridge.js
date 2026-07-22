@@ -41,6 +41,94 @@ function abFirstUrl(v) { return abStr(v).split(/[;,\s]+/).filter(Boolean)[0] || 
 
 // buildAnalysisTargets(bundle, ctx, opts) -> { targets:[{source_key, source_kind, evidence_input}], reason, considered }
 // ctx: { agent_request_id, owner_user_id, chat_id, report_id, niche, region, data_mode, requested_sources[] }
+// BRIDGE-IDENTITY-001: the canonical identity of a REAL source behind a built target.
+//
+// Precedence, strongest-first. A signal is only used when PRESENT — an absent optional field must never SPLIT
+// one source into two (that was the defect), and two genuinely different competitors must never MERGE just
+// because a field is missing:
+//   1. source_run_id — one collection run is unambiguously one source. Strongest, but often absent on offers.
+//   2. canonical domain — website/host identity (t.me/vk.com keep their community segment via abSourceId).
+//   3. normalized company/entity name — always present (the competitor loop requires it; evidence sets it).
+// The function returns EVERY applicable signal so consolidation can union targets that agree on ANY of them
+// (union-find), which is what stitches a domain-keyed competitor to a name-keyed offer for the same company.
+function abCanonicalDomain(url) {
+  var u = abStr(url);
+  var m = u.match(/^https?:\/\/([^\/?#]+)([^?#]*)/i);
+  if (!m) return '';
+  var host = m[1].replace(/^www\./i, '').toLowerCase();
+  var seg = abStr(m[2]).split('/').filter(Boolean)[0] || '';
+  if (/^(t\.me|telegram\.me|vk\.com)$/i.test(host) && seg) return host + '/' + seg.toLowerCase();
+  return host;
+}
+function abNormName(v) { return abStr(v).toLowerCase().replace(/["«»']/g, '').replace(/\s+/g, ' ').trim(); }
+function abIdentitySignals(t) {
+  var sig = [];
+  var run = abStr(t.source_run_id).trim().toLowerCase();
+  if (run) sig.push('run:' + run);
+  var dom = abCanonicalDomain(t.source_url) || abCanonicalDomain(t.source_key);
+  // A social source_key IS a canonical domain-equivalent (telegram_channel::x / vk_community::x).
+  if (!dom && /::/.test(abStr(t.source_key))) dom = abStr(t.source_key).toLowerCase();
+  if (dom) sig.push('dom:' + dom);
+  var nm = abNormName(t.company_name);
+  if (nm) sig.push('name:' + nm);
+  return sig;
+}
+
+// Union targets that share ANY identity signal, then merge each group into one target: richest (most evidence)
+// as the base, evidence and offers unioned (deduped), the best URL/positioning/score kept, evidence_only only
+// when EVERY member is evidence_only (a real competitor profile in the group means the source is profiled).
+function abConsolidateTargets(list, maxEvPer) {
+  list = Array.isArray(list) ? list : [];
+  if (list.length <= 1) return list;
+  var parent = list.map(function (_, i) { return i; });
+  function find(i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+  function union(a, b) { var ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
+
+  var sigToIdx = {};
+  list.forEach(function (t, i) {
+    abIdentitySignals(t).forEach(function (s) {
+      if (sigToIdx[s] !== undefined) union(sigToIdx[s], i); else sigToIdx[s] = i;
+    });
+  });
+
+  var groups = {};
+  list.forEach(function (t, i) { var r = find(i); (groups[r] = groups[r] || []).push(t); });
+
+  return Object.keys(groups).map(function (r) {
+    var members = groups[r];
+    if (members.length === 1) return members[0];
+    // Base = the member with the most evidence (the profiled competitor beats a bare offer/evidence row).
+    members.sort(function (a, b) { return (b.evidence.length - a.evidence.length) || (b.offers.length - a.offers.length); });
+    var base = members[0];
+    var seenEv = {}, seenOf = {};
+    var mergedEv = [], mergedOf = [];
+    members.forEach(function (m) {
+      m.evidence.forEach(function (e) {
+        var k = abStr(e.evidence_id) || (abStr(e.source_url) + '|' + abStr(e.excerpt).slice(0, 80));
+        if (seenEv[k]) return; seenEv[k] = true; mergedEv.push(e);
+      });
+      m.offers.forEach(function (o) {
+        var k = abStr(o.offer) + '|' + abStr(o.price_rate);
+        if (seenOf[k]) return; seenOf[k] = true; mergedOf.push(o);
+      });
+    });
+    return {
+      source_key: base.source_key,
+      source_kind: base.source_kind,
+      company_name: base.company_name || (members.map(function (m) { return m.company_name; }).filter(Boolean)[0] || base.source_key),
+      source_url: base.source_url || (members.map(function (m) { return m.source_url; }).filter(Boolean)[0] || ''),
+      source_run_id: base.source_run_id || (members.map(function (m) { return m.source_run_id; }).filter(Boolean)[0] || ''),
+      quality_status: base.quality_status || 'accepted',
+      positioning: base.positioning || (members.map(function (m) { return m.positioning; }).filter(Boolean)[0] || ''),
+      score: base.score != null ? base.score : (members.map(function (m) { return m.score; }).filter(function (x) { return x != null; })[0] != null ? members.map(function (m) { return m.score; }).filter(function (x) { return x != null; })[0] : null),
+      last_checked: base.last_checked || (members.map(function (m) { return m.last_checked; }).filter(Boolean)[0] || ''),
+      evidence: mergedEv.slice(0, Math.max(maxEvPer || 12, 12)),
+      offers: mergedOf,
+      evidence_only: members.every(function (m) { return m.evidence_only; })
+    };
+  });
+}
+
 function buildAnalysisTargets(bundle, ctx, opts) {
   bundle = bundle || {}; ctx = ctx || {}; opts = opts || {};
   var maxTargets = abNum(opts.max_targets, 5); if (!(maxTargets > 0)) maxTargets = 5;
@@ -141,7 +229,13 @@ function buildAnalysisTargets(bundle, ctx, opts) {
       quality_status: abStr(e.source_quality) || 'accepted', relevance: 70 });
   });
 
-  var all = Object.keys(byName).map(function (k) { return byName[k]; });
+  // BRIDGE-IDENTITY-001: consolidate targets that are the SAME real source before anything counts them.
+  // The competitor pass keys by domain (abSourceId of source_url) while the offer pass keys by the offer's
+  // evidence_url — which WF12 frequently omits, so the offer falls back to a NAME key. One real competitor
+  // («Залог 24» at zalog24h.ru) therefore split into two targets: a domain-keyed one and a name-keyed one,
+  // same source_run_id, same company. Downstream (analysis_router) counts distinct sources to decide
+  // comparison vs synthesis, so an unconsolidated split let ONE source masquerade as a two-source comparison.
+  var all = abConsolidateTargets(Object.keys(byName).map(function (k) { return byName[k]; }), maxEvPer);
   var considered = all.length;
   // Only sources with real citable evidence, richest first, hard-capped: never a per-row call explosion.
   var eligible = all.filter(function (t) { return t.evidence.length > 0; })
@@ -237,4 +331,4 @@ function collectAnalyses(returns) {
   };
 }
 
-module.exports = { buildAnalysisTargets, collectAnalyses, abSourceKind, abSourceId };
+module.exports = { buildAnalysisTargets, collectAnalyses, abSourceKind, abSourceId, abConsolidateTargets, abIdentitySignals, abCanonicalDomain, abNormName };
