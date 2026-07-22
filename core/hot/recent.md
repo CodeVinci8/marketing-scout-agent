@@ -185,10 +185,16 @@ WIP4: unified_analysis_result.js (`0c38a77`) contract+migration LIB — NOT wire
    consistency wiring test in report-truth-quality 197). `df81d16` WIP3-A precision — llm_primary_calls counts
    only WF28 mode==='call' (reuse/disabled/no_evidence make 0 provider calls; a no-call deterministic fallback is
    no longer miscounted); reuse-observability 85.
-2. **WIP4 modes** (build on unified_analysis_result): 3-source synthesis/comparison, WF27 top-candidate
-   enrichment, public-lead interpretation (bounded Claude + deterministic fallback). Also: make uar.v1 the
-   canonical normalized result the renderers read (currently the bundle carries analysis/source_roles/evidence and
-   renderers read those bundle fields — UAR migration exists in the lib but is not yet the single production carrier).
+2. **WIP4 modes** (build on unified_analysis_result). **mode 1 LIB DONE** `5a51f72`:
+   `claude_analysis.analyzeComparison` (three-source synthesis on ccSynthesisTool, one repair + deterministic
+   fallback, every item cites contributing-source evidence; synthesis-analysis 23; embedded in WF28). **STILL to
+   wire mode 1:** WF20 orchestration — when `analysis_mode==='comparison'/'synthesis'` with ≥3 accepted sources,
+   build a MULTI-source evidence package and call the synthesis path (WF28 or a synthesis branch), then render
+   `comparisons` into the report/Telegram/XLSX. **mode 2** WF27 top-candidate enrichment (deterministic gate →
+   top 3–5 → bounded Claude explains relevance + source role, never fabricates facts; ccCandidateTool exists).
+   **mode 3** public-lead interpretation (public evidence only, fact vs interpretation, evidence-bound
+   need/pain/intent, low-info excluded). Also: make uar.v1 the single canonical carrier the renderers read
+   (migration lib exists; bundle-field path currently works).
 3. **Stage F gate**: regenerate → full regression → ONE consolidated backup-first deploy of ALL changed
    workflows (WF12 via isolatedModule replacer; WF18-28 via deploy_workflow_jscode.js) → parity/health/inventory
    → 14 SEQUENTIAL live proofs → inspect Telegram+XLSX+SHA-256 → update matrix → declare.
