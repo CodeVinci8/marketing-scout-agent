@@ -167,6 +167,43 @@ live-proven telegram exec 1087).
 | Tests | `tests/test_deploy_structural.js` — **60 checks, 0 failed**: node addition, connection rewiring, node-id preservation, workflow-id/active/settings preservation, Execute Workflow binding preservation, placeholder rejection, ambiguous-credential rejection (+ actionable, secret-free message), explicit credential inheritance and `--cred` mapping by name and by id, intentional node removal (with dangling-edge cleanup) and its guards, and post-import parity mismatch detection (lost credential, rebound credential, changed node id, missing node, changed connections, lost active state, wrong workflow id, broken binding). Registered in `tests/run_all.js` as `deploy-structural`. Full regression: `make test` → **ALL SUITES PASS (external calls=0, live cost=$0)**. |
 | Production impact | **None.** Only read-only `export:workflow` dry-runs were performed (WF12 `3H7SR0tG12sK_JTV` → 26→26 nodes, no drift; WF20 → 68→68 nodes, 2 benign generator-drift params). Nothing was imported. |
 
+## Session 69 (2026-07-22) — WIP1/2/3/4 remediation batch (offline-complete + tested; consolidated deploy PENDING)
+
+Branch `fix/stage-f-post-migration-acceptance`, HEAD ahead of origin/main by 34. **Nothing from this batch is
+deployed yet** — production still runs the WIP1-era version; the whole batch is staged for ONE consolidated
+backup-first deploy at the Stage F gate. Every item below is offline-tested (`make test` suites green).
+
+| Area | Status | Commit / test |
+|---|---|---|
+| WIP1 terminal-outcome (Progress: Done analysis-aware) | **PASS (deployed+live)** | `810b06f`; live req_17846505866 WF20 1234 |
+| WIP2 CALLBACK-PRIVACY-001 (cross-scope neutral, no leakage) | **PASS (offline)** | `81a0704`; plan-render-ru |
+| WIP2 plan goal (website ≠ competitor by default) | **PASS (offline)** | `9dc76ca` |
+| WIP2 source_role classifier (evidence-based, 6 roles) | **PASS (offline)** | `5bd90ff`; source-role 16 |
+| WIP2 CANONICAL-ROLE-001 (computed ONCE, renderers read) | **PASS (offline)** | `9cc356d`; report-truth-quality 197 |
+| WIP3-A truthful counters + telemetry precision (mode==='call') | **PASS (offline)** | `0a4a62d`,`df81d16`; contracts 83, reuse-obs 85 |
+| WIP3-B evidence dedup (1 canonical row/evidence_id·URL) | **PASS (offline)** | `acfa4cc`; stage-f-report |
+| WIP3-C semantic relevance (off-domain not primary) | **PASS (offline)** | `43f89cd`; social-evidence 90 |
+| WIP3-D/F ownership-safe recs + damaged fragments (+ wired) | **PASS (offline)** | `6116942`,`98c4507` |
+| WIP3-E market-claim scoping in user text | **PASS (offline)** | `7207330` |
+| WIP2b source_role WIRED (XLSX «Роль источника» + Telegram) | **PASS (offline)** | `ac0f9f0` |
+| WIP4 uar.v1 contract + migration | **PASS (lib)** | `0c38a77`; unified-analysis-result 42 |
+| WIP4 mode 1 synthesis/comparison (analyzeComparison) | **PASS (lib)** | `5a51f72`; synthesis-analysis 23 |
+| WIP4 mode 2 WF27 candidate enrichment (enrichCandidate) | **PASS (lib)** | `f28809b`; enrich-lead |
+| WIP4 mode 3 public-lead interpretation (interpretPublicLead) | **PASS (lib)** | `f28809b`; enrich-lead |
+
+**PENDING (require the live deploy session):**
+1. Orchestration WIRING of the 3 mode libs — WF20 synthesis path (analysis_mode=comparison/synthesis, ≥3 accepted
+   sources → multi-source package → analyzeComparison → render comparisons); WF27 top-3–5 gate → enrichCandidate;
+   public-lead path. These are structural WF20/WF27 changes best deployed + live-proven together.
+2. Optional: make uar.v1 the single canonical carrier the renderers read (bundle-field path currently works).
+3. Consolidated backup-first deploy of the changed workflows (WF12, WF18–22, WF24, WF25, WF26, WF28) + the 16
+   sequential live proofs (callback dup/expired/privacy; source-role plan+report+Telegram; counters; dedup;
+   relevance; ownership-safe rec; market-claim scoping; damaged-fragment; 3-source comparison; WF27 enrichment;
+   public-lead). Then the formal Stage F gate.
+
+**VK** fresh collection remains an EXTERNAL BLOCKER (MS_ENABLE_VK=false, no token); stored `vk::sovcombank`
+evidence is used for all offline dev/tests.
+
 ## Session 68 (2026-07-21) — SOCIAL-DELIVERY-001 + Telegram live proof + 5 fresh analyses + VK evidence proof
 
 **Stage F acceptance matrix (PASS / EXTERNAL BLOCKER / REMAINING).** Docker access was restored for `claude-runner`
