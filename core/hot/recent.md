@@ -176,15 +176,10 @@ WIP2: privacy (`81a0704`) + plan-goal (`9dc76ca`) WIRED (WF18/19/…); source_ro
 WIP4: unified_analysis_result.js (`0c38a77`) contract+migration LIB — NOT wired; the 3 modes NOT built.
 
 ### EXACT remaining before the Stage F gate (in order)
-1. **Wire the built libs into the render/export path (currently inert):**
-   - report_text_safety D/F → `report_package.js` (apply ownershipSafeRecommendationRu to recRows/recommendation
-     text; isDamagedFragment to offer/fact fields → mark damaged/exclude) + `compact_report_ru` crRecs for
-     Telegram. Add `report_text_safety` to the embed lists of the nodes that embed report_package/compact_report_ru
-     (WF20 Build Report XLSX + Build Delivery Outbox, WF24 Build Exports & Outbox, WF25 Build Digest Attachments)
-     BEFORE the dependent lib; report_package/compact_report_ru `require('./report_text_safety.js')` (stripped on
-     embed). Add focused wiring tests.
-   - source_role (WIP2b) → thread classifySourceRole into the analysis/report so Telegram+XLSX+stored expose
-     source_role/relationship_to_niche/direct_competitor/confidence/limitations (via the UAR).
+0. **DONE — WIP2 + WIP3 complete & wired offline:** `98c4507` WIP3-D/F wired (report_package + outbox);
+   `ac0f9f0` WIP2b source_role wired — WF20 Shape Report Bundle sets b.source_roles, report_package renders the
+   «Роль источника» sheet (omit-empty), WF20 outbox states «🏷 Роль источника…» in Telegram. All 6 WIP3 defects
+   (A counters, B dedup, C relevance, D own-channel recs, E market-scoping, F damaged) implemented + wired + tested.
 2. **WIP4 modes** (build on unified_analysis_result): 3-source synthesis/comparison, WF27 top-candidate
    enrichment, public-lead interpretation (bounded Claude + deterministic fallback).
 3. **Stage F gate**: regenerate → full regression → ONE consolidated backup-first deploy of ALL changed
