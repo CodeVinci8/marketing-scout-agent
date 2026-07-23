@@ -66,12 +66,15 @@ function arCountContributing(targets) {
 // company. Counting raw targets would therefore let a SINGLE source present itself as a two-source comparison —
 // precisely the invariant F-7 exists to prevent. Identity prefers the collector's run id (same collection run =
 // same source), then the host/source id, then the company name.
+// analysis_bridge already consolidated split records under one target per real source (BRIDGE-IDENTITY-001),
+// so this is a SAFETY dedup only. It must use the SAME per-source signals the bridge does — a batch source_run_id
+// (WF04/WF10 aggregate many URLs under one run id, e.g. wf10_<ts>) is NOT a per-source identity and merging on it
+// collapsed a real two-source comparison to one (live: req_17847633957, exec 1303). Identity = canonical source
+// id / domain-shaped key, else normalized company name.
 function arSourceIdentity(t) {
   var ei = (t && (t.evidence_input || t)) || {};
   var src = ei.source || {};
   var facts = ei.current_run_facts || {};
-  var run = arLow(src.source_run_id);
-  if (run) return 'run:' + run;
   var id = arLow(src.source_id || t.source_key);
   if (id) return 'id:' + id;
   return 'name:' + arLow(facts.company_name);

@@ -17,7 +17,7 @@ const sources = (ts) => ts.map((t) => t.evidence_input.source.source_id);
 A.section('identity signals — present fields only, strongest first');
 {
   const sig = AB.abIdentitySignals({ source_run_id: 'run0', source_url: 'https://Zalog24H.ru/pts', company_name: 'Залог 24', source_key: 'zalog24h.ru' });
-  A.ok('run id captured', sig.indexOf('run:run0') >= 0);
+  A.ok('per-source signals present (run id is NOT a merge signal — WF04 uses a batch run id)', sig.length === 2);
   A.ok('domain normalized (host, no www, lowercase)', sig.indexOf('dom:zalog24h.ru') >= 0);
   A.ok('name normalized', sig.indexOf('name:залог 24') >= 0);
 
@@ -51,6 +51,26 @@ A.section('merge holds even when the offer has NO run id (name is the only share
     evidence: [], source_quality: []
   });
   A.eq('still one source', ts.length, 1);
+}
+
+A.section('BATCH run id: two DIFFERENT competitors from ONE WF04 run stay separate');
+{
+  // WF04 scrapes a URL LIST under one batch run id; two competitors therefore share source_run_id. That must
+  // NOT merge them. Live defect req_17847625565: this collapsed a real 2-source comparison into one source.
+  const ts = targetsFor({
+    competitors: [
+      { competitor: 'zalog24h.ru', source_url: 'https://zalog24h.ru/', source_run_id: 'wf04_req::website::a1', quality: 'accepted', positioning: 'ценовой якорь' },
+      { competitor: 'Автоломбард №1', source_url: 'https://autolombardn1.ru/', source_run_id: 'wf04_req::website::a1', quality: 'accepted', positioning: 'займы под ПТС' }
+    ],
+    offers: [
+      { competitor: 'zalog24h.ru', offer: 'займ', price_rate: '2,4%', source_run_id: 'wf04_req::website::a1' },
+      { competitor: 'Автоломбард №1', offer: 'займ', price_rate: '3%', source_run_id: 'wf04_req::website::a1' }
+    ],
+    evidence: [], source_quality: []
+  });
+  A.eq('shared batch run id does NOT merge different competitors', ts.length, 2);
+  const ids = ts.map((t) => t.evidence_input.source.source_id).sort();
+  A.ok('both domains present', ids.join(',').indexOf('zalog24h.ru') >= 0 && ids.join(',').indexOf('autolombardn1.ru') >= 0);
 }
 
 A.section('two GENUINELY different competitors stay two sources');

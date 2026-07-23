@@ -32,6 +32,17 @@ A.section('contributing sources — a source with no evidence must not inflate t
   A.eq('null-safe', R.arCountContributing(null), 0);
 }
 
+A.section('BATCH source_run_id must not collapse distinct sources');
+{
+  // WF04/WF10 give many URLs one batch run id; the router must count DISTINCT source ids, not run ids.
+  function t(id, run) { return { source_key: id, evidence_input: { source: { source_id: id, source_run_id: run }, current_run_facts: { company_name: id }, evidence: [{ evidence_id: 'e_' + id, source_url: 'https://' + id }] } }; }
+  const shared = [t('zalog24h.ru', 'wf10_batch1'), t('autolombardn1.ru', 'wf10_batch1')];
+  A.eq('two distinct sources despite one batch run id', R.arCountContributing(shared), 2);
+  const r = R.resolveAnalysisMode({ requested_mode: 'comparison', targets: shared });
+  A.eq('a real comparison, not a downgrade', r.mode, 'comparison');
+  A.ok('not downgraded', !r.downgraded);
+}
+
 A.section('single source → analyzeSource');
 {
   const r = R.resolveAnalysisMode({ requested_mode: 'source_analysis', targets: [target('a', 3)] });

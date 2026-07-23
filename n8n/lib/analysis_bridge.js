@@ -43,14 +43,16 @@ function abFirstUrl(v) { return abStr(v).split(/[;,\s]+/).filter(Boolean)[0] || 
 // ctx: { agent_request_id, owner_user_id, chat_id, report_id, niche, region, data_mode, requested_sources[] }
 // BRIDGE-IDENTITY-001: the canonical identity of a REAL source behind a built target.
 //
-// Precedence, strongest-first. A signal is only used when PRESENT — an absent optional field must never SPLIT
-// one source into two (that was the defect), and two genuinely different competitors must never MERGE just
-// because a field is missing:
-//   1. source_run_id — one collection run is unambiguously one source. Strongest, but often absent on offers.
-//   2. canonical domain — website/host identity (t.me/vk.com keep their community segment via abSourceId).
-//   3. normalized company/entity name — always present (the competitor loop requires it; evidence sets it).
-// The function returns EVERY applicable signal so consolidation can union targets that agree on ANY of them
-// (union-find), which is what stitches a domain-keyed competitor to a name-keyed offer for the same company.
+// Precedence: PER-SOURCE identity signals only. A signal is used only when PRESENT — an absent optional field
+// must never SPLIT one source into two (the original defect), and two genuinely different competitors must never
+// MERGE because they happen to share a field:
+//   1. canonical domain — website host (t.me/vk.com keep their community segment). A per-source signal.
+//   2. normalized company/entity name — always present (the competitor loop requires it; evidence sets it).
+// source_run_id is DELIBERATELY NOT a merge signal: in this pipeline WF04 scrapes a LIST of URLs under ONE batch
+// run id (wf04_<req>::website::a1), so two different competitors collected in the same batch share it. Merging on
+// it collapsed a real two-source comparison into one source (live: req_17847625565, execs 1292/1298). Domain and
+// name are the reliable per-source keys, and they still stitch a domain-keyed competitor to a name-keyed offer
+// for the SAME company (they share the normalized name).
 function abCanonicalDomain(url) {
   var u = abStr(url);
   var m = u.match(/^https?:\/\/([^\/?#]+)([^?#]*)/i);
@@ -63,8 +65,6 @@ function abCanonicalDomain(url) {
 function abNormName(v) { return abStr(v).toLowerCase().replace(/["«»']/g, '').replace(/\s+/g, ' ').trim(); }
 function abIdentitySignals(t) {
   var sig = [];
-  var run = abStr(t.source_run_id).trim().toLowerCase();
-  if (run) sig.push('run:' + run);
   var dom = abCanonicalDomain(t.source_url) || abCanonicalDomain(t.source_key);
   // A social source_key IS a canonical domain-equivalent (telegram_channel::x / vk_community::x).
   if (!dom && /::/.test(abStr(t.source_key))) dom = abStr(t.source_key).toLowerCase();
@@ -97,8 +97,12 @@ function abConsolidateTargets(list, maxEvPer) {
   return Object.keys(groups).map(function (r) {
     var members = groups[r];
     if (members.length === 1) return members[0];
-    // Base = the member with the most evidence (the profiled competitor beats a bare offer/evidence row).
-    members.sort(function (a, b) { return (b.evidence.length - a.evidence.length) || (b.offers.length - a.offers.length); });
+    // Base = the richest member, but a DOMAIN-shaped source_key (a real host / social id) is preferred over a
+    // bare-name key so the merged source_id is the canonical domain, keeping attribution clean.
+    function domainish(t) { return /[.]|::/.test(abStr(t.source_key)) ? 1 : 0; }
+    members.sort(function (a, b) {
+      return (domainish(b) - domainish(a)) || (b.evidence.length - a.evidence.length) || (b.offers.length - a.offers.length);
+    });
     var base = members[0];
     var seenEv = {}, seenOf = {};
     var mergedEv = [], mergedOf = [];
