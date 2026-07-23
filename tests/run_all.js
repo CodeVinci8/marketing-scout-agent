@@ -155,6 +155,7 @@ const JS_SUITES = [
   ['analysis-router', 'test_analysis_router.js'],
   ['bridge-identity', 'test_bridge_identity.js'],
   ['f7-routing-nodes', 'test_f7_routing_nodes.js'],
+  ['f7-render', 'test_f7_render.js'],
   ['report-text-safety', 'test_report_text_safety.js'],
   ['telegram-commands', 'test_telegram_commands.js'],
   ['attachment-routing', 'test_attachment_routing.js'],

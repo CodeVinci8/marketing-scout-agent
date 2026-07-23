@@ -252,7 +252,42 @@ function analysisXlsxData(analyses, rendered) {
   });
   // REPORT-TRUTH-D: honest limitations belong on the user-facing Summary sheet.
   var unknowns = ((r.sections || {}).unknowns || []).slice(0, 5);
-  return { inferences: inferences, recommendations: recommendations, pains: pains, evidence: evidence, unknowns: unknowns };
+  // F-7: a comparison/synthesis analysis carries no `items` — surface its cross-source structure so the workbook
+  // renders the comparison it was paid for. Each row cites the evidence ids of the sources it compares.
+  var cmp = arComparisonXlsx(analyses);
+  return { inferences: inferences, recommendations: recommendations.concat(cmp.recommendations),
+    pains: pains.concat(cmp.pains), evidence: evidence, unknowns: unknowns,
+    comparisons: cmp.comparisons, overview: cmp.overview };
+}
+
+// Extract the comparison/synthesis shape into workbook-ready rows. Opportunities and experiments become
+// recommendations; recurring pains become pain rows; comparisons get their own list.
+function arComparisonXlsx(analyses) {
+  var comparisons = [], recommendations = [], pains = [], overview = '';
+  (analyses || []).forEach(function (a) {
+    if (!arUsable(a)) return;
+    var an = a.analysis || {};
+    if (!Array.isArray(an.comparisons)) return;
+    if (!overview) overview = arTrim(an.overview_ru, 400);
+    var mk = function (ids) { return (ids || []).map(function (x) { return '[' + arStr(x) + ']'; }).join(' '); };
+    (an.comparisons || []).forEach(function (c) {
+      var t = arTrim(c && c.text_ru, 400); if (!t || !(c.evidence_ids || []).length) return;
+      comparisons.push({ aspect: arStr(c.aspect) || 'сравнение', text: t, evidence: mk(c.evidence_ids) });
+    });
+    (an.opportunities || []).forEach(function (o) {
+      var t = arTrim(o && o.text_ru, 400); if (!t || !(o.evidence_ids || []).length) return;
+      recommendations.push({ source: 'сравнение', text: t, priority: arPriorityRu('medium'), evidence: mk(o.evidence_ids) });
+    });
+    (an.recommended_experiments || []).forEach(function (o) {
+      var t = arTrim(o && o.text_ru, 400); if (!t) return;
+      recommendations.push({ source: 'эксперимент', text: t, priority: arPriorityRu(o.priority), evidence: mk(o.evidence_ids || []) });
+    });
+    (an.recurring_pains_ru || []).forEach(function (p) {
+      var t = arTrim(p, 300); if (!t) return;
+      pains.push({ source: 'сравнение', kind: 'общая боль', text: t, evidence: '' });
+    });
+  });
+  return { comparisons: comparisons, recommendations: recommendations, pains: pains, overview: overview };
 }
 
 module.exports = {

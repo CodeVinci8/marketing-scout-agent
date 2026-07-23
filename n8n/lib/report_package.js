@@ -24,9 +24,9 @@ function join(a) { return Array.isArray(a) ? a.join('; ') : str(a); }
 // Stage F adds «Аналитические выводы» + «Боли и сигналы» and FEEDS the existing «Рекомендации» / «Доказательства»
 // sheets (the deterministic bundle leaves evidence empty). Every Stage-F sheet is omit-empty: it exists only when
 // the analyst actually produced grounded rows, so a deterministic-only run ships exactly the workbook it did before.
-const SHEET_NAMES = ['Сводка', 'Конкуренты', 'Офферы и цены', 'Аналитические выводы', 'Рекомендации',
+const SHEET_NAMES = ['Сводка', 'Конкуренты', 'Офферы и цены', 'Сравнение источников', 'Аналитические выводы', 'Рекомендации',
   'Боли и сигналы', 'Доказательства', 'Качество данных', 'Роль источника', 'Изменения', 'Технические данные'];
-const STAGE_F_SHEETS = ['Аналитические выводы', 'Боли и сигналы'];
+const STAGE_F_SHEETS = ['Аналитические выводы', 'Боли и сигналы', 'Сравнение источников'];
 
 // quality/status -> highlight bucket (good/warn/bad). Unknown -> no highlight.
 function qualityHighlight(v) {
@@ -261,6 +261,17 @@ function buildSheets(b) {
         { header: 'Ссылка на доказательство', key: 'evidence_url', type: 'url', width: 38 }
       ],
       rows: offers
+    },
+    // F-7: cross-source comparison/synthesis — each row states a common pattern, difference or gap and cites the
+    // evidence of the sources it compares. Omit-empty: only present for a comparison/synthesis report.
+    {
+      name: 'Сравнение источников', freeze_header: true, autofilter: true,
+      columns: [
+        { header: 'Аспект', key: 'aspect', width: 22 },
+        { header: 'Сравнение источников', key: 'text', width: 90 },
+        { header: 'Доказательства', key: 'evidence', width: 18 }
+      ],
+      rows: an.comparisons || []
     },
     // Stage F: ONLY kind=inference — interpretation, kept physically apart from facts so it can never read as one.
     {

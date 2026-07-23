@@ -46,6 +46,30 @@ function crKind(analyses, kind, max) {
   });
   return out;
 }
+// F-7 comparison rendering: a comparison/synthesis analysis has NO `items` — its content lives in
+// overview_ru / comparisons / recurring_pains_ru / opportunities / recommended_experiments. Pull those out so a
+// paid comparison actually reaches the user instead of falling back to deterministic per-source offer facts.
+function crComparison(analyses) {
+  var out = { overview: '', comparisons: [], pains: [], opportunities: [], experiments: [] };
+  (analyses || []).forEach(function (a) {
+    if (!crUsable(a)) return;
+    var an = a.analysis || {};
+    if (!Array.isArray(an.comparisons)) return; // not a comparison result
+    if (!out.overview) out.overview = crTrim(an.overview_ru, 300);
+    (an.comparisons || []).forEach(function (c) {
+      var t = crTrim(c && c.text_ru, 160);
+      if (t && (c.evidence_ids || []).length) out.comparisons.push(t);
+    });
+    (an.recurring_pains_ru || []).forEach(function (t) { var s = crTrim(t, 120); if (s) out.pains.push(s); });
+    (an.opportunities || []).forEach(function (o) { var t = crTrim(o && o.text_ru, 140); if (t && (o.evidence_ids || []).length) out.opportunities.push(t); });
+    (an.recommended_experiments || []).forEach(function (o) { var t = crTrim(o && o.text_ru, 140); if (t) out.experiments.push(t); });
+  });
+  return out;
+}
+function crHasComparison(analyses) {
+  return (analyses || []).some(function (a) { return crUsable(a) && a.analysis && Array.isArray(a.analysis.comparisons) && a.analysis.comparisons.length; });
+}
+
 function crRecs(analyses, max) {
   var out = [];
   (analyses || []).forEach(function (a) {
@@ -195,21 +219,42 @@ function crCompactReportRu(p) {
   }
   if (state === 'partial') L.push('Отчёт частичный — часть источников не отработала.');
 
-  var maxFacts = reusedAll ? 2 : 3;
-  if (facts.length) {
-    L.push('');
-    L.push('📌 Ключевые факты');
-    facts.slice(0, maxFacts).forEach(function (t) { L.push('• ' + t); });
-  }
-  if (!reusedAll && infs.length) {
-    L.push('');
-    L.push('🧠 Выводы — интерпретация, не факты');
-    infs.forEach(function (t) { L.push('• ' + t); });
-  }
-  if (recs.length) {
-    L.push('');
-    L.push('💡 Рекомендации — предложения к проверке');
-    recs.slice(0, reusedAll ? 2 : 3).forEach(function (t) { L.push('• ' + t); });
+  // F-7: a comparison/synthesis result renders its cross-source structure, not per-source item facts.
+  var cmp = (mode === 'comparison' || mode === 'synthesis') ? crComparison(analyses) : null;
+  if (cmp && crHasComparison(analyses)) {
+    if (cmp.overview) { L.push(''); L.push(cmp.overview); }
+    if (cmp.comparisons.length) {
+      L.push('');
+      L.push('⚖️ Сравнение источников');
+      cmp.comparisons.slice(0, 4).forEach(function (t) { L.push('• ' + t); });
+    }
+    if (cmp.pains.length) {
+      L.push('');
+      L.push('🎯 Общие боли аудитории');
+      cmp.pains.slice(0, 3).forEach(function (t) { L.push('• ' + t); });
+    }
+    if (cmp.opportunities.length) {
+      L.push('');
+      L.push('💡 Возможности — предложения к проверке');
+      cmp.opportunities.slice(0, 3).forEach(function (t) { L.push('• ' + t); });
+    }
+  } else {
+    var maxFacts = reusedAll ? 2 : 3;
+    if (facts.length) {
+      L.push('');
+      L.push('📌 Ключевые факты');
+      facts.slice(0, maxFacts).forEach(function (t) { L.push('• ' + t); });
+    }
+    if (!reusedAll && infs.length) {
+      L.push('');
+      L.push('🧠 Выводы — интерпретация, не факты');
+      infs.forEach(function (t) { L.push('• ' + t); });
+    }
+    if (recs.length) {
+      L.push('');
+      L.push('💡 Рекомендации — предложения к проверке');
+      recs.slice(0, reusedAll ? 2 : 3).forEach(function (t) { L.push('• ' + t); });
+    }
   }
   // Reuse messages stay tight (300–700): the evidence detail lives in the XLSX; the reuse line already names
   // the snapshot origin.

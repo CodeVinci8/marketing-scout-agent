@@ -1310,7 +1310,7 @@ try{__cv=cvValidateAnalyses(__ana.analyses||[],cvBuildCtx({analyses:__ana.analys
 if(__cv.audit&&(__cv.audit.demoted||__cv.audit.rejected||__cv.audit.deduped))b.claim_audit=__cv.audit;
 var __rend=renderAnalysisSectionsRu(__cv.analyses,b,{});
 var __x=analysisXlsxData(__cv.analyses,__rend);
-if((__x.inferences||[]).length||(__x.recommendations||[]).length||(__x.pains||[]).length||(__x.evidence||[]).length){
+if((__x.inferences||[]).length||(__x.recommendations||[]).length||(__x.pains||[]).length||(__x.evidence||[]).length||(__x.comparisons||[]).length){
   b.analysis=Object.assign({},__x,{analysis_ids:__ana.analysis_ids||[],count_enriched:Number(__ana.count_enriched)||0,
     count_reused:Number(__ana.count_reused)||0,count_fallback:Number(__ana.count_fallback)||0,
     analysis_cost_usd:Number(__ana.analysis_cost_usd)||0,
