@@ -1,4 +1,4 @@
-# PROJECT_BRIEF.md — Marketing Scout
+# PROJECT_BRIEF.md — Vinci AI Pilot
 
 ## Business Goal
 
@@ -22,7 +22,7 @@ This work is repetitive, time-consuming, and easy to automate with the right sta
 
 ---
 
-## MVP Definition — Marketing Scout v0.1
+## MVP Definition — Vinci AI Pilot v0.1
 
 **Trigger:** Manual (operator runs the pipeline when needed)
 

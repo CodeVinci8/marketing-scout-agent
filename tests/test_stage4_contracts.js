@@ -141,4 +141,42 @@ A.eq('summary keeps llm cost unknown', sum.llm_cost_status, 'unknown');
 A.eq('summary source cost unknown (adapter unknown)', sum.source_cost_status, 'unknown');
 A.ok('summary gives one next action', /partial report/.test(sum.next_operator_action));
 
+// WIP3-A: truthful counters for a social source_analysis — one source checked, one fresh WF28 primary call,
+// even though 0 deterministic competitor-profile rows exist.
+A.section('WIP3-A — checked_sources + WF28 primary calls are truthful');
+{
+  const social = SUM.buildExecutionSummary({
+    config_complete: true, request: { agent_request_id: 'req_s', state: 'reporting' },
+    plan: { sources: ['telegram'] }, collection: { outcome: 'complete' },
+    adapters: [{ source: 'telegram', source_run_id: 'req_s::telegram::a1::t.me/x', status: 'ok', items_written: 9, items_received: 10, outcome_has_data: true, external_calls: 1, cost_status: 'unknown' }],
+    analysis: { records_unique: 9, records_analyzed: 0, llm_primary_calls: 1, llm_repair_calls: 0, llm_cost_status: 'known' },
+    aggregation: { rows_after_filters: 0 }, report: { report_id: 'rep_s', llm_primary_calls: 0, llm_repair_calls: 0 }, delivery: {}
+  });
+  A.eq('one source checked (not 0)', social.sources_checked, 1);
+  A.eq('WF28 fresh primary call counted (not 0)', social.llm_primary_calls, 1);
+  A.eq('no repair', social.llm_repair_calls, 0);
+  A.eq('external requests counted even at $0 cost', social.external_calls, 1);
+
+  // reuse: the source is still "checked" but ZERO new provider calls
+  const reuse = SUM.buildExecutionSummary({
+    config_complete: true, request: { agent_request_id: 'req_r', state: 'reporting' },
+    plan: { sources: ['telegram'] }, collection: { outcome: 'complete' },
+    adapters: [{ source: 'telegram', source_run_id: 'req_r::telegram::a1', status: 'ok', execution_mode: 'reuse', source_outcome: 'reused_snapshot', items_written: 9, outcome_has_data: true }],
+    analysis: { records_unique: 9, llm_primary_calls: 0, llm_repair_calls: 0, llm_cost_status: 'known' },
+    aggregation: { rows_after_filters: 0 }, report: { llm_primary_calls: 0 }, delivery: {}
+  });
+  A.eq('reused source still checked', reuse.sources_checked, 1);
+  A.eq('reuse -> zero new primary calls', reuse.llm_primary_calls, 0);
+
+  // WF12 summary LLM + WF28 analysis are BOTH counted (no double count of WF12)
+  const both = SUM.buildExecutionSummary({
+    config_complete: true, request: { agent_request_id: 'req_w', state: 'reporting' },
+    adapters: [{ source: 'website', source_run_id: 'req_w::website::a1', status: 'ok', items_written: 3, outcome_has_data: true, external_calls: 2 }],
+    analysis: { llm_primary_calls: 1, llm_repair_calls: 1, llm_cost_status: 'known' },
+    report: { llm_primary_calls: 1, llm_repair_calls: 0 }, aggregation: { rows_after_filters: 3 }, delivery: {}
+  });
+  A.eq('WF28(1)+WF12(1) primary = 2 (no double count)', both.llm_primary_calls, 2);
+  A.eq('WF28 repair(1)+WF12 repair(0) = 1', both.llm_repair_calls, 1);
+}
+
 A.report('stage4-contracts');

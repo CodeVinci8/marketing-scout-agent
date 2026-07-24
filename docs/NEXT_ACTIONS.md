@@ -4,7 +4,59 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-07-17, session 59) — HEALTH-LINEAGE-001 is a QUALITY POLICY: needs an operator decision
+## СЕССИЯ 75 (2026-07-24) — пост-гейтовое усиление отчётов + CI + документация (в работе, НЕ смёржено)
+
+Работа на ветке `fix/stage-f-post-migration-acceptance`. Живых/платных прогонов и деплоя нет.
+
+- **WIP1 — правдивость отчётов (СДЕЛАНО, коммит `cb3c40a`).** Контракт учёта источников WF04→WF20
+  (reuse/fresh/rejected/contributing, без вывода из числа вызовов), source-aware качество (fail-closed),
+  структурные универсальные заявления с припиской, контракт МСК-времени по `ms_time`. `test_report_integrity`
+  143/0; полная регрессия 156 наборов / 8861 assert / 0 провалов. Три отчёта (1370/1380/1390) перестроены
+  офлайн и проинспектированы.
+- **WIP2 — CI (СДЕЛАНО, коммит `647f56e`).** Исторический провал `offline-regression` был на `make test`
+  (deploy-entrypoints, теперь 74/0); секрет-скан больше не ложно срабатывает на фикстурах санитайзера
+  (собираются в рантайме, сам скан не тронут). Свежий прогон: PR #49, run `30129297676` — **SUCCESS**.
+- **WIP3 — документация (СДЕЛАНО).** Компактный русскоязычный набор: `README.md`, `docs/GUIDE_RU.md`,
+  `docs/CAPABILITIES_RU.md` (матрица возможностей с уровнями доказанности), `docs/ARCHITECTURE_RU.md`,
+  `docs/OPERATIONS_RU.md`. Исторические стадийные документы сохранены как evidence-архив.
+- **WIP4 — консервативная чистка (СДЕЛАНО).** Вывод: **конклюзивно мёртвого кода нет.**
+  - Слой библиотек: все `n8n/lib/*.js` имеют ≥1 ссылку (генератор/тест/кросс-require); удалять нечего.
+  - 5 офлайн-тестов существовали и проходили, но не были в реестре `run_all.js` (устаревший CI-путь):
+    `discovery-libs` 91, `discovery-routing` 96, `memory-intent` 19, `url-intake` 49, `wf04-source-reuse` 99 —
+    **зарегистрированы, а не удалены** (усиление покрытия, +354 assert). Полная регрессия: 161 набор / 9215 assert / 0 провалов.
+  - Два «несылаемых» инструмента (`tools/ensure_sheets_retry.js`, `tools/gen_stage4_accepted_path_qa.js`) —
+    легитимные ручные утилиты (идемпотентная синхронизация retry-политики; генератор $0 QA-стенда) → сохранены.
+  - Нет tmp/дампов/бэкапов в трекинге, нет битых внутренних ссылок, секрет-скан чист.
+- **Первый по-настоящему открытый критерий приёмки после Stage F — начало Stage F.5** (Unified Analysis
+  Result / Analyst Agent: обогащение кандидатов WF27 + интерпретация публичных лидов). Stage F.5 / G / H —
+  отдельные стадии; F.5 НЕ начинается без команды оператора.
+- **Осталось:** git-интеграция (merge ветки в `main` после зелёного обязательного CI).
+
+---
+
+## CURRENT PRIORITY (2026-07-24, session 74) — STAGE F GATED → next is Stage F.5
+
+**Stage F is COMPLETE and gated (`STAGE F COMPLETE — GO FOR F.5`).** All required live proofs are closed:
+2-source comparison, **3-source synthesis (no downgrade, `submit_synthesis`, 3 contributors)**, F-2 terminal
+edit, discovery→comparison handoff — delivered to Telegram + XLSX, persisted to Sheets, within the $0.50 cap
+(~$0.44 spent). The earlier downgraded attempt is root-caused as a legitimate external bot-protection skip
+(`carcapital.ru` KillBot wall) — not a defect, no code change. One focused local commit on
+`fix/stage-f-post-migration-acceptance`. **NOT pushed/merged/PR'd** (operator ruling stands).
+
+**Immediate next action (do NOT start without operator go):** begin **Stage F.5** (Unified Analysis Result /
+Analyst Agent — WF27 candidate enrichment + public-lead interpretation are the remaining analysis-mode
+extensions folded into F.5 per STAGE_F_ACCEPTANCE.md §9).
+
+**Deferred / optional (non-blocking):**
+- **Fresh VK live-collect** — needs an operator ROOT edit of `/opt/n8n/n8n.env` (root-owned, outside the project):
+  set `MS_ENABLE_VK=true` AND add `vk` to `MS_SOURCE_ALLOWLIST` (BOTH required — `agent_config.js:209` +
+  `agent_charter.js:193`; default allowlist is `['website']`), then recreate the n8n container. Credential
+  `pRZcJEyp7KExTReQ` installed; PROD WF26 active + wired. Optional per DEC-136.
+- Push/merge/PR of the Stage F branch — awaits explicit operator instruction.
+
+---
+
+## PRIOR PRIORITY (2026-07-17, session 59) — HEALTH-LINEAGE-001 is a QUALITY POLICY: needs an operator decision
 
 Session 59 traced the empty-report chain to its end. **It is not a bug and not the absent-field class.** The full
 verified chain (run req_1784255157):

@@ -41,6 +41,98 @@ function abFirstUrl(v) { return abStr(v).split(/[;,\s]+/).filter(Boolean)[0] || 
 
 // buildAnalysisTargets(bundle, ctx, opts) -> { targets:[{source_key, source_kind, evidence_input}], reason, considered }
 // ctx: { agent_request_id, owner_user_id, chat_id, report_id, niche, region, data_mode, requested_sources[] }
+// BRIDGE-IDENTITY-001: the canonical identity of a REAL source behind a built target.
+//
+// Precedence: PER-SOURCE identity signals only. A signal is used only when PRESENT — an absent optional field
+// must never SPLIT one source into two (the original defect), and two genuinely different competitors must never
+// MERGE because they happen to share a field:
+//   1. canonical domain — website host (t.me/vk.com keep their community segment). A per-source signal.
+//   2. normalized company/entity name — always present (the competitor loop requires it; evidence sets it).
+// source_run_id is DELIBERATELY NOT a merge signal: in this pipeline WF04 scrapes a LIST of URLs under ONE batch
+// run id (wf04_<req>::website::a1), so two different competitors collected in the same batch share it. Merging on
+// it collapsed a real two-source comparison into one source (live: req_17847625565, execs 1292/1298). Domain and
+// name are the reliable per-source keys, and they still stitch a domain-keyed competitor to a name-keyed offer
+// for the SAME company (they share the normalized name).
+function abCanonicalDomain(url) {
+  var u = abStr(url);
+  var m = u.match(/^https?:\/\/([^\/?#]+)([^?#]*)/i);
+  if (!m) return '';
+  var host = m[1].replace(/^www\./i, '').toLowerCase();
+  var seg = abStr(m[2]).split('/').filter(Boolean)[0] || '';
+  if (/^(t\.me|telegram\.me|vk\.com)$/i.test(host) && seg) return host + '/' + seg.toLowerCase();
+  return host;
+}
+function abNormName(v) { return abStr(v).toLowerCase().replace(/["«»']/g, '').replace(/\s+/g, ' ').trim(); }
+function abIdentitySignals(t) {
+  var sig = [];
+  var dom = abCanonicalDomain(t.source_url) || abCanonicalDomain(t.source_key);
+  // A social source_key IS a canonical domain-equivalent (telegram_channel::x / vk_community::x).
+  if (!dom && /::/.test(abStr(t.source_key))) dom = abStr(t.source_key).toLowerCase();
+  if (dom) sig.push('dom:' + dom);
+  var nm = abNormName(t.company_name);
+  if (nm) sig.push('name:' + nm);
+  return sig;
+}
+
+// Union targets that share ANY identity signal, then merge each group into one target: richest (most evidence)
+// as the base, evidence and offers unioned (deduped), the best URL/positioning/score kept, evidence_only only
+// when EVERY member is evidence_only (a real competitor profile in the group means the source is profiled).
+function abConsolidateTargets(list, maxEvPer) {
+  list = Array.isArray(list) ? list : [];
+  if (list.length <= 1) return list;
+  var parent = list.map(function (_, i) { return i; });
+  function find(i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+  function union(a, b) { var ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
+
+  var sigToIdx = {};
+  list.forEach(function (t, i) {
+    abIdentitySignals(t).forEach(function (s) {
+      if (sigToIdx[s] !== undefined) union(sigToIdx[s], i); else sigToIdx[s] = i;
+    });
+  });
+
+  var groups = {};
+  list.forEach(function (t, i) { var r = find(i); (groups[r] = groups[r] || []).push(t); });
+
+  return Object.keys(groups).map(function (r) {
+    var members = groups[r];
+    if (members.length === 1) return members[0];
+    // Base = the richest member, but a DOMAIN-shaped source_key (a real host / social id) is preferred over a
+    // bare-name key so the merged source_id is the canonical domain, keeping attribution clean.
+    function domainish(t) { return /[.]|::/.test(abStr(t.source_key)) ? 1 : 0; }
+    members.sort(function (a, b) {
+      return (domainish(b) - domainish(a)) || (b.evidence.length - a.evidence.length) || (b.offers.length - a.offers.length);
+    });
+    var base = members[0];
+    var seenEv = {}, seenOf = {};
+    var mergedEv = [], mergedOf = [];
+    members.forEach(function (m) {
+      m.evidence.forEach(function (e) {
+        var k = abStr(e.evidence_id) || (abStr(e.source_url) + '|' + abStr(e.excerpt).slice(0, 80));
+        if (seenEv[k]) return; seenEv[k] = true; mergedEv.push(e);
+      });
+      m.offers.forEach(function (o) {
+        var k = abStr(o.offer) + '|' + abStr(o.price_rate);
+        if (seenOf[k]) return; seenOf[k] = true; mergedOf.push(o);
+      });
+    });
+    return {
+      source_key: base.source_key,
+      source_kind: base.source_kind,
+      company_name: base.company_name || (members.map(function (m) { return m.company_name; }).filter(Boolean)[0] || base.source_key),
+      source_url: base.source_url || (members.map(function (m) { return m.source_url; }).filter(Boolean)[0] || ''),
+      source_run_id: base.source_run_id || (members.map(function (m) { return m.source_run_id; }).filter(Boolean)[0] || ''),
+      quality_status: base.quality_status || 'accepted',
+      positioning: base.positioning || (members.map(function (m) { return m.positioning; }).filter(Boolean)[0] || ''),
+      score: base.score != null ? base.score : (members.map(function (m) { return m.score; }).filter(function (x) { return x != null; })[0] != null ? members.map(function (m) { return m.score; }).filter(function (x) { return x != null; })[0] : null),
+      last_checked: base.last_checked || (members.map(function (m) { return m.last_checked; }).filter(Boolean)[0] || ''),
+      evidence: mergedEv.slice(0, Math.max(maxEvPer || 12, 12)),
+      offers: mergedOf,
+      evidence_only: members.every(function (m) { return m.evidence_only; })
+    };
+  });
+}
+
 function buildAnalysisTargets(bundle, ctx, opts) {
   bundle = bundle || {}; ctx = ctx || {}; opts = opts || {};
   var maxTargets = abNum(opts.max_targets, 5); if (!(maxTargets > 0)) maxTargets = 5;
@@ -106,18 +198,48 @@ function buildAnalysisTargets(bundle, ctx, opts) {
       fact_type: 'offer', collected_at: abStr(o.collected_at), quality_status: 'accepted', relevance: 80 });
   });
 
-  // Any explicit evidence rows the bundle carries (WF12 emits [] today; a future producer may fill it).
+  // Explicit evidence rows carried by the bundle.
+  //
+  // SOCIAL-BRIDGE-001: this used to require an EXISTING target (`if (!t) return`), which silently discarded every
+  // social post — a Telegram channel or VK community deliberately never becomes a competitor profile
+  // (DEC-133/DEC-135), so `byName` was empty and 22 relevant, quality-gated posts produced ZERO analysis targets
+  // (production req_76722076, executions 1096/1101: WF28 was never called and the user was told no competitor
+  // profiles were found). Evidence with a real source and a citable excerpt is now enough to CREATE a target:
+  // a full competitor profile is optional. Website evidence still attaches to its profile exactly as before,
+  // because a matching key is looked up first.
   bundleEvidence.forEach(function (e) {
-    var url = abFirstUrl(e && e.url);
-    var key = abSourceId(url, abStr(e && e.competitor)) || abStr(e && e.competitor);
+    if (!e || !abStr(e.excerpt)) return;
+    var url = abFirstUrl(e.url);
+    // Prefer the producer's explicit logical-source key (WF12 social evidence sets it); else derive it.
+    var key = abStr(e.source_key) || abSourceId(url, abStr(e.competitor)) || abStr(e.competitor);
+    if (!key) return;
     var t = byName[key];
-    if (!t || !abStr(e.excerpt)) return;
-    t.evidence.push({ source_url: url, source_type: t.source_kind, excerpt: abStr(e.excerpt),
+    if (!t) {
+      // A source known ONLY through its evidence — the social case. It has no profile, no offers and no
+      // deterministic score, and it must not pretend otherwise: company_name is the channel/community name.
+      var kind = abStr(e.source_kind) || abStr(e.platform) || abSourceKind(url) || 'website';
+      t = byName[key] = {
+        source_key: key, source_kind: kind,
+        company_name: abStr(e.source_name) || abStr(e.competitor) || key,
+        source_url: abStr(e.profile_url) || url, source_run_id: abStr(e.source_run_id),
+        quality_status: abStr(e.source_quality) || 'accepted', positioning: '',
+        score: null, last_checked: abStr(e.collected_at), evidence: [], offers: [],
+        evidence_only: true
+      };
+    }
+    t.evidence.push({ source_url: url, source_type: abStr(e.source_kind) || abStr(e.platform) || t.source_kind,
+      excerpt: abStr(e.excerpt), evidence_id: abStr(e.evidence_id),
       fact_type: abStr(e.finding) || 'general', collected_at: abStr(e.collected_at),
       quality_status: abStr(e.source_quality) || 'accepted', relevance: 70 });
   });
 
-  var all = Object.keys(byName).map(function (k) { return byName[k]; });
+  // BRIDGE-IDENTITY-001: consolidate targets that are the SAME real source before anything counts them.
+  // The competitor pass keys by domain (abSourceId of source_url) while the offer pass keys by the offer's
+  // evidence_url — which WF12 frequently omits, so the offer falls back to a NAME key. One real competitor
+  // («Залог 24» at zalog24h.ru) therefore split into two targets: a domain-keyed one and a name-keyed one,
+  // same source_run_id, same company. Downstream (analysis_router) counts distinct sources to decide
+  // comparison vs synthesis, so an unconsolidated split let ONE source masquerade as a two-source comparison.
+  var all = abConsolidateTargets(Object.keys(byName).map(function (k) { return byName[k]; }), maxEvPer);
   var considered = all.length;
   // Only sources with real citable evidence, richest first, hard-capped: never a per-row call explosion.
   var eligible = all.filter(function (t) { return t.evidence.length > 0; })
@@ -125,6 +247,17 @@ function buildAnalysisTargets(bundle, ctx, opts) {
     .slice(0, maxTargets);
 
   var targets = eligible.map(function (t) {
+    // SOCIAL-BRIDGE-001: an evidence-only social source is ONE channel/community with no competitor profile.
+    // State that bound explicitly so the analyst cannot generalise it into a market claim, and so a silent
+    // comment section is never read as "the audience has no questions".
+    var lim = limitations.slice(0, 6);
+    if (t.evidence_only) {
+      lim = lim.concat([
+        'источник «' + t.source_key + '» проанализирован только по его публичным постам: карточки конкурента с офферами и ценами нет',
+        'выводы описывают только этот источник и не переносятся на рынок в целом',
+        'отсутствие комментариев/реакций не означает отсутствия интереса аудитории'
+      ]).slice(0, 9);
+    }
     return {
       source_key: t.source_key,
       source_kind: t.source_kind,
@@ -145,7 +278,7 @@ function buildAnalysisTargets(bundle, ctx, opts) {
         },
         evidence: t.evidence.slice(0, maxEvPer),
         deterministic_scores: { confidence: t.score, relevance: null },
-        limitations: limitations.slice(0, 6),
+        limitations: lim,
         // Current-run only: this bundle is already request-scoped (B1). Nothing historical is presented as current.
         historical_context: Array.isArray(opts.historical_context) ? opts.historical_context : []
       }
@@ -187,6 +320,12 @@ function collectAnalyses(returns) {
     any_enriched: enriched.length > 0,
     count_total: rows.length, count_enriched: enriched.length,
     count_reused: reused, count_repaired: repaired, count_fallback: fallbacks,
+    // WIP3-A: truthful WF28 provider-call counts. A primary provider call happened ONLY when mode==='call'
+    // (an actual attempt — whether it succeeded, was repaired, or fell back after a failed call). mode 'reuse'
+    // (cache hit), 'disabled' and 'no_evidence' make ZERO provider calls and a deterministic fallback with no
+    // call must NOT be counted. Repair calls come from real WF28 telemetry (repair_used, only on the call path).
+    llm_primary_calls: rows.filter(function (r) { return abStr(r.mode) === 'call'; }).length,
+    llm_repair_calls: repaired,
     analysis_cost_usd: Math.round(cost * 1e6) / 1e6,
     // COST-SPLIT-001: the repair share of the analysis cost, its own canonical component downstream.
     analysis_repair_cost_usd: Math.round(repairCost * 1e6) / 1e6,
@@ -196,4 +335,4 @@ function collectAnalyses(returns) {
   };
 }
 
-module.exports = { buildAnalysisTargets, collectAnalyses, abSourceKind, abSourceId };
+module.exports = { buildAnalysisTargets, collectAnalyses, abSourceKind, abSourceId, abConsolidateTargets, abIdentitySignals, abCanonicalDomain, abNormName };

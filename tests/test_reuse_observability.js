@@ -92,6 +92,25 @@ A.section('REUSE-OBS-001 — collectAnalyses aggregates the audit trail');
   A.eq('repair cost aggregated as its own component', col.analysis_repair_cost_usd, 0.006);
   A.eq('model surfaced for the audit sheet', col.model, 'claude-sonnet-4-6');
   A.eq('total analysis cost unchanged by the split', col.analysis_cost_usd, 0.02);
+  // WIP3-A: a primary provider call is counted ONLY for mode==='call' (reuse=0 calls); repair from telemetry.
+  A.eq('llm_primary_calls counts only the real call (reuse excluded)', col.llm_primary_calls, 1);
+  A.eq('llm_repair_calls from real telemetry', col.llm_repair_calls, 1);
+}
+
+A.section('WIP3-A — deterministic fallback WITHOUT a provider call is not a primary call');
+{
+  // mode 'disabled' / 'no_evidence' → deterministic fallback, ZERO provider calls; only 'call' counts.
+  const rets = [
+    { analysis_id: 'a1', mode: 'call', enriched: true, analysis: { overall_confidence: 0.7 }, cost_usd: 0.02 },
+    { analysis_id: 'a2', mode: 'call', fallback_used: true, repair_used: true, analysis: { _fallback: true }, cost_usd: 0.01 }, // called, failed → still 1 primary + 1 repair
+    { analysis_id: 'a3', mode: 'disabled', fallback_used: true, analysis: { _fallback: true }, cost_usd: 0 },   // NO call
+    { analysis_id: 'a4', mode: 'no_evidence', fallback_used: true, analysis: { _fallback: true }, cost_usd: 0 }, // NO call
+    { analysis_id: 'a5', mode: 'reuse', enriched: true, analysis: { overall_confidence: 0.6 }, cost_usd: 0 }     // cache hit, NO call
+  ];
+  const col = AB.collectAnalyses(rets);
+  A.eq('only the two mode=call rows are primary calls', col.llm_primary_calls, 2);
+  A.eq('disabled/no_evidence/reuse are NOT counted as calls', col.count_total - col.count_reused, 4); // sanity: old naive metric would have been 4
+  A.eq('repair from telemetry (one repaired call)', col.llm_repair_calls, 1);
 }
 
 A.section('COST-SPLIT-001 — actualRequestCost splits without double counting');

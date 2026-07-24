@@ -767,7 +767,7 @@ var utext=String((r.parsed&&r.parsed.text)||'');
 // UX-RU-002: every user-visible branch renders through the canonical Russian layer (plan_render_ru).
 // Internal reasons/enums (dispatch_reason, unavailable_reason, intent ids) stay in execution data only.
 if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_dup:')===0){text=approvalDuplicateRu(d.dispatch_reason.replace('approval_dup:',''));}
-else if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_invalid')===0){text='Это подтверждение нельзя применить: '+approvalFailureRu(d.dispatch_reason.replace('approval_invalid:',''))+'.';}
+else if(d.dispatch_reason&&d.dispatch_reason.indexOf('approval_invalid')===0){text=approvalOutcomeRu(d.dispatch_reason.replace('approval_invalid:',''));}
 else if(d.dispatch_reason==='capability_unavailable'){text=ruCapabilityUnavailableMessage(r.capability);}
 else if(r.route==='clarify'){text=clarificationReply(r.clarification);}
 else if(d.intent&&d.intent.intent==='help'){
@@ -1181,7 +1181,7 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
   // request-scoped CURRENT-RUN facts — never raw pages and never the whole Sheets history. Fail-open by
   // construction: every downstream node reads WF12 by NAME, so a disabled/empty/failed analysis still delivers the
   // full deterministic report + XLSX.
-  code('wf20-anainputs', 'Build Analysis Inputs', [1500, -320], ['analysis_bridge', 'agent_config'], `
+  code('wf20-anainputs', 'Build Analysis Inputs', [1500, -320], ['analysis_bridge', 'analysis_router', 'agent_config'], `
 var g=$('Approval & Budget Gate').first().json;var cfg=g.cfg||{};
 var rep={};try{rep=$('Run WF12 Report').first().json||{};}catch(e){rep={};}
 var b={};try{b=JSON.parse(String(rep.report_bundle||'{}'));}catch(e){b={};}
@@ -1194,12 +1194,29 @@ var ctx={agent_request_id:String(req.agent_request_id||''),owner_user_id:String(
   data_mode:String(req.data_mode||'live'),requested_sources:(plan.sources||[])};
 var built=buildAnalysisTargets(b,ctx,{max_targets:Number(cfg.llm_max_analyses_per_run)||5});
 var targets=enabled?built.targets:[];
-return [{json:{do_analyze:targets.length>0,analysis_reason:enabled?built.reason:'disabled',
-  targets:targets.map(function(t){return {source_key:t.source_key,source_kind:t.source_kind,
+// F-7 ANALYSIS-ROUTE-001: the PLAN mode is a request, not a verdict. The router decides what may actually run
+// from how many DISTINCT sources genuinely contributed evidence (analysis_bridge already consolidated split
+// records under BRIDGE-IDENTITY-001), and downgrades explicitly rather than faking a comparison over one source.
+var route=resolveAnalysisMode({requested_mode:String(plan.analysis_mode||'source_analysis'),targets:targets});
+ctx.analysis_mode=route.mode;
+var shaped;
+if(route.multi_source){
+  var mp=arBuildMultiSourcePackage(targets,ctx);
+  shaped=[{source_key:'multi::'+mp.package.sources.map(function(x){return x.source_id;}).join('+'),
+    source_kind:'multi',analysis_type:route.mode,
+    evidence_input:JSON.stringify(mp.package),agent_request_id:ctx.agent_request_id,owner_user_id:ctx.owner_user_id,
+    chat_id:ctx.chat_id,report_id:ctx.report_id,niche:ctx.niche,region:ctx.region,
+    source_run_id:String(g.idempotency_key||'')+'::'+route.mode}];
+}else{
+  shaped=targets.map(function(t){return {source_key:t.source_key,source_kind:t.source_kind,analysis_type:route.mode,
     evidence_input:JSON.stringify(t.evidence_input),agent_request_id:ctx.agent_request_id,owner_user_id:ctx.owner_user_id,
     chat_id:ctx.chat_id,report_id:ctx.report_id,niche:ctx.niche,region:ctx.region,
-    source_run_id:String(g.idempotency_key||'')+'::'+t.source_key};}),
-  targets_considered:built.considered}}];`),
+    source_run_id:String(g.idempotency_key||'')+'::'+t.source_key};});
+}
+return [{json:{do_analyze:shaped.length>0,analysis_reason:enabled?built.reason:'disabled',
+  analysis_mode:route.mode,analysis_mode_requested:route.requested_mode,analysis_mode_downgraded:route.downgraded,
+  analysis_mode_reason:route.reason,analysis_mode_reason_ru:route.reason_ru,contributing_sources:route.contributing,
+  targets:shaped,targets_considered:built.considered}}];`),
   ifNode('wf20-ifana', 'Analyze Sources?', [1720, -320], '={{ $json.do_analyze }}'),
   code('wf20-anashape', 'Shape Analysis Targets', [1940, -400], [],
     "return ($('Build Analysis Inputs').first().json.targets||[]).map(function(t){return {json:t};});"),
@@ -1213,7 +1230,7 @@ return [{json:{do_analyze:targets.length>0,analysis_reason:enabled?built.reason:
     chat_id: '={{ $json.chat_id }}',
     // REPORT-TRUTH-A: the persisted plan's analysis mode IS the analysis type (matcher aliases the legacy
     // 'single_source' spelling, so pre-rename cached analyses stay reusable).
-    analysis_type: "={{ String(($('Approval & Budget Gate').first().json.plan || {}).analysis_mode || 'source_analysis') }}",
+    analysis_type: '={{ $json.analysis_type }}',
     evidence_input: '={{ $json.evidence_input }}',
     niche: '={{ $json.niche }}',
     region: '={{ $json.region }}'
@@ -1223,10 +1240,10 @@ var rets=[];try{rets=($('Run WF28 (Claude Analyst)').all()||[]).map(function(i){
 var ai={};try{ai=$('Build Analysis Inputs').first().json||{};}catch(e){ai={};}
 var col=collectAnalyses(rets);
 return [{json:{analysis:Object.assign({},col,{reason:String(ai.analysis_reason||'disabled'),requested:(ai.targets||[]).length})}}];`),
-  code('wf20-summary', 'Build Execution Summary', [2600, -320], ['source_adapter', 'execution_summary', 'cost_model'],
-    "var g=$('Approval & Budget Gate').first().json;\nvar adapters=[];\n['Normalize Website Result','Normalize Avito Result','Normalize Telegram Result','Normalize VK Result'].forEach(function(nm){try{var a=$(nm).first().json;if(a&&a.adapter)adapters.push(a.adapter);}catch(e){}});\nvar rs=null;try{rs=$('Resolve Collection Set').first().json;}catch(e){rs=null;}\n((rs&&rs.unavailable_sources)||[]).forEach(function(sk){adapters.push({agent_request_id:g.request.agent_request_id,source:sk,source_family:'unknown',platform:sk,status:'failed',errors:['collector_unavailable'],items_written:0,items_received:0,quarantined:false});});\nvar n={adapter:adapters[0]||null,plan:g.plan,request:g.request,cfg:g.cfg};\nvar roll=rollupCollection(adapters,(n.plan&&n.plan.sources)||[]);\n// STAGE-F-INTEGRATION: the Stage-F analysis chain now sits between WF12 and here, so $json is the merged analysis.\n// Read the report from WF12 BY NAME — the deterministic report must never depend on what the analyst returned.\nvar rep={};try{rep=$('Run WF12 Report').first().json||{};}catch(e){rep={};}\nvar ana={};try{ana=($('Merge Analyses').first().json||{}).analysis||{};}catch(e){ana={};}\nvar summary=buildExecutionSummary({config_complete:(n.cfg&&n.cfg.config_complete),request:Object.assign({},n.request,{state:roll.outcome==='complete'?'reporting':(roll.outcome==='failed'?'failed':'partial'),failed_sources:roll.failed_sources||[]}),plan:n.plan,collection:roll,adapters:adapters,analysis:{records_unique:rep.records_unique,records_eligible:rep.records_eligible,records_analyzed:rep.records_analyzed,llm_primary_calls:rep.llm_primary_calls,llm_repair_calls:rep.llm_repair_calls,llm_cost_status:rep.llm_cost_status||'unknown'},aggregation:{rows_after_filters:rep.rows_after_filters},report:rep,delivery:{}});\n// §7: persist projected/actual cost + remaining budget (best-available: observed provider calls x configured unit prices).\nvar usage={firecrawl_pages:0,apify_searches:0,claude_calls:0};\nadapters.forEach(function(a){var c=Number(a.external_calls)||0;if(a.source==='website')usage.firecrawl_pages+=c;if(a.source==='avito')usage.apify_searches+=c;});\nusage.claude_calls=(Number(rep.llm_primary_calls)||0)+(Number(rep.llm_repair_calls)||0)+(Number(rep.llm_cost_usd)>0?1:0);\nif(Number(rep.llm_cost_usd)>0)usage.measured_llm_cost_usd=(Number(rep.llm_cost_usd)||0)+((Number(rep.llm_primary_calls)||0)+(Number(rep.llm_repair_calls)||0))*(Number(n.cfg&&n.cfg.cost_claude_call_usd)||0.02);\n// Stage F: WF28's REAL per-call cost (from response usage tokens) is its own actual component (§4).\nusage.claude_analysis_cost_usd=Number(ana.analysis_cost_usd)||0;\n// COST-SPLIT-001 + REUSE-OBS-001: repair share + component split + the analysis-cache audit trail travel in the summary.\nusage.claude_repair_cost_usd=Number(ana.analysis_repair_cost_usd)||0;\nvar proj=projectRequestCost(g.plan,n.cfg);\nvar act=actualRequestCost(usage,n.cfg);\nsummary=Object.assign({},summary,{projected_cost_usd:proj.projected_cost_usd,hard_cap_usd:act.hard_cap_usd,actual_cost_usd:act.actual_cost_usd,remaining_budget_usd:act.remaining_budget_usd,actual_collection_usd:act.actual_collection_usd,actual_ai_usd:act.actual_ai_usd,actual_summary_ai_usd:act.actual_summary_ai_usd,actual_deep_analysis_usd:act.actual_deep_analysis_usd,actual_repair_usd:act.actual_repair_usd,llm_analyses:Number(ana.count_enriched)||0,llm_analyses_reused:Number(ana.count_reused)||0,llm_analyses_fallback:Number(ana.count_fallback)||0,llm_reuse_lineage:JSON.stringify(ana.reuse_lineage||[]),llm_cache_decisions:JSON.stringify(ana.cache_decisions||[]),llm_model:String(ana.model||''),analysis_mode:String((g.plan&&g.plan.analysis_mode)||'source_analysis')});\nreturn [{json:{summary:summary,report:rep,request:n.request,cfg:n.cfg,analysis:ana}}];"),
-  code('wf20-outbox', 'Build Delivery Outbox', [2820, -320], ['telegram_io', 'conversation_response', 'agent_charter', 'claim_validation', 'compact_report_ru'],
-    "var s=$('Build Execution Summary').first().json;\nvar cfg=s.cfg||{};\nvar caps=availableCapabilities(cfg);\nvar chat=String((s.request&&s.request.chat_id)||'');\nvar state=String((s.summary&&s.summary.final_state)||'completed');\nvar noData=Number((s.summary&&s.summary.records_reported)||0)===0&&state!=='completed';\nvar stateForActions=noData?'no_data':state;\nvar report=s.report||{};\n// REPORT-TRUTH B+C: Telegram gets ONE compact message built from STRUCTURED data (validated analyses + bundle +\n// summary) — never the full report markdown (that stays in the XLSX and the stored bundle). Claims pass the\n// evidence/semantic validator first; the final text passes the markdown guard (foreign-script strip + duplicate\n// bullet collapse) as a net. Any renderer failure falls back to the honest deterministic summary — delivery is\n// never blocked.\nvar __b={};try{__b=JSON.parse(String(report.report_bundle||'{}'));}catch(e){__b={};}\nvar __analyses=((s.analysis||{}).analyses)||[];\nvar __cv={analyses:__analyses,audit:{}};\ntry{__cv=cvValidateAnalyses(__analyses,cvBuildCtx({analyses:__analyses,evidence:__b.evidence||[]}));}catch(e){}\nvar acts=proactiveActions(stateForActions,caps);\nvar next=acts.length?('Я могу '+acts[0].label+'. Просто напишите, что сделать дальше.'):'Напишите, что сделать дальше.';\nvar body='';\ntry{var __cr=crCompactReportRu({bundle:__b,analyses:__cv.analyses,summary:s.summary,cost_line:costLine(s.summary),next_action:next,xlsx_expected:Number((s.summary&&s.summary.records_reported)||0)>0,state:stateForActions});body=__cr.text;}catch(e){body='';}\nif(!body){body=deliveryBody({report_markdown:'',summary_text:report.summary_text},s.summary,caps);}\ntry{var __mg=cvGuardMarkdownRu(body);body=__mg.text;}catch(e){}\nvar ptxt=proactiveText(stateForActions,caps);\nvar dlv=makeDelivery((s.request&&s.request.agent_request_id)||'req',(report.report_id)||'rep',chat,body);\nvar chunks=chunkMessage(body);\nvar kb=proactiveKeyboard(stateForActions,caps);\nvar bodies=chunks.map(function(t,i){var b={chat_id:chat,text:t};if(i===chunks.length-1&&kb)b.reply_markup=kb;return b;});\nreturn [{json:{delivery:dlv,telegram_send_body:JSON.stringify(bodies[0]),telegram_send_bodies:JSON.stringify(bodies),final_keyboard:kb?JSON.stringify(kb):'',chunk_count:chunks.length,proactive_text:ptxt,claim_audit:JSON.stringify(__cv.audit||{}),summary:s.summary}}];"),
+  code('wf20-summary', 'Build Execution Summary', [2600, -320], ['source_role', 'source_adapter', 'execution_summary', 'cost_model'],
+    "var g=$('Approval & Budget Gate').first().json;\nvar adapters=[];\n// A collector can fan out (VK runs once per community) so its Normalize node emits MANY runs — enumerate ALL items,\n// never .first() (which silently dropped every community but the first from the reuse/fresh/cost accounting).\n['Normalize Website Result','Normalize Avito Result','Normalize Telegram Result','Normalize VK Result'].forEach(function(nm){try{($(nm).all()||[]).forEach(function(it){var a=it&&it.json;if(a&&a.adapter)adapters.push(a.adapter);});}catch(e){}});\nvar rs=null;try{rs=$('Resolve Collection Set').first().json;}catch(e){rs=null;}\n((rs&&rs.unavailable_sources)||[]).forEach(function(sk){adapters.push({agent_request_id:g.request.agent_request_id,source:sk,source_family:'unknown',platform:sk,status:'failed',errors:['collector_unavailable'],items_written:0,items_received:0,quarantined:false});});\nvar n={adapter:adapters[0]||null,plan:g.plan,request:g.request,cfg:g.cfg};\nvar roll=rollupCollection(adapters,(n.plan&&n.plan.sources)||[]);\n// STAGE-F-INTEGRATION: the Stage-F analysis chain now sits between WF12 and here, so $json is the merged analysis.\n// Read the report from WF12 BY NAME — the deterministic report must never depend on what the analyst returned.\nvar rep={};try{rep=$('Run WF12 Report').first().json||{};}catch(e){rep={};}\nvar ana={};try{ana=($('Merge Analyses').first().json||{}).analysis||{};}catch(e){ana={};}\nvar summary=buildExecutionSummary({config_complete:(n.cfg&&n.cfg.config_complete),request:Object.assign({},n.request,{state:roll.outcome==='complete'?'reporting':(roll.outcome==='failed'?'failed':'partial'),failed_sources:roll.failed_sources||[]}),plan:n.plan,collection:roll,adapters:adapters,analysis:{records_unique:rep.records_unique,records_eligible:rep.records_eligible,records_analyzed:rep.records_analyzed,llm_primary_calls:Number(ana.llm_primary_calls)||0,llm_repair_calls:Number(ana.llm_repair_calls)||0,llm_cost_status:(Number(ana.analysis_cost_usd)>0?'known':(rep.llm_cost_status||'unknown'))},aggregation:{rows_after_filters:rep.rows_after_filters},report:rep,delivery:{}});\n// §7: persist projected/actual cost + remaining budget (best-available: observed provider calls x configured unit prices).\nvar usage={firecrawl_pages:0,apify_searches:0,claude_calls:0};\nadapters.forEach(function(a){var c=Number(a.external_calls)||0;if(a.source==='website')usage.firecrawl_pages+=c;if(a.source==='avito')usage.apify_searches+=c;});\nusage.claude_calls=(Number(rep.llm_primary_calls)||0)+(Number(rep.llm_repair_calls)||0)+(Number(rep.llm_cost_usd)>0?1:0);\nif(Number(rep.llm_cost_usd)>0)usage.measured_llm_cost_usd=(Number(rep.llm_cost_usd)||0)+((Number(rep.llm_primary_calls)||0)+(Number(rep.llm_repair_calls)||0))*(Number(n.cfg&&n.cfg.cost_claude_call_usd)||0.02);\n// Stage F: WF28's REAL per-call cost (from response usage tokens) is its own actual component (§4).\nusage.claude_analysis_cost_usd=Number(ana.analysis_cost_usd)||0;\n// COST-SPLIT-001 + REUSE-OBS-001: repair share + component split + the analysis-cache audit trail travel in the summary.\nusage.claude_repair_cost_usd=Number(ana.analysis_repair_cost_usd)||0;\nvar proj=projectRequestCost(g.plan,n.cfg);\nvar act=actualRequestCost(usage,n.cfg);\nsummary=Object.assign({},summary,{projected_cost_usd:proj.projected_cost_usd,hard_cap_usd:act.hard_cap_usd,actual_cost_usd:act.actual_cost_usd,remaining_budget_usd:act.remaining_budget_usd,actual_collection_usd:act.actual_collection_usd,actual_ai_usd:act.actual_ai_usd,actual_summary_ai_usd:act.actual_summary_ai_usd,actual_deep_analysis_usd:act.actual_deep_analysis_usd,actual_repair_usd:act.actual_repair_usd,llm_analyses:Number(ana.count_enriched)||0,llm_analyses_reused:Number(ana.count_reused)||0,llm_analyses_fallback:Number(ana.count_fallback)||0,llm_reuse_lineage:JSON.stringify(ana.reuse_lineage||[]),llm_cache_decisions:JSON.stringify(ana.cache_decisions||[]),llm_model:String(ana.model||''),analysis_mode:String((g.plan&&g.plan.analysis_mode)||'source_analysis')});\n// WIP2b CANONICAL-ROLE-001: source roles computed ONCE here (from the WF12 bundle) and stored on the summary; the outbox + Shape Report Bundle READ them, no renderer recomputes.\nvar __sb={};try{__sb=JSON.parse(String(rep.report_bundle||'{}'));}catch(e){__sb={};}\nvar __sr={};(__sb.evidence||[]).forEach(function(e){var eu=String((e&&(e.url||e.profile_url))||'');var sid=String((e&&(e.source_id||e.source_key||e.competitor||e.source_name))||'')||eu;if(!sid)return;var g=__sr[sid]||(__sr[sid]={source_id:sid,source_url:eu,kind:String((e&&(e.source_kind||e.source_type))||''),evidence:[]});g.evidence.push({evidence_id:String((e&&e.evidence_id)||''),excerpt:String((e&&e.excerpt)||'')});});\nvar __srows=Object.keys(__sr).map(function(sid){var r=__sr[sid];var c=classifySourceRole({source_id:sid,kind:r.kind,niche:String(__sb.niche||(n.plan&&n.plan.niche)||''),evidence:r.evidence});return {source_id:sid,source_url:r.source_url,source_type:r.kind,source_role:c.source_role,role_confidence:c.role_confidence,role_reason:c.role_reason,direct_competitor:c.direct_competitor,evidence_ids:c.evidence_ids,relationship_to_niche:(c.source_role==='irrelevant_or_uncertain'?'релевантность не подтверждена':(c.direct_competitor?'прямой конкурент в нише':'публичный источник по теме ниши')),limitations:c.limitations};});\nsummary=Object.assign({},summary,{source_roles:__srows});\nreturn [{json:{summary:summary,report:rep,request:n.request,cfg:n.cfg,analysis:ana}}];"),
+  code('wf20-outbox', 'Build Delivery Outbox', [2820, -320], ['telegram_io', 'conversation_response', 'agent_charter', 'claim_validation', 'report_text_safety', 'compact_report_ru'],
+    "var s=$('Build Execution Summary').first().json;\nvar cfg=s.cfg||{};\nvar caps=availableCapabilities(cfg);\nvar chat=String((s.request&&s.request.chat_id)||'');\nvar state=String((s.summary&&s.summary.final_state)||'completed');\nvar __anForState=((s.analysis&&s.analysis.analyses)||[]);\nvar __hasUsableAnalysis=__anForState.some(function(a){return !!(a&&a.enriched===true&&a.fallback_used!==true&&a.analysis&&typeof a.analysis==='object'&&String(a.quality_status||'')!=='deterministic_fallback');});\nvar noData=Number((s.summary&&s.summary.records_reported)||0)===0&&state!=='completed'&&!__hasUsableAnalysis;\nvar stateForActions=noData?'no_data':state;\nvar report=s.report||{};\n// REPORT-TRUTH B+C: Telegram gets ONE compact message built from STRUCTURED data (validated analyses + bundle +\n// summary) — never the full report markdown (that stays in the XLSX and the stored bundle). Claims pass the\n// evidence/semantic validator first; the final text passes the markdown guard (foreign-script strip + duplicate\n// bullet collapse) as a net. Any renderer failure falls back to the honest deterministic summary — delivery is\n// never blocked.\nvar __b={};try{__b=JSON.parse(String(report.report_bundle||'{}'));}catch(e){__b={};}\nvar __analyses=((s.analysis||{}).analyses)||[];\nvar __cv={analyses:__analyses,audit:{}};\ntry{__cv=cvValidateAnalyses(__analyses,cvBuildCtx({analyses:__analyses,evidence:__b.evidence||[]}));}catch(e){}\n// WIP3-D: ownership-safe recommendations in the Telegram render too (never «разместить в t.me/чужой_канал»).\ntry{(__cv.analyses||[]).forEach(function(a){if(a&&a.analysis&&Array.isArray(a.analysis.recommended_actions))a.analysis.recommended_actions=a.analysis.recommended_actions.map(function(r){return Object.assign({},r,{text_ru:ownershipSafeRecommendationRu(r.text_ru)});});});}catch(e){}\nvar acts=proactiveActions(stateForActions,caps);\nvar next=acts.length?('Я могу '+acts[0].label+'. Просто напишите, что сделать дальше.'):'Напишите, что сделать дальше.';\nvar body='';\ntry{var __cr=crCompactReportRu({bundle:__b,analyses:__cv.analyses,summary:s.summary,cost_line:costLine(s.summary),next_action:next,xlsx_expected:(Number((s.summary&&s.summary.records_reported)||0)>0||__hasUsableAnalysis||((__b&&__b.evidence)||[]).length>0),state:stateForActions});body=__cr.text;}catch(e){body='';}\nif(!body){body=deliveryBody({report_markdown:'',summary_text:report.summary_text},s.summary,caps);}\ntry{var __mg=cvGuardMarkdownRu(body);body=__mg.text;}catch(e){}\n// WIP2b CANONICAL-ROLE-001: READ the role computed once in Build Execution Summary; the renderer never recomputes.\ntry{var __sroles=(s.summary&&s.summary.source_roles)||[];if(__hasUsableAnalysis&&__sroles.length===1){var __c=__sroles[0];var __RL={direct_competitor:'прямой конкурент',adjacent_player:'смежный игрок',industry_source:'отраслевой источник',news_source:'новостной источник',public_community:'публичное сообщество',irrelevant_or_uncertain:'релевантность не подтверждена'};var __rline='🏷 Роль источника: '+(__RL[__c.source_role]||'источник')+(__c.direct_competitor?' (прямой конкурент)':' (не прямой конкурент)')+'.';if(body.indexOf('Роль источника')<0)body=__rline+'\\n'+body;}}catch(e){}\nvar ptxt=proactiveText(stateForActions,caps);\nvar dlv=makeDelivery((s.request&&s.request.agent_request_id)||'req',(report.report_id)||'rep',chat,body);\nvar chunks=chunkMessage(body);\nvar kb=proactiveKeyboard(stateForActions,caps);\nvar bodies=chunks.map(function(t,i){var b={chat_id:chat,text:t};if(i===chunks.length-1&&kb)b.reply_markup=kb;return b;});\nreturn [{json:{delivery:dlv,telegram_send_body:JSON.stringify(bodies[0]),telegram_send_bodies:JSON.stringify(bodies),final_keyboard:kb?JSON.stringify(kb):'',chunk_count:chunks.length,proactive_text:ptxt,claim_audit:JSON.stringify(__cv.audit||{}),summary:s.summary}}];"),
   sheetsAppend('wf20-apout', 'Append telegram_outbox', [1940, -160], 'telegram_outbox'),
   code('wf20-expandchunks', 'Expand Telegram Chunks', [2050, -160], [],
     "// DELIVERY-CHUNKS-001: Build Delivery Outbox chunks the report (Telegram caps a message at 4096 chars) but the\n// send node consumed only telegram_send_body — chunk 0. Chunks 1..N (live exec 956: the ENTIRE AI analysis, 3 of 4\n// chunks) were built, persisted to the outbox row, and never sent. One item per chunk => one sendMessage per chunk,\n// in order. Fail-safe: any parse problem falls back to the single first-chunk body — delivery is never blocked.\nvar ob=$('Build Delivery Outbox').first().json;\nvar bodies=[];\ntry{bodies=JSON.parse(ob.telegram_send_bodies||'[]');}catch(e){bodies=[];}\nif(!Array.isArray(bodies))bodies=[];\nif(!bodies.length){return [{json:{telegram_send_body:ob.telegram_send_body||'{}',chunk_index:0,chunk_count:1}}];}\nreturn bodies.map(function(b,i){return {json:{telegram_send_body:JSON.stringify(b),chunk_index:i,chunk_count:bodies.length}};});"),
@@ -1266,7 +1283,7 @@ var __runIds=Object.keys(b.run_ids||{}).map(function(k){return String(b.run_ids[
 if(Array.isArray(b.source_quality)&&__runIds.length){
   b.source_quality=b.source_quality.filter(function(r){return __runIds.indexOf(String((r||{}).source_run_id||''))>=0;});
 }
-b.summary.sources_checked=(b.source_quality||[]).length||(b.competitors||[]).length||0;
+b.summary.sources_checked=(Number(__sum.sources_checked)>0?Number(__sum.sources_checked):((b.source_quality||[]).length||(b.competitors||[]).length||0));
 // no empty placeholder recommendations — neither in the digest list nor as sheet rows.
 if(Array.isArray(b.summary.key_recommendations))b.summary.key_recommendations=b.summary.key_recommendations.filter(function(x){return String(x||'').trim();});
 if(Array.isArray(b.recommendations))b.recommendations=b.recommendations.filter(function(r){return String((r||{}).recommendation||'').trim();});
@@ -1274,6 +1291,32 @@ if(Array.isArray(b.recommendations))b.recommendations=b.recommendations.filter(f
 ['actual_cost_usd','actual_collection_usd','actual_summary_ai_usd','actual_deep_analysis_usd','actual_repair_usd'].forEach(function(k){if(__sum[k]!==undefined)b.summary[k]=__sum[k];});
 b.summary.external_calls_actual=Number(__sum.external_calls_used!==undefined?__sum.external_calls_used:(b.summary.external_calls||0))||0;
 b.summary.reused_sources=Array.isArray(__sum.reused_sources)?__sum.reused_sources:[];
+// REPORT-TRUTH-E: the requested vs actual analysis mode + downgrade reason, and the count of sources that actually
+// CONTRIBUTED evidence, travel from the router (Build Analysis Inputs) into the workbook so a downgraded partial
+// run is reported honestly and «свежий сбор» is not claimed for a reuse+collect run. Also carry the real fresh
+// external-call count so «Внешних запросов» reflects the sub-workflow's Firecrawl calls, not 0.
+try{var __bai=$('Build Analysis Inputs').first().json||{};
+  b.summary.analysis_mode_requested=String(__bai.analysis_mode_requested||b.summary.analysis_mode||b.analysis_mode||'');
+  b.summary.analysis_mode_downgraded=__bai.analysis_mode_downgraded===true;
+  b.summary.analysis_mode_reason_ru=String(__bai.analysis_mode_reason_ru||'');
+  if(Number(__bai.contributing_sources)>0)b.summary.contributing_sources=Number(__bai.contributing_sources);
+  else if(Number(__sum.sources_contributing)>0)b.summary.contributing_sources=Number(__sum.sources_contributing);
+}catch(e){}
+// REPORT-TRUTH-E (WF04->WF20): the DETERMINISTIC source accounting is computed ONCE in Build Execution Summary
+// (execution_summary.sourceAccounting) from each source's typed reuse/fresh/rejected outcome — read it here, never
+// re-derive fresh collection from external-call counts. fresh/reused/contributing COUNTS are independent of
+// external_calls_actual (the collection-call total, set above), so «свежий сбор»/«смешанный» cannot be confused
+// with the number of API calls.
+try{
+  b.summary.sources_fresh=Number(__sum.sources_fresh)||0;
+  b.summary.fresh_collections=Number(__sum.sources_fresh)||0;
+  b.summary.sources_reused=Number(__sum.sources_reused!=null?__sum.sources_reused:((__sum.reused_sources||[]).length))||0;
+  b.summary.sources_rejected=Number(__sum.sources_rejected)||0;
+  if(Number(__sum.sources_contributing)>0&&!(Number(b.summary.contributing_sources)>0))b.summary.sources_contributing=Number(__sum.sources_contributing);
+  if(Array.isArray(__sum.fresh_sources))b.summary.fresh_sources=__sum.fresh_sources;
+  if(Array.isArray(__sum.rejected_sources))b.summary.rejected_sources=__sum.rejected_sources;
+  if(Array.isArray(__sum.contributing_source_keys))b.summary.contributing_source_keys=__sum.contributing_source_keys;
+}catch(e){}
 // REPORT-TRUTH-D: this node runs AFTER Send Telegram Report succeeded, so the bundle's final state is the
 // TERMINAL delivery state — 'reporting' in a delivered workbook was a lie. Same mapping Mark Plan Complete uses.
 var __fs=String(__sum.final_state||'');
@@ -1293,7 +1336,19 @@ try{__cv=cvValidateAnalyses(__ana.analyses||[],cvBuildCtx({analyses:__ana.analys
 if(__cv.audit&&(__cv.audit.demoted||__cv.audit.rejected||__cv.audit.deduped))b.claim_audit=__cv.audit;
 var __rend=renderAnalysisSectionsRu(__cv.analyses,b,{});
 var __x=analysisXlsxData(__cv.analyses,__rend);
-if((__x.inferences||[]).length||(__x.recommendations||[]).length||(__x.pains||[]).length||(__x.evidence||[]).length){
+// F-7: a comparison/synthesis cites evidence from the MULTI-SOURCE package (ev_1..N), which is not in the
+// deterministic bundle evidence, so cvValidateAnalyses (validated against b.evidence) drops it. Those items were
+// ALREADY evidence-validated inside WF28 against their own package. Take the comparison/overview/opportunity/
+// pain rows from the raw analyses so the XLSX «Сравнение источников» sheet matches the Telegram comparison.
+// The comparison's ev_N -> URL evidence lives in the multi-source package (a.evidence_map), not b.evidence, so the
+// validated __x.evidence is empty; take the raw evidence too so the «Доказательства» sheet resolves the [n] refs
+// the comparison rows cite. Numbering matches: comparisons + evidence come from the SAME raw analysisXlsxData call.
+// REPORT-TRUTH-E row integrity: __x (validated) ALREADY folds the comparison-derived recommendations/pains in, and
+// __xc (raw) produces the SAME rows — a blind concat doubled every recommendation/pain (Рекомендации 9->18, Боли
+// 4->8). Take comparisons/overview/evidence from the raw call (validation can strip their ev_N evidence), but MERGE
+// recommendations/pains with dedup so no row is emitted twice and no genuinely-distinct row is lost.
+try{var __xc=analysisXlsxData(__ana.analyses||[]);if((__xc.comparisons||[]).length){__x.comparisons=__xc.comparisons;__x.overview=__xc.overview;__x.recommendations=arMergeXlsxRows(__x.recommendations,__xc.recommendations);__x.pains=arMergeXlsxRows(__x.pains,__xc.pains);if((__xc.evidence||[]).length&&!(__x.evidence||[]).length)__x.evidence=__xc.evidence;}}catch(e){}
+if((__x.inferences||[]).length||(__x.recommendations||[]).length||(__x.pains||[]).length||(__x.evidence||[]).length||(__x.comparisons||[]).length){
   b.analysis=Object.assign({},__x,{analysis_ids:__ana.analysis_ids||[],count_enriched:Number(__ana.count_enriched)||0,
     count_reused:Number(__ana.count_reused)||0,count_fallback:Number(__ana.count_fallback)||0,
     analysis_cost_usd:Number(__ana.analysis_cost_usd)||0,
@@ -1302,11 +1357,14 @@ if((__x.inferences||[]).length||(__x.recommendations||[]).length||(__x.pains||[]
     model:String(__ana.model||(s.cfg&&s.cfg.llm_model)||'claude-sonnet-4-6'),
     tokens_in:Number(__ana.tokens_in)||0,tokens_out:Number(__ana.tokens_out)||0,latency_ms:Number(__ana.latency_ms)||0});
 }}catch(e){}
+// WIP2b CANONICAL-ROLE-001: the source roles were computed ONCE in Build Execution Summary; the report bundle
+// just carries them forward (no recomputation → Telegram/XLSX/stored can never disagree).
+try{if(Array.isArray(__sum.source_roles)&&__sum.source_roles.length)b.source_roles=__sum.source_roles;}catch(e){}
 return [{json:{report_id:b.report_id,owner_user_id:b.owner_user_id,agent_request_id:b.agent_request_id,created_at:String(b.created_at),report_type:String(rep.report_type||''),bundle:JSON.stringify(b),notes:'wf20 run bundle (export/digest source)'}}];`),
   sheetsAppend('wf20-apbundle', 'Append report_bundles', [2160, 60], 'report_bundles'),
   // DEFECT-5: the plan promises "таблица Excel" — auto-deliver the XLSX right after the report for an approved
   // analysis run (only when the run has data; an empty workbook is never sent). Same bundle -> counts agree.
-  code('wf20-xlsx', 'Build Report XLSX', [2380, 160], ['report_export', 'xlsx_writer', 'report_package'], `
+  code('wf20-xlsx', 'Build Report XLSX', [2380, 160], ['report_export', 'xlsx_writer', 'report_text_safety', 'plan_render_ru', 'report_package'], `
 var sb=$('Shape Report Bundle').first().json;
 var b={};try{b=JSON.parse(String(sb.bundle||'{}'));}catch(e){b={};}
 var s=$('Build Execution Summary').first().json;var summary=s.summary||{};
@@ -1348,15 +1406,71 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
   // to a hardcoded distinct stage — advance() throttles any repeat, so there is never per-item spam. A missing
   // message_id (progress send failed) or a Telegram edit error degrades silently (onError continue) — progress
   // is UX, never a run-killer. Final report delivery stays a SEPARATE idempotent message.
-  ...[[4, 'Quality Gate', 660], [5, 'Analysis', 880], [6, 'Comparison', 1100], [7, 'Report', 1320], [10, 'Done', 2380]].flatMap(function (sp) {
+  ...[[4, 'Quality Gate', 660], [5, 'Analysis', 880], [6, 'Comparison', 1100], [7, 'Report', 1320]].flatMap(function (sp) {
     var stage = sp[0], label = sp[1], x = sp[2];
     var slug = label.toLowerCase().replace(/[^a-z]+/g, '');
     return [
       code('wf20-prog' + slug, 'Progress: ' + label, [x, -340], ['progress_tracker'],
-        "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}\nif(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=" + (stage - 1) + ";st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st," + stage + ",{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:" + stage + ",telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:" + (stage === 10 ? "(function(){var fs='completed';var rec=0;try{var s=($('Build Execution Summary').first().json||{}).summary||{};fs=String(s.final_state||'completed');rec=Number(s.records_reported)||0;}catch(e){}var xs=false;try{xs=$json.xlsx_skipped===true;}catch(e){}/* CALLBACK-IDEMP/UX §8: neutral, state-aware terminal wording — the progress edit stays at its ORIGINAL position in Telegram history, so «выше/ниже» is always unreliable. This edit fires only AFTER the last delivery branch (XLSX sent or explicitly skipped). */if(fs==='failed')return '⚠️ Анализ не завершён: данные получить не удалось.';if(fs==='no_data'||rec===0)return '✅ Проверка завершена. Данные для анализа не получены.';if(fs==='partial')return '⚠️ Анализ завершён частично. Доступные результаты отправлены.';if(xs)return '✅ Готово. Отчёт отправлен.';return '✅ Готово. Отчёт и Excel-файл отправлены.';})()" : 'up.text') + "})}}];"),
+        "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}\nif(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=" + (stage - 1) + ";st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st," + stage + ",{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:" + stage + ",telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:up.text})}}];"),
       Object.assign(httpTelegramEdit('wf20-editprog' + slug, 'Edit Progress (' + label + ')', [x + 110, -340]), { onError: 'continueRegularOutput' })
     ];
-  })
+  }),
+  // ===== F-2 DELIVERY-LIFECYCLE-001: truthful, message-id-driven delivery tail =========================
+  // The instant Send Telegram Report resolves, edit the ONE progress message to report_sent — decoupled from
+  // the XLSX. deliveryReportEdit() calls it report_sent ONLY when the sendMessage result carried a real
+  // message_id (proof of delivery); otherwise report_failed. Never claims a report was sent on absence of error.
+  code('wf20-progreportsent', 'Progress: Report Sent', [2160, 380], ['progress_tracker'], `
+var g=$('Approval & Budget Gate').first().json;
+var chat=String((g.request&&g.request.chat_id)||'');
+var mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}
+if(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}
+// The ONLY proof the text report reached the user is a real Telegram message_id in the sendMessage result.
+var rmid='';try{var rows=$('Send Telegram Report').all()||[];for(var i=0;i<rows.length;i++){var m=(((rows[i]||{}).json||{}).result||{}).message_id;if(m){rmid=String(m);break;}}}catch(e){}
+var ed=deliveryReportEdit({report_message_id:rmid});
+var okReport=ed.delivery_state==='report_sent';
+if(!mid){return [{json:{progress_skipped:true,report_ok:okReport,report_message_id:rmid,delivery_state:ed.delivery_state,telegram_edit_body:JSON.stringify({})}}];}
+return [{json:{progress_skipped:false,report_ok:okReport,report_message_id:rmid,delivery_state:ed.delivery_state,telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:ed.text})}}];`),
+  Object.assign(httpTelegramEdit('wf20-editprogreportsent', 'Edit Progress (Report Sent)', [2270, 380]), { onError: 'continueRegularOutput' }),
+  // Gate the whole workbook tail on a CONFIRMED report send; a report we could not confirm goes straight to the
+  // honest report_failed terminal (no orphan Excel for an undelivered report).
+  ifNode('wf20-ifreportok', 'Report Delivered?', [2380, 380], "={{ $('Progress: Report Sent').first().json.report_ok === true }}"),
+  // The XLSX terminal is decided by the REAL sendDocument result (a document_message_id), NOT by the fact that the
+  // fail-open Send node produced an output item.
+  ifNode('wf20-ifxlsxsent', 'XLSX Sent?', [2710, 160], "={{ !!(($('Send Report XLSX').first().json || {}).result || {}).message_id }}"),
+  // sendDocument failed but the report is delivered: show «Повторяю отправку…» and re-attach the SAME workbook
+  // binary for one retry. Carries the binary forward so Send Report XLSX Retry can upload it.
+  code('wf20-progretry', 'Progress: Retrying', [2710, 320], ['progress_tracker'], `
+var g=$('Approval & Budget Gate').first().json;
+var chat=String((g.request&&g.request.chat_id)||'');
+var mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}
+if(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}
+var txt=deliveryText('document_retrying');
+var bx=null;try{bx=$('Build Report XLSX').first();}catch(e){bx=null;}
+var cap=(bx&&bx.json&&bx.json.caption)||'Таблица Excel по анализу конкурентов';
+var out={chat_id:chat,caption:cap,delivery_state:'document_retrying'};
+if(mid){out.telegram_edit_body=JSON.stringify({chat_id:chat,message_id:Number(mid),text:txt});out.progress_skipped=false;}else{out.telegram_edit_body=JSON.stringify({});out.progress_skipped=true;}
+return [{json:out,binary:(bx&&bx.binary)||{}}];`),
+  Object.assign(httpTelegramEdit('wf20-editprogretry', 'Edit Progress (Retrying)', [2820, 320]), { onError: 'continueRegularOutput' }),
+  Object.assign(httpTelegramFile('wf20-sendxlsxretry', 'Send Report XLSX Retry', [2820, 460], 'sendDocument', 'document', 'attachment'), { onError: 'continueRegularOutput' }),
+  // Terminal arbiter: reads ONLY verified facts — report_message_id (from Progress: Report Sent), the real
+  // document_message_id (from either send attempt), whether a workbook was expected, and the analysis outcome.
+  // deliveryTerminalEdit() maps those to the honest terminal string; delivered REQUIRES both message ids.
+  code('wf20-progdone', 'Progress: Done', [2930, 160], ['progress_tracker'], `
+var g=$('Approval & Budget Gate').first().json;
+var chat=String((g.request&&g.request.chat_id)||'');
+var mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}
+if(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}
+var rmid='';try{rmid=String($('Progress: Report Sent').first().json.report_message_id||'');}catch(e){}
+var dmid='';try{var rr=$('Send Report XLSX Retry').all()||[];for(var i=0;i<rr.length;i++){var m=(((rr[i]||{}).json||{}).result||{}).message_id;if(m){dmid=String(m);break;}}}catch(e){}
+if(!dmid){try{var r2=$('Send Report XLSX').all()||[];for(var j=0;j<r2.length;j++){var m2=(((r2[j]||{}).json||{}).result||{}).message_id;if(m2){dmid=String(m2);break;}}}catch(e){}}
+var xexp=false;try{xexp=$('Build Report XLSX').first().json.xlsx_skipped===false;}catch(e){xexp=false;}
+var attempts=0;try{if(($('Send Report XLSX').all()||[]).length)attempts++;}catch(e){}
+try{if(($('Send Report XLSX Retry').all()||[]).length)attempts++;}catch(e){}
+var fs='completed',rec=0,an=0,ar=0;try{var s=($('Build Execution Summary').first().json||{}).summary||{};fs=String(s.final_state||'completed');rec=Number(s.records_reported)||0;an=Number(s.llm_analyses)||0;ar=Number(s.llm_analyses_reused)||0;}catch(e){}
+var ed=deliveryTerminalEdit({report_message_id:rmid,document_message_id:dmid,xlsx_expected:xexp,attempts:attempts,max_attempts:2,analysis:{final_state:fs,has_analysis:(an+ar)>0,records:rec}});
+if(!mid){return [{json:{progress_skipped:true,delivery_state:ed.delivery_state,telegram_edit_body:JSON.stringify({})}}];}
+return [{json:{progress_skipped:false,delivery_state:ed.delivery_state,telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:ed.text})}}];`),
+  Object.assign(httpTelegramEdit('wf20-editprogdone', 'Edit Progress (Done)', [3040, 160]), { onError: 'continueRegularOutput' })
 ], [
   ['Manual Start', 'Resolve Agent Config'],
   ['When Called by Agent', 'Resolve Agent Config'],
@@ -1420,16 +1534,32 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
   ['Build Execution Summary', 'Shape Plan Completion'],
   ['Shape Plan Completion', 'Mark Plan Complete'],
   ['Shape Execution Summary Row', 'Append execution_summaries'],
-  ['Append execution_summaries', 'Shape Report Bundle'],
+  // F-2 DELIVERY-LIFECYCLE-001: the moment the TEXT report is confirmed, edit the ONE progress message to
+  // report_sent — this is NEVER coupled to XLSX generation/send. The bundle+workbook tail then hangs off the
+  // CONFIRMED send (not a parallel branch), so the terminal arbiter always sees the real report_message_id.
+  ['Send Telegram Report', 'Progress: Report Sent'],
+  ['Progress: Report Sent', 'Edit Progress (Report Sent)'],
+  ['Edit Progress (Report Sent)', 'Shape Report Bundle'],
   ['Shape Report Bundle', 'Append report_bundles'],
   ['Append report_bundles', 'Shape Report Context'],
-  ['Append report_bundles', 'Build Report XLSX'],
-  // REPORT-TRUTH-C: the completion edit follows the XLSX branch (send OR skip), never the text send — the user
-  // sees «Анализ завершён» only after the last delivery step.
+  ['Append report_bundles', 'Report Delivered?'],
+  // Report confirmed -> build + send the workbook; report NOT confirmed -> straight to the honest terminal
+  // (deliveryTerminalEdit returns report_failed on a missing report_message_id, so no orphan Excel is sent).
+  ['Report Delivered?', 'Build Report XLSX', 0],
+  ['Report Delivered?', 'Progress: Done', 1],
   ['Build Report XLSX', 'XLSX Ready?'],
   ['XLSX Ready?', 'Send Report XLSX', 0],
+  // No workbook to send (report-only / no-data) -> terminal reads xlsx_expected=false and stays honest.
   ['XLSX Ready?', 'Progress: Done', 1],
-  ['Send Report XLSX', 'Progress: Done'],
+  // The XLSX terminal is decided by the REAL sendDocument result (a document_message_id), never by the fact that
+  // the fail-open Send node produced an item.
+  ['Send Report XLSX', 'XLSX Sent?'],
+  ['XLSX Sent?', 'Progress: Done', 0],
+  // sendDocument failed but the report is delivered -> «Повторяю отправку…» then retry ONCE with the same binary.
+  ['XLSX Sent?', 'Progress: Retrying', 1],
+  ['Progress: Retrying', 'Edit Progress (Retrying)'],
+  ['Progress: Retrying', 'Send Report XLSX Retry'],
+  ['Send Report XLSX Retry', 'Progress: Done'],
   ['Shape Report Context', 'Upsert Report Context'],
   ['Build Delivery Outbox', 'Append telegram_outbox'],
   // DELIVERY-CHUNKS-001: one item per chunk between outbox and send, so every chunk is actually delivered.
@@ -1601,7 +1731,7 @@ else if(action==='evidence'){out.evidence=queryEvidence(b,{text:s.filter_text},s
 else if(action==='compare'){var cands=[];try{cands=($('Read report_bundles').all()||[]).map(function(r){return J(r.json.bundle||r.json.report_bundle||r.json);}).filter(function(x){return x&&String(x.owner_user_id)===String(scope.owner_user_id)&&String(x.report_id)!==String(scope.report_id);});}catch(e){}var base=selectBaseline(b,cands,cfg);out.baseline=base.baseline||null;out.baseline_reason=base.reason;out.comparison=base.baseline?compareReports(b,base.baseline):null;}
 else if(action==='refresh'){var srcs=(b.source_quality||[]).map(function(q){return {source_id:q.source,owner_user_id:scope.owner_user_id,platform:q.platform,ref:q.source,status:'active',last_status:q.error?'error':'ok',last_success_at:q.last_success_at,last_collected_at:q.last_collected_at,fields:{hash:'h'}};});out.refresh_plan=planRefresh(srcs,{cfg:cfg,now:(new Date()).toISOString(),only_stale:true});}
 return [{json:Object.assign({},s,{result:out})}];`),
-  code('wf24-exports', 'Build Exports & Outbox', [220, 40], ['report_export', 'xlsx_writer', 'report_package', 'report_charts', 'attachment_router', 'telegram_io'], `
+  code('wf24-exports', 'Build Exports & Outbox', [220, 40], ['report_export', 'xlsx_writer', 'report_text_safety', 'plan_render_ru', 'report_package', 'report_charts', 'attachment_router', 'telegram_io'], `
 var s=$('Apply Action').first().json;var b=s.bundle;var scope=s.scope;
 var csv=exportCsv(b,'report',scope);
 var pkg=buildReportPackage(b,scope,{omit_empty:true});
@@ -1685,7 +1815,7 @@ var res=buildWeeklyDigest({owner_user_id:owner,now:inp.now||(new Date()).toISOSt
 var dd=dedupeDigest(existing,res.digest);
 return [{json:{digest:res.digest,emit:(res.ok&&dd.emit),suppressed:res.suppressed,empty:res.empty,dedupe_reason:dd.reason,owner_user_id:owner,cfg:cfg}}];`),
   ifNode('wf25-if', 'Emit Digest?', [-220, 0], '={{ $json.emit }}'),
-  code('wf25-attach', 'Build Digest Attachments', [0, -120], ['report_export', 'xlsx_writer', 'report_package'], `
+  code('wf25-attach', 'Build Digest Attachments', [0, -120], ['report_export', 'xlsx_writer', 'report_text_safety', 'plan_render_ru', 'report_package'], `
 var d=$('Build Weekly Digest').first().json;var cfg=d.cfg||{};var dg=d.digest;
 function J(v){try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return v;}}
 var reports=[];try{reports=($('Read report_bundles').all()||[]).map(function(r){return J(r.json.bundle||r.json.report_bundle||r.json);});}catch(e){}
@@ -2027,8 +2157,8 @@ write('27_competitor_discovery.json', wf('27 — Cross-Source Competitor Discove
 // Transport: tool_choice:auto submit tool (the measured gateway contract). Deterministic fallback always yields a
 // usable typed result. Persists llm_analysis_results + llm_analysis_telemetry with full lineage; NO secret, NO
 // thinking block ever leaves the node. Max 2 Claude calls (primary + at most one repair) — no loops.
-var WF28_LIBS_FULL = ['agent_config', 'claude_adapter', 'claude_contracts', 'evidence_package', 'llm_cost', 'claude_analysis', 'llm_telemetry'];
-var WF28_LIBS_PARSE = ['claude_adapter', 'claude_contracts', 'evidence_package', 'llm_cost', 'claude_analysis'];
+var WF28_LIBS_FULL = ['agent_config', 'claude_adapter', 'claude_contracts', 'evidence_package', 'llm_cost', 'analysis_router', 'claude_analysis', 'llm_telemetry'];
+var WF28_LIBS_PARSE = ['claude_adapter', 'claude_contracts', 'evidence_package', 'llm_cost', 'analysis_router', 'claude_analysis'];
 write('28_claude_analyst.json', wf('28 — Claude Analyst (Stage F, evidence-bound, feature-gated)', [
   subTrigger('wf28-trigger', 'When Called by Agent', [-60, 0],
     ['agent_request_id', 'source_run_id', 'report_id', 'owner_user_id', 'chat_id', 'analysis_type', 'evidence_input', 'niche', 'region']),
@@ -2037,9 +2167,21 @@ write('28_claude_analyst.json', wf('28 — Claude Analyst (Stage F, evidence-bou
 var inp=callerInput();
 var cfg=resolveConfig(__env);
 var evIn={};try{evIn=(typeof inp.evidence_input==='string')?JSON.parse(inp.evidence_input||'{}'):(inp.evidence_input||{});}catch(e){evIn={};}
-var pkgRes=buildEvidencePackage(evIn,{});
+// F-7 ANALYSIS-ROUTE-001: a MULTI-source package arrives pre-built by WF20 (schema evidence_package.multi.v1)
+// and must NOT go through the single-source builder, which would collapse it to one source.
+var __mode=arNormalizeMode(inp.analysis_type);
+var __multi=arIsMultiSource(__mode)&&String(evIn.schema||'')==='evidence_package.multi.v1';
+var pkgRes;
+if(__multi){
+  var __ids=(evIn.evidence_items||[]).map(function(e){return String(e.evidence_id||'');}).filter(Boolean);
+  pkgRes={package:evIn,allowed_evidence_ids:__ids,package_hash:epHash(JSON.stringify(evIn))};
+}else{
+  // A multi-source label whose package did not arrive multi-source cannot be honoured — fall back to single.
+  if(arIsMultiSource(__mode))__mode='source_analysis';
+  pkgRes=buildEvidencePackage(evIn,{});
+}
 var model=(cfg.llm_model||'claude-sonnet-4-6');
-var ctx={owner_user_id:String(inp.owner_user_id||''),chat_id:String(inp.chat_id||''),agent_request_id:String(inp.agent_request_id||''),source_run_id:String(inp.source_run_id||''),report_id:String(inp.report_id||''),analysis_type:String(inp.analysis_type||'single_source'),evidence_package_hash:pkgRes.package_hash,source_scope:(evIn.source||{}),schema_version:CC_SCHEMA_VERSION,prompt_version:CC_PROMPT_VERSION,model:model};
+var ctx={owner_user_id:String(inp.owner_user_id||''),chat_id:String(inp.chat_id||''),agent_request_id:String(inp.agent_request_id||''),source_run_id:String(inp.source_run_id||''),report_id:String(inp.report_id||''),analysis_type:__mode,evidence_package_hash:pkgRes.package_hash,source_scope:(__multi?{source_id:'multi',kind:'multi',source_count:(evIn.sources||[]).length}:(evIn.source||{})),schema_version:CC_SCHEMA_VERSION,prompt_version:CC_PROMPT_VERSION,model:model};
 // Runtime gate: the dedicated Stage-F rollout flag (default OFF). Auth is enforced by the n8n credential on the
 // HTTP node — a missing/invalid credential simply fails the call and falls back (claude_key_present is a
 // cost-model concern, not a runtime gate).
@@ -2053,7 +2195,7 @@ var base={ctx:ctx,pkg:{package:pkgRes.package,allowed_evidence_ids:pkgRes.allowe
 if(reuse){base.mode='reuse';base.do_call=false;base.reuse_analysis=reuse.analysis;base.reuse_ref={reused_from_analysis_id:String(reuse.reused_from_analysis_id||''),quality_status:String(reuse.quality_status||''),created_at:String(reuse.reused_created_at||''),model:String(reuse.reused_model||'')};base.cache_decision={decision:'reuse',reason:String(reuse.cache_reason||'')};}
 else if(!enabled){base.mode='disabled';base.do_call=false;base.cache_decision={decision:'skip_disabled',reason:'llm analysis disabled'};}
 else if(!haveEvidence){base.mode='no_evidence';base.do_call=false;base.cache_decision={decision:'skip_no_evidence',reason:'no allowed evidence'};}
-else{var built=buildSourceAnalysisCall(base.pkg,{llm_model:model});base.mode='call';base.do_call=true;base.claude_body=built.body;base.allowed_ids=built.allowed_evidence_ids;base.ctx.estimated_cost_usd=estimateCost((evIn.evidence||[]).length*200,700,cfg).est_cost_usd;base.cache_decision={decision:'fresh_call',reason:(reuseRows.length?'miss: no persisted analysis matched owner+analysis_type+evidence_hash+schema+prompt+model':'miss: no persisted analyses to reuse')};}
+else{var built=__multi?buildComparisonCall(base.pkg,{llm_model:model}):buildSourceAnalysisCall(base.pkg,{llm_model:model});base.mode='call';base.do_call=true;base.multi_source=__multi;base.claude_body=built.body;base.allowed_ids=built.allowed_evidence_ids;base.ctx.estimated_cost_usd=estimateCost(((__multi?evIn.evidence_items:evIn.evidence)||[]).length*200,900,cfg).est_cost_usd;base.cache_decision={decision:'fresh_call',reason:(reuseRows.length?'miss: no persisted analysis matched owner+analysis_type+evidence_hash+schema+prompt+model':'miss: no persisted analyses to reuse')};}
 // WF28-LATENCY-001: the clock the parser needs. n8n's HTTP node reports no timing, so latency is measured across
 // the node boundary or not at all — and "not at all" is what shipped: parseClaudeResponse reads http.latency_ms
 // from an object this workflow builds WITHOUT that key, so every call recorded latency_ms=0, including the
@@ -2070,7 +2212,8 @@ var http={status:Number(raw.statusCode||raw.status||0)||(raw.body?200:0),body:ra
 var res=parseClaudeResponse(http,{model:prep.ctx.model});
 function lr(r){return {usage:r.usage,request_id:r.request_id,stop_reason:r.stop_reason,schema_mode:r.schema_mode,latency_ms:r.latency_ms,provider:r.provider,error_category:r.error_category};}
 var out={prep:prep,res1:lr(res)};
-if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,CC_ANALYSIS_SCHEMA);if(v.ok){out.status='valid';out.analysis=res.content;}else{out.status='repair';out.errors=v.errors;out.rejected=res.content;var rep=buildRepairCall(res.content,v.errors,prep.allowed_ids,{llm_model:prep.ctx.model});out.claude_body=rep.body;out.__t1=Date.now();}}
+var __schema=prep.multi_source?CC_SYNTHESIS_SCHEMA:CC_ANALYSIS_SCHEMA;
+if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,__schema);out.coerced_paths=v.coerced||[];if(v.ok){out.status='valid';out.analysis=v.value;}else{out.status='repair';out.errors=v.errors;out.rejected=v.value;var rep=buildRepairCall(v.value,v.errors,prep.allowed_ids,{llm_model:prep.ctx.model});out.claude_body=rep.body;out.__t1=Date.now();}}
 else{out.status='fail';out.error_category=res.error_category;}
 return [{json:out}];`),
   ifNode('wf28-ifrep', 'Need Repair?', [1060, -120], "={{ $json.status === 'repair' }}"),
@@ -2083,7 +2226,8 @@ var http={status:Number(raw.statusCode||raw.status||0)||(raw.body?200:0),body:ra
 var res=parseClaudeResponse(http,{model:prep.ctx.model});
 function lr(r){return {usage:r.usage,request_id:r.request_id,stop_reason:r.stop_reason,schema_mode:r.schema_mode,latency_ms:r.latency_ms,provider:r.provider,error_category:r.error_category};}
 var out={prep:prep,res1:pp.res1,res2:lr(res),repair_used:true,prev_errors:pp.errors||[]};
-if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,CC_ANALYSIS_SCHEMA);if(v.ok){out.status='repaired';out.analysis=res.content;out.repair_success=true;}else{out.status='fallback';out.repair_success=false;out.errors=v.errors;}}
+var __schema=prep.multi_source?CC_SYNTHESIS_SCHEMA:CC_ANALYSIS_SCHEMA;
+if(res.ok){var v=validateAnalysisResult(res.content,prep.allowed_ids,__schema);out.coerced_paths=(pp.coerced_paths||[]).concat(v.coerced||[]);if(v.ok){out.status='repaired';out.analysis=v.value;out.repair_success=true;}else{out.status='fallback';out.repair_success=false;out.errors=v.errors;}}
 else{out.status='fallback';out.repair_success=false;out.error_category=res.error_category;}
 return [{json:out}];`),
   code('wf28-fin', 'Finalize Analysis', [1720, 0], WF28_LIBS_FULL, `
@@ -2092,12 +2236,15 @@ var pkgRes={package:prep.pkg.package,allowed_evidence_ids:prep.pkg.allowed_evide
 var pp=null,pr=null;try{pp=$('Parse Primary').first().json;}catch(e){}try{pr=$('Parse Repair').first().json;}catch(e){}
 function agg(cs){return {input_tokens:cs.reduce(function(a,c){return a+((c&&c.input_tokens)||0);},0),output_tokens:cs.reduce(function(a,c){return a+((c&&c.output_tokens)||0);},0)};}
 function mk(analysis,meta){return {ok:!meta.fallback_used,analysis:analysis,schema_mode:meta.schema_mode||'',repair_used:!!meta.repair_used,repair_success:!!meta.repair_success,fallback_used:!!meta.fallback_used,validation_errors:meta.validation_errors||[],usage:meta.usage||{input_tokens:0,output_tokens:0},cost_usd:meta.cost_usd||0,request_id:meta.request_id||'',stop_reason:meta.stop_reason||'',error_category:meta.error_category||'',provider:'aiprimetech',latency_ms:meta.latency_ms||0};}
+// F-7: a multi-source failure must fall back to the COMPARISON deterministic shape, not a single-source one,
+// so the renderer always receives the structure its mode implies.
+function detFallback(){return prep.multi_source?deterministicComparisonFallback(pkgRes):deterministicAnalysisFallback(pkgRes);}
 var result,persist=false,enriched=false,repairCost=0;
 if(prep.mode==='reuse'){result=mk(prep.reuse_analysis,{schema_mode:'reuse',stop_reason:'reuse'});enriched=true;}
-else if(prep.mode==='disabled'||prep.mode==='no_evidence'){result=mk(deterministicAnalysisFallback(pkgRes),{fallback_used:true,error_category:prep.mode});}
-else if(pr){var cs=[costFromUsage((pp&&pp.res1&&pp.res1.usage)||{},{}),costFromUsage((pr.res2&&pr.res2.usage)||{},{})];repairCost=sumCosts([cs[1]]);if(pr.status==='repaired'){result=mk(pr.analysis,{schema_mode:(pr.res2&&pr.res2.schema_mode)||'tool_use',repair_used:true,repair_success:true,validation_errors:pr.prev_errors||[],usage:agg(cs),cost_usd:sumCosts(cs),request_id:(pr.res2&&pr.res2.request_id),stop_reason:(pr.res2&&pr.res2.stop_reason),latency_ms:(pr.res2&&pr.res2.latency_ms)});enriched=true;}else{result=mk(deterministicAnalysisFallback(pkgRes),{schema_mode:(pr.res2&&pr.res2.schema_mode)||'',repair_used:true,repair_success:false,fallback_used:true,validation_errors:pr.errors||[pr.error_category],usage:agg(cs),cost_usd:sumCosts(cs),request_id:(pr.res2&&pr.res2.request_id),stop_reason:(pr.res2&&pr.res2.stop_reason),error_category:pr.error_category||'validation_failed'});}persist=true;}
-else if(pp){var c1=[costFromUsage((pp.res1&&pp.res1.usage)||{},{})];if(pp.status==='valid'){result=mk(pp.analysis,{schema_mode:(pp.res1&&pp.res1.schema_mode)||'tool_use',usage:agg(c1),cost_usd:sumCosts(c1),request_id:(pp.res1&&pp.res1.request_id),stop_reason:(pp.res1&&pp.res1.stop_reason),latency_ms:(pp.res1&&pp.res1.latency_ms)});enriched=true;}else{result=mk(deterministicAnalysisFallback(pkgRes),{fallback_used:true,usage:agg(c1),cost_usd:sumCosts(c1),request_id:(pp.res1&&pp.res1.request_id),stop_reason:(pp.res1&&pp.res1.stop_reason),error_category:pp.error_category||'no_structured_output'});}persist=true;}
-else{result=mk(deterministicAnalysisFallback(pkgRes),{fallback_used:true,error_category:'unknown'});}
+else if(prep.mode==='disabled'||prep.mode==='no_evidence'){result=mk(detFallback(),{fallback_used:true,error_category:prep.mode});}
+else if(pr){var cs=[costFromUsage((pp&&pp.res1&&pp.res1.usage)||{},{}),costFromUsage((pr.res2&&pr.res2.usage)||{},{})];repairCost=sumCosts([cs[1]]);if(pr.status==='repaired'){result=mk(pr.analysis,{schema_mode:(pr.res2&&pr.res2.schema_mode)||'tool_use',repair_used:true,repair_success:true,validation_errors:pr.prev_errors||[],usage:agg(cs),cost_usd:sumCosts(cs),request_id:(pr.res2&&pr.res2.request_id),stop_reason:(pr.res2&&pr.res2.stop_reason),latency_ms:(pr.res2&&pr.res2.latency_ms)});enriched=true;}else{result=mk(detFallback(),{schema_mode:(pr.res2&&pr.res2.schema_mode)||'',repair_used:true,repair_success:false,fallback_used:true,validation_errors:pr.errors||[pr.error_category],usage:agg(cs),cost_usd:sumCosts(cs),request_id:(pr.res2&&pr.res2.request_id),stop_reason:(pr.res2&&pr.res2.stop_reason),error_category:pr.error_category||'validation_failed'});}persist=true;}
+else if(pp){var c1=[costFromUsage((pp.res1&&pp.res1.usage)||{},{})];if(pp.status==='valid'){result=mk(pp.analysis,{schema_mode:(pp.res1&&pp.res1.schema_mode)||'tool_use',usage:agg(c1),cost_usd:sumCosts(c1),request_id:(pp.res1&&pp.res1.request_id),stop_reason:(pp.res1&&pp.res1.stop_reason),latency_ms:(pp.res1&&pp.res1.latency_ms)});enriched=true;}else{result=mk(detFallback(),{fallback_used:true,usage:agg(c1),cost_usd:sumCosts(c1),request_id:(pp.res1&&pp.res1.request_id),stop_reason:(pp.res1&&pp.res1.stop_reason),error_category:pp.error_category||'no_structured_output'});}persist=true;}
+else{result=mk(detFallback(),{fallback_used:true,error_category:'unknown'});}
 ctx.estimated_cost_usd=prep.ctx.estimated_cost_usd||0;
 var resultRow=buildAnalysisResultRow(ctx,result,now);
 var telRow=buildTelemetryRow(ctx,result,now);
@@ -2109,7 +2256,7 @@ var evMap=((pkgRes.package&&pkgRes.package.evidence_items)||[]).map(function(e){
 // are the audit surface; analysis_id itself stays CURRENT-request lineage. repair_cost_usd feeds COST-SPLIT-001.
 var reusedRef=(prep.mode==='reuse'&&prep.reuse_ref)?prep.reuse_ref:null;
 var cacheDec=prep.cache_decision||{decision:(prep.mode==='call'?'fresh_call':String(prep.mode||'')),reason:''};
-var typedReturn={analysis_id:resultRow.analysis_id,enriched:enriched,quality_status:resultRow.quality_status,mode:prep.mode,analysis:a,overall_confidence:a.overall_confidence||0,repair_used:result.repair_used,repair_success:result.repair_success,fallback_used:result.fallback_used,error_category:result.error_category,cost_usd:result.cost_usd,repair_cost_usd:repairCost,model:String(ctx.model||''),reused_from_analysis_id:(reusedRef?String(reusedRef.reused_from_analysis_id||''):''),reused_from_created_at:(reusedRef?String(reusedRef.created_at||''):''),reused_from_model:(reusedRef?String(reusedRef.model||''):''),cache_decision:String(cacheDec.decision||''),cache_reason:String(cacheDec.reason||''),evidence_package_hash:ctx.evidence_package_hash,evidence_map:evMap,source:ctx.source_scope||{},tokens_in:((result.usage||{}).input_tokens)||0,tokens_out:((result.usage||{}).output_tokens)||0,latency_ms:result.latency_ms||0};
+var typedReturn={analysis_id:resultRow.analysis_id,analysis_mode:String(ctx.analysis_type||''),multi_source:!!prep.multi_source,source_count:((prep.pkg&&prep.pkg.package&&prep.pkg.package.sources)||[]).length,enriched:enriched,quality_status:resultRow.quality_status,mode:prep.mode,analysis:a,overall_confidence:a.overall_confidence||0,repair_used:result.repair_used,repair_success:result.repair_success,fallback_used:result.fallback_used,error_category:result.error_category,cost_usd:result.cost_usd,repair_cost_usd:repairCost,model:String(ctx.model||''),reused_from_analysis_id:(reusedRef?String(reusedRef.reused_from_analysis_id||''):''),reused_from_created_at:(reusedRef?String(reusedRef.created_at||''):''),reused_from_model:(reusedRef?String(reusedRef.model||''):''),cache_decision:String(cacheDec.decision||''),cache_reason:String(cacheDec.reason||''),evidence_package_hash:ctx.evidence_package_hash,evidence_map:evMap,source:ctx.source_scope||{},tokens_in:((result.usage||{}).input_tokens)||0,tokens_out:((result.usage||{}).output_tokens)||0,latency_ms:result.latency_ms||0,coerced_paths:((pr&&pr.coerced_paths)||(pp&&pp.coerced_paths)||[])};
 return [{json:{persist:persist,result_row:resultRow,telemetry_row:telRow,typed_return:typedReturn}}];`),
   ifNode('wf28-ifpersist', 'Persist?', [1940, 0], '={{ $json.persist }}'),
   code('wf28-shaperes', 'Shape Result Row', [2160, -120], [], `return [{json:$('Finalize Analysis').first().json.result_row}];`),

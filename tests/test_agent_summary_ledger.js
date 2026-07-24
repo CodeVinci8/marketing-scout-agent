@@ -183,8 +183,11 @@ A.section('EXPORT-BUNDLE-001 / REPORT-CONTEXT-001 / DELIVERY-CONTENT-001 — rep
   A.ok('WF20 has Shape Report Bundle', names.indexOf('Shape Report Bundle') >= 0);
   A.ok('WF20 appends report_bundles', names.indexOf('Append report_bundles') >= 0);
   A.ok('WF20 persists last_report_id on conversation state', names.indexOf('Upsert Report Context') >= 0);
-  const chain = wf20.connections['Append execution_summaries'].main[0][0].node;
-  A.eq('bundle chain hangs off Append execution_summaries', chain, 'Shape Report Bundle');
+  // F-2 DELIVERY-LIFECYCLE-001: the bundle chain hangs off the CONFIRMED text send (Edit Progress (Report Sent)),
+  // not off the summary append — the workbook/export tail is downstream of a proven report delivery.
+  const chain = wf20.connections['Edit Progress (Report Sent)'].main[0][0].node;
+  A.eq('bundle chain hangs off the confirmed report send', chain, 'Shape Report Bundle');
+  A.ok('Append execution_summaries is a ledger leaf (no longer drives the bundle/workbook)', !wf20.connections['Append execution_summaries']);
 
   const wf24 = JSON.parse(fs.readFileSync(path.join(WFD, '24_report_export_delivery.json'), 'utf8'));
   const scopeNode = wf24.nodes.find(n => n.name === 'Select & Scope Report');

@@ -58,6 +58,38 @@ function ruEnum(map, key, fallback) {
   return (k && Object.prototype.hasOwnProperty.call(map, k)) ? map[k] : fallback;
 }
 function ruIntent(v) { return ruEnum(RU_INTENT, v, 'анализ конкурентов'); }
+// WIP2 SOURCE-ROLE-001: the plan goal must NOT assert «конкурент» for a public social source just because the
+// niche is credit_brokerage (regression: PRObonds/frank_media/banksta are public sources, not competitors). At
+// plan time there is no evidence yet, so the goal is a deterministic heuristic by SOURCE TYPE + analysis mode:
+// a named company WEBSITE is a candidate direct competitor (the report confirms/scopes with evidence); a
+// Telegram/VK channel is a public source of market signals; a mix is a preliminary relevance assessment. The
+// evidence-bound source_role (source_role.js) decides direct_competitor in the report, never the niche.
+function planGoalRu(plan) {
+  plan = plan || {};
+  if (ruText(plan.intent) === 'competitor_discovery') return 'поиск новых источников и оценка их релевантности';
+  var mode = ruText(plan.analysis_mode) || 'source_analysis';
+  if (mode === 'comparison') return 'сравнение источников';
+  if (mode === 'synthesis') return 'сводный анализ нескольких источников';
+  if (mode === 'change_report') return 'что изменилось у источника с прошлой проверки';
+  var tg = (Array.isArray(plan.telegram_channels) ? plan.telegram_channels : []).length;
+  var vk = (Array.isArray(plan.vk_sources) ? plan.vk_sources : []).length;
+  var web = (Array.isArray(plan.websites) ? plan.websites : []).length;
+  var social = tg + vk;
+  if (social + web === 0) return ruIntent(plan.intent); // no explicit source: niche competitor scan
+  // «анализ конкурента» requires a TRUSTED competitor signal in the approved input — NEVER a website's mere
+  // existence, source type or the niche (regression: a public/news/aggregator website is not a competitor). The
+  // signal is: operator marked it known; a stored owner-scoped source_role=direct_competitor with confidence; or
+  // deterministic own-offer evidence already in the plan. Evidence-confirmed role is decided in the report.
+  var provenCompetitor = plan.known_competitor === true || plan.direct_competitor === true ||
+    (Array.isArray(plan.source_roles) && plan.source_roles.some(function (r) {
+      return r && (r.direct_competitor === true || ruText(r.source_role) === 'direct_competitor') && Number(r.role_confidence) >= 0.6;
+    }));
+  if (provenCompetitor) return 'анализ конкурента';
+  // social-only feeds are public sources of market signals by nature; a website (or a mix) with no proven
+  // competitor status is a preliminary relevance assessment until evidence classifies it.
+  if (social > 0 && web === 0) return 'анализ публичного источника и рыночных сигналов';
+  return 'предварительная оценка релевантности публичного источника';
+}
 function ruNiche(v) { return ruEnum(RU_NICHE, v, 'кредитные услуги'); }
 // region values are produced in Russian by the planner; map the canonical short form to the full phrase and
 // never leak a latin/underscore internal token if one ever appears.
@@ -135,7 +167,7 @@ function planApprovalMessageRu(plan, opts) {
   var lines = [
     '🔎 План анализа',
     '',
-    'Цель: ' + ruIntent(plan.intent),
+    'Цель: ' + planGoalRu(plan),
     // REPORT-TRUTH-A: the mode is part of what the user approves — "что изменилось" and "проанализируй" are
     // different deliverables. Rendered only when it adds information beyond the default.
     (ruText(plan.analysis_mode) && plan.analysis_mode !== 'source_analysis'
@@ -181,8 +213,15 @@ function planApprovalMessageRu(plan, opts) {
     // run, and must not bill for it. OFF -> say it is off, with no AI cost in the total.
     var deepUsd = ruNum(bd.claude_analysis_usd, 0) + ruNum(bd.claude_usd, 0);
     var summaryUsd = ruNum(bd.summary_ai_usd, 0);
+    var reuseAnPossible = cost.reuse_analysis_possible === true;
     if (reuseAn) {
       lines.push('• AI-анализ: $0 (будет переиспользован сохранённый анализ)');
+    } else if (reuseAnPossible && cost.llm_enabled && deepUsd > 0) {
+      // COST-REUSE-002 (§4, residual-risk #1): the source data is reused, but a saved AI-analysis is NOT
+      // guaranteed to match (a different report type/model, or a snapshot never analysed, still costs a fresh
+      // call). Quote the real cost as the ceiling and state the exact condition for the charge — never promise a
+      // $0 the run may not deliver.
+      lines.push('• AI-анализ: ' + band(deepUsd) + ' (спишется, если готового анализа под этот отчёт ещё нет)');
     } else if (cost.llm_enabled && deepUsd > 0) {
       lines.push('• AI-анализ: ' + band(deepUsd));
     } else if (cost.llm_requested && cost.llm_auth_ok === false) {
@@ -247,6 +286,29 @@ var RU_APPROVAL_DUP_TOAST = {
 };
 function approvalDuplicateToastRu(kind) { return ruEnum(RU_APPROVAL_DUP_TOAST, ruText(kind), 'Уже обрабатывается'); }
 
+// WIP2 CALLBACK-UX-001: a self-contained, user-facing message for an approval callback that could not be applied
+// (a stale/expired keyboard, a button for another request, or a malformed callback). Unlike approvalFailureRu
+// (a lowercase fragment reused by the WF20 budget/gate blocked-response), this returns a COMPLETE sentence and
+// exposes NO internal code, workflow/execution id, row number, ownership detail or exception. The callback stays
+// bound to its exact agent_request_id upstream; this only chooses the words the user sees.
+// CALLBACK-PRIVACY-001: only the SAFE, self-owned cases get a specific message. Any cross-scope mismatch
+// (owner/chat/request/hash or unknown) collapses to ONE neutral result that reveals nothing about whether a
+// foreign plan exists, who owns it, which chat/request/hash it is, or any workflow/row/exec id. The exact reason
+// code stays in execution telemetry only.
+var RU_APPROVAL_OUTCOME = {
+  not_awaiting_approval: 'Этот план уже запущен или завершён.',
+  no_plan: 'Этот план устарел. Отправьте запрос ещё раз, чтобы создать новый.'
+};
+var RU_APPROVAL_NEUTRAL = 'Не удалось применить это подтверждение. Отправьте запрос ещё раз, чтобы создать новый план.';
+function approvalOutcomeRu(reason) {
+  var first = ruText(reason).split(';')[0].trim();
+  // prefix-match: reason codes may carry a suffix (e.g. "not_awaiting_approval:running")
+  var keys = Object.keys(RU_APPROVAL_OUTCOME);
+  for (var i = 0; i < keys.length; i++) { if (first.indexOf(keys[i]) === 0) return RU_APPROVAL_OUTCOME[keys[i]]; }
+  // owner_mismatch / chat_mismatch / request_mismatch / plan_hash_mismatch / anything else → privacy-neutral.
+  return RU_APPROVAL_NEUTRAL;
+}
+
 // ================= UX-RU-002 — Vinci persona + full user-facing message surface =========================
 // The bot's audience is a Russian-speaking credit broker, not a developer. NOTHING below may contain env var
 // names, enum values, workflow/execution ids, adapter names, allowlists, credential states, raw provider
@@ -284,7 +346,7 @@ function ruIntentAny(v) {
 // /start — concise welcome; NEVER the internal capability matrix.
 function ruStartMessage() {
   return [
-    'Здравствуйте! Я Vinci — помощник по анализу конкурентов и рынка.',
+    'Здравствуйте! Я Vinci AI Pilot — помощник по анализу конкурентов и рынка.',
     '',
     'Я могу:',
     '• находить и сравнивать конкурентов;',
@@ -301,7 +363,7 @@ function ruStartMessage() {
 // «кто ты?» / «представься» — short self-description, no command list.
 function ruWhoAmIMessage() {
   return [
-    'Я Vinci — бизнес-помощник по анализу конкурентов и рынка.',
+    'Я Vinci AI Pilot — бизнес-помощник по анализу конкурентов и рынка.',
     '',
     'Я собираю информацию из открытых источников, сравниваю предложения, выделяю важные факты и готовлю понятный отчёт.'
   ].join('\n');
@@ -526,9 +588,21 @@ function ruSourceOpFailure(reason) {
 var RU_SOURCE_STATUS = { active: 'активен', paused: 'на паузе', removed: 'удалён', pending: 'готовится' };
 function ruSourceStatusLabel(status) { return ruEnum(RU_SOURCE_STATUS, ruText(status), 'в обработке'); }
 
+
+// F-3 ENUM-RU-001 — single-source labels for report cells. A workbook cell must read «сайт», not «website»,
+// and «принят», not «accepted»/«healthy». Unknown values fall back to the raw text only when it is already
+// Russian; a latin/underscore token is never shown to a user.
+var RU_SOURCE_ONE = { website: 'сайт', avito: 'Авито', telegram: 'Telegram-канал', telegram_channel: 'Telegram-канал',
+  vk: 'сообщество VK', vk_community: 'сообщество VK', search: 'поисковая выдача', discovery: 'поиск источников' };
+var RU_QUALITY = { accepted: 'принят', healthy: 'исправен', degraded: 'с замечаниями', rejected: 'отклонён',
+  quality_rejected: 'отклонён по качеству', unknown: '', blocked: 'недоступен', stale: 'устарел' };
+function ruSafeText(v) { var t = ruText(v); return (t && !/[a-z_]/i.test(t)) ? t : ''; }
+function ruSourceLabel(v) { return ruEnum(RU_SOURCE_ONE, v, ruSafeText(v)); }
+function ruQualityLabel(v) { return ruEnum(RU_QUALITY, v, ruSafeText(v)); }
+
 module.exports = {
-  planApprovalMessageRu, planStatusLineRu, approvalFailureRu, approvalDuplicateRu, approvalDuplicateToastRu,
-  ruIntent, ruNiche, ruRegion, ruSources, ruEnum, ruIntentAny,
+  planApprovalMessageRu, planStatusLineRu, planGoalRu, approvalFailureRu, approvalOutcomeRu, approvalDuplicateRu, approvalDuplicateToastRu,
+  ruIntent, ruNiche, ruRegion, ruSources, ruEnum, ruIntentAny, ruSourceLabel, ruQualityLabel,
   ruStartMessage, ruWhoAmIMessage, ruIsWhoAmI,
   ruCapabilityGroups, ruHelpMessage, ruCapLabel, ruCapAdvertisable,
   RU_CAP_LABEL, RU_CAP_GROUP,

@@ -193,9 +193,10 @@ A.section('WF20 topology — WF28 is called per source and NEVER gates the deter
   const inputs = call.parameters.workflowInputs.value;
   ['agent_request_id', 'source_run_id', 'report_id', 'owner_user_id', 'chat_id', 'analysis_type', 'evidence_input', 'niche', 'region']
     .forEach(k => A.ok('passes named field ' + k, inputs[k] !== undefined));
-  // REPORT-TRUTH-A: the plan's analysis mode IS the analysis type (safe default source_analysis).
-  A.ok('analysis_type carries the approved plan mode',
-    String(inputs.analysis_type).indexOf("analysis_mode || 'source_analysis'") >= 0);
+  // F-7 ANALYSIS-ROUTE-001: WF20 passes the RESOLVED mode from Build Analysis Inputs ($json.analysis_type),
+  // not the raw plan label — the router decides the executed mode from distinct contributing sources.
+  A.ok('analysis_type carries the RESOLVED mode (router output)',
+    String(inputs.analysis_type).indexOf('$json.analysis_type') >= 0);
   A.ok('owner is propagated (isolation)', /owner_user_id/.test(inputs.owner_user_id));
 
   const prep = node20('Build Analysis Inputs').parameters.jsCode;

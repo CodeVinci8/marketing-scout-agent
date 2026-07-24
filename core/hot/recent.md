@@ -2,6 +2,784 @@
 
 Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm/decisions.md`.
 
+## Сессия 75 (2026-07-24) — WIP1: пост-гейтовое усиление правдивости отчётов (офлайн, $0, ничего не задеплоено)
+
+**Контекст.** Независимая проверка трёх выгруженных XLSX после гейта Stage F выявила воспроизводимые дефекты
+пользовательских отчётов, которые гейт пропустил. Исправлено в канонических библиотеках + генераторе, без живых/платных
+вызовов и без деплоя. Ветка `fix/stage-f-post-migration-acceptance`, HEAD до работы `e96bf4a`.
+
+**Что исправлено (канонические причины):**
+- **Контракт WF04→WF20.** Детерминированный учёт источников вынесен в `execution_summary.sourceAccounting`
+  (`classifyAdapterSource`): по типизированному `execution_mode`/`source_outcome`/`status` каждый источник попадает
+  ровно в одну корзину — reused / fresh / rejected; contributing = reused ∪ fresh. Число свежесобранных источников
+  **никогда** не выводится из числа внешних вызовов. Поля `sources_fresh`/`sources_reused`/`sources_rejected`/
+  `sources_contributing` + их идентичности пробрасываются в бандл (`Shape Report Bundle`), `external_calls_actual`
+  остаётся отдельным счётчиком. Fan-out VK: `Build Execution Summary` собирает адаптеры через `.all()` (было `.first()`,
+  терявшее все сообщества кроме первого).
+- **«Собрано заново» = только fresh.** `report_package.rpFreshCount` читает `sources_fresh` (а не `sources_checked`,
+  который = admitted = reused+fresh). Колонки «Источников собрано заново» / «в анализе» / «Внешних запросов» — три
+  независимые величины.
+- **Режим данных.** `rpDataMode` решает reuse/collect/mixed по детерминированным счётчикам, а не по внешним вызовам.
+- **Качество источника (source-aware, fail-closed).** `arQualityContradictionGuard`/`crQualityContradictionGuard`
+  дедуплицируют идентичности источников с правилом приоритета (`arResolveSourceStates`): источник «здоров» только если
+  ВСЕ его наблюдения здоровы; любое нездоровое/неизвестное состояние → не-здоров. Ограничение о карантине снимается,
+  только если оно называет здоровый источник ИЛИ каждый contributing-источник здоров; конфликт/неизвестность —
+  сохраняется. Единое поведение в Telegram и XLSX.
+- **Универсальные заявления (структурно, без ломки грамматики).** `arBroadcastGuard`/`crBroadcastGuard` только
+  ДЕТЕКТИРУЮТ квантор (noun-anchored: «все три источника», «все игроки», «у всех конкурентов», «каждый конкурент»,
+  «оба источника», «обе компании»; не срабатывает на «каждый месяц» / «все предлагают»). Если цитаты не покрывают все
+  contributing-источники — исходная фраза сохраняется дословно и добавляется нейтральная приписка
+  «Подтверждено не для всех участвовавших источников (подтверждено: <источники>)». Атрибуция никогда не выдумывается.
+  Идемпотентно. Рыночные «незанятые ниши» на малой выборке помечаются гипотезами в обоих рендерерах.
+- **Контракт временных меток.** `xlsx_writer.excelSerial` приведён к каноническому производителю `ms_time.instantOf`:
+  зонированные (`Z`/`±HH:MM`) → мгновение + один сдвиг МСК; зонанезависимые цифры трактуются как настенное время
+  Москвы и рендерятся буквально (без сдвига → нет двойного сдвига); нераспознаваемое → пусто. Реальные сохранённые
+  метки (`…+03:00`, exec 1349) подтверждают выбор; XLSX и Telegram показывают одно и то же время МСК.
+
+**Доказательства (офлайн, $0):**
+- `tests/test_report_integrity.js` расширен до **143 assert, 0 провалов** (6 сценариев учёта источников; независимость
+  fresh≠contributing≠calls; смешанные состояния качества для XLSX и Telegram; варианты кванторов + идемпотентность +
+  отсутствие ложных срабатываний; контракт временных меток).
+- Полный офлайн-прогон `node tests/run_all.js`: **156 наборов, 0 провалов, 8861 assert, exit 0, внешних вызовов 0**.
+- Генератор идемпотентен (побайтовая стабильность повторной генерации); перегенерированы только WF20/WF24/WF25
+  (встраивают изменённые библиотеки). WF20 содержит новый код (проверено).
+- Три представительных отчёта перестроены офлайн из сохранённых данных и проинспектированы: **1370** сравнение
+  (свежий сбор, 2/2/2, 0 дублей), **1380** понижение synthesis→сравнение (смешанный, 1/2/1, причина с carcapital.ru),
+  **1390** синтез (смешанный, fresh 1 ≠ contributing 3 ≠ вызовов 4, 1 квалифицированное заявление
+  «подтверждено: autolombard-moskva.ru»). Все МСК-метки, RU-аспекты, без утечки «multi», рабочие URL.
+
+**Статус:** WIP1 — код готов и зелёный локально; **не запушено/не смёржено/не задеплоено**. Дальше: CI (WIP2),
+консолидация Russian-документации (WIP3), консервативная чистка (WIP4), git-интеграция.
+
+## Session 74 (2026-07-24) — STAGE F GATED: live 3-source synthesis proven, downgrade root-caused (not a defect), one local commit
+
+**VERDICT: `STAGE F COMPLETE — GO FOR F.5`.** All required live proofs closed within the $0.50 cap. One focused
+local commit created (impl + generator + exports + 3 new tests + tracker + continuity). **NOT pushed/merged/PR'd.**
+
+### Live proofs this session (operator-approved, bounded paid)
+- **3-source SYNTHESIS — LIVE-PROVEN.** WF20 `1384` / WF04 `1385` (reuse zalog24h.ru + autolombardn1.ru,
+  collect `autolombard-moskva.ru`) / WF28 `1390`. `analysis_mode=synthesis`, `downgraded=false`, **3 contributing**,
+  ONE `multi` target, `submit_synthesis` tool, `evidence_package.multi.v1`, 6 evidence items (1:1 host map, no
+  cross-attribution), `fresh_call` (no dup), `fallback_used=false`. Telegram report **msg 620**, XLSX **msg 621**
+  (17527 B, «Сравнение источников» 7 rows inspected), `llm_analysis_results` `an_a1b8ce88`. Cost **$0.1436**.
+- **Downgraded earlier attempt (exec `1374`) — ROOT-CAUSED, NOT A DEFECT.** Per-source decode of WF04 `1375`:
+  `carcapital.ru` correctly routed `collect/never_collected`, 1 Firecrawl call made, but the page served a
+  **KillBot bot-protection wall** (150 chars, zero business content) → honest `business_skip`/`irrelevant`
+  (NOT quarantined; deterministic route agreed) → router honestly counted 2 contributors → documented graceful
+  downgrade synthesis→comparison (`analysis_router.js:116`). Category **#9 legitimate skip**. No WF04/merge defect
+  (`items_received=3, items_written=3, reused_count=2`). **No code change made** — retry used a collectible 3rd
+  competitor (`autolombard-moskva.ru`, classifier missed it only on a 2-line snippet).
+- Scenario 1 comparison (`1364/1370`, msg 610/611, $0.1233) + F-2 terminal edit + discovery→comparison handoff:
+  all LIVE-PROVEN (see STAGE_F_ACCEPTANCE.md).
+
+### Cost + deploy + parity
+- Cumulative Stage F live cost: recorded AI **$0.3915** + ~$0.05 unpriced collection ≈ **~$0.44 < $0.50 cap**.
+  The $0.1246 downgraded attempt is counted, not hidden.
+- Deployed **WF20 + WF24 only** (structural graft, backup-first). **WF27 + WF28 NOT redeployed** — already matched.
+  Post-work STRUCTURAL parity: WF20 75→75 / 0 param changes, WF24 17→17 / 0, WF28 16→16 / 0 (parity is
+  **structural, not byte-for-byte** — prod carries runtime ids + credential bindings). Runtime integrity OK
+  (health=true, 90 total, 17 active, webhook=1, ingress=200). Generator idempotent (byte-stable regen).
+  Full offline suite: **ALL SUITES PASS** (0 failed).
+- **VK:** fresh live-collect stays OPTIONAL / non-blocking (DEC-136). Enabling needs an operator ROOT edit of
+  `/opt/n8n/n8n.env` (root-owned, outside project): **both** `MS_ENABLE_VK=true` AND `vk` added to
+  `MS_SOURCE_ALLOWLIST` (`agent_config.js:209` + `agent_charter.js:193`; default allowlist is `['website']`),
+  plus container recreation. Credential `pRZcJEyp7KExTReQ` installed; PROD WF26 active + wired.
+- **Monitoring unchanged/truthful:** WF23 inactive, `MS_MONITORING_ENABLED=false`, no scheduled run.
+
+## Session 73 (2026-07-24) — F-7 render/XLSX + F-2 delivery lifecycle + F-8/F-8b: OFFLINE-PROVEN, no live runs, nothing pushed
+
+**VERIFIED CHECKPOINT AT WRITE TIME:** branch `fix/stage-f-post-migration-acceptance`, HEAD `0c19d0d`.
+Worktree carries the uncommitted F-7/F-2 implementation + 3 new test files — **NOT committed, NOT pushed**
+(operator ruling: no push/merge/PR; local commit deferred to the approval step). Full regression
+`node tests/run_all.js` → **155 suites, 8715 assertions, 0 failed, external calls=0, live cost=$0,
+SUITE_EXIT=0.** Generator drift **ZERO** (all four WF hashes byte-identical after regen: WF20 `501e2b7e`,
+WF24 `cfc83b2b`, WF27 `47aa8460`, WF28 `d53e486d`). **No deploy, no paid call, no Telegram send, no Sheet
+write this session.**
+
+### What is now OFFLINE-PROVEN (read literally — offline = wiring verified in generated JSON, NOT a live run)
+- **F-7 comparison/synthesis** — `analysis_router.resolveAnalysisMode` makes `analysis_type` an EXECUTION
+  decision (comparison ≥2 contributing sources, synthesis ≥3; one source never fakes a comparison; over-request
+  downgrades with a RU reason). Wired into the REAL WF20 `Build Analysis Inputs`; multi mode → ONE
+  `source_kind:'multi'` target via `arBuildMultiSourcePackage` (`evidence_package.multi.v1`). RENDERS: compact
+  profile `'multi'` + «⚖️ Сравнение источников»; XLSX comparison sheet non-empty (commit `0c19d0d` fixed the
+  claim validator stripping multi-package evidence); `ev_N` remapped to `[n]`, never leaked. `f7-render` 29/0.
+- **F-2 delivery lifecycle** — canonical `progress_tracker.js` 11-state, sticky-terminal `advanceDelivery`;
+  «✅ Готово» reached ONLY from a VERIFIED Telegram message id (never from `xlsx_skipped`/branch/no-exception);
+  original progress message EDITED in place (NO separate «Готово» sendMessage — binding UX). Embedded into
+  WF20/WF24 nodes, drift-asserted. `f2-delivery` 110/0 runs the REAL generated nodes.
+- **F-8 discovery→comparison handoff** — REAL WF27 classify/finalize on a fixture Firecrawl response → REAL
+  WF20 build-inputs. Two distinct hosts (`autozalog-msk.ru`, `ptsdengi.ru`) → real comparison; aggregator
+  `vsezaymy-catalog.ru` NOT a competitor; shared `discovery_run_id` does NOT collapse hosts; `website::host`
+  maps 1:1 to `abSourceId`; same-host pair dedups; single competitor requested as comparison DOWNGRADES.
+  `f8-discovery-comparison` 50/0.
+- **F-8b Telegram regression** — the render/route diff did NOT break SOCIAL-BRIDGE-001: one channel → ONE
+  evidence-only target; requested as comparison → DOWNGRADED (via REAL WF20 node AND the router lib);
+  single-source social analysis still renders (grounded claims survive, `[1]`→`t.me/...`, profile not multi,
+  0 comparison rows, no `ev_N` leak). `f8b-telegram-regression` 34/0.
+
+### LIVE GAPS — OUTSTANDING (require operator approval for a bounded deploy + paid run)
+Real 2-source comparison E2E; real 3-source synthesis E2E; F-2 terminal edit observed in production; discovery
+→comparison live; fresh VK collection (`MS_ENABLE_VK=false`, root-owned env; VK SERVICE token already in
+credential `pRZcJEyp7KExTReQ`). **Monitoring is NOT active** (WF23 inactive, `MS_MONITORING_ENABLED=false`) —
+do not describe recurring/automatic monitoring as running without fresh live evidence.
+
+### Files changed this session (all inside `/opt/marketing-scout-agent`)
+Modified: `n8n/lib/analysis_report_ru.js`, `n8n/lib/compact_report_ru.js`, `n8n/lib/progress_tracker.js`,
+`n8n/workflows/20_agent_orchestrator.json`, `n8n/workflows/24_report_export_delivery.json`,
+`tools/gen_stage4_workflows.js`, `tests/run_all.js`, `tests/test_agent_summary_ledger.js`,
+`tests/test_approval_ux.js`, `tests/test_f7_render.js`, `tests/test_live_defects.js`,
+`tests/test_progress_lifecycle.js`, `tests/test_report_truth_quality.js`. New (untracked):
+`tests/test_f2_delivery.js`, `tests/test_f8_discovery_comparison.js`, `tests/test_f8b_telegram_regression.js`.
+Docs: `docs/STAGE_F_ACCEPTANCE.md` (session-73 section), `core/hot/recent.md` (this entry).
+
+### EXACT NEXT STEP (resume here)
+STOP for operator approval. To gate Stage F, deploy WF20+WF28 backup-first + run the live proofs under
+**Live gaps** (2-source comparison, 3-source synthesis, F-2 terminal edit), inspecting that every comparison
+claim cites ≥2 sources' evidence ids. Until then, commit the worktree LOCALLY only when the operator OKs it.
+
+## Session 72 (2026-07-22) — VK credential installed; F-7 router FOUNDATION landed (wiring pending); env change needs root
+
+**VERIFIED CHECKPOINT:** branch `fix/stage-f-post-migration-acceptance`, HEAD `7da0c01`, worktree clean,
+origin/main `05490a2`, **46 ahead / 0 behind**, NOT pushed. Production: health ok, **90/17**, webhook
+registered (1 row), ingress POST 200, proxy+ngrok active, RestartCount=0, StartedAt 2026-07-22T22:33:45Z.
+Full regression ALL SUITES PASS ($0). Runtime gate OK.
+
+### VK credential — INSTALLED (token type determined empirically, never printed)
+The VK token is a **credential, NOT an env var**: the canonical collector (`vk_collector.js`) states the token
+is injected by the n8n `httpQueryAuth` credential. Prod already had the slot
+`httpQueryAuth | HTTP Query Auth - VK Access Token | id=pRZcJEyp7KExTReQ`. I updated it via
+`n8n import:credentials` (payload built 0600, shredded after; token never echoed to logs/git/tests).
+**Token type = VK SERVICE token** (сервисный ключ): probed live against api.vk.com v5.199 —
+`groups.getById` OK, `wall.get` OK (items[2] total=6 on `kredit874`), `wall.getComments` OK, and
+`users.get(self)` → empty array (the service-token signature). All three methods the collector uses succeed on
+a configured public community.
+
+### Env change STILL NEEDS ROOT (I cannot write /opt/n8n/n8n.env)
+`/opt/n8n` is root-owned, no sudo. `MS_ENABLE_VK` is still `false` and `219246148` is NOT yet in
+`MS_TELEGRAM_ALLOWED_USER_IDS` (currently only `1188830082`). The env source is `/opt/n8n/n8n.env`
+(compose project `n8n`, working_dir `/opt/n8n`, config `/opt/n8n/docker-compose.yml`). The operator must run
+the command block provided in the session response (backup n8n.env → set MS_ENABLE_VK=true → append
+219246148 preserving existing ids → `docker compose up -d n8n` → verify inside container). MS_TIMEZONE stays
+Europe/Moscow. **The VK TOKEN is already in the credential store — only MS_ENABLE_VK=true is needed in the env.**
+
+### F-7 — router FOUNDATION committed (`7da0c01`), wiring NOT yet in production
+`n8n/lib/analysis_router.js` + `test_analysis_router.js` (55, registered). `resolveAnalysisMode` makes
+analysis_type an EXECUTION decision (comparison needs ≥2 CONTRIBUTING sources, synthesis ≥3; one source can
+never fake a comparison; over-request downgrades with a Russian reason). **Caught a real latent hazard:**
+analysis_bridge emits BOTH a competitor-name-keyed target AND a host-keyed evidence-only target for the SAME
+company, so naive counting let ONE source look like a 2-source comparison — `arSourceIdentity` dedupes on
+run_id→source_id→company_name. `arBuildMultiSourcePackage` builds evidence_package.multi.v1 with unique ev_N,
+per-source evidence ids, identity/lineage preserved.
+
+**WHY WIRING IS NOT DEPLOYED:** I built the WF20/WF28 wiring (Build Analysis Inputs → resolve mode → multi
+package → WF28 buildComparisonCall; Prepare/Parse/Finalize schema-switch to CC_SYNTHESIS_SCHEMA) and a
+behavioural node test, but hit context limit before the node test was fully green (the bridge fan-out made the
+fixture assertions count raw targets, not sources — a TEST issue, the router dedupe is correct). Rather than
+commit a red suite or deploy unproven code, I **reverted the generator/workflow changes** and kept only the
+proven, green, isolated router lib. Production is UNCHANGED by F-7.
+
+### EXACT NEXT STEP for F-7 (resume here)
+1. Re-apply the WF20/WF28 wiring in `tools/gen_stage4_workflows.js` (the reverted diff — see commit `7da0c01`
+   message for the shape): Build Analysis Inputs embeds `analysis_router`, calls `resolveAnalysisMode`, and for
+   a multi-source mode emits ONE target with `arBuildMultiSourcePackage` + `analysis_type:route.mode`; WF20→WF28
+   passes `$json.analysis_type` (the RESOLVED mode, not the plan label); WF28 Prepare detects
+   `schema==='evidence_package.multi.v1'`, uses `buildComparisonCall`, and Parse Primary/Repair validate against
+   `CC_SYNTHESIS_SCHEMA` when `prep.multi_source`; Finalize reports analysis_mode/multi_source/source_count.
+2. Write the behavioural test asserting on `contributing_sources` and the multi package (NOT raw target counts).
+3. Regenerate, full regression, deploy WF20+WF28 backup-first + gate (WF20 callable — no restart), live-prove a
+   real 2-source comparison and 3-source synthesis with a Telegram report + XLSX, inspecting that every
+   comparison claim cites ≥2 sources' evidence ids.
+
+### STILL OPEN (unchanged from session 71): F-2, F-4, F-5, F-8 not started; F-7 wiring pending.
+Operator UX decisions now BINDING: keep progress-message-edit terminal UX (NO separate «Готово» sendMessage —
+CANCELS the earlier F-2 proposal); XLSX must become human-readable (drop «Технические данные», no
+tokens/latency/enums/JSON/ids — keep full telemetry in Sheets only); MS_TIMEZONE=Europe/Moscow; allow
+219246148.
+
+## Session 71 (2026-07-22) — Stage F slices F-1, F-3, F-6, F-9 CLOSED (deployed + verified). F-2/F-4/F-5/F-7/F-8 OPEN.
+
+**VERIFIED CHECKPOINT AT WRITE TIME:** branch `fix/stage-f-post-migration-acceptance`, HEAD `60cfcd9`,
+worktree clean, origin/main `05490a2`, **45 ahead / 0 behind**, NOT pushed. Production: health ok,
+**90 total / 17 active**, webhook registered (1 row), ingress POST 200, proxy+ngrok active, RestartCount=0,
+StartedAt 2026-07-22T21:43:51Z, disk 8.4 G. **FULL 20-workflow parity sweep: ZERO drift.**
+Full regression `node tests/run_all.js` → **ALL SUITES PASS, 7806 assertions, external calls=0, $0.**
+
+### Commits this session
+- `f2a1153` F-6 TOOLUSE-COERCE-002 — WF28 node code kept the RAW payload
+- `b60f657` F-1 runtime-integrity guard
+- `fb5199e` F-9 drift (WF17/WF27) + tracked_sources test debt
+- `2a9d59e` F-3 damaged Russian text + stuttering headings
+- `60cfcd9` F-3 ENUM-RU-001 internal enums in user-facing cells
+
+### F-6 — the session-70 fix was only HALF deployed (the mission's hypothesis, but in the NODE code)
+`validateAnalysisResult` normalizes internally and returns `v.value`, but WF28's generated `Parse Primary` /
+`Parse Repair` did `out.analysis = res.content` — the RAW payload. Validation passed on the coerced object
+while the un-coerced one was persisted, rendered and cached. Session 70's live proof (exec 1268) only passed
+because that run did not need coercion — the quirk is intermittent. A run that DID need it would have stored a
+broken analysis marked `enriched=true`, i.e. WORSE than the fallback. Fixed in the generator; `coerced_paths`
+now flows Parse → Finalize → typed return. `ccNormalizeStructured` is now **PURE** (it mutated its input, which
+is exactly how the telemetry went missing). Tests: `wf28-coercion-nodes` 28 (runs the REAL node source in a VM),
+`tooluse-coercion` 61 (purity + primary AND repair for all four modes).
+
+### F-1 — a deploy can no longer leave the ingress dead
+`tools/runtime_integrity_lib.js` (pure) + `tools/verify_runtime_integrity.js` (CLI) + `runtime-integrity` (26).
+Catches **H1 DEACTIVATED_BY_IMPORT** (`import:workflow` deactivates — hit 3× this session) and
+**H2 RUNTIME_WEBHOOK_MISSING** (`active=1` but `webhook_entity` empty → the session-70 3-hour outage).
+Runbook rewritten (`docs/STAGE_F_RUNBOOK.md`): backup → merge → import → **republish** → **mandatory gate**.
+Callable sub-workflows need no restart; **an active trigger workflow (WF18) does.**
+**The guard proved itself live:** after this session's WF18 deploy it reported `registered_webhooks=0` →
+exit 1; one controlled restart → OK. Without it that outage would have shipped again.
+Probe is benign: POST `{}` with NO secret header → WF18 ingress terminates after 6 nodes (exec 1271), no
+message/plan/cost. **Session 70's `approve <bogus-id>` probe DID land in the operator chat as «Этот план
+устарел…» (msg 557) — unlabelled. Do not repeat; use the unauthenticated probe or label the text.**
+
+### F-3 — damaged Russian text, stuttering headings, internal enums
+- «…до 90% от рыночно»: WF10 `Aggregate Market Intelligence` used `cut(r.offer_text,140)` =
+  `s.slice(0,n)` — no word boundary, no ellipsis. Traced: `Read monitor_queue` had the COMPLETE text, WF10
+  emitted the damaged one (exactly 140 chars). WIP3-F never caught it because it inspects the ANALYSIS text
+  while the damage was manufactured upstream in deterministic aggregation.
+- «📊 Залог 24 — Залог 24 (zalog24h.ru) — …»: the inline dedup regex required the separator to follow the name
+  immediately; the parenthetical defeated it.
+- Canonical: `report_text_safety.safeShortenRu` (sentence boundary ≥60% of budget, else word boundary, strips
+  dangling punctuation, ellipsis ONLY when something was removed) + `dedupeHeadingRu`/`headingWithBodyRu`;
+  `evidence_package.epTrim` word-safe; WF10's own `cut()` word-safe (WF10 has NO generator — its JSON is
+  canonical); `compact_report_ru` calls the canonical helper.
+- ENUM-RU-001: `plan_render_ru.ruSourceLabel`/`ruQualityLabel` (unknown latin/underscore token is BLANKED, never
+  echoed); `report_package` renders the scope via `ruNiche`; generator co-embeds `plan_render_ru` in the XLSX
+  nodes; WF10 says «средняя оценка заметности N» not «avg competitor_strength N».
+- `text-safety-f3` 62 checks.
+
+### F-9 — drift closed
+WF17 (1 node) + WF27 (3 nodes) stale `agent_config` embeds were pure deploy lag (both generator-owned).
+Deployed; WF17 deliberately left INACTIVE. `tracked-sources` 47 checks added (the lib is embedded in NINE
+workflows and had no suite).
+
+### STILL OPEN — exact remaining Stage F work, in mission order
+- **F-2 terminal lifecycle / Telegram ordering.** NOT started. Ordering is already correct (report → XLSX →
+  then «Готово»), but «✅ Готово» is written by EDITING the early progress message, so it keeps its old chat
+  position and reads as if completion was announced first. Required: send the terminal message as a NEW
+  message after delivery; no duplicate terminal on retry/redelivery.
+- **F-4 telemetry/cost truthfulness.** NOT started. `llm_primary_calls` is now correct (=1 live), but the
+  **summary-AI $0.0318 still has no visible call/analysis id, provider request id, model, tokens, latency or
+  call mode**, and workbook `Run IDs` carries one application run rather than lineage.
+- **F-5 evidence-bound claim quality.** NOT started. Review the retained/demoted claims of `an_2fbe6e74`
+  (one-source market-wide statements, audience assumptions, absence-as-proof).
+- **F-7 canonical `analysis_type` routing.** NOT started and MANDATORY. WF28 still invokes only
+  `analyzeSource`; `analysis_type` is a cache-key component, never a router. WF20 has no multi-source evidence
+  package. `request_planner` already maps 2 named sources → `comparison`, ≥3 → `synthesis`, and
+  `plan_render_ru` PROMISES «сравнение указанных источников» in the approval — so this is an exposed,
+  currently-broken user path.
+- **F-8 contextual routing / discovery truthfulness.** NOT started.
+- Live acceptance: only 4 of the 22 required scenarios are proven (benign runtime probe exec 1271; expired
+  callback msg 557 — but see the labelling defect; approval-required + single-source analysis
+  `req_17847532270`; automatic Telegram+XLSX delivery msgs 564/565).
+- VK fresh collection: `MS_ENABLE_VK=false`, no token → BLOCKED_EXTERNAL (unchanged).
+
+### Exact next action
+F-7 shared enabler: route on `analysis_type` in WF28 `Prepare Analysis` (comparison/synthesis →
+`buildComparisonCall`/`analyzeComparison`), leaving `source_analysis` byte-identical; then WF20 must build a
+real MULTI-source evidence package when the plan is comparison/synthesis with ≥2 (resp. ≥3) contributing
+sources. Deploy with the canonical procedure + gate; WF18 changes require a restart.
+
+## Session 70 (2026-07-22) — PRODUCTION OUTAGE FIXED + TOOLUSE-COERCE-001 (deployed, live-proven)
+
+**VERIFIED START STATE:** branch `fix/stage-f-post-migration-acceptance`, HEAD `50f62ce`, worktree clean,
+origin/main `05490a2`, **37 ahead / 0 behind**, branch+HEAD absent from GitHub, disk 8.4 G free.
+Full regression re-verified green (`ALL SUITES PASS`, external calls=0, $0).
+
+### 1. The session-69 deploy DID complete — continuity was stale
+All ten candidates (WF12/18/19/20/21/22/24/25/26/28) are **byte-identical to repo HEAD** (0 jsCode drift,
+connections/settings/node-counts equal, 0 credential rebinds, 0 placeholders). The 429 interrupted the
+*verification*, not the deployment. Full 20-workflow parity sweep: 18 MATCH; **WF17 (1 node) and WF27
+(3 nodes) carry a stale `agent_config` embed** — pre-existing, NOT from that batch, still outstanding.
+
+### 2. PRODUCTION WAS DOWN — found and fixed
+`webhook_entity` was **EMPTY (0 rows)**; `POST /webhook/ms-telegram-agent` returned **404**. The Telegram
+gateway had been unreachable since the 17:25 UTC deploy: n8n CLI `import:workflow` does not notify the
+running process, and the container had run since 2026-07-21 05:28 with RestartCount=0 and **no execution
+since 11:53 UTC**. Backed up all 21 prod workflows (`scratchpad/backup/prerestart_*_20260722_203440.json`),
+performed ONE controlled restart. After: health ok, **90 total / 17 active**, webhook **registered (1 row)**,
+proxy + ngrok active, RestartCount=0. **Proof the outage was real: Telegram redelivered a queued real user
+message** («найди вк сообщества конкурентов по птс», exec 1254) the moment the webhook came back.
+**LESSON: after ANY WF18 import, the webhook must be re-verified; `active=1` in the DB does NOT mean registered.**
+
+### 3. Runtime coherence proven (not assumed)
+Zero-cost probe reaching the affected WF18 nodes: `approve <bogus-id>` → exec **1253** → `Command Lane`
+lane=`approve_ack_dup` → `Build Conversational Reply` = «Этот план устарел…» (the NEW `approvalOutcomeRu`
+wording; the pre-deploy export contains neither `approvalOutcomeRu` nor `RU_APPROVAL_NEUTRAL`) → Telegram
+msg **557**. Also a live PASS for the duplicate/expired-callback criterion (friendly RU, no id leakage).
+
+### 4. zalog24h regression (`req_76722084`) — TRACED. Two reported claims are WRONG.
+Executions **1241–1252** (11:48–11:56 UTC = 14:48–14:56 MSK; MS_TIMEZONE=Europe/Moscow).
+- **Approval WAS given.** Exec 1245 carries a REAL Telegram callback (`approve:req_76722084`,
+  callback_query_id `5105986326496841220`, msg 551) → lane `approve_ack`. `MS_REQUIRE_APPROVAL=true`.
+  `Mark Plan Approved` ran (1125 ms). There is **no approval bypass**.
+- **Delivery order was CORRECT.** report msg **553** → XLSX msg **554** → *then* `Progress: Done` edited
+  msg **552**. «Готово» never preceded delivery. The perceived "instant Готово" is a **UX artifact**: the
+  progress message is edited **in place**, so it keeps its early chat position (11:49:50) while its final
+  text is written 6 min later. Worth changing (terminal message should be new, not an early-slot edit).
+- **REAL ROOT CAUSE = TOOLUSE-COERCE-001** (below). Everything the user saw — 4 sheets, no analysis, empty
+  recommendations/limitations, `LLM primary calls = 0` beside a non-zero AI charge — follows from it.
+
+### 5. TOOLUSE-COERCE-001 — FIXED, DEPLOYED, LIVE-PROVEN (commit `02d9339`)
+WF28 exec **1252** returned a COMPLETE, correct, fully evidence-cited analysis whose `items` arrived
+**JSON-encoded as a STRING**. `validateStructured` rejected it (`$.items: expected array, got string`), a
+bounded repair was billed and came back the same shape → deterministic fallback. User paid **2 real calls
+(12217 in / 651 out, $0.0464 incl. $0.0304 repair)** for **no AI analysis**.
+Fix: `ccNormalizeStructured(obj, schema)` in `claude_contracts.js` runs BEFORE validation and coerces a
+string ONLY when the schema expects array/object, it parses as JSON, and the parsed type matches exactly.
+Content never altered — only encoding. Non-JSON / wrong-type strings are left alone so malformed payloads
+still fail honestly. Wired into ALL FOUR modes (analyzeSource / analyzeComparison / enrichCandidate /
+interpretPublicLead) so the COERCED value is what is persisted, rendered and repaired against.
+`tests/test_tooluse_coercion.js` **33 checks** (registered `tooluse-coercion`). Full regression **ALL SUITES
+PASS** (7608 assertions, $0). Only WF28 embeds these libs → regenerated, deployed backup-first
+(`scratchpad/backup/prod_mswf28claudeanalyst_20260722_204549.json`), **parity NONE, 90/17 restored**.
+**NOTE: `n8n import:workflow` DEACTIVATED WF28 (17→16); re-published with `update:workflow --active=true`
+→ 17.** Same class as DEPLOY-CLEANUP-001 — always re-check the active count after an import.
+
+**LIVE PROOF — `req_17847532270`** (WF18 1259 → WF19 **1260** → approve → WF18 1261 → WF20 **1262** →
+WF04 1263 → WF16 1264 → WF08 1265 → WF10 1266 → WF12 1267 → **WF28 1268**):
+
+| | before (exec 1252) | after (exec 1268) |
+|---|---|---|
+| enriched / quality | false / `deterministic_fallback` | **true / `ok`** |
+| repair / fallback | 1 / 1 | **0 / 0** |
+| llm_primary_calls | 0 (workbook) | **1** |
+| analysis cost | $0.046416 (incl. $0.030393 repair) | **$0.018573 (repair $0)** |
+| tokens | 12217 in / 651 out | **2696 in / 699 out**, latency 69327 ms |
+| analysis items / recs | 4 fallback facts / 0 | **10 / 4**, confidence 45 |
+| XLSX sheets | **4** (no analysis at all) | **7** — +Аналитические выводы, +Рекомендации, +Доказательства |
+
+Delivered: analysis `an_2fbe6e74`, report msg **564**, XLSX
+`vinci_ai_pilot_report_20260722_234918_report.xlsx` msg **565**, progress msg 563 → «✅ Готово».
+Telegram (1405 chars) carries «🧠 Выводы — интерпретация, не факты», honest reuse line, and
+«AI-сводка $0.0318 + AI-анализ $0.0186 = $0.0504» — reconciles. **Cost fell 60% while delivering a real
+analysis instead of nothing.** Approval was correctly REQUIRED («Запустить анализ?») with a reuse-aware
+estimate — no auto-execution.
+
+### 6. STILL OPEN (verified, not speculation)
+- **Truncated fragment persists**: «…выдача до 90% от рыночно» still reaches «Ключевые факты» (msg 564).
+  It originates in the DETERMINISTIC `offer_summary` (WF10/WF12 upstream truncation), so WIP3-F's
+  damaged-fragment guard does not catch it. Real, user-visible, unfixed.
+- Duplicated name in the report header («📊 Залог 24 — Залог 24 (zalog24h.ru) — …»).
+- `coerced_paths` is NOT forwarded by WF28's typed return, so a coercion event is invisible in telemetry.
+  (The live run needed no coercion — the quirk is intermittent — so the coercion path is proven OFFLINE
+  only; the pipeline fix is proven live.)
+- Terminal «Готово» should be a NEW message, not an edit of the early progress message.
+- **WF17 + WF27 stale `agent_config` embeds** — not yet deployed.
+- Mode 1/2/3 orchestration (comparison/synthesis, WF27 enrichment, public-lead) still **NOT wired**:
+  WF28 invokes only `analyzeSource`; `analysis_type` is a cache-key component, never a router.
+- ALL of Stage F.5 remains unimplemented (no `opportunity_signals`/`action_candidates` tab, no
+  `analyst_agent`/`analyst_tools` lib). WF23 inactive, `MS_MONITORING_ENABLED=false`.
+- VK fresh collection: `MS_ENABLE_VK=false`, no token → EXTERNAL BLOCKER (unchanged).
+
+### 7. Exact next action
+Wire the canonical `analysis_type` router in WF28 (`Prepare Analysis` + `Finalize Analysis`) so
+comparison/synthesis → `analyzeComparison`, candidate → `enrichCandidate`, public_lead →
+`interpretPublicLead`, leaving `source_analysis` byte-identical. jsCode-only; deploy with
+`deploy_workflow_jscode.js`; re-check the active count after import. Then WF20's multi-source package.
+
+## Session: 2026-07-21 (session 68) — WF20 runtime-embed VERIFIED in prod (Docker blocker resolved by operator)
+
+**RESOLVED:** the operator restored Docker access for `claude-runner` (`usermod -aG docker` + `setfacl -m
+u:claude-runner:rw /var/run/docker.sock`). The blocker diagnosis below is kept for the record; access is back
+(n8n 2.23.3, `/healthz` ok, container up, RestartCount=0).
+
+**WF20 runtime-embed milestone (Stage F immediate WIP) — VERIFIED, no deploy needed.** The prior session's
+regenerated `20_agent_orchestrator.json` had already been deployed to prod. Confirmed this session:
+- Prod WF20 (`QBNFpiZE_IHKUKkf`, active=true, 68 nodes) is **byte-identical** to the worktree repo WF20 (0
+  code-node diffs) — the surgical deploy tool reports "no jsCode/workflowInputs differences — prod already
+  matches repo".
+- **0 drift** across all 36 embedded lib blocks under the canonical `embed_lib.stripCore` transform. Prod
+  `Build Analysis Inputs` carries the SOCIAL-BRIDGE-001 evidence-only target logic + limitations; `Merge
+  Analyses` embeds analysis_bridge.
+- Hardened `tests/test_stage4_workflows.js` with an **exhaustive stripCore drift sweep** over every embedded
+  block in WF17–26 (the old EMBEDS spot-check missed WF20's analysis_bridge and every require-having embed).
+  `semantic_core` excluded (taxonomy is fs-inlined by the generator; covered behaviourally by
+  `test_wf26_vk_rmr_mapping.js`). Suite **287 PASS / 0 FAIL**; sweep confirms the WF20 analysis_bridge embed.
+- Prod verified: 90 workflows / 17 active, WF18 webhook `POST ms-telegram-agent` registered, proxy + ngrok
+  active, RestartCount=0.
+
+**SOCIAL-DELIVERY-001 (commit `1c63941`) — a source_analysis with 0 deterministic records now reaches the user.**
+Telegram live proof exposed the real remaining defect: WF28 produced a full evidence-cited analysis
+(`an_3f6ccdb3`, rusmicrofinance) and the XLSX was complete, but Telegram delivered "Подходящих данных не собрано"
+because `compact_report_ru`'s no-data guard fired on `records_reported===0` (social channels have 0 competitor-
+profile records) BEFORE rendering the analysis. Fix: the no-data profile now yields to a usable analysis; the WF20
+outbox `noData`/`xlsx_expected` are analysis-aware. Live-verified via reuse ($0): Telegram msg **500** shows the
+analysis, XLSX 6 sheets, plan `completed`. Tests A–E added to `test_report_truth_quality.js` (183 PASS); full
+regression ALL PASS; deployed WF20 backup-first (parity OK, active, 90/17, RestartCount=0).
+
+**Telegram source analysis — LIVE-PROVEN end-to-end** (`req_17846250562`, WF18 1132→WF20 1133→…→WF28 1139).
+**5 fresh (non-cache-hit) analyses** with full telemetry: `an_3f6ccdb3` rusmicrofinance, `an_a228d496`
+centralbank_russia, `an_4115eb3b` probonds, `an_142594e` frank_media, `an_3d9dcde4` banksta — all `fresh_call`,
+enriched, no repair/fallback, model claude-sonnet-4-6, ~$0.187 total.
+
+**VK — evidence path proven on real data; live collection is an EXTERNAL BLOCKER.** Real `social_evidence` bridge
+over 48 stored `vk::sovcombank` rows → 11 citable VK evidence items (31 off-topic dropped, no PII leaked). Fresh
+VK collection needs an operator VK token (`MS_ENABLE_VK=false`, `MS_VK_ACCESS_TOKEN` absent). Analysis+delivery is
+platform-agnostic and shared with the live-proven Telegram path.
+
+**Stage F matrix written to `docs/STAGE_F_ACCEPTANCE.md` (session 68).** DONE+PROVEN: analyst, social bridge,
+delivery, website/Telegram analysis, discovery, no-content path, failure matrix (fixtures), idempotency, 5 fresh
+analyses. **REMAINING before the Stage F gate:** 3 analysis-mode extensions — 3-source synthesis/comparison, WF27
+top-candidate enrichment, public-lead interpretation (schemas exist in `claude_contracts`; orchestration unbuilt;
+`claude_analysis` exports only `analyzeSource`). These are folded into Stage F.5 (Analyst Agent / Unified Analysis
+Result / Opportunity Radar). **Stage F is NOT yet formally gated.** F.5 / G / H not started.
+
+**Infra lesson:** do NOT run orchestrations concurrently — 3 parallel runs hit the per-minute Google Sheets write
+quota (429 on `Append live_source_runs`) and left 11 `finished=0` zombie executions (transient artifact, not a
+code defect). Run source analyses SEQUENTIALLY with a short cooldown. `scratchpad/synthetic_tg.js` drives the
+signed webhook (message|approve|reject); secret/chat pulled from container env, never printed.
+
+**Session 68b — WIP1 terminal-outcome arbiter (commit `810b06f`, deployed, live-proven).** The "Progress: Done"
+edit contradicted a real analysis: it said "✅ Проверка завершена. Данные для анализа не получены." whenever
+`records_reported===0` (the normal social-analysis case), alongside the delivered analysis. Fix: Progress: Done
+now reads `llm_analyses + llm_analyses_reused`; a usable analysis suppresses the no-data/failed wording. Live proof
+(reuse, $0): req `req_17846505866` WF20 1234 — Progress: Done edit = "✅ Готово. Отчёт и Excel-файл отправлены."
+with `records_reported=0 / llm_analyses=1`. Deployed WF20 backup-first (1 node, parity OK, 17 active, health ok).
+
+**Remaining mission (this branch, NOT yet done):**
+- WIP1 leftover: clean callback wording ("план не найден" → user-friendly) — batched (shared lib `plan_render_ru`).
+- WIP2: user-facing source-role classification (direct_competitor / adjacent_player / industry_source /
+  news_source / public_community / irrelevant); PRObonds must NOT be called a credit-broker competitor from niche.
+- WIP3 (6 XLSX/evidence defects): A counters (Проверено источников/LLM primary/Внешних запросов = 0 despite a real
+  fresh call); B evidence dedup (one canonical row per evidence_id/URL; raw social_post only in hidden sheet);
+  C post-level semantic relevance (banksta British Steel / Oracle CDS off-topic); D 3rd-party publish wording
+  ("Разместить в t.me/banksta" → "Подготовить для собственного канала…"); E market-wide claim scoping in
+  user-facing text (claim-validator demotion must surface); F malformed fragments ("пониженна") excluded from facts.
+- WIP4: Unified Analysis Result contract + 3 modes (3-source synthesis/comparison, WF27 top-candidate enrichment,
+  public-lead interpretation) — these close the last mandatory Stage F criteria.
+- Then Stage F gate (consolidated deploy of all changed workflows + sequential live proofs), then F.5/G/H.
+
+**Efficient strategy:** implement + offline-test + commit each defect; do ONE consolidated backup-first deploy of
+all changed workflows + sequential live proofs at the Stage F gate (avoids repeated deploys + Sheets-429 risk).
+Shared-lib changes (report_package, execution_summary, semantic_core, analysis_report_ru, claim_validation,
+plan_render_ru) force redeploy of every embedding workflow — the drift sweep in `test_stage4_workflows.js` enforces
+parity. Run source analyses SEQUENTIALLY only.
+
+## Session 68c — WIP2 (callback UX + source roles), all offline-committed (NOT yet deployed)
+
+- `b4fde4a` **WIP2a**: `plan_render_ru.approvalOutcomeRu` — clean callback wording (no «план не найден»/internal
+  ids): already-processed / expired-stale / wrong-request / malformed. `plan_render_ru.planGoalRu` — plan goal by
+  SOURCE TYPE, never niche: social→«анализ публичного источника и рыночных сигналов», website→«анализ
+  конкурента», mixed→«предварительная оценка». Regenerated 6 workflows (18/19/20/21/22/26). Tests in
+  `test_plan_render_ru.js` (71). **Wired but NOT deployed** (batched for the gate).
+- `5bd90ff` **WIP2b**: `n8n/lib/source_role.js` — evidence-based role classifier (direct_competitor /
+  adjacent_player / industry_source / news_source / public_community / irrelevant_or_uncertain), role from
+  evidence never niche. `test_source_role.js` (16, registered `source-role`): rusmicrofinance→industry,
+  banksta→news, PRObonds NOT competitor, own-offer site→competitor. **Lib only — NOT yet wired into the report.**
+
+### Remaining before the Stage F gate (exact, in order)
+1. **WIP2b wiring**: thread `classifySourceRole` into the analysis/report so Telegram + XLSX state source_role,
+   relevance, direct_competitor(bool), confidence, limitations. (In `analysis_report_ru`/`report_package` +
+   WF28/WF20; consumed via the Unified Analysis Result.)
+2. **WIP3 A–F** (report/XLSX truth): A counters (checked_sources = unique admitted sources; llm_primary_calls /
+   llm_repair_calls from WF28 telemetry; external_requests = real network calls even at $0; reuse shows 0 new
+   calls + lineage; values agree across Telegram/XLSX/stored/summary). B evidence dedup (one canonical row per
+   evidence_id/URL in «Доказательства»; raw social_post only in hidden sheet). C post-level semantic relevance
+   (exclude general-finance-only posts — banksta British Steel/Oracle CDS — require real lending relevance).
+   D ownership-safe recommendations («Подготовить для собственного канала материал на основе сигнала из X», never
+   «Разместить в t.me/X»). E market-claim scoping in USER-FACING text (claim-validator demotion must surface, not
+   only hidden audit). F malformed-fragment exclusion («пониженна» etc. → damaged/needs_verification, never a fact).
+3. **WIP4**: `n8n/lib/unified_analysis_result.js` (minimal versioned contract) + 3 modes — 3-source
+   synthesis/comparison, WF27 top-candidate enrichment, public-lead interpretation — with deterministic fallback +
+   bounded Claude. Live-prove each sequentially over stored accepted sources.
+4. **Stage F gate**: focused suites → one full regression → verify generated exports → ONE consolidated
+   backup-first deploy of ALL changed workflows (jsCode tool; structural only for genuine topology change) →
+   parity/health/inventory/webhook/proxy/ngrok/RestartCount → 11 sequential live proofs (never concurrent) →
+   inspect Telegram text + XLSX + SHA-256 → update matrix (PASS/MISSING/EXTERNAL BLOCKER, no «substantially») →
+   commit → declare «STAGE F COMPLETE — GO FOR F.5».
+5. Then F.5 (`docs/STAGE_F5_OPPORTUNITY_RADAR_AGENT.md`), then canonical G, then canonical H, then push+PR+CI+merge.
+
+**VK** stays an EXTERNAL BLOCKER for fresh collection only; use stored `vk::sovcombank` (48 rows) evidence for all
+contract/classifier/comparison/report dev. **Do not run orchestrations concurrently** (Sheets 429 → zombies).
+
+## Session 68d — WIP2/WIP3/WIP4 offline foundations (all committed, NONE deployed; batched for the Stage F gate)
+
+New commits this session (from `76ebf5a`): `b4fde4a` `5bd90ff` `14ebc64` `81a0704` `9dc76ca` `0c38a77` `6116942`
+`43f89cd`. All offline-tested; production is UNCHANGED (still the WIP1-era deploy: 90/17, health ok, RestartCount=0).
+
+- `81a0704` **CALLBACK-PRIVACY-001**: `plan_render_ru.approvalOutcomeRu` collapses owner/chat/request/hash + unknown
+  + malformed → ONE neutral message (no foreign-plan/owner/chat/id leakage); only self-owned states (already-run,
+  expired) stay specific. Regenerated WF18/19/20/21/22/26.
+- `9dc76ca` **WIP2-B plan goal**: `planGoalRu` — a bare website is NOT a competitor; default «предварительная
+  оценка релевантности публичного источника»; «анализ конкурента» only with a trusted signal (operator-marked /
+  stored source_role=direct_competitor conf≥0.6). Social → «анализ публичного источника…».
+- `5bd90ff` **source_role.js** (evidence-based role classifier) — committed earlier this session.
+- `0c38a77` **unified_analysis_result.js** (`uar.v1`): canonical versioned contract + deterministic migration
+  (WF28 result + bundle + legacy) + invariants (evidence-cited, scope, direct_competitor). `uarSourceRole`.
+- `6116942` **report_text_safety.js**: WIP3-D ownershipSafeRecommendationRu (third-party publish → «для
+  собственного канала… на основе сигнала из X»); WIP3-F fragmentQuality/isDamagedFragment («пониженна» etc.).
+- `43f89cd` **WIP3-C** `social_evidence.seNichePrimary`: broad кредит/займ catch-all is primary only with a loan-
+  offer signal; off-domain bond/macro/rating news (British Steel/Oracle CDS) dropped as `low_relevance`. WF12
+  embed re-synced (isolatedModule __SE); social-evidence 90.
+
+### Remaining before the Stage F gate (exact, in order) — mostly INTEGRATION + DEPLOY
+1. **WIP3-A counters** + **WIP3-B evidence dedup** + **WIP3-E market-claim scoping in USER-FACING text**: surgery in
+   `report_package.js` / `execution_summary.js` / Shape Report Bundle (WF20) + claim_validation surfacing.
+2. **Wire** source_role + report_text_safety (D/F) + UAR into the real render/export path (`report_package`,
+   `analysis_report_ru`, `compact_report_ru`, WF28/WF20) so Telegram + XLSX + stored report expose source_role/
+   relevance/direct_competitor/limitations and the safe wording. Renderers must READ the UAR, not re-interpret.
+3. **WIP4 modes**: 3-source synthesis/comparison, WF27 top-candidate enrichment, public-lead interpretation
+   (bounded Claude + deterministic fallback), consuming the UAR.
+4. **Stage F gate**: regenerate → full regression → ONE consolidated backup-first deploy of ALL changed workflows
+   (WF12 needs the STRUCTURAL/embed tool for social_evidence; WF18-28 via jsCode) → parity/health/inventory →
+   14 SEQUENTIAL live proofs (callback dup/expired/privacy, source-role plan+report wording, counters, dedup,
+   relevance, ownership-safe rec, market-claim scoping, damaged-fragment, 3-source comparison, WF27 enrichment,
+   public-lead) → inspect Telegram+XLSX+SHA-256 → update matrix → declare.
+5. Then F.5 (`STAGE_F5_OPPORTUNITY_RADAR_AGENT.md`), canonical G, canonical H, push+PR+CI+merge.
+
+**Deploy note:** WF12 social_evidence embed is maintained by the small in-repo isolatedModule replacer (see this
+session's WF12 update), NOT gen_stage4 (which only covers WF17-28). plan_render_ru changes touch WF18/19/20/21/22/26.
+report_package/execution_summary/analysis_report_ru changes will touch WF20/24/25. Inventory ALL before deploy.
+
+## Session 68e — WIP3 A–F complete offline + WIP2/WIP4 foundations (committed; STILL not deployed)
+
+New commits (from `76ebf5a`): b4fde4a, 5bd90ff, 14ebc64, 81a0704, 9dc76ca, 0c38a77, 6116942, 43f89cd, d2bbcab,
+0a4a62d, acfa4cc, 7207330 (+ this continuity). All offline-tested; production UNCHANGED (WIP1-era deploy, 90/17).
+
+WIP3 defects — ALL SIX implemented + tested offline:
+- A counters (`0a4a62d`): analysis_bridge exposes llm_primary_calls/llm_repair_calls; WF20 summary counts WF28
+  (no WF12 double-count); execution_summary emits sources_checked (unique admitted); Shape Report Bundle prefers it.
+- B evidence dedup (`acfa4cc`): report_package.rpDedupeEvidence — one canonical «Доказательства» row per
+  evidence_id/URL; WF20/24/25 regenerated.
+- C relevance (`43f89cd`): social_evidence.seNichePrimary — broad кредит/займ catch-all dropped as low_relevance
+  when off-domain (bonds/macro/rating); WF12 embed re-synced.
+- D ownership-safe recs + F damaged fragments (`6116942`): `report_text_safety.js` (LIB ONLY — **NOT yet wired**
+  into report_package recommendation/offer rendering).
+- E market-claim scoping (`7207330`): claim_validation appends «без сравнения… нельзя подтвердить максимум рынка»
+  and CV_MARKET_ZONE catches «среди автоломбардов/банков…»; surfaces in Telegram+XLSX via cvValidateAnalyses.
+WIP2: privacy (`81a0704`) + plan-goal (`9dc76ca`) WIRED (WF18/19/…); source_role.js (`5bd90ff`) LIB — NOT wired.
+WIP4: unified_analysis_result.js (`0c38a77`) contract+migration LIB — NOT wired; the 3 modes NOT built.
+
+### EXACT remaining before the Stage F gate (in order)
+0. **DONE — WIP2 + WIP3 complete & wired offline:** `98c4507` WIP3-D/F wired (report_package + outbox);
+   `ac0f9f0` WIP2b source_role wired — WF20 Shape Report Bundle sets b.source_roles, report_package renders the
+   «Роль источника» sheet (omit-empty), WF20 outbox states «🏷 Роль источника…» in Telegram. All 6 WIP3 defects
+   (A counters, B dedup, C relevance, D own-channel recs, E market-scoping, F damaged) implemented + wired + tested.
+1b. **DONE this continuation:** `9cc356d` CANONICAL-ROLE-001 — source_role computed ONCE in WF20 Build Execution
+   Summary (summary.source_roles); Shape Report Bundle + Telegram outbox only READ it (no recompute, no divergence;
+   consistency wiring test in report-truth-quality 197). `df81d16` WIP3-A precision — llm_primary_calls counts
+   only WF28 mode==='call' (reuse/disabled/no_evidence make 0 provider calls; a no-call deterministic fallback is
+   no longer miscounted); reuse-observability 85.
+2. **WIP4 modes** (build on unified_analysis_result). **mode 1 LIB DONE** `5a51f72`:
+   `claude_analysis.analyzeComparison` (three-source synthesis on ccSynthesisTool, one repair + deterministic
+   fallback, every item cites contributing-source evidence; synthesis-analysis 23; embedded in WF28). **STILL to
+   wire mode 1:** WF20 orchestration — when `analysis_mode==='comparison'/'synthesis'` with ≥3 accepted sources,
+   build a MULTI-source evidence package and call the synthesis path (WF28 or a synthesis branch), then render
+   `comparisons` into the report/Telegram/XLSX. **mode 2** WF27 top-candidate enrichment (deterministic gate →
+   top 3–5 → bounded Claude explains relevance + source role, never fabricates facts; ccCandidateTool exists).
+   **mode 3** public-lead interpretation (public evidence only, fact vs interpretation, evidence-bound
+   need/pain/intent, low-info excluded). Also: make uar.v1 the single canonical carrier the renderers read
+   (migration lib exists; bundle-field path currently works).
+
+### Session 69 close — OFFLINE WIP1/2/3/4 BATCH COMPLETE + FULL REGRESSION GREEN (nothing deployed)
+All three WIP4 mode LIBS are built + tested + committed: `5a51f72` analyzeComparison (synthesis-analysis 23),
+`f28809b` enrichCandidate + interpretPublicLead (enrich-lead 22), on `0c38a77` uar.v1. `c5c40a6` fixed the
+«Роль источника» SHEET_NAMES order. **`node tests/run_all.js` → ALL SUITES PASS ($0).** HEAD 36 ahead of
+origin/main; worktree clean; production still WIP1-era (90/17, healthy).
+
+**EXACT remaining (needs a live-deploy session — do NOT half-migrate production):**
+1. **Orchestration wiring of the 3 mode libs** (structural, un-provable offline — verify via live proof):
+   - Synthesis: WF20 — after Merge Analyses, if analysis_mode∈{comparison,synthesis} AND ≥3 sources have
+     enriched evidence, build a MULTI-source package and call the synthesis path; WF28 must route analysis_type=
+     'comparison' → `analyzeComparison`. Render `comparisons` into bundle/Telegram/XLSX.
+   - Enrichment: WF27 — deterministic top-3–5 gate → per-candidate `enrichCandidate` (analysis_type='candidate');
+     preserve discovery evidence; no auto paid collection/monitoring/outreach.
+   - Public-lead: a lead path calling `interpretPublicLead` (analysis_type='public_lead') on public rows.
+   (WF28 routing by analysis_type is the shared enabler — its Prepare/Finalize nodes currently hardcode the
+   source-analysis path but already embed claude_analysis with all 4 functions.)
+2. **Consolidated backup-first deploy** of the semantically-changed workflows — inventory by diffing each repo
+   workflow's Code nodes vs a fresh prod export (candidates: WF12, WF18, WF19, WF20, WF21, WF22, WF24, WF25,
+   WF26, WF28). Deploy LEAF-first then callers (WF28/WF12 before WF20) to keep prod coherent; jsCode tool for
+   code-only, structural tool only for the genuine topology adds from step 1. Verify parity/health/inventory/
+   webhook/proxy/ngrok/RestartCount after each.
+3. **16 sequential live proofs** (never concurrent; Sheets-429 → cooldown+retry): callback dup/expired/privacy;
+   source-role plan+report+Telegram; counters; dedup; relevance; ownership-safe rec; market-claim scoping;
+   damaged-fragment; 3-source comparison; WF27 enrichment; public-lead. Inspect real Telegram text/IDs + XLSX +
+   SHA-256 + stored result, not just green executions.
+4. Stage F gate → F.5 (7 subsystems + the 8-step Telegram conversation proof) → canonical G → canonical H → PR/CI/merge.
+3. **Stage F gate**: regenerate → full regression → ONE consolidated backup-first deploy of ALL changed
+   workflows (WF12 via isolatedModule replacer; WF18-28 via deploy_workflow_jscode.js) → parity/health/inventory
+   → 14 SEQUENTIAL live proofs → inspect Telegram+XLSX+SHA-256 → update matrix → declare.
+4. Then F.5 / canonical G / canonical H / push+PR+CI+merge.
+
+**Workflows changed by regeneration so far this session (need deploy at the gate):** WF12 (social_evidence),
+WF18/19/20/21/22/26 (plan_render_ru), WF20 (analysis_bridge, execution_summary, claim_validation, Progress: Done,
+outbox), WF24/25 (report_package). Re-inventory with `git`/regeneration before the consolidated deploy.
+
+### (Historical, now resolved) blocker diagnosis
+Branch `fix/stage-f-post-migration-acceptance`, HEAD `235c4df`, **7 ahead / 0 behind** origin/main. Worktree
+carried the previous session's regenerated `20_agent_orchestrator.json` (2 embedded-lib one-liners changed).
+Production HTTP health `{"status":"ok"}`, webhook proxy + ngrok both `active` (verified via curl + systemctl —
+those don't need Docker).
+
+**BLOCKER (matches mission stop condition "account-owner intervention that cannot be reproduced through an
+authorized test path"): the `claude-runner` shell user can no longer reach the Docker socket.** The prior session
+ran `docker exec n8n-n8n-1 …` freely; this session cannot. Evidence, all confirmed this session:
+- `docker ps` / `docker exec n8n-n8n-1 n8n --version` → `permission denied … unix:///var/run/docker.sock`
+  (exit 1), identical with the Bash sandbox ON and OFF — a kernel-level EACCES, not a permission-prompt issue.
+- Socket is `srw-rw---- root docker`; `getent group docker` → `docker:x:107:` (**empty — no user is a member**).
+- `sudo -n -l` → "user claude-runner may not run sudo" (sudo fully disabled). `/opt/n8n` unreadable.
+- No alternative path: no `N8N_API`/`DOCKER_HOST` env, no `~/.n8n`, no rootless socket, no API key anywhere in
+  repo/env/home; n8n `/api/v1/workflows` and `/rest/login` both return **401**.
+
+Docker is the sole mechanism for: deploying WF20, inspecting executions (sqlite via `docker exec node -e`),
+reading the webhook secret for the synthetic proof, and reading runtime env/costs. Therefore **every remaining
+mission item is blocked** — WF20 deploy+parity, live Telegram/VK/discovery/analysis proofs, all five fresh
+analyses, and every formal gate (F, F.5, G, H all require production deployment + live evidence). No honest
+offline-only progress reaches a gate, so no fabricated/speculative work was done.
+
+**To unblock (operator, as root over SSH — restores access the prior session already had):**
+- Immediate, non-persistent: `setfacl -m u:claude-runner:rw /var/run/docker.sock`
+- Persistent: `usermod -aG docker claude-runner` **then restart the Claude Code agent session** (group
+  membership is applied at login; the already-running shell won't pick it up otherwise).
+Verify with: `docker exec n8n-n8n-1 n8n --version` (should print 2.23.3).
+
+**Exact next action once Docker is restored** (continues Session-67 item 1):
+1. `docker exec n8n-n8n-1 sh -c "n8n export:workflow --id=QBNFpiZE_IHKUKkf --output=/tmp/wf20_prod.json"` then
+   `docker cp n8n-n8n-1:/tmp/wf20_prod.json scratchpad/backup/wf20_prod_<stamp>.json` (backup-first).
+2. Diff prod WF20's embedded `analysis_bridge` against `n8n/lib/analysis_bridge.js`; if stale, deploy via
+   `node tools/deploy_workflow_jscode.js` (topology unchanged), import + publish, re-export, verify parity + that
+   prod WF20 contains SOCIAL-BRIDGE-001 (evidence-only target creation) and active=1.
+3. Then run the Telegram + VK live source-analysis proofs on a **fresh, non-stale** accepted source run (do NOT
+   reuse the `stale_source`-flagged `req_84613707` run; do NOT weaken the quality gate).
+
+## Session: 2026-07-21 (session 67) — SOCIAL-BRIDGE-001 deployed; Stage F still OPEN
+
+Branch `fix/stage-f-post-migration-acceptance`, `6f441b0` -> `249d16b`. **5 -> 6 commits ahead of origin/main**
+(the previous session's "4 ahead" was a miscount; `ad0b58e` is also unpushed). Worktree clean. Production after:
+90 workflows / 17 active, health ok, webhook registered to WF18, proxy + ngrok active, 11G free.
+
+**`249d16b` — SOCIAL-BRIDGE-001 (the confirmed defect B from exec 1096) is FIXED and DEPLOYED.**
+- New canonical `n8n/lib/social_evidence.js`; `analysis_bridge` now lets evidence CREATE a target (competitor
+  profile optional); WF12 gained `Read raw_market_records` wired after `Read source_health`, embeds the lib
+  verbatim, and sets `bundle.evidence = socialEvidence` (was `[]`). WF12 appended to the tab's readers.
+- `tests/test_social_evidence.js` **84/84**, including a behavioural run of the REAL WF12 Code node over
+  production-shaped rows: 3 rows in (1 relevant, 1 off-topic, 1 foreign-request) -> 1 bundle evidence row -> 1
+  WF28 target. Full regression before deploy: ALL SUITES PASS.
+- Structural deploy of WF12 `3H7SR0tG12sK_JTV` with `--inherit "Read raw_market_records=Read competitor_profiles"`.
+  Diff was exactly the intent (26->27 nodes, 1 added, 1 param change, 2 rewired, 11 creds preserved, 0
+  placeholders). Backup `scratchpad/backup/wf3H7SR0tG12sK_JTV_prod_20260721054814.json`. **Parity: OK.**
+- **DEPLOY-CLEANUP-001 (tool defect, found live and fixed):** the first `--apply` aborted between import and
+  re-publish because the container scratch-file `rm` failed (docker cp writes as root, n8n runs as `node`),
+  leaving WF12 imported but INACTIVE (active 17->16). Caught immediately, re-published, verified 17. Cleanup can
+  no longer change a deploy's outcome. **Lesson: any post-import step in a deploy tool must be non-fatal.**
+
+### STAGE F IS NOT COMPLETE. Exactly what remains, in order
+
+1. **Live proof of the social bridge — the top priority.** Deterministic proof is complete; the PAID end-to-end
+   run is not done. Needs one Telegram-channel source analysis and one VK-community source analysis through
+   WF18 -> WF19 -> approval callback -> WF20 -> WF12 -> WF28. Record request id, source_run_id, exec ids,
+   collected/accepted, source outcome, evidence hash, WF28 analysis id, report id, Telegram message ids, XLSX
+   name/hash/sheets, projected vs actual component costs, final plan state.
+2. **Discovery post-fix integration proof.** DISCOVERY-004 is deployed and byte-verified in WF18, and proven
+   offline against the verbatim production text of exec 1093. The operator authorized a SYNTHETIC WEBHOOK
+   INTEGRATION PROOF (POST the exact text «Найди телеграмм каналы по птс»). **Blocker to be aware of:** the
+   WF18 ingress gate checks a bot secret token, so the synthetic POST must carry the real
+   `X-Telegram-Bot-Api-Secret-Token`, and the run WILL send a real bot reply to chat 1188830082. Label it
+   clearly as synthetic.
+3. Stage F acceptance matrix (PASS / MISSING / EXTERNAL BLOCKER per §9 role), reusing existing evidence for
+   blocked carmoney.ru, callback idempotency, REPORT-TRUTH D, source reuse and analysis reuse.
+4. §10 quality metrics: >=5 genuinely FRESH (non-reused) analyses across source types with full telemetry.
+5. Formal Stage F gate.
+
+Then Stage F.5 (Unified Source Runtime, Unified Analysis Result, Opportunity Radar, Analyst Agent + bounded
+context capsule, durable owner-scoped memory, Monitoring Intelligence) — **not started in this session.**
+
+Nothing is pushed. CI has not re-run remotely; the hermeticity fix is proven locally only.
+
+## Session: 2026-07-21 (session 66) — structural deploy tool, brand migration, CI hermeticity, discovery routing
+
+Branch `fix/stage-f-post-migration-acceptance`, start `ad0b58e` → four commits. Production verified healthy
+throughout (n8n 2.23.3, 90 workflows / 17 active, `/healthz` ok, proxy + ngrok active, 15G free).
+
+1. **`cf5432b` — canonical STRUCTURAL deploy tool** (`tools/deploy_workflow_structural.js`). Grafts the repo
+   topology onto a live export; preserves workflow id, active, settings, node ids, real credentials, webhookId
+   and **Execute Workflow bindings**. Found and fixed a real safety bug in the draft: it adopted repo
+   `parameters` wholesale, and since the repo ships `PASTE_WORKFLOW_ID`, a graft would have overwritten live
+   sub-workflow bindings — a read-only dry-run on prod WF20 shows *9* bindings protected. Credential resolution
+   for new nodes is fail-closed: explicit `--cred`, `--inherit` from a named sibling, an already-real repo id, or
+   a UNIQUE type match; ≥2 candidates aborts with an actionable, secret-free error. Modes: offline rehearsal,
+   live read-only dry-run with a structural diff, `--apply` (backup → import → re-export → parity → rollback
+   command), `--restore`. `tests/test_deploy_structural.js` 60/60.
+2. **`4273a54` — brand migration to Vinci AI Pilot.** Remote repointed to `CodeVinci8/Vinci-Ai-Pilot`. Product
+   prose, bot self-identification, and BRAND-001 user-visible file names (`vinci_ai_pilot_*` for XLSX/CSV/SVG).
+   `docs/BRANDING.md` records what stays as a **technical legacy alias** (credential names, systemd units, the
+   `/opt/marketing-scout-agent` path, the `marketing_scout_bootstrap` Sheets key, `marketing-scout/*/v1` schema
+   strings, `meta.instanceId`, archived v0 module, historical evidence). Directory NOT renamed — invisible to
+   users, would require touching live systemd units.
+3. **`a762af2` — CI root cause fixed.** GitHub Actions `offline-regression` had failed since 2026-06-28; the one
+   failing suite was `deploy-entrypoints`. `scripts/lib/n8n_exec.sh n8n_version_string()` ran `docker exec … n8n
+   --version` unconditionally, ignoring `MS_N8N_EXEC_DRY`; under the callers' `set -euo pipefail` a missing
+   docker (127) or absent container (1) made `detect_n8n_version()`'s substitution abort the whole script
+   SILENTLY, so `--credential-audit` never reached its own accounting. The suite only passed where a real n8n
+   container answered — the VPS. Fix honours DRY and never propagates a failure (empty ⇒ version "unknown",
+   already handled). CI-HERMETIC-001 guard added. Verified locally under both clean-runner conditions.
+4. **`?` — DISCOVERY-004, defect A of the live report.** Traced the real interaction: prod exec **1093**
+   (2026-07-19 04:09 UTC), message «Найди телеграмм каналы по птс» → `Route Intent` classified it
+   **competitor_search** (0.85, from=rule) instead of `competitor_discovery`. Root cause is one letter: the
+   signal regex `телеграм` cannot match «телеграмм каналы» — the second "м" breaks the following
+   `\s*-?\s*канал`. The user asked to FIND channels and got an analysis approval prompt. Fixed with tolerant
+   platform patterns (`телеграм{1,2}`, `тг`, `телега`, and platform+source-type presence regardless of word
+   order). 13 phrasings × 3 platforms locked in `tests/test_discovery_routing.js` (96/96). Deployed to prod WF18
+   backup-first (`scratchpad/backup/wf18_prod_20260721_052519.json`); 5 jsCode nodes updated (Route Intent plus
+   the 4 self-healing benign-drift embeds); ids/creds/connections/webhookIds identical; **n8n restarted** —
+   genuinely required, WF18 is the active trigger so its Code nodes are served from the in-memory cache. After
+   restart: health ok, 90/17, webhook registered to WF18, proxy + ngrok active.
+
+**Defect B is confirmed independent and still open (= WIP 4 / the next item).** Same request, exec **1096**:
+Telegram collection *worked* — 30 received, 22 written, 22 relevant, `source_outcome=collected_with_data` — but
+`Build Analysis Inputs` produced **0 targets**, so WF28 never ran (`records_analyzed: 0`, `llm_analyses: 0`,
+cost $0) and the report fell back to "no competitor profiles with offers/prices". `analysis_bridge`
+derives targets only from competitor profiles/offers, and social posts deliberately never become profiles
+(DEC-133/135 quality policy). Fix direction: canonical `Read raw_market_records` node in WF12 (deploy it with
+the new structural tool, inheriting the credential from an existing WF12 Sheets read node), bounded verbatim
+excerpts into `Build Deterministic Report`, and let `analysis_bridge` CREATE a social `source_analysis` target
+without a competitor profile.
+
+**Not live-proven yet:** the discovery fix end-to-end. It needs one real Telegram message from the operator's
+account — I will not spoof a user update or send unprompted messages. The fix is proven offline against the
+verbatim production text and byte-verified in the deployed export.
+
+---
+
+## Session: 2026-07-20 (session 65) — post-migration: COST-REUSE-002 honest deep-analysis reuse estimate (deployed, verified)
+
+First session on the NEW VPS (62.60.248.184). Verified authoritative production: git `main` @ **05490a2** clean,
+origin==local, tag `migration-pre-vps-2026-07`; n8n `n8nio/n8n:2.23.3` healthz ok; **17 active / 90 total**;
+webhook-proxy + ngrok services active; disk 15G free. Migration is DONE — not re-verified beyond this.
+
+**COST-REUSE-002 (Stage-F residual-risk #1) — CLOSED (code + tests + regression + deploy + verify).** The approval
+estimate promised «AI-анализ: $0 (будет переиспользован сохранённый анализ)» whenever the source SNAPSHOT was
+reused. Root cause: `cost_model.sourceReusePreflight` set `expect_analysis_reuse` from source reuse alone
+(`reused>=total && claudeOn`); `projectRequestCost` zeroed the deep-analysis cost. But the analysis cache key
+(`findReusableAnalysis`: owner+analysis_type+evidence_hash+schema+prompt+model, non-fallback row must EXIST) still
+MISSES on the same evidence under a different report mode/model or a never-analysed snapshot (already live-proven:
+exec 1004 same-hash change_report → fresh paid call). Fix: source reuse now yields `analysis_reuse_possible` only;
+`expect_analysis_reuse` is true **only** with explicit `opts.analysis_reuse_confirmed`. WF19 can't cheaply confirm
+a hit at approval time, so it renders the honest ceiling «• AI-анализ: ~$0.07–0.11 (спишется, если готового
+анализа под этот отчёт ещё нет)» — never a guaranteed $0. Collection reuse ($0 collection) unchanged. Confirmed-hit
+path still renders $0.
+
+**Tests/deploy:** `tests/test_approval_ux.js` → honest contract (80). Regenerated stage-4 workflows (drift green:
+stage4-workflows 144, cost-model 87). `make test` ALL SUITES PASS ($0). New **canonical** deploy tool
+`tools/deploy_workflow_jscode.js` (replaces the lost scratchpad `deploy_sync.js`; syncs jsCode + executeWorkflow
+`workflowInputs`, preserves ids/creds/connections/`workflowId`/active/webhookId, **aborts on structural mismatch**).
+Deployed **WF19 only** (`d0ffU5QxNb8zpwKW`) backup-first (`scratchpad/backup/wf19_prod_20260720_210727.json`):
+exactly 1 node changed (`Build Approval Message`, +1892 B), fresh-export byte-verified, 17 active / 90 total, health
+ok, no restart (callable). WF18/20/21/22/26 embeds regenerated + committed but NOT deployed — behavior-identical on
+their paths (WF18 estimate render is a preflight-less fallback; WF20 uses `actualRequestCost`), self-heal on next
+functional deploy. NOT a fault.
+
+**Live confirmation** deferred to the §9 live-role matrix (every real scenario surfaces the approval estimate); no
+disposable exec created (no clean CLI delete → would break the 90-total invariant), no unprompted Telegram sent.
+
+**Next (this mission, in order):** (1) canonical STRUCTURAL workflow deploy tool (jsCode-only is done; node-add/rewire
+still needs a canonical in-repo tool — scratchpad `graft_topology.js` is gone); (2) Telegram/VK social evidence must
+reach source analysis even without a full competitor profile (Stage-E/G defer); (3) §9 live-role matrix; (4) §10 ≥5
+fresh analyses metrics; (5) formal Stage F gate → then Stage F.5 → Stage G. Do NOT start Stage H/I.
+
 ---
 
 ## Session: 2026-07-19 (session 64) — REPORT-TRUTH B+C+D closed, deployed, live-proven
@@ -349,7 +1127,7 @@ injection from model output. Asserted by test.
 **WF04-ROUTE-002 — new `n8n/lib/error_sanitizer.js`.** technical_errors/skipped_log are durable human-readable tabs
 built FROM a provider response. Sanitizer redacts sk-ant-/sk-/AIza/gh*_/JWT/bearer/basic/cookie/generic key:value/
 url-query secrets, strips thinking, scrubs PII, caps at 300 chars. Embedded (drift-tested) at the ONE persistence
-choke point per router. **Proven on the real WF04 node**: `Authorization: Bearer sk-ant-api03-LEAK…` →
+choke point per router. **Proven on the real WF04 node**: `Authorization: Bearer sk-ant-***` (redacted example) →
 `Authorization: [скрыто] [скрыто]`; `{"api_key":"topsecret12345"}` → `{"api_key": [скрыто]}`; thinking/email/phone
 gone; `"blocked"`/`401` kept for triage.
 

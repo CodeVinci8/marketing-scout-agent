@@ -49,6 +49,16 @@ A.section('claim validation — market-wide claims from one source become scoped
     A.eq('demoted to inference: ' + t.slice(0, 30), v.item.kind, 'inference');
     A.ok('scoped as hypothesis: ' + t.slice(0, 30), /^Гипотеза/.test(v.item.text_ru));
   });
+  // WIP3-E: a single-source market superlative gets an EXPLICIT scope caveat in the user-facing text (not only a
+  // hidden audit) — «без сравнения с другими источниками нельзя подтвердить максимум/лидерство на рынке».
+  const ltv = CV.cvValidateItem({ kind: 'fact', text_ru: 'Максимальный LTV среди автоломбардов — до 90% от стоимости', dimension: 'positioning', evidence_ids: ['ev_1'] }, ctx);
+  A.eq('LTV superlative demoted', ltv.item.kind, 'inference');
+  A.ok('LTV carries the scope caveat', /без сравнения с другими источниками/i.test(ltv.item.text_ru));
+  A.ok('LTV keeps the observed value (до 90%)', /90%/.test(ltv.item.text_ru));
+  A.ok('market_claim_scoped reason recorded', ltv.reasons.indexOf('market_claim_scoped') >= 0);
+  // idempotent: re-validating the scoped text does not append the caveat twice
+  const twice = CV.cvValidateItem({ kind: 'inference', text_ru: ltv.item.text_ru, dimension: 'positioning', evidence_ids: ['ev_1'] }, ctx);
+  A.eq('scope caveat not duplicated', (twice.item.text_ru.match(/без сравнения с другими источниками/gi) || []).length, 1);
   // Idempotency: already-scoped text is never re-prefixed.
   const once = CV.cvValidateItem({ kind: 'inference', text_ru: 'Гипотеза (по одному источнику): лидер рынка автозаймов', evidence_ids: ['ev_1'] }, ctx);
   A.eq('no double prefix', once.item.text_ru.indexOf('Гипотеза (по одному источнику): Гипотеза'), -1);
@@ -189,6 +199,68 @@ A.section('compact renderer — reuse, issue, change_report honesty, hard cap');
   has('cost line survives the cap', capped.text, '$0.0512');
 }
 
+A.section('SOCIAL-DELIVERY-001 — a source_analysis with 0 deterministic records but a usable analysis is delivered');
+{
+  // A public Telegram/VK channel yields citable EVIDENCE, not a competitor profile with offers/prices, so a
+  // successful source_analysis routinely has records_reported=0 and the caller passes state='no_data'. The
+  // usable, evidence-bound analysis IS the deliverable and must NOT be suppressed. (live: rusmicrofinance
+  // an_3f6ccdb3 was wrongly delivered as "Подходящих данных не собрано".)
+  const SOCIAL_BUNDLE = {
+    analysis_mode: 'source_analysis', competitors: [], offers: [],
+    evidence: [
+      { excerpt: 'Рынок ломбардов: прогноз +35% выдач в 2026', url: 'https://t.me/rusmicrofinance/6181', collected_at: '2026-07-20T08:00:00Z' },
+      { excerpt: 'Банк России составил ренкинг МФО по числу жалоб', url: 'https://t.me/rusmicrofinance/6179', collected_at: '2026-07-20T08:00:00Z' }
+    ]
+  };
+  const SOCIAL_SUMMARY = {
+    final_state: 'no_data', records_reported: 0, analysis_mode: 'source_analysis',
+    actual_cost_usd: 0.1045, actual_summary_ai_usd: 0, actual_deep_analysis_usd: 0.1045,
+    reused_sources: [], failed_sources: [], source_outcomes: [{ outcome: 'ok', has_data: true }]
+  };
+  const SOCIAL_COST = '💰 Фактическая стоимость: AI-анализ $0.1045 = $0.1045.';
+  function mkSocial(over) {
+    return Object.assign({
+      analysis_id: 'an_soc', enriched: true, mode: 'call', quality_status: 'ok',
+      evidence_map: [{ id: 'ev_1', url: 'https://t.me/rusmicrofinance/6181' }, { id: 'ev_2', url: 'https://t.me/rusmicrofinance/6179' }],
+      analysis: {
+        executive_summary_ru: 'Канал t.me/rusmicrofinance освещает рынок МФО и ломбардов; прямых офферов и цен в постах нет, уверенность в выводах низкая.',
+        items: [
+          { kind: 'fact', text_ru: 'Канал публикует отраслевую аналитику рынка МФО и ломбардов', dimension: 'positioning', evidence_ids: ['ev_1', 'ev_2'] },
+          { kind: 'fact', text_ru: 'Прямой рекламы продуктов в проанализированных постах нет', dimension: 'advertising_angles', evidence_ids: ['ev_1'] },
+          { kind: 'inference', text_ru: 'Целевая аудитория — профессиональные участники рынка, а не конечные заёмщики', dimension: 'target_audience', evidence_ids: ['ev_2'] }
+        ],
+        recommended_actions: [{ text_ru: 'Отслеживать регуляторные сигналы Банка России по этому каналу', priority: 'medium', evidence_ids: ['ev_2'] }],
+        unknowns_ru: ['Нет данных об офферах и ценах'], overall_confidence: 0.18, used_evidence_ids: ['ev_1', 'ev_2']
+      }
+    }, over || {});
+  }
+
+  // A + D: usable analysis renders even at records=0/state=no_data — and carries the full grounded shape.
+  const soc = CR.crCompactReportRu({ bundle: SOCIAL_BUNDLE, analyses: [mkSocial()], summary: SOCIAL_SUMMARY, cost_line: SOCIAL_COST, next_action: NEXT, xlsx_expected: true, state: 'no_data' });
+  A.eq('A: usable analysis is NOT the issue profile', soc.profile, 'success');
+  A.ok('A: no false "Подходящих данных не собрано"', soc.text.indexOf('Подходящих данных не собрано') < 0);
+  A.ok('A: no false "конкурентных профилей" wording', soc.text.indexOf('конкурентных профилей') < 0);
+  has('D: source header', soc.text, '📊');
+  has('D: facts section', soc.text, '📌 Ключевые факты');
+  has('D: conclusions marked interpretation', soc.text, 'интерпретация, не факты');
+  has('D: recommendations marked suggestions', soc.text, 'предложения к проверке');
+  has('D: limitations / needs-verification visible', soc.text, 'требует проверки');
+  has('D: actual cost truthful', soc.text, '$0.1045');
+  has('D: XLSX delivery line', soc.text, 'Excel-файле');
+  A.ok('D: no internal enums/ids leak', !/ev_\d|an_[0-9a-f]{3,}|source_analysis/.test(soc.text));
+
+  // B: a GENUINE no-data run (no usable analysis) still gets the honest issue profile.
+  const genuineNoData = CR.crCompactReportRu({ bundle: {}, analyses: [], summary: { final_state: 'no_data', records_reported: 0, source_outcomes: [{ outcome: 'empty_response', has_data: false }] }, cost_line: '', next_action: NEXT, xlsx_expected: false, state: 'no_data' });
+  A.eq('B: no usable analysis -> issue profile', genuineNoData.profile, 'issue');
+  has('B: honest no-data message', genuineNoData.text, 'Подходящих данных не собрано');
+
+  // C: a deterministic fallback must NOT masquerade as a successful AI analysis — it is not "usable".
+  const fb = mkSocial({ enriched: true, fallback_used: true, quality_status: 'deterministic_fallback' });
+  const fbRender = CR.crCompactReportRu({ bundle: { analysis_mode: 'source_analysis', competitors: [], offers: [], evidence: [] }, analyses: [fb], summary: { final_state: 'no_data', records_reported: 0, source_outcomes: [{ outcome: 'ok', has_data: true }] }, cost_line: '', next_action: NEXT, xlsx_expected: false, state: 'no_data' });
+  A.eq('C: deterministic fallback is not treated as usable -> issue profile', fbRender.profile, 'issue');
+  A.ok('C: fallback does not fabricate an AI conclusions section', fbRender.text.indexOf('интерпретация, не факты') < 0);
+}
+
 A.section('live-1024/1018 regressions — string tool input, offer enum leak, competitor header');
 {
   const CA = require('../n8n/lib/claude_adapter.js');
@@ -238,6 +310,11 @@ A.section('WF20 wiring — validation + compact renderer + completion order');
   const ob = node(wf20, 'Build Delivery Outbox').parameters.jsCode;
   A.ok('outbox validates claims', ob.indexOf('cvValidateAnalyses(') >= 0);
   A.ok('outbox renders compact', ob.indexOf('crCompactReportRu(') >= 0);
+  // SOCIAL-DELIVERY-001 (E): the outbox must be analysis-aware — a usable analysis suppresses the no_data state
+  // (so the keyboard/next-action aren't the "nothing found" set) and forces xlsx_expected even at records=0.
+  A.ok('E: outbox computes a usable-analysis flag', ob.indexOf('__hasUsableAnalysis') >= 0);
+  A.ok('E: no_data is suppressed when a usable analysis exists', /noData=[^;]*&&!__hasUsableAnalysis/.test(ob));
+  A.ok('E: xlsx_expected fires for analysis/evidence even at records=0', /xlsx_expected:\([^;]*__hasUsableAnalysis[^;]*evidence/.test(ob));
   A.ok('outbox guards final text', ob.indexOf('cvGuardMarkdownRu(') >= 0);
   A.ok('outbox no longer ships the full markdown', ob.indexOf('appendAnalysisToReportRu(') < 0);
   A.ok('claim audit is observable', ob.indexOf('claim_audit') >= 0);
@@ -247,12 +324,34 @@ A.section('WF20 wiring — validation + compact renderer + completion order');
   const bx = node(wf20, 'Build Report XLSX').parameters.jsCode;
   A.ok('skipped workbook still emits an item', bx.indexOf('xlsx_skipped:true') >= 0);
   A.ok('XLSX Ready? gate exists', !!node(wf20, 'XLSX Ready?'));
+  // SOCIAL-DELIVERY-001 (terminal arbiter): the "Progress: Done" edit must be analysis-aware. A social
+  // source_analysis has records_reported=0 yet a usable enriched/reused WF28 analysis — the terminal progress
+  // edit must NOT say «Данные для анализа не получены» over a real analysis (live: the contradictory transcript).
+  const pd = node(wf20, 'Progress: Done').parameters.jsCode;
+  A.ok('Progress: Done reads llm_analyses + reused for the terminal state', /llm_analyses/.test(pd) && /llm_analyses_reused/.test(pd));
+  // WIP2b CANONICAL-ROLE-001: source_role is computed in EXACTLY ONE node (Build Execution Summary); the report
+  // bundle and the Telegram outbox READ summary.source_roles — they must never recompute (no renderer divergence).
+  const summ = node(wf20, 'Build Execution Summary').parameters.jsCode;
+  const sb2 = node(wf20, 'Shape Report Bundle').parameters.jsCode;
+  const ob2 = node(wf20, 'Build Delivery Outbox').parameters.jsCode;
+  A.ok('Build Execution Summary computes source_roles once (classifySourceRole present)', /classifySourceRole\(/.test(summ) && /source_roles:__srows/.test(summ));
+  A.ok('Shape Report Bundle does NOT recompute source roles', !/classifySourceRole\(/.test(sb2));
+  A.ok('Shape Report Bundle reads summary.source_roles', /__sum\.source_roles/.test(sb2));
+  A.ok('Telegram outbox does NOT recompute source roles', !/classifySourceRole\(/.test(ob2));
+  A.ok('Telegram outbox reads summary.source_roles', /s\.summary&&s\.summary\.source_roles/.test(ob2));
+  // F-2 DELIVERY-LIFECYCLE-001: the terminal arbiter is now the canonical deliveryTerminalEdit() (embedded from
+  // progress_tracker.js); the node feeds it a usable-analysis flag, and the no-data guard lives in that library.
+  A.ok('Progress: Done feeds a usable-analysis flag into the terminal arbiter', pd.indexOf('has_analysis:(an+ar)>0') >= 0 && /deliveryTerminalEdit\(/.test(pd));
+  A.ok('the embedded arbiter guards no-data wording by !hasAnalysis', /!hasAnalysis && \(fs === 'no_data' \|\| records === 0\)/.test(pd));
+  A.ok('Progress: Done still has an honest no-data branch', pd.indexOf('Данные для анализа не получены') >= 0);
   const conn = wf20.connections;
   const to = (from, idx) => (((conn[from] || {}).main || [])[idx || 0] || []).map(c => c.node);
   A.ok('Build Report XLSX -> XLSX Ready?', to('Build Report XLSX').indexOf('XLSX Ready?') >= 0);
   A.ok('XLSX Ready? true -> Send Report XLSX', to('XLSX Ready?', 0).indexOf('Send Report XLSX') >= 0);
   A.ok('XLSX Ready? false -> Progress: Done', to('XLSX Ready?', 1).indexOf('Progress: Done') >= 0);
-  A.ok('Send Report XLSX -> Progress: Done', to('Send Report XLSX').indexOf('Progress: Done') >= 0);
+  // F-2: the send no longer wires straight to completion — it passes through the «XLSX Sent?» verification gate,
+  // so the terminal ✅ is reached only after a real document_message_id is (or is not) confirmed.
+  A.ok('Send Report XLSX -> XLSX Sent? -> Progress: Done', to('Send Report XLSX').indexOf('XLSX Sent?') >= 0 && to('XLSX Sent?', 0).indexOf('Progress: Done') >= 0);
   A.ok('text send no longer triggers completion', to('Send Telegram Report').indexOf('Progress: Done') < 0);
   const done = node(wf20, 'Progress: Done').parameters.jsCode;
   has('completion names both deliveries (neutral, non-directional)', done, 'Готово. Отчёт и Excel-файл отправлены.');

@@ -1,4 +1,7 @@
 'use strict';
+// F-3 ENUM-RU-001: user-facing cells must never show an internal enum (credit_brokerage / website / healthy).
+// The canonical maps live in plan_render_ru; the embed step inlines them (co-embedded in the XLSX nodes).
+const { ruNiche, ruSourceLabel, ruQualityLabel } = require('./plan_render_ru.js');
 // report_package.js — assemble the user-facing XLSX report package from a stored report bundle (Sections 3.2 / 19).
 // Operational Sheets stay internal; this is the intentionally-designed user workbook. Russian sheet names AND
 // headers (B7 + Stage F §6); the only technical sheet is hidden.
@@ -10,6 +13,9 @@
 
 const { assertScope, safeReportId } = require('./report_export.js');
 const { workbookBuffer } = require('./xlsx_writer.js');
+// WIP3-D/F: ownership-safe recommendations + damaged-fragment exclusion. Embedded alongside report_package in the
+// generated nodes (require stripped on embed); the functions resolve from the shared node scope.
+const { ownershipSafeRecommendationRu, isDamagedFragment } = require('./report_text_safety.js');
 
 function str(v) { return v == null ? '' : String(v); }
 function low(v) { return str(v).trim().toLowerCase(); }
@@ -18,9 +24,9 @@ function join(a) { return Array.isArray(a) ? a.join('; ') : str(a); }
 // Stage F adds «Аналитические выводы» + «Боли и сигналы» and FEEDS the existing «Рекомендации» / «Доказательства»
 // sheets (the deterministic bundle leaves evidence empty). Every Stage-F sheet is omit-empty: it exists only when
 // the analyst actually produced grounded rows, so a deterministic-only run ships exactly the workbook it did before.
-const SHEET_NAMES = ['Сводка', 'Конкуренты', 'Офферы и цены', 'Аналитические выводы', 'Рекомендации',
-  'Боли и сигналы', 'Доказательства', 'Качество данных', 'Изменения', 'Технические данные'];
-const STAGE_F_SHEETS = ['Аналитические выводы', 'Боли и сигналы'];
+const SHEET_NAMES = ['Сводка', 'Конкуренты', 'Офферы и цены', 'Сравнение источников', 'Аналитические выводы', 'Рекомендации',
+  'Боли и сигналы', 'Доказательства', 'Качество данных', 'Роль источника', 'Изменения', 'Технические данные'];
+const STAGE_F_SHEETS = ['Аналитические выводы', 'Боли и сигналы', 'Сравнение источников'];
 
 // quality/status -> highlight bucket (good/warn/bad). Unknown -> no highlight.
 function qualityHighlight(v) {
@@ -39,6 +45,35 @@ const RP_MODE_RU = {
   monitoring_insight: 'мониторинговое уведомление'
 };
 function rpModeRu(v) { return RP_MODE_RU[low(v)] || RP_MODE_RU.source_analysis; }
+// REPORT-TRUTH-E (defect 3): the downgrade cell states, in plain Russian, that the requested mode was not delivered
+// and why. Empty when the delivered mode equals the requested one (no downgrade).
+function rpDowngradeRu(sum, b) {
+  const requested = low(sum.analysis_mode_requested || b.analysis_mode_requested || '');
+  const actual = low(b.analysis_mode || sum.analysis_mode || '');
+  const flagged = sum.analysis_mode_downgraded === true || b.analysis_mode_downgraded === true;
+  if (!flagged && (!requested || requested === actual)) return '';
+  const reason = str(sum.analysis_mode_reason_ru || b.analysis_mode_reason_ru || '');
+  return 'запрошен «' + rpModeRu(requested || actual) + '», построен «' + rpModeRu(actual) + '»'
+    + (reason ? (': ' + reason) : '');
+}
+// REPORT-TRUTH-E (defect 5): sources that actually contributed evidence to the analysis (reused + fresh), distinct
+// from «собрано заново» (fresh only). Prefer the analysis router's contributing count, then the deterministic
+// collection accounting (execution_summary.sourceAccounting), then structural fallbacks.
+function rpContributingCount(sum, b) {
+  if (Number(sum.contributing_sources) > 0) return Number(sum.contributing_sources);
+  if (Number(sum.sources_contributing) > 0) return Number(sum.sources_contributing);
+  const q = (b.source_quality || []).length, c = (b.competitors || []).length;
+  return q || c || (sum.sources_checked != null ? Number(sum.sources_checked) || 0 : 0);
+}
+// REPORT-TRUTH-E (defect 5): «Источников собрано заново» = FRESHLY collected THIS run — the deterministic
+// sources_fresh count (execution_summary.sourceAccounting), NOT sources_checked (admitted = reused+fresh). A run that
+// reused 2 snapshots and collected 1 must read «1 собрано заново», not «3». fresh_collections is the propagated alias;
+// only when neither deterministic fresh signal exists do we fall back to the admitted/structural count (legacy data).
+function rpFreshCount(sum, b) {
+  if (sum.sources_fresh != null) return Number(sum.sources_fresh) || 0;
+  if (sum.fresh_collections != null) return Number(sum.fresh_collections) || 0;
+  return sum.sources_checked != null ? Number(sum.sources_checked) || 0 : (b.source_quality || []).length;
+}
 function rpHost(u) { const m = str(u).match(/^https?:\/\/([^\/?#]+)/i); return m ? m[1].replace(/^www\./i, '') : ''; }
 function rpSourceType(u) {
   const h = low(rpHost(u));
@@ -60,19 +95,76 @@ function rpDedupOffers(offers) {
   const seen = {}; const out = [];
   (offers || []).forEach(o => {
     const clean = Object.assign({}, o, { offer: rpCleanOffer(o && o.offer) });
+    // WIP3-F: never present a damaged/incomplete fragment as a confirmed offer/rate.
+    if (isDamagedFragment(clean.offer)) clean.offer = 'данные повреждены — требует проверки';
+    if (isDamagedFragment(clean.price_rate)) clean.price_rate = 'требует проверки';
     const key = rpNorm(str(clean.competitor) + '|' + str(clean.offer) + '|' + str(clean.price_rate));
     if (seen[key]) return; seen[key] = true;
     out.push(clean);
   });
   return out;
 }
+// WIP3-B: the visible «Доказательства» sheet must carry ONE canonical row per evidence_id / normalized public URL.
+// The Stage-F bundle historically CONCATENATED the raw social_evidence rows (b.evidence) with the analyst's
+// numbered evidence (an.evidence), so the same Telegram/VK post appeared twice (a raw social_post + a normalized
+// numbered row). Dedup keyed by evidence_id, else normalized URL, else an excerpt fingerprint. The analyst row is
+// preferred (it carries [n] ref / observation kind / quality); a raw row only fills a URL the analyst never cited.
+// The strongest (longest) excerpt and a real collection timestamp are preserved.
+function rpNormUrl(u) { return str(u).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[?#].*$/, '').replace(/\/+$/, ''); }
+function rpEvKey(id, url, excerpt) {
+  var k = str(id).trim(); if (k) return 'id:' + k;
+  var nu = rpNormUrl(url); if (nu) return 'u:' + nu;
+  return 'x:' + rpNorm(excerpt).slice(0, 60);
+}
+function rpDedupeEvidence(bundleEv, analysisEv) {
+  var byKey = {}; var order = [];
+  function put(k, row) { if (!byKey[k]) { byKey[k] = row; order.push(k); } else {
+    var cur = byKey[k];
+    if (str(row.excerpt).length > str(cur.excerpt).length && !/цитата не сохранена/.test(str(row.excerpt))) cur.excerpt = row.excerpt;
+    if (!cur.ref && row.ref) cur.ref = row.ref;
+    if (!cur.finding && row.finding) cur.finding = row.finding;
+    if (!cur.collected_at && row.collected_at) cur.collected_at = row.collected_at;
+    if (!cur.source_quality && row.source_quality) cur.source_quality = row.source_quality;
+  } }
+  (analysisEv || []).forEach(function (e) {
+    // key by the stable evidence_id, else the normalized URL — NEVER the display ref ([1]/[2]), which is not a
+    // cross-source identity and would defeat URL-based dedup against the raw bundle rows.
+    put(rpEvKey(e.evidence_id, e.url, e.excerpt), {
+      ref: str(e.ref), finding: rpFactRu(e.fact_type) + (str(e.type) ? ' (' + str(e.type) + ')' : ''),
+      competitor: str(e.source), excerpt: str(e.excerpt) || 'цитата не сохранена при сборе — ограничение данных',
+      url: str(e.url), source_quality: str(e.quality), collected_at: str(e.collected_at)
+    });
+  });
+  (bundleEv || []).forEach(function (e) {
+    put(rpEvKey(e.evidence_id, e.url || e.profile_url, e.excerpt), {
+      ref: str(e.ref) || '', finding: str(e.finding) || '', competitor: str(e.competitor) || str(e.source_name) || str(e.source_key),
+      excerpt: str(e.excerpt), url: str(e.url) || str(e.profile_url), source_quality: str(e.source_quality || e.quality),
+      collected_at: str(e.collected_at || e.published_at)
+    });
+  });
+  return order.map(function (k) { return byKey[k]; });
+}
 // Execution data mode: reuse vs fresh collection, from the reused_sources audit. ONE derivation feeds both the
 // user-facing Russian label and the canonical technical value — the two sheets can never disagree (§D).
+// REPORT-TRUTH-E (defect 1): a reuse+reuse+collect run must read as «смешанный», never «свежий сбор». Decided from
+// the DETERMINISTIC per-source accounting (execution_summary.sourceAccounting): reused vs freshly-collected source
+// COUNTS derived from each source's typed execution_mode/outcome — NEVER from external-call counts (§WF04→WF20).
+// Rule: reuse+fresh => mixed · reuse only => reuse · fresh only (or no reuse signal) => collect (never fabricate reuse).
 function rpDataMode(sum, b) {
-  const reused = Array.isArray(sum.reused_sources) ? sum.reused_sources.length : 0;
-  if (!reused) return 'collect';
-  const total = (b.source_quality || []).length || (b.competitors || []).length || reused;
-  return reused >= total ? 'reuse' : 'mixed';
+  const reused = Number(sum.sources_reused != null ? sum.sources_reused
+    : (Array.isArray(sum.reused_sources) ? sum.reused_sources.length : 0)) || 0;
+  // fresh-collection count from the deterministic accounting (sources_fresh); fresh_collections is the propagated alias.
+  const freshRaw = (sum.sources_fresh != null) ? sum.sources_fresh : sum.fresh_collections;
+  const fresh = Number(freshRaw);
+  const freshKnown = freshRaw != null && isFinite(fresh);
+  if (reused > 0) {
+    if (freshKnown) return fresh > 0 ? 'mixed' : 'reuse';
+    // fresh count unknown: compare reuse against the contributing total to decide reuse vs mixed.
+    const total = rpContributingCount(sum, b);
+    return reused >= total ? 'reuse' : 'mixed';
+  }
+  // No reuse signal → fresh collection (the historical default). Never fabricate reuse from a missing signal.
+  return 'collect';
 }
 function rpDataModeRu(sum, b) {
   const m = rpDataMode(sum, b);
@@ -89,6 +181,9 @@ function rpShort(s, n) { s = str(s).replace(/\s+/g, ' ').trim(); return s.length
 // Observation label for an evidence row — what KIND of captured fact this quote is.
 const RP_FACT_RU = { positioning: 'позиционирование со страницы источника', offer: 'зафиксированное предложение', general: 'наблюдение из источника' };
 function rpFactRu(v) { return RP_FACT_RU[low(v)] || RP_FACT_RU.general; }
+// WIP2b: user-facing role labels — the report STATES what the source is, from evidence, never from the niche.
+const RP_ROLE_RU = { direct_competitor: 'прямой конкурент', adjacent_player: 'смежный игрок', industry_source: 'отраслевой источник', news_source: 'новостной источник', public_community: 'публичное сообщество', irrelevant_or_uncertain: 'релевантность не подтверждена' };
+function rpRoleRu(v) { return RP_ROLE_RU[low(v)] || RP_ROLE_RU.irrelevant_or_uncertain; }
 
 function buildSheets(b) {
   const sum = b.summary || {};
@@ -97,7 +192,7 @@ function buildSheets(b) {
   // Stage-F analysis rows (analysis_report_ru.analysisXlsxData). Absent on a deterministic-only run -> every
   // Stage-F sheet stays empty and omit_empty drops it.
   const an = b.analysis || {};
-  const scopeStr = [b.niche, b.region, (b.time_window_days ? b.time_window_days + 'd' : '')].filter(Boolean).join(' · ');
+  const scopeStr = [b.niche ? ruNiche(b.niche) : '', b.region, (b.time_window_days ? b.time_window_days + ' дн.' : '')].filter(Boolean).join(' · ');
   const filterStr = b.active_filters ? join(b.active_filters) : '';
   const offers = rpDedupOffers(b.offers);
   const limitations = join(an.unknowns);
@@ -112,7 +207,12 @@ function buildSheets(b) {
     })))
     .filter(r => str(r.recommendation).trim())
     .map(r => (str(r.linked_finding_ids).trim() ? r
-      : Object.assign({}, r, { rationale: (str(r.rationale) ? str(r.rationale) + ' — ' : '') + 'гипотеза (без прямых доказательств в этом отчёте)' })));
+      : Object.assign({}, r, { rationale: (str(r.rationale) ? str(r.rationale) + ' — ' : '') + 'гипотеза (без прямых доказательств в этом отчёте)' })))
+    // WIP3-D: never tell the user to publish INSIDE a third-party source — reframe as own-channel material.
+    .map(r => Object.assign({}, r, { recommendation: ownershipSafeRecommendationRu(r.recommendation) }));
+  // REPORT-TRUTH-E (defect 11): «Следующий шаг» is dropped when no recommendation carries one — an always-empty
+  // column pretends to a field the report does not have.
+  const anyNextAction = recRows.some(r => str(r.next_action).trim());
   const summaryRecs = [].concat(sum.key_recommendations || []).map(str).filter(s => s.trim());
   const recsCell = summaryRecs.length ? join(summaryRecs)
     : recRows.slice(0, 3).map(r => rpShort(r.recommendation, 120)).join('; ');
@@ -142,8 +242,15 @@ function buildSheets(b) {
         { header: 'Ниша', key: 'niche', width: 18 },
         { header: 'Регион запроса', key: 'region', width: 16 },
         { header: 'Дата отчёта', key: 'date', type: 'datetime', width: 20 },
+        // REPORT-TRUTH-E (defect 3): requested vs actual report type + explicit downgrade, so a partial run that
+        // asked for synthesis but delivered a two-source comparison is not silently relabelled.
+        { header: 'Запрошенный тип', key: 'mode_requested', width: 26 },
+        { header: 'Понижение режима', key: 'downgrade', width: 40 },
         { header: 'Найдено конкурентов', key: 'competitors', type: 'integer', width: 18 },
-        { header: 'Проверено источников (в этом запросе)', key: 'sources', type: 'integer', width: 20 },
+        // REPORT-TRUTH-E (defect 5): «собрано заново» = freshly collected THIS run; «в анализе» = sources that
+        // actually contributed evidence (reused + fresh). The synthesis showed «1» though three sources contributed.
+        { header: 'Источников собрано заново', key: 'sources', type: 'integer', width: 22 },
+        { header: 'Источников в анализе', key: 'contributing', type: 'integer', width: 20 },
         { header: 'Качество данных', key: 'quality', width: 16 },
         { header: 'Охват', key: 'scope', width: 26 },
         { header: 'Активные фильтры', key: 'filters', width: 24 },
@@ -160,10 +267,14 @@ function buildSheets(b) {
       ],
       rows: [{
         request: b.agent_request_id, mode: rpModeRu(b.analysis_mode), data_mode: rpDataModeRu(sum, b),
+        mode_requested: rpModeRu(sum.analysis_mode_requested || b.analysis_mode_requested || b.analysis_mode),
+        downgrade: rpDowngradeRu(sum, b),
         niche: b.niche, region: b.region, date: b.created_at,
         competitors: sum.competitors_found != null ? sum.competitors_found : (b.competitors || []).length,
-        // Scope truth: this counts the sources of THIS request, never the global inventory.
-        sources: sum.sources_checked != null ? sum.sources_checked : (b.source_quality || []).length,
+        // Scope truth: this counts the sources of THIS request, never the global inventory. «собрано заново» = FRESH
+        // (rpFreshCount), «в анализе» = contributing (reused+fresh) — two independent values, never conflated.
+        sources: rpFreshCount(sum, b),
+        contributing: rpContributingCount(sum, b),
         quality: sum.quality_status, scope: scopeStr, filters: filterStr,
         findings: join(sum.key_findings),
         recs: recsCell,
@@ -208,6 +319,17 @@ function buildSheets(b) {
       ],
       rows: offers
     },
+    // F-7: cross-source comparison/synthesis — each row states a common pattern, difference or gap and cites the
+    // evidence of the sources it compares. Omit-empty: only present for a comparison/synthesis report.
+    {
+      name: 'Сравнение источников', freeze_header: true, autofilter: true,
+      columns: [
+        { header: 'Аспект', key: 'aspect', width: 22 },
+        { header: 'Сравнение источников', key: 'text', width: 90 },
+        { header: 'Доказательства', key: 'evidence', width: 18 }
+      ],
+      rows: an.comparisons || []
+    },
     // Stage F: ONLY kind=inference — interpretation, kept physically apart from facts so it can never read as one.
     {
       name: 'Аналитические выводы', freeze_header: true, autofilter: true,
@@ -227,7 +349,7 @@ function buildSheets(b) {
         { header: 'Обоснование', key: 'rationale', width: 50 },
         { header: 'Доказательства', key: 'linked_finding_ids', width: 20 },
         { header: 'Следующий шаг', key: 'next_action', width: 40 }
-      ],
+      ].filter(c => c.key !== 'next_action' || anyNextAction),
       // deterministic angles first (authoritative), then the analyst's evidence-cited proposals.
       // REPORT-TRUTH-D: no empty placeholder rows; a recommendation without evidence is explicitly a hypothesis.
       // Same canonical recRows the Summary cell renders from.
@@ -260,14 +382,8 @@ function buildSheets(b) {
       // REPORT-TRUTH-D: each row carries the captured contract — bounded quote, observation kind, collection
       // time, source quality. A quote we did NOT capture is an explicit stated limitation, never a silent blank
       // that makes the evidence look complete — and never a fabricated excerpt.
-      rows: (b.evidence || []).concat((an.evidence || []).map(e => ({
-        ref: str(e.ref),
-        finding: rpFactRu(e.fact_type) + (str(e.type) ? ' (' + str(e.type) + ')' : ''),
-        competitor: str(e.source),
-        excerpt: str(e.excerpt) || 'цитата не сохранена при сборе — ограничение данных',
-        url: str(e.url),
-        source_quality: str(e.quality), collected_at: str(e.collected_at)
-      }))),
+      // WIP3-B: ONE canonical row per evidence_id / normalized URL — no raw+numbered duplicate of the same post.
+      rows: rpDedupeEvidence(b.evidence, an.evidence),
       highlight: (r, c) => c.key === 'source_quality' ? qualityHighlight(r.source_quality) : null
     },
     {
@@ -283,6 +399,27 @@ function buildSheets(b) {
       ],
       rows: (b.source_quality || []).map(r => Object.assign({}, r, { exclusions: join(r.exclusions) })),
       highlight: (r, c) => c.key === 'status' ? qualityHighlight(r.status) : null
+    },
+    // WIP2b: the source ROLE stated from evidence — role, relationship to the niche, whether a direct competitor,
+    // confidence and limitations. Omit-empty: only present when the run classified at least one source.
+    {
+      name: 'Роль источника', freeze_header: true, autofilter: true,
+      columns: [
+        { header: 'Источник', key: 'source', width: 32 },
+        { header: 'Тип', key: 'type', width: 12 },
+        { header: 'Роль', key: 'role', width: 24 },
+        { header: 'Прямой конкурент', key: 'direct', width: 16 },
+        { header: 'Отношение к нише', key: 'relation', width: 30 },
+        { header: 'Уверенность', key: 'confidence', type: 'number', width: 12 },
+        { header: 'Обоснование', key: 'reason', width: 50 },
+        { header: 'Ограничения', key: 'limitations', width: 50 }
+      ],
+      rows: (b.source_roles || []).map(r => ({
+        source: str(r.source_url) || str(r.source_id), type: str(r.source_type) || '—',
+        role: rpRoleRu(r.source_role), direct: r.direct_competitor === true ? 'да' : 'нет',
+        relation: str(r.relationship_to_niche), confidence: Number(r.role_confidence) || 0,
+        reason: str(r.role_reason), limitations: join(r.limitations)
+      }))
     },
     {
       name: 'Изменения', freeze_header: true, autofilter: true,
@@ -382,7 +519,8 @@ function buildReportPackage(bundle, scope, opts) {
   const row_counts = {};
   sheets.forEach(s => { row_counts[s.name] = (s.rows || []).length; });
   return {
-    filename: 'marketing_scout_' + safeReportId(bundle.report_id) + '_report.xlsx',
+    // BRAND-001: user-visible attachment name carries the current public product name (Vinci AI Pilot).
+    filename: 'vinci_ai_pilot_' + safeReportId(bundle.report_id) + '_report.xlsx',
     mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     buffer: buffer, sheet_names: sheets.map(s => s.name), row_counts: row_counts, size_bytes: buffer.length,
     report_id: str(bundle.report_id).trim(), agent_request_id: str(bundle.agent_request_id).trim()
@@ -411,4 +549,4 @@ function shouldSendAttachment(existing, delivery) {
   return { send: true, reason: '' };
 }
 
-module.exports = { buildReportPackage, buildSheets, SHEET_NAMES, STAGE_F_SHEETS, ALWAYS_KEEP_SHEETS, qualityHighlight, attachmentDelivery, shouldSendAttachment, djb2 };
+module.exports = { buildReportPackage, buildSheets, SHEET_NAMES, STAGE_F_SHEETS, ALWAYS_KEEP_SHEETS, qualityHighlight, attachmentDelivery, shouldSendAttachment, djb2, rpDedupeEvidence, rpNormUrl };

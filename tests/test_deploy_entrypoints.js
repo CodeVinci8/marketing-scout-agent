@@ -185,4 +185,48 @@ A.section('DISPATCH-PUBLISH-001 — callable dispatch targets are publishable (n
   A.ok('WF23/WF25 are not in the callable publish set', L2.callableTargets().every(f => !/^2[35]_/.test(f)));
 }
 
+// ------------------------------------------------------------------------------------------------------------
+A.section('CI-HERMETIC-001 — the entrypoints must work on a machine with NO docker (clean GitHub runner)');
+// Root cause this locks: n8n_version_string() ran `docker exec … n8n --version` unconditionally, ignoring the DRY
+// executor. Under the callers' `set -euo pipefail`, a missing docker binary (127) or an absent container (1) made
+// detect_n8n_version()'s command substitution exit the whole script SILENTLY, so --credential-audit never reached
+// its own accounting. The suite therefore passed only where a real n8n container answered — the production VPS —
+// and failed in CI. Here we rebuild a minimal PATH with docker deliberately absent and prove the modes still run.
+{
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'ms-nodocker-')) + '/bin';
+  fs.mkdirSync(bin);
+  const needed = ['bash', 'sh', 'node', 'python3', 'mktemp', 'rm', 'mkdir', 'grep', 'sed', 'awk', 'cat', 'cp',
+    'ls', 'date', 'env', 'dirname', 'basename', 'find', 'sort', 'uniq', 'head', 'tail', 'wc', 'tr', 'cut',
+    'chmod', 'touch', 'id', 'readlink', 'stat', 'xargs', 'printf'];
+  const dirs = String(BASE_PATH || '').split(':').filter(Boolean);
+  let linked = 0;
+  for (const b of needed) {
+    const src = dirs.map(d => path.join(d, b)).find(p => { try { fs.accessSync(p, fs.constants.X_OK); return true; } catch (e) { return false; } });
+    if (src) { try { fs.symlinkSync(src, path.join(bin, b)); linked++; } catch (e) { /* already linked */ } }
+  }
+  A.ok('built a minimal PATH sandbox for the hermetic check', linked >= 20, 'linked=' + linked);
+  const noDocker = (args, extra) => {
+    const env = Object.assign({ PATH: bin, HOME: HOME }, extra || {});
+    try { return { code: 0, out: execFileSync('bash', [DEPLOY].concat(args), { env, encoding: 'utf8', stdio: 'pipe', cwd: ROOT }) }; }
+    catch (e) { return { code: e.status == null ? -1 : e.status, out: (e.stdout || '') + (e.stderr || '') }; }
+  };
+  A.ok('sandbox really has no docker', !fs.existsSync(path.join(bin, 'docker')));
+
+  const dry = { MS_N8N_EXEC_DRY: '1', MS_N8N_MODE: 'docker', MS_N8N_CONTAINER: 'n8n-n8n-1' };
+  const ca = noDocker(['--credential-audit'], dry);
+  A.ok('no-docker: credential-audit reaches its runtime-workflow accounting', /PRODUCTION_RUNTIME_WORKFLOWS=/.test(ca.out), ca.out.slice(-400));
+  A.ok('no-docker: credential-audit emits its verdict marker', /PRODUCTION_CREDENTIAL_AUDIT=/.test(ca.out), ca.out.slice(-400));
+  A.ok('no-docker: an unreachable n8n reports version "unknown", it does not abort',
+    /n8n CLI detected: version unknown/.test(ca.out), ca.out.slice(0, 400));
+  A.ok('no-docker: no shell-init defect', !initDefect(ca.out), ca.out.slice(-400));
+
+  for (const m of ['--status', '--discover', '--check-config', '--verify-bindings', '--offline-plan']) {
+    const r = noDocker([m], dry);
+    A.ok('no-docker: mode ' + m + ' runs without a shell-init defect', !initDefect(r.out), r.out.slice(-300));
+  }
+  // Fail-closed behaviour must survive the fix: a production dry-run with genuinely no n8n still refuses.
+  const fc = noDocker(['--dry-run'], { MS_N8N_MODE: 'docker', MS_N8N_CONTAINER: 'definitely-not-running' });
+  A.ok('no-docker: production dry-run still FAILS CLOSED (no silent OK)', fc.code !== 0 && /requires a reachable n8n/.test(fc.out), fc.out.slice(-300));
+}
+
 A.report('deploy-entrypoints');

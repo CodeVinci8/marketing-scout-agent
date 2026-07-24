@@ -1,14 +1,14 @@
-# CLAUDE.md — Marketing Scout Project Agent
+# CLAUDE.md — Vinci AI Pilot Project Agent
 
 ## Project Purpose
 
-Marketing Scout is an AI-powered automation ecosystem that monitors competitor activity,
+Vinci AI Pilot is an AI-powered automation ecosystem that monitors competitor activity,
 extracts lead signals, and generates content ideas from public web sources.
 It runs on a VPS, orchestrated by n8n, and uses Claude API as its analytical brain.
 
 ## Current Module
 
-**Marketing Scout v0.1** — Manual-triggered pipeline:
+**Vinci AI Pilot v0.1** — Manual-triggered pipeline:
 scrape → normalize → analyze → score → store → notify.
 
 ## Target Stack

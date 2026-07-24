@@ -76,7 +76,8 @@ A.section('WF20 propagation — plan → WF28 type → summary → bundle');
   A.ok('Resolve Approved Plan reads the persisted mode', /analysis_mode:String\(row\.analysis_mode\|\|'source_analysis'\)/.test(rap));
   const w28 = node(wf20, 'Run WF28 (Claude Analyst)');
   const at = JSON.stringify(w28.parameters);
-  A.ok('WF28 receives the plan mode as analysis_type', at.indexOf("analysis_mode || 'source_analysis'") >= 0 && at.indexOf("'single_source'") < 0);
+  // F-7: WF28 receives the RESOLVED mode from Build Analysis Inputs ($json.analysis_type), not the plan label.
+  A.ok('WF28 receives the resolved analysis_type (router output)', at.indexOf('$json.analysis_type') >= 0 && at.indexOf("'single_source'") < 0);
   const sum = node(wf20, 'Build Execution Summary').parameters.jsCode;
   A.ok('summary persists analysis_mode', /analysis_mode:String\(\(g\.plan&&g\.plan\.analysis_mode\)\|\|'source_analysis'\)/.test(sum));
   const bun = node(wf20, 'Shape Report Bundle').parameters.jsCode;

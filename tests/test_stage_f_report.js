@@ -217,4 +217,72 @@ A.section('§6 — real OOXML: Russian headers, hidden technical sheet, clickabl
   A.ok('the hidden sheet DOES carry the AI cost', tech.indexOf('0.084') >= 0);
 }
 
+// WIP2b WIRING: the «Роль источника» sheet states role / relationship / direct_competitor / confidence /
+// limitations from precomputed b.source_roles — and is omit-empty when the run classified nothing.
+A.section('WIP2b wiring — «Роль источника» sheet is rendered from b.source_roles');
+{
+  const str = v => (v == null ? '' : String(v));
+  const withRoles = Object.assign({}, BUNDLE, { source_roles: [
+    { source_id: 't.me/probonds', source_url: 'https://t.me/probonds', source_type: 'telegram', source_role: 'news_source', role_confidence: 0.7, role_reason: 'Новостные публикации о рынке.', direct_competitor: false, evidence_ids: ['ev_1'], relationship_to_niche: 'публичный источник по теме ниши', limitations: ['Новостной источник, не прямой конкурент.'] }
+  ] });
+  const sheets = RP.buildSheets(withRoles);
+  const roleSheet = sheets.find(s => s.name === 'Роль источника');
+  A.ok('«Роль источника» sheet exists when roles present', !!roleSheet && (roleSheet.rows || []).length === 1);
+  const r0 = roleSheet.rows[0];
+  A.eq('role label in Russian', r0.role, 'новостной источник');
+  A.eq('direct competitor = нет', r0.direct, 'нет');
+  A.ok('states relationship to niche', str(r0.relation).length > 0);
+  A.ok('carries limitations', str(r0.limitations).length > 0);
+  // omit-empty: no source_roles -> sheet dropped from the downloadable package
+  const pkg = RP.buildReportPackage(BUNDLE, { owner_user_id: 'o1', agent_request_id: 'req_1', report_id: 'rep_1' }, { omit_empty: true });
+  A.ok('«Роль источника» omitted when empty', pkg.sheet_names.indexOf('Роль источника') < 0);
+}
+
+// WIP3-D/F WIRING: report_package must APPLY the ownership-safe + damaged-fragment guards, not just carry the lib.
+A.section('WIP3-D/F wiring — recommendations are ownership-safe and damaged offers are marked');
+{
+  const str = v => (v == null ? '' : String(v));
+  const b = Object.assign({}, BUNDLE, {
+    recommendations: [{ recommendation: 'Разместить в канале t.me/banksta контент о снижении ставок', linked_finding_ids: 'ev_1', priority: 'high' }],
+    offers: [{ competitor: 'X', offer: 'Ставка пониженна', price_rate: 'пониженна', collected_at: NOW, evidence_url: 'https://x.ru' }]
+  });
+  const sheets = RP.buildSheets(b);
+  const rec = sheets.find(s => s.name === 'Рекомендации');
+  const recText = (rec.rows || []).map(r => str(r.recommendation)).join(' | ');
+  A.ok('third-party publish reframed to own channel', /Подготовить для собственного канала/.test(recText));
+  A.ok('no «Разместить в канале t.me/banksta»', recText.indexOf('Разместить в канале t.me/banksta') < 0);
+  const off = sheets.find(s => s.name === 'Офферы и цены');
+  const offText = (off.rows || []).map(r => str(r.offer) + ' ' + str(r.price_rate)).join(' | ');
+  A.ok('damaged offer/rate marked, not presented as fact', /повреждены|требует проверки/.test(offText));
+  A.ok('the raw «пониженна» fragment is not a confirmed rate', !/^пониженна$/.test(str((off.rows[0] || {}).price_rate)));
+}
+
+// WIP3-B: the visible «Доказательства» sheet has ONE canonical row per evidence_id / normalized URL — never the
+// same post as both a raw social_post and a numbered analyst row.
+A.section('WIP3-B — evidence deduplication (one canonical row per evidence_id/URL)');
+{
+  const bundleEv = [
+    { evidence_id: 'ev_1', competitor: 'rusmicrofinance', url: 'https://t.me/rusmicrofinance/6176', excerpt: 'Полная дословная цитата поста про рынок МФО', published_at: '2026-07-07' },
+    { evidence_id: 'ev_2', competitor: 'rusmicrofinance', url: 'https://t.me/rusmicrofinance/6179', excerpt: 'Второй пост', published_at: '2026-07-08' }
+  ];
+  const analysisEv = [
+    { ref: '[1]', fact_type: 'positioning', source: 'rusmicrofinance', excerpt: 'цитата', url: 'https://t.me/rusmicrofinance/6176', quality: 'ok', collected_at: '2026-07-07', evidence_id: 'ev_1' },
+    { ref: '[3]', fact_type: 'risks', source: 'rusmicrofinance', excerpt: 'третий', url: 'https://t.me/rusmicrofinance/6181', quality: 'ok', collected_at: '2026-07-09', evidence_id: 'ev_3' }
+  ];
+  const rows = RP.rpDedupeEvidence(bundleEv, analysisEv);
+  const urls = rows.map(r => RP.rpNormUrl(r.url));
+  A.eq('no duplicate rows for the same URL', new Set(urls).size, urls.length);
+  A.eq('canonical row count = distinct evidence (6176,6179,6181)', rows.length, 3);
+  const r6176 = rows.find(r => /6176/.test(r.url));
+  A.eq('shared post keeps the analyst ref [1]', r6176.ref, '[1]');
+  A.ok('shared post keeps the strongest excerpt', r6176.excerpt.length >= 'цитата'.length);
+  A.ok('bundle-only URL (6179) is present', rows.some(r => /6179/.test(r.url)));
+  A.ok('analyst-only URL (6181) is present', rows.some(r => /6181/.test(r.url)));
+  // trailing-slash / query variants normalize to one key
+  const variants = RP.rpDedupeEvidence(
+    [{ evidence_id: '', url: 'https://t.me/x/1/', excerpt: 'a' }],
+    [{ ref: '[1]', url: 'https://t.me/x/1?utm=1', excerpt: 'aaaa', fact_type: 'x' }]);
+  A.eq('url variants (slash/query) dedupe to one row', variants.length, 1);
+}
+
 A.report('stage-f-report');

@@ -125,4 +125,47 @@ A.section('E2-ROUTE-001 guard — a source-MANAGEMENT command carrying a domain 
 });
 A.eq('"дай отчет по autolombardn1.ru" still -> analysis (not a source-op)', route('дай отчет по autolombardn1.ru').intent, 'competitor_search');
 
+// ---------------------------------------------------------------------------------------------------------------
+A.section('DISCOVERY-004 — the live defect: a source hunt must stay discovery, never become an analysis approval');
+// Reproduces production exec 1093 (2026-07-19): «Найди телеграмм каналы по птс» was classified competitor_search
+// (confidence 0.85, from=rule), so the user who asked to FIND Telegram channels got a competitor-ANALYSIS approval
+// prompt and, at the end, "no competitor profiles with offers/prices were found" — never a list of channels.
+// The single cause was spelling: `телеграм` does not match «телеграмм …» because the second "м" breaks the
+// following `\s*-?\s*канал`. One extra letter flipped the intent.
+const R2 = require('../n8n/lib/intent_router.js');
+[
+  'Найди телеграмм каналы по птс',           // the exact live message
+  'найди телеграмм-каналы по ПТС',
+  'Найди телеграм каналы по птс',
+  'найди Telegram-каналы по ПТС',
+  'найди tg каналы по автозаймам',
+  'найди тг каналы по птс',
+  'найди каналы в телеграмм по автоломбардам',
+  'найди VK-сообщества по ПТС',
+  'найди вк сообщества по автозаймам',
+  'найди вконтакте группы по птс',
+  'найди паблики вк по автоломбардам',
+  'найди сайты по ПТС',
+  'найди сайты автоломбардов'
+].forEach(function (t) {
+  const r = route(t);
+  A.eq('source hunt stays discovery: "' + t + '"', r.intent, 'competitor_discovery');
+  A.eq('  and its action is discovery (no analysis plan): "' + t + '"', r.action, 'discovery');
+});
+// Discovery must never be gated behind the analysis approval prompt.
+A.ok('competitor_discovery is NOT an approval intent', R2.APPROVAL_INTENTS.indexOf('competitor_discovery') < 0);
+A.ok('competitor_search IS an approval intent (unchanged)', R2.APPROVAL_INTENTS.indexOf('competitor_search') >= 0);
+// The platform must survive into the entities so discovery searches the right network.
+A.includes('telegram platform extracted from the live message',
+  (R2.deterministicIntent({ kind: 'request', text: 'Найди телеграмм каналы по птс' }, {}).entities || {}).platforms || [], 'telegram_channel');
+A.includes('vk platform extracted', (R2.deterministicIntent({ kind: 'request', text: 'найди вк сообщества по птс' }, {}).entities || {}).platforms || [], 'vk_community');
+// Explicit competitive analysis must NOT be dragged into discovery by the looser platform rules.
+[['найди конкурентов', 'competitor_search'],
+ ['найди конкурентов в Москве', 'competitor_search'],
+ ['проанализируй t.me/somechannel', 'competitor_search'],
+ ['сравни конкурентов по ПТС', 'compare_periods']].forEach(function (p) {
+  const got = route(p[0]).intent;
+  A.ok('"' + p[0] + '" is not discovery (got ' + got + ')', got !== 'competitor_discovery');
+});
+
 A.report('discovery-routing');

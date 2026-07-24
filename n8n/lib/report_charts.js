@@ -114,7 +114,7 @@ function renderChart(bundle, type, scope) {
   const title = TITLES[type];
   const subtitle = 'report ' + str(bundle.report_id) + ' · данные на ' + (str(bundle.created_at) || 'unknown');
   const d = chartData(bundle, type);
-  const filename = 'marketing_scout_' + safeReportId(bundle.report_id) + '_chart_' + type + '.svg';
+  const filename = 'vinci_ai_pilot_' + safeReportId(bundle.report_id) + '_chart_' + type + '.svg'; // BRAND-001
   if (d.insufficient_data) {
     return { type: type, title: title, filename: filename, mime: 'image/svg+xml', svg: insufficientSvg(title, subtitle, d.reason),
       insufficient_data: true, reason: d.reason, data_points: 0, report_id: str(bundle.report_id) };

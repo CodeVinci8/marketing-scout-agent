@@ -149,4 +149,57 @@ m('SINGLE_PLAN_BLOCK', true);
 m('NO_INTERNAL_ENUMS_IN_TELEGRAM', true);
 m('ZERO_SOURCE_SCAN_FAILS_CLOSED', true);
 m('CALLBACKS_PRESERVED', true);
+// WIP2 CALLBACK-UX-001 — a callback that cannot be applied gets a clean, self-contained user message; never an
+// internal code / workflow id / row number / ownership detail.
+// CALLBACK-PRIVACY-001 — only self-owned safe states get a specific message; every cross-scope mismatch
+// (owner/chat/request/hash/unknown/malformed) collapses to ONE neutral message that reveals nothing about a
+// foreign plan's existence, owner, chat, id, hash, row or exception.
+A.section('CALLBACK-PRIVACY-001 — callback outcome wording (no internal/foreign leakage)');
+{
+  const NEUTRAL = 'Не удалось применить это подтверждение. Отправьте запрос ещё раз, чтобы создать новый план.';
+  A.eq('duplicate/already-processed -> specific', R.approvalOutcomeRu('not_awaiting_approval:running'), 'Этот план уже запущен или завершён.');
+  A.eq('expired/stale plan -> specific', R.approvalOutcomeRu('no_plan'), 'Этот план устарел. Отправьте запрос ещё раз, чтобы создать новый.');
+  // every cross-scope mismatch -> the SAME neutral message (no distinguishing owner/chat/request/hash)
+  A.eq('owner_mismatch -> neutral', R.approvalOutcomeRu('owner_mismatch'), NEUTRAL);
+  A.eq('chat_mismatch -> neutral', R.approvalOutcomeRu('chat_mismatch'), NEUTRAL);
+  A.eq('request_mismatch -> neutral', R.approvalOutcomeRu('request_mismatch'), NEUTRAL);
+  A.eq('plan_hash_mismatch -> neutral', R.approvalOutcomeRu('plan_hash_mismatch'), NEUTRAL);
+  A.eq('unknown/malformed -> neutral', R.approvalOutcomeRu('totally_unknown_code_xyz'), NEUTRAL);
+  A.eq('empty reason -> neutral', R.approvalOutcomeRu(''), NEUTRAL);
+  // the four privacy-sensitive mismatches must be INDISTINGUISHABLE from each other
+  const set = new Set(['owner_mismatch', 'chat_mismatch', 'request_mismatch', 'plan_hash_mismatch'].map(r => R.approvalOutcomeRu(r)));
+  A.eq('cross-scope mismatches are indistinguishable (single message)', set.size, 1);
+  // no internal token / id leaks for ANY reason
+  for (const s of ['no_plan', 'not_awaiting_approval:x', 'request_mismatch', 'owner_mismatch:1188', 'chat_mismatch', 'plan_hash_mismatch:abc123', 'garbage', 'req_17846:approve']) {
+    const t = R.approvalOutcomeRu(s);
+    A.ok('no internal code/id leaks for "' + s + '"', !/no_plan|not_awaiting|mismatch|plan_hash|req_[0-9]|approve:|reject:|workflow|exec|row|\bid\b|1188|abc123/i.test(t));
+    A.ok('never «план не найден» for "' + s + '"', t.indexOf('план не найден') < 0);
+    A.ok('does not reveal a foreign plan/owner/chat for "' + s + '"', !/автор|чат|владел|другому/i.test(t));
+  }
+}
+
+// WIP2 SOURCE-ROLE-001 — the plan goal must reflect SOURCE TYPE, never assert «конкурент» for a public social
+// source from the niche alone (regression: PRObonds/frank_media/banksta).
+A.section('WIP2/PLAN-GOAL — goal reflects source type + proven signal, NEVER the niche');
+{
+  const base = { intent: 'competitor_market_scan', analysis_mode: 'source_analysis' };
+  const social = Object.assign({}, base, { telegram_channels: ['@probonds'], vk_sources: [], websites: [] });
+  A.eq('social source -> public-source goal', R.planGoalRu(social), 'анализ публичного источника и рыночных сигналов');
+  A.ok('social plan goal is NOT «анализ конкурент…»', R.planGoalRu(social).indexOf('конкурент') < 0);
+  // WIP2-B: a bare website is NOT a competitor by existence/type/niche — default preliminary.
+  const web = Object.assign({}, base, { telegram_channels: [], vk_sources: [], websites: ['autolombardn1.ru'] });
+  A.eq('bare website -> preliminary relevance (not competitor)', R.planGoalRu(web), 'предварительная оценка релевантности публичного источника');
+  A.ok('bare website goal is NOT «анализ конкурента»', R.planGoalRu(web).indexOf('анализ конкурента') < 0);
+  const newsWeb = Object.assign({}, base, { websites: ['banki.ru'] });
+  A.eq('news/aggregator website -> preliminary', R.planGoalRu(newsWeb), 'предварительная оценка релевантности публичного источника');
+  // «анализ конкурента» ONLY with a trusted signal:
+  A.eq('operator-marked competitor -> competitor goal', R.planGoalRu(Object.assign({}, base, { websites: ['x.ru'], known_competitor: true })), 'анализ конкурента');
+  A.eq('stored direct_competitor (conf>=0.6) -> competitor goal', R.planGoalRu(Object.assign({}, base, { websites: ['x.ru'], source_roles: [{ source_role: 'direct_competitor', role_confidence: 0.7 }] })), 'анализ конкурента');
+  A.eq('stored direct_competitor but LOW confidence -> preliminary', R.planGoalRu(Object.assign({}, base, { websites: ['x.ru'], source_roles: [{ source_role: 'direct_competitor', role_confidence: 0.3 }] })), 'предварительная оценка релевантности публичного источника');
+  const mixed = Object.assign({}, base, { telegram_channels: ['@x'], vk_sources: [], websites: ['y.ru'] });
+  A.eq('mixed (no proof) -> preliminary relevance', R.planGoalRu(mixed), 'предварительная оценка релевантности публичного источника');
+  A.eq('comparison mode goal', R.planGoalRu({ analysis_mode: 'comparison', websites: ['a', 'b', 'c'] }), 'сравнение источников');
+  A.eq('discovery goal', R.planGoalRu({ intent: 'competitor_discovery' }), 'поиск новых источников и оценка их релевантности');
+}
+
 A.report('plan-render-ru');

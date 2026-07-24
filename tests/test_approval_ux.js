@@ -42,16 +42,28 @@ A.section('§6 — the estimate is execution-aware (reuse ≠ fresh), never a me
   const pfReuse = CM.sourceReusePreflight(plan, cfg, freshSnap, SX.decideSourceExecution, { owner_user_id: 'u1', now: NOW });
   A.eq('fresh snapshot => reuse predicted', pfReuse.data_mode, 'reuse');
   A.ok('…source collection reused', pfReuse.expect_source_reuse);
-  A.ok('…deep analysis reused', pfReuse.expect_analysis_reuse);
+  // COST-REUSE-002 (residual-risk #1): source reuse only makes a deep-analysis cache hit POSSIBLE — the analysis
+  // key (owner+analysis_type+evidence_hash+schema+prompt+model) may still MISS. Without confirmation the estimate
+  // must NOT promise a $0 analysis.
+  A.ok('…deep analysis reuse is POSSIBLE, not promised (no confirmation supplied)', pfReuse.analysis_reuse_possible === true && pfReuse.expect_analysis_reuse === false);
   const projReuse = CM.projectRequestCost(plan, cfg, { preflight: pfReuse });
   A.eq('reuse => $0 collection', projReuse.breakdown.collection_usd, 0);
-  A.eq('reuse => $0 deep analysis', projReuse.breakdown.claude_analysis_usd, 0);
+  A.ok('reuse WITHOUT a confirmed cache hit still QUOTES the deep analysis (never a promised $0)', projReuse.breakdown.claude_analysis_usd > 0);
   A.ok('reuse => a nonzero summary component remains (never exact $0)', projReuse.breakdown.summary_ai_usd > 0 && projReuse.projected_cost_usd > 0);
   const rMsg = RP.planApprovalMessageRu(plan, { data_mode: projReuse.data_mode, cost: projReuse }).text;
   has('reuse msg states saved data', rMsg, 'используются сохранённые данные');
   has('reuse msg shows $0 collection with snapshot date', rMsg, 'сбор данных: $0 (сохранённый снимок от 2026-07-18)');
-  has('reuse msg shows deep analysis reused', rMsg, 'AI-анализ: $0 (будет переиспользован сохранённый анализ)');
+  hasnt('reuse msg must NOT promise a guaranteed $0 AI-analysis', rMsg, 'AI-анализ: $0');
+  has('reuse msg quotes AI-analysis honestly with the spend condition', rMsg, 'спишется, если готового анализа под этот отчёт ещё нет');
   has('reuse msg still shows a summary-AI cost', rMsg, 'AI-сводка: ~$');
+
+  // …but when the caller CONFIRMS a matching cached analysis exists, the $0 reuse prediction is honest and returns.
+  const pfConfirmed = CM.sourceReusePreflight(plan, cfg, freshSnap, SX.decideSourceExecution, { owner_user_id: 'u1', now: NOW, analysis_reuse_confirmed: true });
+  A.ok('confirmed cache hit => deep analysis reuse predicted', pfConfirmed.expect_analysis_reuse === true);
+  const projConfirmed = CM.projectRequestCost(plan, cfg, { preflight: pfConfirmed });
+  A.eq('confirmed reuse => $0 deep analysis', projConfirmed.breakdown.claude_analysis_usd, 0);
+  const cMsg = RP.planApprovalMessageRu(plan, { data_mode: projConfirmed.data_mode, cost: projConfirmed }).text;
+  has('confirmed reuse msg shows $0 deep analysis', cMsg, 'AI-анализ: $0 (будет переиспользован сохранённый анализ)');
 
   // no snapshot => fresh collection estimate, DIFFERENT from reuse
   const pfFresh = CM.sourceReusePreflight(plan, cfg, [], SX.decideSourceExecution, { owner_user_id: 'u1', now: NOW });
@@ -143,11 +155,13 @@ A.section('§8 — neutral, state-aware completion wording (no directional «в�
   has('no-data wording', done, '✅ Проверка завершена. Данные для анализа не получены.');
   has('partial wording', done, '⚠️ Анализ завершён частично. Доступные результаты отправлены.');
   has('failure wording', done, '⚠️ Анализ не завершён: данные получить не удалось.');
-  // the terminal edit is downstream of the LAST delivery branch (send OR explicit skip)
+  // the terminal edit is downstream of the LAST delivery branch (send OR explicit skip). F-2: the send branch now
+  // passes through the «XLSX Sent?» verification gate (a real document_message_id) before the terminal ✅.
   const conns = wf20.connections;
   const xlsxReady = conns['XLSX Ready?'].main;
   A.ok('skip branch reaches Progress: Done', JSON.stringify(xlsxReady).indexOf('Progress: Done') >= 0);
-  A.ok('send branch reaches Progress: Done', JSON.stringify(conns['Send Report XLSX'].main).indexOf('Progress: Done') >= 0);
+  A.ok('send branch reaches Progress: Done via the XLSX Sent? gate',
+    JSON.stringify(conns['Send Report XLSX'].main).indexOf('XLSX Sent?') >= 0 && JSON.stringify(conns['XLSX Sent?'].main).indexOf('Progress: Done') >= 0);
 }
 
 A.report('approval-ux');

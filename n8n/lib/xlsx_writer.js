@@ -60,11 +60,33 @@ function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').repla
 function colLetter(n) { let s = ''; n = n + 1; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
 function cellRef(r, c) { return colLetter(c) + (r + 1); }
 
+// REPORT-TRUTH-E (defect 4): user-facing dates render in Moscow wall-clock (MSK = UTC+3, no DST), matching the
+// filename and Telegram time. The datetime column headers are labelled «(МСК)» so the timezone is explicit.
+var XLSX_MSK_OFFSET_MIN = 180;
+// TIMESTAMP CONTRACT — aligned with the CANONICAL producer contract in ms_time.js (instantOf), applied exactly once:
+//   1. ISO WITH a zone — «…Z» or «…±HH:MM» (e.g. 2026-07-24T09:00:00Z, 2026-07-24T12:00:00+03:00): Date.parse
+//      resolves the true UTC instant; add ONE fixed MSK offset → Moscow wall-clock. Both forms of the same instant
+//      render identically. This is what every real producer emits (.toISOString() → Z, ms_time.toRFC3339 → +03:00).
+//   2. ISO WITHOUT a zone (timezone-naive, e.g. 2026-07-24T12:00:00): ms_time interprets a zone-less value as
+//      product-timezone (Moscow) WALL-CLOCK — so the written digits ARE already МСК. We render them LITERALLY (parse
+//      the digits at UTC, add NO offset). Date-only (YYYY-MM-DD) → that calendar date at 00:00, never day-shifted.
+//   3. Anything unparseable → null (rejected; the cell renders empty, never a wrong date).
+// The MSK offset is added ONLY on the zoned path (case 1). A naive value never gets it — so a naive «12:00» shows
+// «12:00 МСК», not «15:00». There is no double shift: cases 1 and 2 are mutually exclusive by the zone test.
+var XLSX_ZONED_RE = /(?:[zZ]|[+\-]\d{2}:?\d{2})$/;                                       // ends in Z or ±HH:MM
+var XLSX_NAIVE_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/; // zone-less ISO / date-only
 // Excel serial date (1900 system, 1899-12-30 = 0). Returns null when not a parseable date.
 function excelSerial(iso) {
-  const t = Date.parse(String(iso));
-  if (!isFinite(t)) return null;
-  return t / 86400000 + 25569;
+  var s = String(iso == null ? '' : iso).trim();
+  if (!s) return null;
+  if (XLSX_ZONED_RE.test(s)) {                                     // case 1: zoned instant → Moscow wall-clock
+    var tz = Date.parse(s);
+    return isFinite(tz) ? (tz + XLSX_MSK_OFFSET_MIN * 60000) / 86400000 + 25569 : null;
+  }
+  var m = s.match(XLSX_NAIVE_RE);                                  // case 2: zone-less digits ARE Moscow wall-clock
+  if (!m) return null;                                            // case 3: unparseable → rejected
+  var t = Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+  return isFinite(t) ? t / 86400000 + 25569 : null;               // rendered literally, NO offset
 }
 
 // Style indices baked into styles.xml below (cellXfs order is fixed).
@@ -139,7 +161,7 @@ function sheetXml(sheet) {
   const sheetViews = '<sheetViews><sheetView workbookViewId="0">' + pane + '</sheetView></sheetViews>';
 
   // header row
-  let body = '<row r="1">' + cols.map((c, i) => '<c r="' + cellRef(0, i) + '" s="' + STYLE.header + '" t="inlineStr"><is><t xml:space="preserve">' + esc(c.header) + '</t></is></c>').join('') + '</row>';
+  let body = '<row r="1">' + cols.map((c, i) => '<c r="' + cellRef(0, i) + '" s="' + STYLE.header + '" t="inlineStr"><is><t xml:space="preserve">' + esc(c.header + (c.type === 'datetime' ? ' (МСК)' : '')) + '</t></is></c>').join('') + '</row>';
   // hyperlinks collected for the rels + <hyperlinks> block
   const links = [];
   rows.forEach((r, ri) => {

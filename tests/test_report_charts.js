@@ -57,7 +57,7 @@ A.section('renderAll + idempotency + isolation');
 const all = C.renderAllCharts(b, scope);
 A.eq('all chart types rendered', all.length, C.CHART_TYPES.length);
 A.eq('idempotent svg', C.renderChart(b, 'competitor_score', scope).svg, C.renderChart(F.currentReport(), 'competitor_score', scope).svg);
-A.ok('filename scoped to report', score.filename === 'marketing_scout_report_20260621_101500_chart_competitor_score.svg');
+A.ok('filename scoped to report', score.filename === 'vinci_ai_pilot_report_20260621_101500_chart_competitor_score.svg');
 let threw = false;
 try { C.renderChart(b, 'competitor_score', { report_id: 'other' }); } catch (e) { threw = /scope mismatch/.test(e.message); }
 A.ok('cross-report rejected', threw);

@@ -88,6 +88,32 @@ function ccSynthesisTool() {
   return { name: 'submit_synthesis', description: 'Submit the cross-competitor synthesis. Every comparison/opportunity cites evidence_ids from the package. Russian narrative; no invented facts.', input_schema: CC_SYNTHESIS_SCHEMA };
 }
 
+// ---- public-lead interpretation (WIP4 mode 3) ---------------------------------------------------------------
+// PUBLIC audience/lead evidence only. Each lead separates the OBSERVED public fact from the INTERPRETATION
+// (need/pain/buying-intent), is evidence-bound, and carries confidence. No private identity inference, no contact.
+var CC_LEAD_SIGNALS = ['need', 'pain', 'buying_intent', 'none'];
+var CC_LEAD_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['overview_ru', 'leads', 'limitations_ru', 'used_evidence_ids'],
+  properties: {
+    overview_ru: { type: 'string' },
+    leads: { type: 'array', items: {
+      type: 'object', additionalProperties: false, required: ['observed_fact_ru', 'interpretation_ru', 'signal', 'confidence', 'evidence_ids'],
+      properties: {
+        observed_fact_ru: { type: 'string' },          // what the public post literally says
+        interpretation_ru: { type: 'string' },          // inferred need/pain/buying-intent (NOT a fact)
+        signal: { type: 'string', enum: CC_LEAD_SIGNALS },
+        confidence: { type: 'integer', minimum: 0, maximum: 100 },
+        evidence_ids: { type: 'array', items: { type: 'string' } }
+      } } },
+    limitations_ru: { type: 'array', items: { type: 'string' } },
+    used_evidence_ids: { type: 'array', items: { type: 'string' } }
+  }
+};
+function ccLeadTool() {
+  return { name: 'submit_public_leads', description: 'Interpret PUBLIC audience evidence only. Separate observed_fact_ru (literal public text) from interpretation_ru (inferred need/pain/buying-intent). Cite evidence_ids. Never infer private identity, never suggest contacting a person.', input_schema: CC_LEAD_SCHEMA };
+}
+
 // ---- local validator (pragmatic JSON-schema subset) ---------------------------------------------------------
 function ccTypeOf(v) {
   if (Array.isArray(v)) return 'array';
@@ -125,6 +151,58 @@ function validateStructured(obj, schema, path) {
   return errs;
 }
 
+// ---- TOOLUSE-COERCE-001: tool_use payload normalization -----------------------------------------------------
+// The gateway's tool_use transport intermittently serializes a nested array/object PARAMETER as a JSON STRING
+// instead of the container itself. Observed live in production: WF28 exec 1252 (req_76722084, zalog24h.ru)
+// returned a complete, correct, fully evidence-cited analysis whose `items` arrived as a string. The validator
+// rejected it on type ("$.items: expected array, got string"), a bounded repair was billed, the repair returned
+// the same shape, and the run fell through to the deterministic fallback — the user paid for two real calls
+// (12217 in / 651 out, $0.0464) and received no AI analysis at all.
+//
+// Coercion is safe and narrowly scoped: a string is replaced ONLY when the schema expects an array/object, the
+// string parses as JSON, AND the parsed value is exactly the expected type. The CONTENT is never altered — only
+// its encoding. Anything that fails any of those conditions is left untouched so validation still fails honestly
+// (a genuinely malformed payload must still reach the repair/fallback path).
+//
+// Returns { value, coerced: [paths] }. `coerced` is surfaced as telemetry so a transport quirk stays observable
+// instead of silently disappearing.
+function ccNormalizeStructured(obj, schema, path, acc) {
+  path = path || '$'; acc = acc || [];
+  if (!schema || typeof schema !== 'object') return { value: obj, coerced: acc };
+  var t = schema.type;
+  if ((t === 'array' || t === 'object') && typeof obj === 'string') {
+    var s = obj.trim();
+    if ((t === 'array' && s.charAt(0) === '[') || (t === 'object' && s.charAt(0) === '{')) {
+      try {
+        var parsed = JSON.parse(s);
+        if (ccTypeOf(parsed) === t) { obj = parsed; acc.push(path); }
+      } catch (e) { /* not JSON — leave as-is so validateStructured reports the real type error */ }
+    }
+  }
+  // PURE: never mutate the caller's object. A parsed provider response may be inspected, re-validated or
+  // re-used elsewhere (and tests share fixtures) — in-place rewriting made a second normalization silently
+  // find nothing to do, which is exactly how the coercion telemetry first went missing.
+  if (t === 'object' && obj && typeof obj === 'object' && !Array.isArray(obj)) {
+    var props = schema.properties || {};
+    var outO = null;
+    Object.keys(props).forEach(function (k) {
+      if (obj[k] === undefined) return;
+      var r = ccNormalizeStructured(obj[k], props[k], path + '.' + k, acc);
+      if (r.value !== obj[k]) { if (!outO) { outO = {}; Object.keys(obj).forEach(function (kk) { outO[kk] = obj[kk]; }); } outO[k] = r.value; }
+    });
+    if (outO) obj = outO;
+  }
+  if (t === 'array' && Array.isArray(obj) && schema.items) {
+    var outA = null;
+    for (var i = 0; i < obj.length; i++) {
+      var ri = ccNormalizeStructured(obj[i], schema.items, path + '[' + i + ']', acc);
+      if (ri.value !== obj[i]) { if (!outA) outA = obj.slice(); outA[i] = ri.value; }
+    }
+    if (outA) obj = outA;
+  }
+  return { value: obj, coerced: acc };
+}
+
 // Collect every evidence_ids / used_evidence_ids value anywhere in the object and check membership in allowedIds.
 function collectEvidenceIds(obj, acc) {
   acc = acc || [];
@@ -149,7 +227,7 @@ function validateEvidenceIds(obj, allowedIds) {
 
 module.exports = {
   CC_SCHEMA_VERSION, CC_PROMPT_VERSION, CC_DIMENSIONS, CC_KINDS, CC_PRIORITIES, CC_CANDIDATE_VERDICTS,
-  CC_ANALYSIS_SCHEMA, CC_CANDIDATE_SCHEMA, CC_SYNTHESIS_SCHEMA,
-  ccAnalysisTool, ccCandidateTool, ccSynthesisTool,
-  validateStructured, validateEvidenceIds, collectEvidenceIds
+  CC_ANALYSIS_SCHEMA, CC_CANDIDATE_SCHEMA, CC_SYNTHESIS_SCHEMA, CC_LEAD_SCHEMA, CC_LEAD_SIGNALS,
+  ccAnalysisTool, ccCandidateTool, ccSynthesisTool, ccLeadTool,
+  validateStructured, validateEvidenceIds, collectEvidenceIds, ccNormalizeStructured
 };

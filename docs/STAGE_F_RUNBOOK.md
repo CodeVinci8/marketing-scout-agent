@@ -67,3 +67,59 @@ docker exec n8n-n8n-1 sh -c "n8n update:workflow --id=<id> --active=true"
 
 ## Rollback
 Every deploy backs up the prior workflow export to `scratchpad/backup_*`; re-import that JSON + reactivate to roll back.
+
+## Deployment & runtime integrity (canonical — added session 71, slice F-1)
+
+**Every workflow import MUST be followed by a runtime-integrity check.** `/healthz`, the workflow inventory and
+`RestartCount` are all insufficient: each stayed green through a three-hour production outage.
+
+### Two hazards this procedure exists to catch
+
+| Code | What happens | How it was observed | Remedy |
+|---|---|---|---|
+| `DEACTIVATED_BY_IMPORT` | `n8n import:workflow` **deactivates the workflow it imports**. | Sessions 70 and 71, WF28: active 17 → 16 both times. | `n8n update:workflow --id=<id> --active=true`, then re-assert the count. |
+| `RUNTIME_WEBHOOK_MISSING` | A CLI import does not notify the **running** process. An active webhook-trigger workflow can have `active=1` in the DB while `webhook_entity` has **no row** and the real path 404s. | Session 70: the Telegram gateway was dead ~3 h. `/healthz` ok, inventory 90/17, `RestartCount=0`. Telegram queued real user messages and redelivered them on restart (exec 1254). | **Controlled** `docker restart n8n-n8n-1`, then re-check. |
+
+### Canonical procedure
+
+```bash
+# 1. BACKUP FIRST — always, before any import
+docker exec n8n-n8n-1 sh -c "n8n export:workflow --id=<ID> --output=/tmp/d.json >/dev/null 2>&1"
+docker cp n8n-n8n-1:/tmp/d.json scratchpad/backup/prod_<ID>_$(date -u +%Y%m%d_%H%M%S).json
+
+# 2. Merge repo jsCode into the live export (aborts on ANY structural change)
+node tools/deploy_workflow_jscode.js <backup.json> n8n/workflows/<repo>.json /tmp/merged.json
+
+# 3. Import, then IMMEDIATELY republish — the import deactivates
+docker cp /tmp/merged.json n8n-n8n-1:/tmp/merged.json
+docker exec n8n-n8n-1 n8n import:workflow --input=/tmp/merged.json
+docker exec n8n-n8n-1 n8n update:workflow --id=<ID> --active=true
+
+# 4. MANDATORY runtime gate — exit 0 required
+node tools/verify_runtime_integrity.js --expect-total 90 --expect-active 17 \
+     --must-active mslocf50ab8007ca,mswf28claudeanalyst,QBNFpiZE_IHKUKkf
+```
+
+Exit 1 means a real failure; the report states whether a controlled restart is required. Re-run after the
+restart — never leave it failing.
+
+### Is a restart required after an import?
+
+- **Callable sub-workflows** (WF19/20/21/22/24/25/26/27/28 …): **no.** `executeWorkflow` loads the definition
+  from the DB at call time, so new `jsCode` is live immediately. Verified repeatedly (session 65 WF19,
+  session 71 WF28 exec 1268).
+- **Active trigger workflows** (WF18): **yes.** Its nodes are served from the in-memory active-workflow
+  registry, and its webhook registration can be lost entirely by an import. Always restart, then re-run the gate.
+
+### The benign runtime probe
+
+`verify_runtime_integrity.js` POSTs `{}` to the ingress path with **no** secret header. The WF18 ingress
+security gate terminates it after six nodes (`Telegram Webhook → Respond 200 → Ingress Security Gate →
+Ingress Accepted? → Terminate Safely → Terminate Ack Needed?`) — no Telegram message, no plan, no Sheets row,
+no cost. Proven live: exec 1271. Only a 404 counts as "not served"; a 403/security rejection means the path
+*is* served, which is what we are testing.
+
+**Acceptance probes must never produce an unexplained user-facing message.** Session 70 sent an
+`approve <bogus-id>` callback into the operator's real chat, which surfaced as «Этот план устарел…»
+(msg 557) with nothing marking it as a test. Use this unauthenticated probe for runtime checks; when a probe
+must reach a real lane, label it explicitly in the message text.

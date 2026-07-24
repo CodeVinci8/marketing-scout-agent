@@ -56,13 +56,23 @@ function sourceReusePreflight(plan, cfg, snapshots, decideFn, opts) {
   }
   var total = webTargets.length;
   var mode = (total && reused >= total) ? 'reuse' : (reused > 0 ? 'mixed' : 'collect');
-  // Deep-analysis reuse is expected exactly when the source is reused (same evidence => same cache key). The
-  // per-report summary AI still runs, so this never claims a $0 total.
+  // COST-REUSE-002 (Stage-F residual-risk #1): source-snapshot reuse makes a deep-analysis cache hit POSSIBLE, not
+  // CERTAIN. The analysis cache key is owner+analysis_type+evidence_hash+schema+prompt+model and needs a
+  // non-fallback row to actually exist (llm_telemetry.findReusableAnalysis) — the SAME evidence still MISSES when
+  // the report mode, the model, or the schema/prompt version differ, or when the snapshot was never analysed
+  // (live-proven: exec 1004, same evidence hash under change_report → fresh paid call). At approval time we cannot
+  // cheaply confirm the hit (it needs the built evidence package + hash + an llm_analysis_results read), so we
+  // PREDICT analysis reuse ONLY when the caller passes explicit proof via opts.analysis_reuse_confirmed. Absent
+  // that proof the estimate honestly quotes the deep-analysis cost and never promises a guaranteed $0.
   var claudeOn = cfg.claude_available !== false && cfg.enable_claude !== false;
+  var sourceReuse = !refresh && total > 0 && reused >= total;
+  var analysisReusePossible = sourceReuse && claudeOn;
   return {
     data_mode: refresh ? 'refresh' : mode,
-    expect_source_reuse: !refresh && total > 0 && reused >= total,
-    expect_analysis_reuse: !refresh && total > 0 && reused >= total && claudeOn,
+    expect_source_reuse: sourceReuse,
+    // Only a CONFIRMED cache hit zeroes the deep-analysis cost; the "possible" flag drives honest hedge wording.
+    expect_analysis_reuse: analysisReusePossible && opts.analysis_reuse_confirmed === true,
+    analysis_reuse_possible: analysisReusePossible,
     snapshot_collected_at: newest, per_source: per
   };
 }
@@ -195,6 +205,9 @@ function projectRequestCost(plan, cfg, opts) {
     data_mode: pf ? String(pf.data_mode || 'collect') : '',
     reuse_collection: reuseCollection,
     reuse_analysis: reuseAnalysis,
+    // COST-REUSE-002: source is reused but a matching saved analysis is NOT confirmed — the deep-analysis cost
+    // stays quoted; the renderer marks it as spend-only-if-no-saved-analysis rather than a promised $0.
+    reuse_analysis_possible: !!(pf && pf.analysis_reuse_possible) && !reuseAnalysis,
     snapshot_collected_at: pf ? String(pf.snapshot_collected_at || '') : '',
     planned_calls: calls,
     breakdown: breakdown
