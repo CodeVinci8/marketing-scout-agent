@@ -1127,7 +1127,7 @@ injection from model output. Asserted by test.
 **WF04-ROUTE-002 — new `n8n/lib/error_sanitizer.js`.** technical_errors/skipped_log are durable human-readable tabs
 built FROM a provider response. Sanitizer redacts sk-ant-/sk-/AIza/gh*_/JWT/bearer/basic/cookie/generic key:value/
 url-query secrets, strips thinking, scrubs PII, caps at 300 chars. Embedded (drift-tested) at the ONE persistence
-choke point per router. **Proven on the real WF04 node**: `Authorization: Bearer sk-ant-api03-LEAK…` →
+choke point per router. **Proven on the real WF04 node**: `Authorization: Bearer sk-ant-***` (redacted example) →
 `Authorization: [скрыто] [скрыто]`; `{"api_key":"topsecret12345"}` → `{"api_key": [скрыто]}`; thinking/email/phone
 gone; `"blocked"`/`401` kept for triage.
 
