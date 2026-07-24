@@ -352,3 +352,20 @@ F-2 terminal edit-in-place, and the discovery→comparison handoff — all execu
 XLSX, persisted to Sheets, within the cost cap. The earlier downgraded attempt is root-caused as a legitimate
 external bot-protection skip (not a defect). Fresh VK live-collect remains an OPTIONAL, non-blocking external
 item (operator ROOT env change: `MS_ENABLE_VK=true` **and** `vk` in `MS_SOURCE_ALLOWLIST`).
+
+## Пост-гейт WIP1 (2026-07-24) — усиление правдивости отчётов (офлайн, $0, НЕ задеплоено)
+
+Независимая проверка трёх выгруженных XLSX после гейта нашла воспроизводимые дефекты пользовательских отчётов.
+Исправлено в канонических библиотеках и генераторе; **живых/платных вызовов и деплоя не было.**
+
+| Дефект (пользовательский) | Каноническая причина и исправление | Проверка (офлайн) |
+|---|---|---|
+| «свежий сбор» на прогоне с повторным использованием; свежие/участвовавшие/вызовы путались | Детерминированный учёт вынесен в `execution_summary.sourceAccounting` (корзины reuse/fresh/rejected по типизированному `execution_mode`/`source_outcome`/`status`); свежие **никогда** не выводятся из внешних вызовов. `report_package.rpFreshCount` = только `sources_fresh`; `rpDataMode` = по счётчикам. Проброс в бандл в `Shape Report Bundle`; `external_calls_actual` отдельно. `.first()`→`.all()` для fan-out VK. | `test_report_integrity` 6 сценариев учёта + независимость fresh≠contributing≠calls |
+| Ограничение о карантине противоречило здоровому детерминированному качеству | `arQualityContradictionGuard`/`crQualityContradictionGuard` — source-aware + fail-closed, дедуп идентичностей с приоритетом (`arResolveSourceStates`): «здоров» ⇔ все наблюдения здоровы; снятие только для названного здорового источника или когда все contributing здоровы. Единое поведение Telegram/XLSX | смешанные состояния (healthy+quarantined / all-healthy / all-rejected / unknown / конфликт / named / aggregate) для обоих рендереров |
+| Свойство одного источника вещалось как «все три»; ломкая правка русской грамматики | `arBroadcastGuard`/`crBroadcastGuard` — только детекция квантора (noun-anchored), исходная фраза сохраняется, добавляется приписка «Подтверждено не для всех участвовавших источников (подтверждено: …)»; атрибуция не выдумывается; идемпотентно | варианты «все три/все игроки/у всех/каждый/оба/обе», негативы «каждый месяц»/«все предлагают», идемпотентность, XLSX≡Telegram |
+| Даты на 3 ч позади МСК / риск двойного сдвига | `xlsx_writer.excelSerial` приведён к каноническому `ms_time.instantOf`: зонированные → мгновение + один сдвиг МСК; зонанезависимые = настенное время Москвы, рендерятся буквально; нераспознаваемое → пусто. Реальные метки `…+03:00` (exec 1349) подтверждают | Z / +03:00 / наивное / невалидное; XLSX≡Telegram время МСК; нет двойного сдвига |
+
+**Совокупная проверка:** `node tests/run_all.js` → **156 наборов, 0 провалов, 8861 assert, exit 0, внешних вызовов 0**;
+`test_report_integrity` **143/0**. Генератор идемпотентен (побайтово); перегенерированы только WF20/WF24/WF25.
+Три отчёта перестроены офлайн из сохранённых данных и проинспектированы (1370 сравнение / 1380 понижение / 1390 синтез) —
+все проверки чек-листа зелёные. **Состояние:** код готов и зелёный локально; не запушено/не смёржено/не задеплоено.

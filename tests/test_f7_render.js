@@ -58,7 +58,8 @@ A.section('XLSX — the comparison becomes rows with RESOLVABLE cross-source evi
 {
   const x = AR.analysisXlsxData([COMPARISON]);
   A.eq('two comparison rows', x.comparisons.length, 2);
-  A.eq('aspect kept', x.comparisons[0].aspect, 'positioning');
+  // REPORT-TRUTH-E (defect 7): a raw English aspect key is a leaked enum — it renders as a Russian label.
+  A.eq('aspect translated to Russian', x.comparisons[0].aspect, 'Позиционирование');
   // ev_N is remapped to the visible [n] the «Доказательства» sheet uses — the raw id must not survive.
   A.ok('evidence column uses visible [n], not raw ev_N', /\[\d+\]/.test(x.comparisons[0].evidence) && noEvLeak(x.comparisons[0].evidence));
   A.ok('comparison row cites both source markers', /\[1\]/.test(x.comparisons[0].evidence) && /\[2\]/.test(x.comparisons[0].evidence));

@@ -45,6 +45,35 @@ const RP_MODE_RU = {
   monitoring_insight: 'мониторинговое уведомление'
 };
 function rpModeRu(v) { return RP_MODE_RU[low(v)] || RP_MODE_RU.source_analysis; }
+// REPORT-TRUTH-E (defect 3): the downgrade cell states, in plain Russian, that the requested mode was not delivered
+// and why. Empty when the delivered mode equals the requested one (no downgrade).
+function rpDowngradeRu(sum, b) {
+  const requested = low(sum.analysis_mode_requested || b.analysis_mode_requested || '');
+  const actual = low(b.analysis_mode || sum.analysis_mode || '');
+  const flagged = sum.analysis_mode_downgraded === true || b.analysis_mode_downgraded === true;
+  if (!flagged && (!requested || requested === actual)) return '';
+  const reason = str(sum.analysis_mode_reason_ru || b.analysis_mode_reason_ru || '');
+  return 'запрошен «' + rpModeRu(requested || actual) + '», построен «' + rpModeRu(actual) + '»'
+    + (reason ? (': ' + reason) : '');
+}
+// REPORT-TRUTH-E (defect 5): sources that actually contributed evidence to the analysis (reused + fresh), distinct
+// from «собрано заново» (fresh only). Prefer the analysis router's contributing count, then the deterministic
+// collection accounting (execution_summary.sourceAccounting), then structural fallbacks.
+function rpContributingCount(sum, b) {
+  if (Number(sum.contributing_sources) > 0) return Number(sum.contributing_sources);
+  if (Number(sum.sources_contributing) > 0) return Number(sum.sources_contributing);
+  const q = (b.source_quality || []).length, c = (b.competitors || []).length;
+  return q || c || (sum.sources_checked != null ? Number(sum.sources_checked) || 0 : 0);
+}
+// REPORT-TRUTH-E (defect 5): «Источников собрано заново» = FRESHLY collected THIS run — the deterministic
+// sources_fresh count (execution_summary.sourceAccounting), NOT sources_checked (admitted = reused+fresh). A run that
+// reused 2 snapshots and collected 1 must read «1 собрано заново», not «3». fresh_collections is the propagated alias;
+// only when neither deterministic fresh signal exists do we fall back to the admitted/structural count (legacy data).
+function rpFreshCount(sum, b) {
+  if (sum.sources_fresh != null) return Number(sum.sources_fresh) || 0;
+  if (sum.fresh_collections != null) return Number(sum.fresh_collections) || 0;
+  return sum.sources_checked != null ? Number(sum.sources_checked) || 0 : (b.source_quality || []).length;
+}
 function rpHost(u) { const m = str(u).match(/^https?:\/\/([^\/?#]+)/i); return m ? m[1].replace(/^www\./i, '') : ''; }
 function rpSourceType(u) {
   const h = low(rpHost(u));
@@ -117,11 +146,25 @@ function rpDedupeEvidence(bundleEv, analysisEv) {
 }
 // Execution data mode: reuse vs fresh collection, from the reused_sources audit. ONE derivation feeds both the
 // user-facing Russian label and the canonical technical value — the two sheets can never disagree (§D).
+// REPORT-TRUTH-E (defect 1): a reuse+reuse+collect run must read as «смешанный», never «свежий сбор». Decided from
+// the DETERMINISTIC per-source accounting (execution_summary.sourceAccounting): reused vs freshly-collected source
+// COUNTS derived from each source's typed execution_mode/outcome — NEVER from external-call counts (§WF04→WF20).
+// Rule: reuse+fresh => mixed · reuse only => reuse · fresh only (or no reuse signal) => collect (never fabricate reuse).
 function rpDataMode(sum, b) {
-  const reused = Array.isArray(sum.reused_sources) ? sum.reused_sources.length : 0;
-  if (!reused) return 'collect';
-  const total = (b.source_quality || []).length || (b.competitors || []).length || reused;
-  return reused >= total ? 'reuse' : 'mixed';
+  const reused = Number(sum.sources_reused != null ? sum.sources_reused
+    : (Array.isArray(sum.reused_sources) ? sum.reused_sources.length : 0)) || 0;
+  // fresh-collection count from the deterministic accounting (sources_fresh); fresh_collections is the propagated alias.
+  const freshRaw = (sum.sources_fresh != null) ? sum.sources_fresh : sum.fresh_collections;
+  const fresh = Number(freshRaw);
+  const freshKnown = freshRaw != null && isFinite(fresh);
+  if (reused > 0) {
+    if (freshKnown) return fresh > 0 ? 'mixed' : 'reuse';
+    // fresh count unknown: compare reuse against the contributing total to decide reuse vs mixed.
+    const total = rpContributingCount(sum, b);
+    return reused >= total ? 'reuse' : 'mixed';
+  }
+  // No reuse signal → fresh collection (the historical default). Never fabricate reuse from a missing signal.
+  return 'collect';
 }
 function rpDataModeRu(sum, b) {
   const m = rpDataMode(sum, b);
@@ -167,6 +210,9 @@ function buildSheets(b) {
       : Object.assign({}, r, { rationale: (str(r.rationale) ? str(r.rationale) + ' — ' : '') + 'гипотеза (без прямых доказательств в этом отчёте)' })))
     // WIP3-D: never tell the user to publish INSIDE a third-party source — reframe as own-channel material.
     .map(r => Object.assign({}, r, { recommendation: ownershipSafeRecommendationRu(r.recommendation) }));
+  // REPORT-TRUTH-E (defect 11): «Следующий шаг» is dropped when no recommendation carries one — an always-empty
+  // column pretends to a field the report does not have.
+  const anyNextAction = recRows.some(r => str(r.next_action).trim());
   const summaryRecs = [].concat(sum.key_recommendations || []).map(str).filter(s => s.trim());
   const recsCell = summaryRecs.length ? join(summaryRecs)
     : recRows.slice(0, 3).map(r => rpShort(r.recommendation, 120)).join('; ');
@@ -196,8 +242,15 @@ function buildSheets(b) {
         { header: 'Ниша', key: 'niche', width: 18 },
         { header: 'Регион запроса', key: 'region', width: 16 },
         { header: 'Дата отчёта', key: 'date', type: 'datetime', width: 20 },
+        // REPORT-TRUTH-E (defect 3): requested vs actual report type + explicit downgrade, so a partial run that
+        // asked for synthesis but delivered a two-source comparison is not silently relabelled.
+        { header: 'Запрошенный тип', key: 'mode_requested', width: 26 },
+        { header: 'Понижение режима', key: 'downgrade', width: 40 },
         { header: 'Найдено конкурентов', key: 'competitors', type: 'integer', width: 18 },
-        { header: 'Проверено источников (в этом запросе)', key: 'sources', type: 'integer', width: 20 },
+        // REPORT-TRUTH-E (defect 5): «собрано заново» = freshly collected THIS run; «в анализе» = sources that
+        // actually contributed evidence (reused + fresh). The synthesis showed «1» though three sources contributed.
+        { header: 'Источников собрано заново', key: 'sources', type: 'integer', width: 22 },
+        { header: 'Источников в анализе', key: 'contributing', type: 'integer', width: 20 },
         { header: 'Качество данных', key: 'quality', width: 16 },
         { header: 'Охват', key: 'scope', width: 26 },
         { header: 'Активные фильтры', key: 'filters', width: 24 },
@@ -214,10 +267,14 @@ function buildSheets(b) {
       ],
       rows: [{
         request: b.agent_request_id, mode: rpModeRu(b.analysis_mode), data_mode: rpDataModeRu(sum, b),
+        mode_requested: rpModeRu(sum.analysis_mode_requested || b.analysis_mode_requested || b.analysis_mode),
+        downgrade: rpDowngradeRu(sum, b),
         niche: b.niche, region: b.region, date: b.created_at,
         competitors: sum.competitors_found != null ? sum.competitors_found : (b.competitors || []).length,
-        // Scope truth: this counts the sources of THIS request, never the global inventory.
-        sources: sum.sources_checked != null ? sum.sources_checked : (b.source_quality || []).length,
+        // Scope truth: this counts the sources of THIS request, never the global inventory. «собрано заново» = FRESH
+        // (rpFreshCount), «в анализе» = contributing (reused+fresh) — two independent values, never conflated.
+        sources: rpFreshCount(sum, b),
+        contributing: rpContributingCount(sum, b),
         quality: sum.quality_status, scope: scopeStr, filters: filterStr,
         findings: join(sum.key_findings),
         recs: recsCell,
@@ -292,7 +349,7 @@ function buildSheets(b) {
         { header: 'Обоснование', key: 'rationale', width: 50 },
         { header: 'Доказательства', key: 'linked_finding_ids', width: 20 },
         { header: 'Следующий шаг', key: 'next_action', width: 40 }
-      ],
+      ].filter(c => c.key !== 'next_action' || anyNextAction),
       // deterministic angles first (authoritative), then the analyst's evidence-cited proposals.
       // REPORT-TRUTH-D: no empty placeholder rows; a recommendation without evidence is explicitly a hypothesis.
       // Same canonical recRows the Summary cell renders from.

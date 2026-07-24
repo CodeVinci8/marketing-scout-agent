@@ -9,6 +9,43 @@
 function str(v) { return v == null ? '' : String(v).trim(); }
 function num(v, d) { const n = Number(v); return isFinite(n) ? n : (d === undefined ? 0 : d); }
 
+// REPORT-TRUTH-E (WF04→WF20 contract): classify ONE adapter into exactly one deterministic collection bucket from
+// its TYPED execution_mode / source_outcome / status — NEVER from external-call counts. A freshly collected source
+// can cost many external calls; a reused source costs none; the two must never be conflated. Buckets:
+//   reused   — answered from a saved accepted snapshot ($0 collection)
+//   fresh    — freshly collected (or refreshed) THIS run, with data
+//   rejected — failed / quarantined / ran-but-produced-nothing-usable (did NOT contribute evidence)
+// "Contributing" downstream = reused ∪ fresh.
+function classifyAdapterSource(a) {
+  a = a || {};
+  const mode = str(a.execution_mode).toLowerCase();
+  const outcome = str(a.source_outcome).toLowerCase();
+  const status = str(a.status).toLowerCase();
+  if (a.quarantined === true || status === 'quarantined' || status === 'failed') return 'rejected';
+  if (mode === 'reuse' || outcome === 'reused_snapshot') return 'reused';
+  const hasData = a.outcome_has_data === true || num(a.items_written, 0) > 0
+    || outcome === 'collected_with_data' || outcome === 'refreshed_with_data' || status === 'ok';
+  return hasData ? 'fresh' : 'rejected';
+}
+// Deterministic source accounting over ALL adapters: counts + identities for reused / fresh / rejected /
+// contributing, plus the SEPARATE external-call total. These are the structured fields the report renders — the
+// data-mode («свежий сбор» / «повторное использование» / «смешанный») is derived from these, never from call counts.
+function sourceAccounting(adapters) {
+  adapters = Array.isArray(adapters) ? adapters.filter(Boolean) : [];
+  const buckets = { reused: [], fresh: [], rejected: [] };
+  adapters.forEach(a => { buckets[classifyAdapterSource(a)].push(str(a.source) || str(a.source_run_id) || 'source'); });
+  const uniq = arr => arr.filter((v, i) => arr.indexOf(v) === i);
+  const fresh = uniq(buckets.fresh), reused = uniq(buckets.reused), rejected = uniq(buckets.rejected);
+  const contributing = uniq(buckets.fresh.concat(buckets.reused));
+  return {
+    sources_fresh: buckets.fresh.length, fresh_sources: fresh,
+    sources_reused: buckets.reused.length, reused_source_keys: reused,
+    sources_rejected: buckets.rejected.length, rejected_sources: rejected,
+    sources_contributing: contributing.length, contributing_source_keys: contributing,
+    external_calls: adapters.reduce((s, a) => s + num(a.external_calls, 0), 0)
+  };
+}
+
 function buildExecutionSummary(parts) {
   parts = parts || {};
   const req = parts.request || {};
@@ -39,6 +76,8 @@ function buildExecutionSummary(parts) {
   else if (state === 'failed') next_action = blocking.length ? ('resolve: ' + blocking[0]) : 'inspect failed state events';
   else next_action = 'request in progress (' + state + ')';
 
+  const acct = sourceAccounting(adapters);
+
   return {
     agent_request_id: str(req.agent_request_id),
     final_state: state,
@@ -65,7 +104,16 @@ function buildExecutionSummary(parts) {
     records_eligible: num(analysis.records_eligible, 0),
     records_analyzed: num(analysis.records_analyzed, 0),
     records_reported: num(aggregation.rows_after_filters, num(report.rows_after_filters, 0)),
-    external_calls: adapters.reduce((a, r) => a + num(r.external_calls, 0), 0),
+    // external COLLECTION calls (Firecrawl pages / Apify searches …). A COUNT OF CALLS — deliberately distinct from
+    // the count of freshly collected SOURCES (sources_fresh): one source may cost several calls, a reused source none.
+    external_calls: acct.external_calls,
+    // REPORT-TRUTH-E (WF04→WF20): deterministic, call-count-independent source accounting. reuse/fresh/mixed is
+    // derived downstream from THESE, never from external_calls. Identities travel alongside the counts so the report
+    // can name which sources were reused vs freshly collected vs rejected.
+    sources_fresh: acct.sources_fresh, fresh_sources: acct.fresh_sources,
+    sources_reused: acct.sources_reused, reused_source_keys: acct.reused_source_keys,
+    sources_rejected: acct.sources_rejected, rejected_sources: acct.rejected_sources,
+    sources_contributing: acct.sources_contributing, contributing_source_keys: acct.contributing_source_keys,
     // SOURCE-REUSE-001: sources answered from a saved accepted snapshot ($0 collection). The delivery layer MUST
     // tell the user saved data was used and when it was really collected — a reuse must never look like a fresh scrape.
     reused_sources: adapters
@@ -93,4 +141,4 @@ function buildExecutionSummary(parts) {
   };
 }
 
-module.exports = { buildExecutionSummary };
+module.exports = { buildExecutionSummary, classifyAdapterSource, sourceAccounting };

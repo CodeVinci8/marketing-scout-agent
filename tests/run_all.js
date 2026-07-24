@@ -160,6 +160,9 @@ const JS_SUITES = [
   ['f2-delivery', 'test_f2_delivery.js'],
   ['f8-discovery-comparison', 'test_f8_discovery_comparison.js'],
   ['f8b-telegram-regression', 'test_f8b_telegram_regression.js'],
+  // REPORT-TRUTH-E: delivered-XLSX row integrity (no doubled recs/pains) + report-truth fields (mixed mode,
+  // requested/actual/downgrade, contributing count, per-evidence source, translated aspects, MSK dates, claim guards)
+  ['report-integrity', 'test_report_integrity.js'],
   ['report-text-safety', 'test_report_text_safety.js'],
   ['telegram-commands', 'test_telegram_commands.js'],
   ['attachment-routing', 'test_attachment_routing.js'],

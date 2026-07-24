@@ -58,19 +58,105 @@ function crStripEv(s) {
     .replace(/\[\s*,\s*/g, '[').replace(/,\s*\]/g, ']').replace(/\[\s*\]/g, '')
     .replace(/\s+([;,.)])/g, '$1').replace(/\s{2,}/g, ' ').trim();
 }
+// REPORT-TRUTH-E (defects 8/9/10): the SAME claim guards the workbook applies (arQualityContradictionGuard /
+// arBroadcastGuard / arHypothesisGuard), mirrored here byte-for-byte in behaviour so the Telegram answer never
+// over-claims where the XLSX does not, and never contradicts the deterministic per-source quality. Self-contained
+// (embed contract — no cross-lib require).
+var CR_GAP_RE = /незанят|не\s*закрыт|незакрыт|пробел|никто\s+(?:из|не)|отсутствует\s+на\s+рынке|свободн[а-яё]*\s+ниш|неудовлетвор[а-яё]+\s+спрос|незакрыт[а-яё]+\s+спрос/i;
+function crEvSource(e) { var s = crStr(e && e.source_id); if (s && s.toLowerCase() !== 'multi') return s; var m = crStr(e && (e.url || e.source_url)).match(/^https?:\/\/([^\/?#]+)/i); return m ? m[1].replace(/^www\./i, '') : ''; }
+// distinct real source identities a set of ev ids spans (via the analysis evidence_map). Order preserved, deduped —
+// the basis for both the broadcast coverage check and the «подтверждено: …» attribution.
+function crCitedSources(ids, a) {
+  var em = (a && a.evidence_map) || [], by = {};
+  em.forEach(function (e) { by[crStr(e.id)] = crEvSource(e); });
+  var seen = {}, out = [];
+  (ids || []).forEach(function (id) { var s = by[crStr(id)]; if (s && !seen[s]) { seen[s] = true; out.push(s); } });
+  return out;
+}
+function crCitedCount(ids, a) { return crCitedSources(ids, a).length; }
+function crHypothesisGuard(t, n) { t = crStr(t); if (!t) return t; if (n && n > 3) return t; if (/гипотез|предполож|вероятн|возможно/i.test(t)) return t; return CR_GAP_RE.test(t) ? (t.replace(/[\s.]*$/, '') + ' (гипотеза на основе выборки из ' + (n || 'нескольких') + ' источников)') : t; }
+// STRUCTURED fail-closed broadcast guard (mirrors arBroadcastGuard): DETECT a universal quantifier; if the cited
+// evidence does not cover every contributing source, keep the clause intact (no fragile Cyrillic regex surgery) and
+// APPEND a neutral, grammatical disclaimer — listing the supporting sources when known. Never invents attribution.
+// NOUN-ANCHORED universal detector — identical contract to analysis_report_ru.AR_UNIVERSAL_RE (fires on «все три
+// источника»/«все игроки»/«у всех конкурентов»/«каждый конкурент»/«оба источника»/«обе компании»; never on temporal
+// «каждый месяц» or a bare verb «все предлагают»).
+var CR_SRC_NOUN = 'источник|игрок|конкурент|компани|сайт|канал|сообществ|бренд|площадк|фирм|организац|сервис';
+var CR_UNIVERSAL_RE = new RegExp('(^|[\\s(«"])(?:все\\s+(?:три|3|четыре|4|пять|5|(?:' + CR_SRC_NOUN + ')[а-яё]*)'
+  + '|(?:у|для|во)\\s+всех|кажд(?:ый|ая|ое|ые)\\s+(?:из\\s+(?:трёх|трех|четырёх|четырех|пяти|них)|(?:' + CR_SRC_NOUN + ')[а-яё]*)'
+  + '|об[ае]\\s+(?:' + CR_SRC_NOUN + ')[а-яё]*)', 'i');
+var CR_NOT_ALL_RU = 'Подтверждено не для всех участвовавших источников';
+function crBroadcastGuard(t, cited, total, supportedIds) {
+  t = crStr(t);
+  if (!t || !total || total < 2) return t;                     // "all" is meaningless below 2 sources
+  if (cited && cited >= total) return t;                       // evidence covers every source → keep as-is
+  if (!CR_UNIVERSAL_RE.test(t)) return t;                      // no universal quantifier → nothing to qualify
+  if (t.indexOf(CR_NOT_ALL_RU) >= 0) return t;                 // already qualified (idempotent)
+  var ids = (Array.isArray(supportedIds) ? supportedIds : []).filter(Boolean);
+  var note = CR_NOT_ALL_RU + (ids.length ? (' (подтверждено: ' + ids.join(', ') + ')') : '');
+  return t.replace(/[\s.]*$/, '') + '. ' + note + '.';
+}
+// Source-aware quality-contradiction guard (mirrors arQualityContradictionGuard): drop an AI limitation claiming
+// quarantine/blocked/uncollected ONLY when provably false against the DETERMINISTIC per-source state — it NAMES a
+// healthy/accepted source, or it is an AGGREGATE claim while EVERY contributing source is healthy/accepted. Keep a
+// limitation that names a genuinely quarantined source, or an aggregate claim while ANY source is not-healthy /
+// unknown. Fail-closed: never delete a legitimate quarantine warning because a DIFFERENT source is healthy.
+var CR_QUALITY_NEG_RE = /каранти|quarantin|заблокир|недоступ|не\s+удалось\s+собра|данные\s+не\s+(?:были\s+)?собра|источник[а-яё]*\s+отклон|отклон[а-яё]+\s+источник/i;
+var CR_HEALTHY_STATES = ['healthy', 'ok', 'accepted', 'eligible', 'good'];
+function crIsHealthyState(s) { return CR_HEALTHY_STATES.indexOf(crStr(s).toLowerCase()) >= 0; }
+function crNamedIn(text, id) {
+  var i = crStr(id).toLowerCase(); if (!i || (i.length < 4 && i.indexOf('.') < 0)) return false;
+  return crStr(text).toLowerCase().indexOf(i) >= 0;
+}
+// DEDUP + PRECEDENCE (mirrors arResolveSourceStates): collapse multiple/conflicting observations of the same source
+// id to ONE record, fail-closed — a source is HEALTHY only when EVERY observation is a recognized healthy state; any
+// non-healthy/unknown observation makes it not-healthy. A conflict never silently resolves to healthy.
+function crResolveSourceStates(sourceStates) {
+  var byId = {}, order = [];
+  (Array.isArray(sourceStates) ? sourceStates : []).forEach(function (s) {
+    var id = crStr(s && (s.id != null ? s.id : s.source));
+    var status = crStr(s && (s.status != null ? s.status : s));
+    if (!status) return;
+    if (!(id in byId)) { byId[id] = { id: id, statuses: [status] }; order.push(id); }
+    else byId[id].statuses.push(status);
+  });
+  return order.map(function (id) {
+    var st = byId[id].statuses;
+    var healthy = st.every(function (s) { return crIsHealthyState(s); });
+    var shown = healthy ? st[0] : (st.filter(function (s) { return !crIsHealthyState(s); })[0] || st[0]);
+    return { id: id, status: shown, healthy: healthy };
+  });
+}
+function crQualityContradictionGuard(limitations, sourceStates) {
+  var states = crResolveSourceStates(sourceStates);
+  if (!states.length) return (limitations || []).slice();     // no deterministic state → cannot disprove anything
+  var allHealthy = states.every(function (s) { return s.healthy; });
+  return (limitations || []).filter(function (l) {
+    var t = crStr(l); if (!CR_QUALITY_NEG_RE.test(t)) return true;              // not a quality-negative claim → keep
+    var named = states.filter(function (s) { return crNamedIn(t, s.id); });
+    if (named.length) return !named.every(function (s) { return s.healthy; });  // drop iff every named source healthy
+    return !allHealthy;                                                        // aggregate: drop iff ALL sources healthy
+  });
+}
 function crComparison(analyses) {
   var out = { overview: '', comparisons: [], pains: [], opportunities: [], experiments: [] };
   (analyses || []).forEach(function (a) {
     if (!crUsable(a)) return;
     var an = a.analysis || {};
     if (!Array.isArray(an.comparisons)) return; // not a comparison result
-    if (!out.overview) out.overview = crTrim(crStripEv(an.overview_ru), 300);
+    var total = Number((a.source || {}).source_count) || crCitedCount((a.evidence_map || []).map(function (e) { return crStr(e.id); }), a);
+    if (!out.overview) out.overview = crHypothesisGuard(crTrim(crStripEv(an.overview_ru), 300), total);
     (an.comparisons || []).forEach(function (c) {
-      var t = crTrim(crStripEv(c && c.text_ru), 160);
+      var cited = crCitedSources(c.evidence_ids, a);
+      var t = crTrim(crHypothesisGuard(crBroadcastGuard(crStripEv(c && c.text_ru), cited.length, total, cited), total), 160);
       if (t && (c.evidence_ids || []).length) out.comparisons.push(t);
     });
-    (an.recurring_pains_ru || []).forEach(function (t) { var s = crTrim(crStripEv(t), 120); if (s) out.pains.push(s); });
-    (an.opportunities || []).forEach(function (o) { var t = crTrim(crStripEv(o && o.text_ru), 140); if (t && (o.evidence_ids || []).length) out.opportunities.push(t); });
+    (an.recurring_pains_ru || []).forEach(function (t) { var s = crTrim(crHypothesisGuard(crStripEv(t), total), 120); if (s) out.pains.push(s); });
+    (an.opportunities || []).forEach(function (o) {
+      var cited = crCitedSources(o.evidence_ids, a);
+      var t = crTrim(crHypothesisGuard(crBroadcastGuard(crStripEv(o && o.text_ru), cited.length, total, cited), total), 140);
+      if (t && (o.evidence_ids || []).length) out.opportunities.push(t);
+    });
     (an.recommended_experiments || []).forEach(function (o) { var t = crTrim(crStripEv(o && o.text_ru), 140); if (t) out.experiments.push(t); });
   });
   return out;
@@ -154,10 +240,22 @@ function crReuseLine(summary) {
 function crEvidenceLine(bundle, analyses, xlsxExpected) {
   var ev = Array.isArray(bundle && bundle.evidence) ? bundle.evidence.length : 0;
   var unknowns = [];
+  // REPORT-TRUTH-E (defect 8, source-aware): build {id,status} pairs from the DETERMINISTIC per-source quality
+  // (bundle source_quality + cited evidence, keyed by source id/host) so the guard reasons per source, not in
+  // aggregate — the Telegram line must never contradict the XLSX «Качество источника», but must also never suppress
+  // a genuine quarantine warning just because a DIFFERENT source is healthy.
+  var qSourceStates = [];
+  ((bundle && bundle.source_quality) || []).forEach(function (q) {
+    var host = ''; var m = crStr(q && q.url).match(/^https?:\/\/([^\/?#]+)/i); if (m) host = m[1].replace(/^www\./i, '');
+    qSourceStates.push({ id: crStr(q && (q.source_id || q.source || q.host)) || host, status: crStr(q && q.status) });
+  });
   (analyses || []).forEach(function (a) {
     if (!crUsable(a)) return;
     ((a.analysis.unknowns_ru) || []).forEach(function (u) { var t = crTrim(u, 120); if (t && unknowns.indexOf(t) < 0) unknowns.push(t); });
+    ((a.analysis.limitations_ru) || []).forEach(function (u) { var t = crTrim(u, 120); if (t && unknowns.indexOf(t) < 0) unknowns.push(t); });
+    (a.evidence_map || []).forEach(function (e) { if (crStr(e.quality_status)) qSourceStates.push({ id: crEvSource(e), status: crStr(e.quality_status) }); });
   });
+  unknowns = crQualityContradictionGuard(unknowns, qSourceStates);
   var bits = [];
   if (ev) bits.push('Основано на ' + ev + ' подтверждённых фрагментах данных');
   if (unknowns.length) bits.push('требует проверки: ' + unknowns[0]);
@@ -309,4 +407,8 @@ function crFinish(lines, profile, maxLen) {
   return { text: text, length: text.length, profile: profile };
 }
 
-module.exports = { CR_HARD_MAX, crCompactReportRu, crOfferFacts, crKind, crRecs, crHeader, crReuseLine, crEvidenceLine, crFinish };
+module.exports = {
+  CR_HARD_MAX, crCompactReportRu, crOfferFacts, crKind, crRecs, crHeader, crReuseLine, crEvidenceLine, crFinish,
+  crBroadcastGuard, crHypothesisGuard, crCitedSources, crCitedCount, crQualityContradictionGuard,
+  crResolveSourceStates, crIsHealthyState, crNamedIn, CR_NOT_ALL_RU
+};
