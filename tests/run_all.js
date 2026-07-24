@@ -163,6 +163,14 @@ const JS_SUITES = [
   // REPORT-TRUTH-E: delivered-XLSX row integrity (no doubled recs/pains) + report-truth fields (mixed mode,
   // requested/actual/downgrade, contributing count, per-evidence source, translated aspects, MSK dates, claim guards)
   ['report-integrity', 'test_report_integrity.js'],
+  // WIP4 stale-CI-path fix: these offline suites existed and passed but were never in the registry, so CI never
+  // ran them. Registered (not deleted) — they cover real behaviour: discovery libs/routing, NL memory intent,
+  // URL intake, WF04 cross-request source reuse. All $0, no network.
+  ['discovery-libs', 'test_discovery_libs.js'],
+  ['discovery-routing', 'test_discovery_routing.js'],
+  ['memory-intent', 'test_memory_intent.js'],
+  ['url-intake', 'test_url_intake.js'],
+  ['wf04-source-reuse', 'test_wf04_source_reuse.js'],
   ['report-text-safety', 'test_report_text_safety.js'],
   ['telegram-commands', 'test_telegram_commands.js'],
   ['attachment-routing', 'test_attachment_routing.js'],
