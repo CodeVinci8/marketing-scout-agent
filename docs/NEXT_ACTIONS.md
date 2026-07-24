@@ -4,6 +4,27 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
+## СЕССИЯ 75 (2026-07-24) — пост-гейтовое усиление отчётов + CI + документация (в работе, НЕ смёржено)
+
+Работа на ветке `fix/stage-f-post-migration-acceptance`. Живых/платных прогонов и деплоя нет.
+
+- **WIP1 — правдивость отчётов (СДЕЛАНО, коммит `cb3c40a`).** Контракт учёта источников WF04→WF20
+  (reuse/fresh/rejected/contributing, без вывода из числа вызовов), source-aware качество (fail-closed),
+  структурные универсальные заявления с припиской, контракт МСК-времени по `ms_time`. `test_report_integrity`
+  143/0; полная регрессия 156 наборов / 8861 assert / 0 провалов. Три отчёта (1370/1380/1390) перестроены
+  офлайн и проинспектированы.
+- **WIP2 — CI (СДЕЛАНО, коммит `647f56e`).** Исторический провал `offline-regression` был на `make test`
+  (deploy-entrypoints, теперь 74/0); секрет-скан больше не ложно срабатывает на фикстурах санитайзера
+  (собираются в рантайме, сам скан не тронут). Свежий прогон: PR #49, run `30129297676` — **SUCCESS**.
+- **WIP3 — документация (СДЕЛАНО).** Компактный русскоязычный набор: `README.md`, `docs/GUIDE_RU.md`,
+  `docs/CAPABILITIES_RU.md` (матрица возможностей с уровнями доказанности), `docs/ARCHITECTURE_RU.md`,
+  `docs/OPERATIONS_RU.md`. Исторические стадийные документы сохранены как evidence-архив.
+- **Осталось:** WIP4 — консервативная чистка мёртвого кода (с доказательством отсутствия ссылок);
+  затем git-интеграция (merge в `main` после зелёного CI). Первый по-настоящему открытый критерий приёмки
+  после Stage F — начало **Stage F.5** (см. ниже), которое НЕ начинается без команды оператора.
+
+---
+
 ## CURRENT PRIORITY (2026-07-24, session 74) — STAGE F GATED → next is Stage F.5
 
 **Stage F is COMPLETE and gated (`STAGE F COMPLETE — GO FOR F.5`).** All required live proofs are closed:
