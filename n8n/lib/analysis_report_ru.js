@@ -245,7 +245,13 @@ function analysisXlsxData(analyses, rendered) {
   }).map(function (i) {
     return { source: i.source_id, kind: arDimensionRu(i.dimension), text: i.text, evidence: mk(i.markers) };
   });
-  var evidence = (r.evidence_list || []).map(function (e) {
+  // A comparison/synthesis analysis has NO fact/inference/rec items, so renderAnalysisSectionsRu takes its
+  // no-grounded-content early return and hands back evidence_list:[] — even though arBuildEvidenceIndex DID build a
+  // valid ev_N -> URL index from the multi-source package's evidence_map (and set each analysis's __local). Fall
+  // back to that index directly so the comparison's sources still populate the «Доказательства» sheet and its
+  // [n] refs resolve. (Single-source runs keep using r.evidence_list — identical numbering, same analyses.)
+  var evList = (r.evidence_list && r.evidence_list.length) ? r.evidence_list : arBuildEvidenceIndex(analyses).list;
+  var evidence = evList.map(function (e) {
     return { ref: '[' + e.n + ']', source: e.source_id, url: e.url, type: e.type,
       excerpt: arStr(e.excerpt), fact_type: arStr(e.fact_type),
       collected_at: arStr(e.collected_at), quality: arStr(e.quality) };
@@ -260,30 +266,51 @@ function analysisXlsxData(analyses, rendered) {
     comparisons: cmp.comparisons, overview: cmp.overview };
 }
 
+// The internal ev_N ids the comparison analysis cites must NEVER reach the user (see the header rule) — they are
+// remapped to the SAME visible [n] markers the «Доказательства» sheet uses, via the analysis's __local index.
+// arComparisonXlsx runs after arBuildEvidenceIndex (analysisXlsxData builds the index first), so __local is set.
+function arRemapEvIds(ids, local) {
+  local = local || {};
+  var seen = {}, nums = [];
+  (ids || []).forEach(function (id) { var n = local[arStr(id)]; if (n && !seen[n]) { seen[n] = true; nums.push(n); } });
+  nums.sort(function (a, b) { return a - b; });
+  return nums.map(function (n) { return '[' + n + ']'; }).join(' ');
+}
+// The model routinely embeds citations INLINE in text_ru («…ценовой якорь [ev_1, ev_2]; …»). Rewrite each inline
+// ev_N to its visible [n] (or drop it when unmapped), then tidy the punctuation an empty replacement can leave.
+function arRemapEvText(text, local) {
+  local = local || {};
+  return arStr(text)
+    .replace(/\[?\bev_(\d+)\b\]?/g, function (m, d) { var n = local['ev_' + d]; return n ? ('[' + n + ']') : ''; })
+    .replace(/\[\s*,\s*/g, '[').replace(/,\s*\]/g, ']').replace(/\[\s*\]/g, '')
+    .replace(/\s+([;,.)])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+}
+
 // Extract the comparison/synthesis shape into workbook-ready rows. Opportunities and experiments become
-// recommendations; recurring pains become pain rows; comparisons get their own list.
+// recommendations; recurring pains become pain rows; comparisons get their own list. Every ev_N (inline in the
+// text AND in evidence_ids) is remapped to the visible [n] that resolves in the «Доказательства» sheet.
 function arComparisonXlsx(analyses) {
   var comparisons = [], recommendations = [], pains = [], overview = '';
   (analyses || []).forEach(function (a) {
     if (!arUsable(a)) return;
     var an = a.analysis || {};
     if (!Array.isArray(an.comparisons)) return;
-    if (!overview) overview = arTrim(an.overview_ru, 400);
-    var mk = function (ids) { return (ids || []).map(function (x) { return '[' + arStr(x) + ']'; }).join(' '); };
+    var local = a.__local || {};
+    if (!overview) overview = arTrim(arRemapEvText(an.overview_ru, local), 400);
     (an.comparisons || []).forEach(function (c) {
-      var t = arTrim(c && c.text_ru, 400); if (!t || !(c.evidence_ids || []).length) return;
-      comparisons.push({ aspect: arStr(c.aspect) || 'сравнение', text: t, evidence: mk(c.evidence_ids) });
+      var t = arTrim(arRemapEvText(c && c.text_ru, local), 400); if (!t || !(c.evidence_ids || []).length) return;
+      comparisons.push({ aspect: arStr(c.aspect) || 'сравнение', text: t, evidence: arRemapEvIds(c.evidence_ids, local) });
     });
     (an.opportunities || []).forEach(function (o) {
-      var t = arTrim(o && o.text_ru, 400); if (!t || !(o.evidence_ids || []).length) return;
-      recommendations.push({ source: 'сравнение', text: t, priority: arPriorityRu('medium'), evidence: mk(o.evidence_ids) });
+      var t = arTrim(arRemapEvText(o && o.text_ru, local), 400); if (!t || !(o.evidence_ids || []).length) return;
+      recommendations.push({ source: 'сравнение', text: t, priority: arPriorityRu('medium'), evidence: arRemapEvIds(o.evidence_ids, local) });
     });
     (an.recommended_experiments || []).forEach(function (o) {
-      var t = arTrim(o && o.text_ru, 400); if (!t) return;
-      recommendations.push({ source: 'эксперимент', text: t, priority: arPriorityRu(o.priority), evidence: mk(o.evidence_ids || []) });
+      var t = arTrim(arRemapEvText(o && o.text_ru, local), 400); if (!t) return;
+      recommendations.push({ source: 'эксперимент', text: t, priority: arPriorityRu(o.priority), evidence: arRemapEvIds(o.evidence_ids || [], local) });
     });
     (an.recurring_pains_ru || []).forEach(function (p) {
-      var t = arTrim(p, 300); if (!t) return;
+      var t = arTrim(arRemapEvText(p, local), 300); if (!t) return;
       pains.push({ source: 'сравнение', kind: 'общая боль', text: t, evidence: '' });
     });
   });

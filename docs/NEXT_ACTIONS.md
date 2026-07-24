@@ -4,7 +4,29 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## CURRENT PRIORITY (2026-07-17, session 59) — HEALTH-LINEAGE-001 is a QUALITY POLICY: needs an operator decision
+## CURRENT PRIORITY (2026-07-24, session 74) — STAGE F GATED → next is Stage F.5
+
+**Stage F is COMPLETE and gated (`STAGE F COMPLETE — GO FOR F.5`).** All required live proofs are closed:
+2-source comparison, **3-source synthesis (no downgrade, `submit_synthesis`, 3 contributors)**, F-2 terminal
+edit, discovery→comparison handoff — delivered to Telegram + XLSX, persisted to Sheets, within the $0.50 cap
+(~$0.44 spent). The earlier downgraded attempt is root-caused as a legitimate external bot-protection skip
+(`carcapital.ru` KillBot wall) — not a defect, no code change. One focused local commit on
+`fix/stage-f-post-migration-acceptance`. **NOT pushed/merged/PR'd** (operator ruling stands).
+
+**Immediate next action (do NOT start without operator go):** begin **Stage F.5** (Unified Analysis Result /
+Analyst Agent — WF27 candidate enrichment + public-lead interpretation are the remaining analysis-mode
+extensions folded into F.5 per STAGE_F_ACCEPTANCE.md §9).
+
+**Deferred / optional (non-blocking):**
+- **Fresh VK live-collect** — needs an operator ROOT edit of `/opt/n8n/n8n.env` (root-owned, outside the project):
+  set `MS_ENABLE_VK=true` AND add `vk` to `MS_SOURCE_ALLOWLIST` (BOTH required — `agent_config.js:209` +
+  `agent_charter.js:193`; default allowlist is `['website']`), then recreate the n8n container. Credential
+  `pRZcJEyp7KExTReQ` installed; PROD WF26 active + wired. Optional per DEC-136.
+- Push/merge/PR of the Stage F branch — awaits explicit operator instruction.
+
+---
+
+## PRIOR PRIORITY (2026-07-17, session 59) — HEALTH-LINEAGE-001 is a QUALITY POLICY: needs an operator decision
 
 Session 59 traced the empty-report chain to its end. **It is not a bug and not the absent-field class.** The full
 verified chain (run req_1784255157):

@@ -100,12 +100,16 @@ A.section('WF20 §9 — the ONE progress message is edited on the real main line
   A.ok('analysis edit precedes WF08', hasEdge(WF20, 'Run WF16 Quality Gate', 'Progress: Analysis') && hasEdge(WF20, 'Edit Progress (Analysis)', 'Run WF08 Analyzer'));
   A.ok('comparison edit precedes WF10', hasEdge(WF20, 'Run WF08 Analyzer', 'Progress: Comparison') && hasEdge(WF20, 'Edit Progress (Comparison)', 'Run WF10 Aggregator'));
   A.ok('report edit precedes WF12', hasEdge(WF20, 'Run WF10 Aggregator', 'Progress: Report') && hasEdge(WF20, 'Edit Progress (Report)', 'Run WF12 Report'));
-  // REPORT-TRUTH-C: the terminal ✅ edit follows the LAST delivery step — the XLSX branch (send or explicit
-  // skip), never the text send, so «Анализ завершён» can no longer race ahead of the workbook.
-  A.ok('terminal ✅ edit follows the XLSX delivery (send or skip)',
-    hasEdge(WF20, 'Send Report XLSX', 'Progress: Done') && hasEdge(WF20, 'XLSX Ready?', 'Progress: Done')
+  // F-2 DELIVERY-LIFECYCLE-001: the report-success edit is DECOUPLED from the XLSX (fires off the confirmed
+  // text send), and the terminal ✅ edit follows the workbook tail — the XLSX-sent gate, the report-only/no-data
+  // skip, or the retry — never the text send directly. Exhaustive state coverage lives in test_f2_delivery.js.
+  A.ok('report-success edit is decoupled from XLSX (off the confirmed text send)',
+    hasEdge(WF20, 'Send Telegram Report', 'Progress: Report Sent') && hasEdge(WF20, 'Progress: Report Sent', 'Edit Progress (Report Sent)'));
+  A.ok('terminal ✅ edit follows the workbook tail (send gate / skip / retry), never the text send',
+    hasEdge(WF20, 'XLSX Sent?', 'Progress: Done', 0) && hasEdge(WF20, 'XLSX Ready?', 'Progress: Done', 1)
+    && hasEdge(WF20, 'Send Report XLSX Retry', 'Progress: Done')
     && !hasEdge(WF20, 'Send Telegram Report', 'Progress: Done') && hasEdge(WF20, 'Progress: Done', 'Edit Progress (Done)'));
-  for (const nm of ['Edit Progress (Quality Gate)', 'Edit Progress (Analysis)', 'Edit Progress (Comparison)', 'Edit Progress (Report)', 'Edit Progress (Done)']) {
+  for (const nm of ['Edit Progress (Quality Gate)', 'Edit Progress (Analysis)', 'Edit Progress (Comparison)', 'Edit Progress (Report)', 'Edit Progress (Report Sent)', 'Edit Progress (Retrying)', 'Edit Progress (Done)']) {
     const nd = WF20.nodes.find(n => n.name === nm);
     A.eq(nm + ' uses editMessageText', nd.parameters.url.indexOf('editMessageText') >= 0, true);
     A.eq(nm + ' degrades on Telegram errors', nd.onError, 'continueRegularOutput');
@@ -123,23 +127,6 @@ A.section('WF20 §9 — the ONE progress message is edited on the real main line
   const e2 = editor('Progress: Report', { ok: true, result: { message_id: 88 } });
   A.eq('later editor edits the SAME message', JSON.parse(e2.telegram_edit_body).message_id, 88);
   A.ok('stages differ (real transitions, no repeat spam)', JSON.parse(e2.telegram_edit_body).text !== JSON.parse(e1.telegram_edit_body).text);
-  // REPORT-TRUTH-C: the terminal text is state-aware — it claims report+XLSX only when a summary with data
-  // exists and the workbook was actually built (xlsx_skipped false on the incoming item).
-  const doneRun = H.makeRun();
-  H.inject(doneRun, 'Approval & Budget Gate', [{ request: { agent_request_id: 'r1', chat_id: 'c1' } }]);
-  H.inject(doneRun, 'Send Progress', [{ ok: true, result: { message_id: 88 } }]);
-  H.inject(doneRun, 'Build Execution Summary', [{ summary: { final_state: 'completed', records_reported: 5 } }]);
-  const done = H.runCodeNode(doneRun, WF20, 'Progress: Done', [{ json: { xlsx_skipped: false } }])[0].json;
-  // PHASE-2 §8: neutral, non-directional terminal wording.
-  A.ok('terminal edit is the completed state (report + workbook)', JSON.parse(done.telegram_edit_body).text.indexOf('✅ Готово. Отчёт и Excel-файл отправлены.') >= 0);
-  A.ok('terminal edit uses no directional wording', JSON.parse(done.telegram_edit_body).text.indexOf('выше') < 0 && JSON.parse(done.telegram_edit_body).text.indexOf('ниже') < 0);
-  const doneEmptyRun = H.makeRun();
-  H.inject(doneEmptyRun, 'Approval & Budget Gate', [{ request: { agent_request_id: 'r1', chat_id: 'c1' } }]);
-  H.inject(doneEmptyRun, 'Send Progress', [{ ok: true, result: { message_id: 88 } }]);
-  H.inject(doneEmptyRun, 'Build Execution Summary', [{ summary: { final_state: 'reporting', records_reported: 0 } }]);
-  const doneEmpty = H.runCodeNode(doneEmptyRun, WF20, 'Progress: Done', [{ json: { xlsx_skipped: true } }])[0].json;
-  A.ok('empty run never claims a delivered workbook (live exec 1048 defect)',
-    JSON.parse(doneEmpty.telegram_edit_body).text.indexOf('Excel') < 0 && JSON.parse(doneEmpty.telegram_edit_body).text.indexOf('Данные для анализа не получены') >= 0);
   const skipped = editor('Progress: Analysis', { ok: false });
   A.eq('missing message_id skips the edit silently', skipped.progress_skipped, true);
   // no internal leakage in any stage name

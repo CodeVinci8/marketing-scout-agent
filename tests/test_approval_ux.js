@@ -155,11 +155,13 @@ A.section('§8 — neutral, state-aware completion wording (no directional «в�
   has('no-data wording', done, '✅ Проверка завершена. Данные для анализа не получены.');
   has('partial wording', done, '⚠️ Анализ завершён частично. Доступные результаты отправлены.');
   has('failure wording', done, '⚠️ Анализ не завершён: данные получить не удалось.');
-  // the terminal edit is downstream of the LAST delivery branch (send OR explicit skip)
+  // the terminal edit is downstream of the LAST delivery branch (send OR explicit skip). F-2: the send branch now
+  // passes through the «XLSX Sent?» verification gate (a real document_message_id) before the terminal ✅.
   const conns = wf20.connections;
   const xlsxReady = conns['XLSX Ready?'].main;
   A.ok('skip branch reaches Progress: Done', JSON.stringify(xlsxReady).indexOf('Progress: Done') >= 0);
-  A.ok('send branch reaches Progress: Done', JSON.stringify(conns['Send Report XLSX'].main).indexOf('Progress: Done') >= 0);
+  A.ok('send branch reaches Progress: Done via the XLSX Sent? gate',
+    JSON.stringify(conns['Send Report XLSX'].main).indexOf('XLSX Sent?') >= 0 && JSON.stringify(conns['XLSX Sent?'].main).indexOf('Progress: Done') >= 0);
 }
 
 A.report('approval-ux');

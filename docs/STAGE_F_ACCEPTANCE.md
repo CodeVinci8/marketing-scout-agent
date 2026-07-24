@@ -282,3 +282,73 @@ this session (operator: `usermod -aG docker` + `setfacl` on the socket).
 
 **Stage F is NOT gated.** The highest-value defect is closed and live-proven, but mode 1 (comparison/synthesis)
 remains mandatory Stage F work per the operator's scope ruling, and the residual truthfulness defects above are real.
+
+## Session 73 (2026-07-24) — F-7 (comparison render+XLSX), F-2 (delivery lifecycle), F-8/F-8b: OFFLINE-PROVEN, NO live runs
+
+**Read this row's Verdict column literally.** Every item below is proven **OFFLINE** — pure-lib tests plus the
+workflow-node harness (`tests/wf_harness.js`) that executes the REAL generated Code-node source against
+fixtures. **No workflow was deployed, no paid API was called, no Telegram message was sent, no Sheet was
+written this session.** "OFFLINE-PROVEN" here means the wiring is verified in the generated JSON, not that a
+production run happened. The live proofs these replace are listed under **Live gaps** and remain OUTSTANDING.
+
+**Checkpoint at write time:** branch `fix/stage-f-post-migration-acceptance`, HEAD `0c19d0d`, worktree has the
+uncommitted F-7/F-2 implementation + the three new test files below (NOT committed — the operator asked for no
+push/merge/PR; a local commit is deferred to the approval step). Full regression
+`node tests/run_all.js` → **155 suites, 8715 assertions, 0 failed, external calls=0, live cost=$0,
+SUITE_EXIT=0.** Generator drift **ZERO**: `node tools/gen_stage4_workflows.js` is idempotent — repeated regen
+leaves every generated workflow byte-stable (verified session 74: WF20/WF24 sha256 identical across two regens).
+(Session 73 recorded per-tool short fingerprints that predate the `0c19d0d` commit and no longer match a current
+hash; the authoritative drift check is regen-idempotency + `git status`, both clean.)
+
+| Slice | Verdict | Evidence (offline) |
+|---|---|---|
+| **F-7 — comparison/synthesis routing IS an execution decision** | **OFFLINE-PROVEN** | `analysis_router.resolveAnalysisMode({requested_mode,targets})`: comparison needs ≥2 CONTRIBUTING sources, synthesis ≥3; one source can never fake a comparison; over-request DOWNGRADES with a Russian reason. Wired into the REAL WF20 `Build Analysis Inputs` node — the node emits `analysis_mode`/`_requested`/`_downgraded`/`_reason_ru`/`contributing_sources` and, for a multi-source mode, ONE target of `source_kind:'multi'` built by `arBuildMultiSourcePackage` (`evidence_package.multi.v1`, unique `ev_N`, per-source ids, identity/lineage preserved). Committed foundation `7da0c01`; wiring + render committed `e465798`/`375b7af`/`a07bee8`/`0c19d0d`. `f7-render` **29/0**. |
+| **F-7 — comparison RENDERS into Telegram + XLSX** | **OFFLINE-PROVEN** | `compact_report_ru` returns `profile:'multi'` and a «⚖️ Сравнение источников» section for a multi analysis; `analysis_report_ru.analysisXlsxData` produces populated `comparisons` rows. F-7 XLSX regression (commit `0c19d0d`): the claim validator no longer strips multi-package evidence, so the comparison sheet is non-empty. Internal `ev_N` ids are remapped to visible `[n]` and NEVER leak into Telegram text or workbook cells. Verified end-to-end in `f8-discovery-comparison` (section E). |
+| **F-2 — corrected progress-message delivery lifecycle** | **OFFLINE-PROVEN** | Canonical `progress_tracker.js` 11-state contract with a monotonic, sticky-terminal idempotency guard (`advanceDelivery`). The terminal «✅ Готово» state is reached ONLY from a VERIFIED Telegram message id — never inferred from `xlsx_skipped`, branch completion, or absence of an exception. The original progress message is EDITED in place (no separate «Готово» `sendMessage`, per the binding operator UX ruling). Cancellation + idempotency preserved. Logic lives in the canonical library and is embedded into the generated WF20/WF24 nodes (drift-asserted). `f2-delivery` **110/0** runs the REAL generated nodes, so the WF wiring — not just the helper — is what passes. |
+| **F-8 — discovery → 2-source comparison HANDOFF** | **OFFLINE-PROVEN** | The gap F-7's own tests never covered: they inject already-distinct sources; none start from discovery. `f8-discovery-comparison` (**50/0**) runs the REAL WF27 `Classify Candidates`/`Finalize Discovery`/`Shape Candidate Rows` on a fixture Firecrawl response (no live call), feeds the discovered competitors into the REAL WF20 `Build Analysis Inputs` + WF28 `Prepare Analysis`, and proves: two genuinely-distinct hosts (`autozalog-msk.ru`, `ptsdengi.ru`) survive into 2 CONTRIBUTING source identities → a real `comparison` (ONE `multi` target); the aggregator `vsezaymy-catalog.ru` is correctly NOT a competitor; the shared `discovery_run_id` does NOT collapse distinct hosts (batch-run-id trap avoided); discovery identity `website::<host>` maps 1:1 to bridge identity `abSourceId`=host; a same-host pair dedups to ONE candidate at discovery; a single discovered competitor requested as comparison DOWNGRADES to `source_analysis` with a Russian reason. |
+| **F-8b — Telegram social path regression** | **OFFLINE-PROVEN** | `f8b-telegram-regression` (**34/0**) proves this session's render/route changes did NOT break the SOCIAL-BRIDGE-001 path: a single Telegram channel still yields exactly ONE evidence-only target (no invented positioning/offers, three social limitations present); requested as a comparison it is DOWNGRADED, never faked (verified via BOTH the REAL WF20 node and `resolveAnalysisMode` directly); and its single-source analysis still renders through the F-7-modified libs — grounded fact/inference survive, `[1]` resolves to the real `t.me/...` post URL, `profile` is NOT multi, no fabricated comparison section, 0 comparison XLSX rows, no `ev_N` leak. |
+
+### Live gaps — CLOSED this session (bounded paid live proof, operator-approved)
+
+| Item | Status | Live evidence |
+|---|---|---|
+| Real 2-source comparison, end-to-end | **LIVE-PROVEN** | Discovery `1360` → 2 competitors → comparison WF20 `1364` / WF28 `1370`; Telegram report **msg 610**, XLSX **msg 611** («Сравнение источников» 7 rows), progress **msg 609** edited to terminal; every comparison claim cites ≥2 sources; no `ev_N`/cross-attribution/market-overreach. Actual cost **$0.1233**. |
+| Real 3-source synthesis, end-to-end | **LIVE-PROVEN** | WF20 `1384` / WF04 `1385` (reuse ×2 + collect ×1) / WF28 `1390`. `analysis_mode=synthesis`, `requested=synthesis`, `downgraded=false`, **3 contributing** (`autolombard-moskva.ru`, `zalog24h.ru`, `autolombardn1.ru`), ONE `multi` target, `submit_synthesis` tool (submit_analysis absent), `evidence_package.multi.v1`, 6 evidence items (2/source, 1:1 host map, no cross-attribution), `fallback_used=false`, model `claude-sonnet-4-6`, `cache_decision=fresh_call` (no dup). Telegram synthesis report **msg 620**; XLSX **msg 621** (17527 B, «Сравнение источников» = 7 comparison rows inspected); `llm_analysis_results` row `an_a1b8ce88`; conclusions scoped to «наблюдаемых игроков» (no market overreach). Actual cost **$0.1436**. |
+| F-2 terminal edit observed in production | **LIVE-PROVEN** | Scenario 1 progress msg 609 edited in place to «✅ Готово» only after report+XLSX msg ids confirmed; synthesis run 1384 progress reached terminal `delivered`. No separate «Готово» send. |
+| Discovery → comparison in production | **LIVE-PROVEN** | Discovery `1360` (real Firecrawl search) fed the WF20 `1364` comparison run end-to-end (the F-8 handoff, live). |
+| Earlier 3-source attempt downgraded to comparison (exec `1374`) | **ROOT-CAUSED — NOT A DEFECT** | Per-source decode of WF04 `1375`: zalog24h.ru + autolombardn1.ru → `reuse/fresh_snapshot`; `carcapital.ru` → `collect/never_collected`, 1 Firecrawl call made (external_calls=1) but the page served a **bot-protection wall (KillBot)** — 150 chars of verification UI, zero business content → Claude `status=skipped`/`business_skip`/`irrelevant` (NOT quarantined; deterministic route agreed). Router honestly counted 2 contributors → documented graceful downgrade (`analysis_router.js:116`). Category **#9 legitimate skip** (external bot-protection). No WF04/orchestration/merge defect (`items_received=3, items_written=3, reused_count=2`); no code change required. |
+| Fresh VK collection | **BLOCKED_EXTERNAL / OPTIONAL (non-blocking)** | Requires an operator ROOT change to `/opt/n8n/n8n.env` (root-owned, unreadable to the agent, outside the project dir): **both** `MS_ENABLE_VK=true` **and** adding `vk` to `MS_SOURCE_ALLOWLIST` — canonical gating needs both (`agent_config.js:40,157,209`; `agent_charter.js:193`; default allowlist is `['website']`) — plus a container recreation. VK SERVICE token already installed as credential `pRZcJEyp7KExTReQ`; PROD WF26 active + bound; PROD WF20 wired to WF26. Fresh VK is a Stage-3 expansion item (DEC-136), explicitly NOT an MVP/Stage-F blocker. |
+
+### Monitoring wording (kept truthful)
+
+Recurring / automatic monitoring is **NOT active and NOT production-verified.** WF23 is inactive and
+`MS_MONITORING_ENABLED=false` (unchanged this session). Storage/reuse of prior collections is NOT active
+monitoring. Everything below is a MANUAL-triggered pipeline. Do not describe monitoring as running until
+there is fresh live evidence of a scheduled run.
+
+### Deploy + parity (this session, structural — NOT byte-for-byte)
+
+Deployed (backup-first structural graft, `tools/deploy_workflow_structural.js`): **WF20** and **WF24** only.
+**WF27 and WF28 were NOT redeployed** — they already matched the repo. Post-work repo↔prod STRUCTURAL parity
+(repo topology grafted onto the live export, installation-local runtime ids + credential bindings preserved):
+WF20 `75→75` nodes / **0 param changes** / 0 rewired; WF24 `17→17` / **0**; WF28 `16→16` / **0**. Production
+necessarily carries runtime workflow-ids and credential bindings absent from the repo, so parity is **structural,
+never raw byte-for-byte**. Generated exports are drift-free: `node tools/gen_stage4_workflows.js` is idempotent
+(WF20/WF24 byte-stable across repeated regen). Runtime integrity: `health=true, total=90, active=17,
+registered_webhooks=1, ingress_post=200`. Full offline suite: **ALL SUITES PASS** (0 failed, external calls=0,
+live cost=$0); focused Stage F suites `f2-delivery` 110/0, `f7-render` 29/0, `f8-discovery-comparison` 50/0,
+`f8b-telegram-regression` 34/0.
+
+### Cumulative Stage F live cost (authoritative)
+
+Discovery `1360` (Firecrawl search, ~$0.01 unpriced) + Scenario 1 comparison `1364/1370` **$0.1233** +
+downgraded attempt `1374/1375/1380` (**$0.1246** LLM + ~$0.03 unpriced carcapital Firecrawl+primary) +
+synthesis retry `1384/1385/1390` **$0.1436** = recorded AI **$0.3915**, with ~$0.05 unpriced collection
+≈ **~$0.44 cumulative — under the $0.50 cap.** The $0.1246 downgraded analysis is included, not hidden.
+
+**STAGE F COMPLETE — GO FOR F.5.** F-7/F-2/F-8/F-8b are offline-proven AND the required live proofs are now
+closed: real 2-source comparison, real 3-source synthesis (no downgrade, `submit_synthesis`, 3 contributors),
+F-2 terminal edit-in-place, and the discovery→comparison handoff — all executed live, delivered to Telegram +
+XLSX, persisted to Sheets, within the cost cap. The earlier downgraded attempt is root-caused as a legitimate
+external bot-protection skip (not a defect). Fresh VK live-collect remains an OPTIONAL, non-blocking external
+item (operator ROOT env change: `MS_ENABLE_VK=true` **and** `vk` in `MS_SOURCE_ALLOWLIST`).

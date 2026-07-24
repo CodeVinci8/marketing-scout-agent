@@ -156,6 +156,10 @@ const JS_SUITES = [
   ['bridge-identity', 'test_bridge_identity.js'],
   ['f7-routing-nodes', 'test_f7_routing_nodes.js'],
   ['f7-render', 'test_f7_render.js'],
+  // F-2 DELIVERY-LIFECYCLE-001: the ONE progress message is the single source of delivery truth (message-id-driven)
+  ['f2-delivery', 'test_f2_delivery.js'],
+  ['f8-discovery-comparison', 'test_f8_discovery_comparison.js'],
+  ['f8b-telegram-regression', 'test_f8b_telegram_regression.js'],
   ['report-text-safety', 'test_report_text_safety.js'],
   ['telegram-commands', 'test_telegram_commands.js'],
   ['attachment-routing', 'test_attachment_routing.js'],

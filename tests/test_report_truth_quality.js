@@ -339,15 +339,19 @@ A.section('WF20 wiring — validation + compact renderer + completion order');
   A.ok('Shape Report Bundle reads summary.source_roles', /__sum\.source_roles/.test(sb2));
   A.ok('Telegram outbox does NOT recompute source roles', !/classifySourceRole\(/.test(ob2));
   A.ok('Telegram outbox reads summary.source_roles', /s\.summary&&s\.summary\.source_roles/.test(ob2));
-  A.ok('Progress: Done computes a usable-analysis flag', pd.indexOf('var hasAnalysis=(an+ar)>0') >= 0);
-  A.ok('Progress: Done no-data wording is guarded by !hasAnalysis', /!hasAnalysis&&\(fs===.no_data.\|\|rec===0\)/.test(pd));
+  // F-2 DELIVERY-LIFECYCLE-001: the terminal arbiter is now the canonical deliveryTerminalEdit() (embedded from
+  // progress_tracker.js); the node feeds it a usable-analysis flag, and the no-data guard lives in that library.
+  A.ok('Progress: Done feeds a usable-analysis flag into the terminal arbiter', pd.indexOf('has_analysis:(an+ar)>0') >= 0 && /deliveryTerminalEdit\(/.test(pd));
+  A.ok('the embedded arbiter guards no-data wording by !hasAnalysis', /!hasAnalysis && \(fs === 'no_data' \|\| records === 0\)/.test(pd));
   A.ok('Progress: Done still has an honest no-data branch', pd.indexOf('Данные для анализа не получены') >= 0);
   const conn = wf20.connections;
   const to = (from, idx) => (((conn[from] || {}).main || [])[idx || 0] || []).map(c => c.node);
   A.ok('Build Report XLSX -> XLSX Ready?', to('Build Report XLSX').indexOf('XLSX Ready?') >= 0);
   A.ok('XLSX Ready? true -> Send Report XLSX', to('XLSX Ready?', 0).indexOf('Send Report XLSX') >= 0);
   A.ok('XLSX Ready? false -> Progress: Done', to('XLSX Ready?', 1).indexOf('Progress: Done') >= 0);
-  A.ok('Send Report XLSX -> Progress: Done', to('Send Report XLSX').indexOf('Progress: Done') >= 0);
+  // F-2: the send no longer wires straight to completion — it passes through the «XLSX Sent?» verification gate,
+  // so the terminal ✅ is reached only after a real document_message_id is (or is not) confirmed.
+  A.ok('Send Report XLSX -> XLSX Sent? -> Progress: Done', to('Send Report XLSX').indexOf('XLSX Sent?') >= 0 && to('XLSX Sent?', 0).indexOf('Progress: Done') >= 0);
   A.ok('text send no longer triggers completion', to('Send Telegram Report').indexOf('Progress: Done') < 0);
   const done = node(wf20, 'Progress: Done').parameters.jsCode;
   has('completion names both deliveries (neutral, non-directional)', done, 'Готово. Отчёт и Excel-файл отправлены.');

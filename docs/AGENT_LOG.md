@@ -5,6 +5,77 @@ Most recent first.
 
 ---
 
+## 2026-07-24 (session 74) — STAGE F GATED: live 3-source synthesis proven; downgrade root-caused; ONE local commit
+
+**Branch:** `fix/stage-f-post-migration-acceptance`. Operator-approved bounded paid live work. **No push/merge/PR.**
+**Verdict: `STAGE F COMPLETE — GO FOR F.5`.**
+
+**Root cause of the earlier downgraded 3-source attempt (exec `1374`) — NOT A DEFECT.** Decoded WF04 `1375`
+per-URL: `zalog24h.ru` + `autolombardn1.ru` → `reuse/fresh_snapshot`; `carcapital.ru` → `collect/never_collected`,
+one Firecrawl call made (external_calls=1) but the site served a **KillBot bot-protection wall** (150 chars, zero
+business content) → Claude honestly returned `business_skip`/`irrelevant` (NOT quarantined; deterministic route
+agreed) → router honestly counted 2 contributors → **documented graceful downgrade** synthesis→comparison
+(`analysis_router.js:116`, a tested/committed contract, not silent, not a duplicate). Category **#9 legitimate
+external skip**. WF04 dropped nothing (`items_received=3, items_written=3, reused_count=2`). **No code fix made.**
+
+**Live proofs (delivered + persisted, within the $0.50 cap):**
+- **3-source synthesis** — WF20 `1384` / WF04 `1385` (reuse ×2 + collect `autolombard-moskva.ru`) / WF28 `1390`.
+  `synthesis`, `downgraded=false`, 3 contributing, ONE `multi` target, `submit_synthesis` tool,
+  `evidence_package.multi.v1`, 6 evidence (1:1 host map, no cross-attribution), `fresh_call`, `fallback_used=false`.
+  Telegram **msg 620**, XLSX **msg 621** (17527 B; «Сравнение источников» 7 rows inspected), `llm_analysis_results`
+  `an_a1b8ce88`. Cost **$0.1436**. (Third competitor chosen after `carcapital.ru` proved un-collectible; the
+  classifier had marked it `is_competitor=false` only on a 2-line search snippet — genuine автоломбард by content.)
+- Scenario 1 comparison `1364/1370` (msg 610/611, $0.1233), F-2 terminal edit-in-place, discovery→comparison
+  handoff — all LIVE-PROVEN.
+
+**Cost / deploy / parity:** cumulative recorded AI **$0.3915** + ~$0.05 unpriced ≈ **~$0.44 < $0.50**. Deployed
+**WF20 + WF24 only** (structural, backup-first); **WF27 + WF28 NOT redeployed** (already matched). STRUCTURAL
+parity (not byte-for-byte): WF20 75→75/0, WF24 17→17/0, WF28 16→16/0. Runtime integrity OK. Full offline suite
+**ALL SUITES PASS** (0 failed). Generator idempotent.
+
+**VK:** optional/non-blocking (DEC-136). Needs operator ROOT edit of `/opt/n8n/n8n.env`: **both**
+`MS_ENABLE_VK=true` AND `vk` in `MS_SOURCE_ALLOWLIST` (`agent_config.js:209`+`agent_charter.js:193`), plus
+container recreation — outside the agent's authority; not attempted.
+
+**Monitoring unchanged/truthful:** WF23 inactive, `MS_MONITORING_ENABLED=false`, no scheduled run.
+
+---
+
+## 2026-07-24 (session 73) — F-7 render/XLSX + F-2 delivery lifecycle + F-8/F-8b: OFFLINE-PROVEN, nothing pushed
+
+**Branch:** `fix/stage-f-post-migration-acceptance` @ `0c19d0d`. No commit, no push, no PR (operator ruling).
+**$0, 0 paid/external calls, no deploy, no Telegram send, no Sheet write.**
+
+**Tangible output (all offline-proven — offline = generated-JSON wiring verified via `wf_harness`, NOT a live run):**
+- **F-7** — comparison/synthesis is an EXECUTION decision (`analysis_router.resolveAnalysisMode` wired into the
+  REAL WF20 `Build Analysis Inputs`; multi mode → one `source_kind:'multi'` target via `arBuildMultiSourcePackage`).
+  Renders into Telegram (compact profile `'multi'`, «⚖️ Сравнение источников») + XLSX (comparison sheet non-empty
+  after the `0c19d0d` claim-validator fix); `ev_N` remapped to `[n]`, never leaked. `f7-render` 29/0.
+- **F-2** — canonical `progress_tracker.js` 11-state sticky-terminal `advanceDelivery`; «✅ Готово» ONLY from a
+  verified Telegram message id; progress message EDITED in place (no separate «Готово» send). Embedded into
+  WF20/WF24, drift-asserted. `f2-delivery` 110/0 exercises the REAL generated nodes.
+- **F-8** — discovery→2-source comparison handoff (REAL WF27 classify/finalize on a fixture → REAL WF20
+  build-inputs): two distinct hosts → real comparison, aggregator not a competitor, shared `discovery_run_id`
+  does not collapse hosts, `website::host`↔`abSourceId` 1:1, same-host dedup, single-competitor downgrade.
+  `f8-discovery-comparison` 50/0.
+- **F-8b** — Telegram social path regression: SOCIAL-BRIDGE-001 still yields one target, never faked into a
+  comparison, renders correctly through the F-7-modified libs. `f8b-telegram-regression` 34/0.
+
+**Verification:** full `node tests/run_all.js` → 155 suites, 8715 assertions, 0 failed, external calls=0,
+$0, SUITE_EXIT=0. Generator drift ZERO (WF20/24/27/28 byte-identical after regen).
+
+**Files changed:** modified `n8n/lib/{analysis_report_ru,compact_report_ru,progress_tracker}.js`,
+`n8n/workflows/{20_agent_orchestrator,24_report_export_delivery}.json`, `tools/gen_stage4_workflows.js`,
+`tests/{run_all,test_agent_summary_ledger,test_approval_ux,test_f7_render,test_live_defects,test_progress_lifecycle,test_report_truth_quality}.js`;
+new `tests/{test_f2_delivery,test_f8_discovery_comparison,test_f8b_telegram_regression}.js`; docs
+`docs/STAGE_F_ACCEPTANCE.md`, `core/hot/recent.md`, this file.
+
+**Live gaps (OUTSTANDING, need operator approval):** real 2-source comparison E2E, real 3-source synthesis
+E2E, F-2 terminal edit in production, discovery→comparison live, fresh VK collection (`MS_ENABLE_VK=false`).
+Monitoring is NOT active (WF23 inactive, `MS_MONITORING_ENABLED=false`).
+
+---
+
 ## 2026-06-28 (session 32) — Stage 4–8 final closure: LIVE production credential repair + image pin (DEC-164)
 
 **Branch:** `fix/stage4-8-final-closure` off `main` @ `189c0ee`. 3 commits (`8d02032`, `8ac1600`, `b60bb54`), not pushed, no AI attribution. **$0, 0 paid/external calls.**

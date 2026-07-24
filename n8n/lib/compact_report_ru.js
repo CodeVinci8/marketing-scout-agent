@@ -49,20 +49,29 @@ function crKind(analyses, kind, max) {
 // F-7 comparison rendering: a comparison/synthesis analysis has NO `items` — its content lives in
 // overview_ru / comparisons / recurring_pains_ru / opportunities / recommended_experiments. Pull those out so a
 // paid comparison actually reaches the user instead of falling back to deterministic per-source offer facts.
+// Internal ev_N citation ids must NEVER reach the user. The compact Telegram message carries no [n] legend (the
+// resolvable [n] -> URL evidence lives in the attached XLSX «Доказательства» sheet), so — unlike the workbook,
+// which remaps ev_N to a resolvable [n] — here we strip the ids and tidy the punctuation an empty gap leaves.
+// This also matches single-source rendering, which shows bare text with no visible markers (crKind).
+function crStripEv(s) {
+  return crStr(s).replace(/\[?\bev_\d+\b\]?/g, '')
+    .replace(/\[\s*,\s*/g, '[').replace(/,\s*\]/g, ']').replace(/\[\s*\]/g, '')
+    .replace(/\s+([;,.)])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+}
 function crComparison(analyses) {
   var out = { overview: '', comparisons: [], pains: [], opportunities: [], experiments: [] };
   (analyses || []).forEach(function (a) {
     if (!crUsable(a)) return;
     var an = a.analysis || {};
     if (!Array.isArray(an.comparisons)) return; // not a comparison result
-    if (!out.overview) out.overview = crTrim(an.overview_ru, 300);
+    if (!out.overview) out.overview = crTrim(crStripEv(an.overview_ru), 300);
     (an.comparisons || []).forEach(function (c) {
-      var t = crTrim(c && c.text_ru, 160);
+      var t = crTrim(crStripEv(c && c.text_ru), 160);
       if (t && (c.evidence_ids || []).length) out.comparisons.push(t);
     });
-    (an.recurring_pains_ru || []).forEach(function (t) { var s = crTrim(t, 120); if (s) out.pains.push(s); });
-    (an.opportunities || []).forEach(function (o) { var t = crTrim(o && o.text_ru, 140); if (t && (o.evidence_ids || []).length) out.opportunities.push(t); });
-    (an.recommended_experiments || []).forEach(function (o) { var t = crTrim(o && o.text_ru, 140); if (t) out.experiments.push(t); });
+    (an.recurring_pains_ru || []).forEach(function (t) { var s = crTrim(crStripEv(t), 120); if (s) out.pains.push(s); });
+    (an.opportunities || []).forEach(function (o) { var t = crTrim(crStripEv(o && o.text_ru), 140); if (t && (o.evidence_ids || []).length) out.opportunities.push(t); });
+    (an.recommended_experiments || []).forEach(function (o) { var t = crTrim(crStripEv(o && o.text_ru), 140); if (t) out.experiments.push(t); });
   });
   return out;
 }

@@ -1314,7 +1314,10 @@ var __x=analysisXlsxData(__cv.analyses,__rend);
 // deterministic bundle evidence, so cvValidateAnalyses (validated against b.evidence) drops it. Those items were
 // ALREADY evidence-validated inside WF28 against their own package. Take the comparison/overview/opportunity/
 // pain rows from the raw analyses so the XLSX «Сравнение источников» sheet matches the Telegram comparison.
-try{var __xc=analysisXlsxData(__ana.analyses||[]);if((__xc.comparisons||[]).length){__x.comparisons=__xc.comparisons;__x.overview=__xc.overview;__x.recommendations=(__x.recommendations||[]).concat(__xc.recommendations||[]);__x.pains=(__x.pains||[]).concat(__xc.pains||[]);}}catch(e){}
+// The comparison's ev_N -> URL evidence lives in the multi-source package (a.evidence_map), not b.evidence, so the
+// validated __x.evidence is empty; take the raw evidence too so the «Доказательства» sheet resolves the [n] refs
+// the comparison rows cite. Numbering matches: comparisons + evidence come from the SAME raw analysisXlsxData call.
+try{var __xc=analysisXlsxData(__ana.analyses||[]);if((__xc.comparisons||[]).length){__x.comparisons=__xc.comparisons;__x.overview=__xc.overview;__x.recommendations=(__x.recommendations||[]).concat(__xc.recommendations||[]);__x.pains=(__x.pains||[]).concat(__xc.pains||[]);if((__xc.evidence||[]).length&&!(__x.evidence||[]).length)__x.evidence=__xc.evidence;}}catch(e){}
 if((__x.inferences||[]).length||(__x.recommendations||[]).length||(__x.pains||[]).length||(__x.evidence||[]).length||(__x.comparisons||[]).length){
   b.analysis=Object.assign({},__x,{analysis_ids:__ana.analysis_ids||[],count_enriched:Number(__ana.count_enriched)||0,
     count_reused:Number(__ana.count_reused)||0,count_fallback:Number(__ana.count_fallback)||0,
@@ -1373,15 +1376,71 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
   // to a hardcoded distinct stage — advance() throttles any repeat, so there is never per-item spam. A missing
   // message_id (progress send failed) or a Telegram edit error degrades silently (onError continue) — progress
   // is UX, never a run-killer. Final report delivery stays a SEPARATE idempotent message.
-  ...[[4, 'Quality Gate', 660], [5, 'Analysis', 880], [6, 'Comparison', 1100], [7, 'Report', 1320], [10, 'Done', 2380]].flatMap(function (sp) {
+  ...[[4, 'Quality Gate', 660], [5, 'Analysis', 880], [6, 'Comparison', 1100], [7, 'Report', 1320]].flatMap(function (sp) {
     var stage = sp[0], label = sp[1], x = sp[2];
     var slug = label.toLowerCase().replace(/[^a-z]+/g, '');
     return [
       code('wf20-prog' + slug, 'Progress: ' + label, [x, -340], ['progress_tracker'],
-        "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}\nif(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=" + (stage - 1) + ";st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st," + stage + ",{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:" + stage + ",telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:" + (stage === 10 ? "(function(){var fs='completed';var rec=0;var an=0;var ar=0;try{var s=($('Build Execution Summary').first().json||{}).summary||{};fs=String(s.final_state||'completed');rec=Number(s.records_reported)||0;an=Number(s.llm_analyses)||0;ar=Number(s.llm_analyses_reused)||0;}catch(e){}var xs=false;try{xs=$json.xlsx_skipped===true;}catch(e){}/* CALLBACK-IDEMP/UX §8: neutral, state-aware terminal wording — the progress edit stays at its ORIGINAL position in Telegram history, so «выше/ниже» is always unreliable. This edit fires only AFTER the last delivery branch (XLSX sent or explicitly skipped). */ /* SOCIAL-DELIVERY-001 terminal arbiter: a usable analysis (enriched or reused) IS the deliverable even at 0 deterministic competitor-profile records — never the no-data wording over a real analysis. */var hasAnalysis=(an+ar)>0;if(fs==='failed'&&!hasAnalysis)return '⚠️ Анализ не завершён: данные получить не удалось.';if(!hasAnalysis&&(fs==='no_data'||rec===0))return '✅ Проверка завершена. Данные для анализа не получены.';if(fs==='partial')return '⚠️ Анализ завершён частично. Доступные результаты отправлены.';if(xs)return '✅ Готово. Отчёт отправлен.';return '✅ Готово. Отчёт и Excel-файл отправлены.';})()" : 'up.text') + "})}}];"),
+        "var g=$('Approval & Budget Gate').first().json;\nvar chat=String((g.request&&g.request.chat_id)||'');\nvar mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}\nif(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}\nvar st=initProgress({agent_request_id:(g.request&&g.request.agent_request_id)||'req',chat_id:chat});\nst.stage=" + (stage - 1) + ";st.status='running';\nst=setMessageId(st,mid);\nvar up=advance(st," + stage + ",{now:(new Date()).toISOString()});\nif(!mid||up.action!=='edit'){return [{json:{progress_skipped:true,telegram_edit_body:JSON.stringify({})}}];}\nreturn [{json:{progress_skipped:false,progress_stage:" + stage + ",telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:up.text})}}];"),
       Object.assign(httpTelegramEdit('wf20-editprog' + slug, 'Edit Progress (' + label + ')', [x + 110, -340]), { onError: 'continueRegularOutput' })
     ];
-  })
+  }),
+  // ===== F-2 DELIVERY-LIFECYCLE-001: truthful, message-id-driven delivery tail =========================
+  // The instant Send Telegram Report resolves, edit the ONE progress message to report_sent — decoupled from
+  // the XLSX. deliveryReportEdit() calls it report_sent ONLY when the sendMessage result carried a real
+  // message_id (proof of delivery); otherwise report_failed. Never claims a report was sent on absence of error.
+  code('wf20-progreportsent', 'Progress: Report Sent', [2160, 380], ['progress_tracker'], `
+var g=$('Approval & Budget Gate').first().json;
+var chat=String((g.request&&g.request.chat_id)||'');
+var mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}
+if(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}
+// The ONLY proof the text report reached the user is a real Telegram message_id in the sendMessage result.
+var rmid='';try{var rows=$('Send Telegram Report').all()||[];for(var i=0;i<rows.length;i++){var m=(((rows[i]||{}).json||{}).result||{}).message_id;if(m){rmid=String(m);break;}}}catch(e){}
+var ed=deliveryReportEdit({report_message_id:rmid});
+var okReport=ed.delivery_state==='report_sent';
+if(!mid){return [{json:{progress_skipped:true,report_ok:okReport,report_message_id:rmid,delivery_state:ed.delivery_state,telegram_edit_body:JSON.stringify({})}}];}
+return [{json:{progress_skipped:false,report_ok:okReport,report_message_id:rmid,delivery_state:ed.delivery_state,telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:ed.text})}}];`),
+  Object.assign(httpTelegramEdit('wf20-editprogreportsent', 'Edit Progress (Report Sent)', [2270, 380]), { onError: 'continueRegularOutput' }),
+  // Gate the whole workbook tail on a CONFIRMED report send; a report we could not confirm goes straight to the
+  // honest report_failed terminal (no orphan Excel for an undelivered report).
+  ifNode('wf20-ifreportok', 'Report Delivered?', [2380, 380], "={{ $('Progress: Report Sent').first().json.report_ok === true }}"),
+  // The XLSX terminal is decided by the REAL sendDocument result (a document_message_id), NOT by the fact that the
+  // fail-open Send node produced an output item.
+  ifNode('wf20-ifxlsxsent', 'XLSX Sent?', [2710, 160], "={{ !!(($('Send Report XLSX').first().json || {}).result || {}).message_id }}"),
+  // sendDocument failed but the report is delivered: show «Повторяю отправку…» and re-attach the SAME workbook
+  // binary for one retry. Carries the binary forward so Send Report XLSX Retry can upload it.
+  code('wf20-progretry', 'Progress: Retrying', [2710, 320], ['progress_tracker'], `
+var g=$('Approval & Budget Gate').first().json;
+var chat=String((g.request&&g.request.chat_id)||'');
+var mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}
+if(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}
+var txt=deliveryText('document_retrying');
+var bx=null;try{bx=$('Build Report XLSX').first();}catch(e){bx=null;}
+var cap=(bx&&bx.json&&bx.json.caption)||'Таблица Excel по анализу конкурентов';
+var out={chat_id:chat,caption:cap,delivery_state:'document_retrying'};
+if(mid){out.telegram_edit_body=JSON.stringify({chat_id:chat,message_id:Number(mid),text:txt});out.progress_skipped=false;}else{out.telegram_edit_body=JSON.stringify({});out.progress_skipped=true;}
+return [{json:out,binary:(bx&&bx.binary)||{}}];`),
+  Object.assign(httpTelegramEdit('wf20-editprogretry', 'Edit Progress (Retrying)', [2820, 320]), { onError: 'continueRegularOutput' }),
+  Object.assign(httpTelegramFile('wf20-sendxlsxretry', 'Send Report XLSX Retry', [2820, 460], 'sendDocument', 'document', 'attachment'), { onError: 'continueRegularOutput' }),
+  // Terminal arbiter: reads ONLY verified facts — report_message_id (from Progress: Report Sent), the real
+  // document_message_id (from either send attempt), whether a workbook was expected, and the analysis outcome.
+  // deliveryTerminalEdit() maps those to the honest terminal string; delivered REQUIRES both message ids.
+  code('wf20-progdone', 'Progress: Done', [2930, 160], ['progress_tracker'], `
+var g=$('Approval & Budget Gate').first().json;
+var chat=String((g.request&&g.request.chat_id)||'');
+var mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}
+if(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}
+var rmid='';try{rmid=String($('Progress: Report Sent').first().json.report_message_id||'');}catch(e){}
+var dmid='';try{var rr=$('Send Report XLSX Retry').all()||[];for(var i=0;i<rr.length;i++){var m=(((rr[i]||{}).json||{}).result||{}).message_id;if(m){dmid=String(m);break;}}}catch(e){}
+if(!dmid){try{var r2=$('Send Report XLSX').all()||[];for(var j=0;j<r2.length;j++){var m2=(((r2[j]||{}).json||{}).result||{}).message_id;if(m2){dmid=String(m2);break;}}}catch(e){}}
+var xexp=false;try{xexp=$('Build Report XLSX').first().json.xlsx_skipped===false;}catch(e){xexp=false;}
+var attempts=0;try{if(($('Send Report XLSX').all()||[]).length)attempts++;}catch(e){}
+try{if(($('Send Report XLSX Retry').all()||[]).length)attempts++;}catch(e){}
+var fs='completed',rec=0,an=0,ar=0;try{var s=($('Build Execution Summary').first().json||{}).summary||{};fs=String(s.final_state||'completed');rec=Number(s.records_reported)||0;an=Number(s.llm_analyses)||0;ar=Number(s.llm_analyses_reused)||0;}catch(e){}
+var ed=deliveryTerminalEdit({report_message_id:rmid,document_message_id:dmid,xlsx_expected:xexp,attempts:attempts,max_attempts:2,analysis:{final_state:fs,has_analysis:(an+ar)>0,records:rec}});
+if(!mid){return [{json:{progress_skipped:true,delivery_state:ed.delivery_state,telegram_edit_body:JSON.stringify({})}}];}
+return [{json:{progress_skipped:false,delivery_state:ed.delivery_state,telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:ed.text})}}];`),
+  Object.assign(httpTelegramEdit('wf20-editprogdone', 'Edit Progress (Done)', [3040, 160]), { onError: 'continueRegularOutput' })
 ], [
   ['Manual Start', 'Resolve Agent Config'],
   ['When Called by Agent', 'Resolve Agent Config'],
@@ -1445,16 +1504,32 @@ return [{json:{conversation_id:convId,owner_user_id:String(req.owner_user_id||''
   ['Build Execution Summary', 'Shape Plan Completion'],
   ['Shape Plan Completion', 'Mark Plan Complete'],
   ['Shape Execution Summary Row', 'Append execution_summaries'],
-  ['Append execution_summaries', 'Shape Report Bundle'],
+  // F-2 DELIVERY-LIFECYCLE-001: the moment the TEXT report is confirmed, edit the ONE progress message to
+  // report_sent — this is NEVER coupled to XLSX generation/send. The bundle+workbook tail then hangs off the
+  // CONFIRMED send (not a parallel branch), so the terminal arbiter always sees the real report_message_id.
+  ['Send Telegram Report', 'Progress: Report Sent'],
+  ['Progress: Report Sent', 'Edit Progress (Report Sent)'],
+  ['Edit Progress (Report Sent)', 'Shape Report Bundle'],
   ['Shape Report Bundle', 'Append report_bundles'],
   ['Append report_bundles', 'Shape Report Context'],
-  ['Append report_bundles', 'Build Report XLSX'],
-  // REPORT-TRUTH-C: the completion edit follows the XLSX branch (send OR skip), never the text send — the user
-  // sees «Анализ завершён» only after the last delivery step.
+  ['Append report_bundles', 'Report Delivered?'],
+  // Report confirmed -> build + send the workbook; report NOT confirmed -> straight to the honest terminal
+  // (deliveryTerminalEdit returns report_failed on a missing report_message_id, so no orphan Excel is sent).
+  ['Report Delivered?', 'Build Report XLSX', 0],
+  ['Report Delivered?', 'Progress: Done', 1],
   ['Build Report XLSX', 'XLSX Ready?'],
   ['XLSX Ready?', 'Send Report XLSX', 0],
+  // No workbook to send (report-only / no-data) -> terminal reads xlsx_expected=false and stays honest.
   ['XLSX Ready?', 'Progress: Done', 1],
-  ['Send Report XLSX', 'Progress: Done'],
+  // The XLSX terminal is decided by the REAL sendDocument result (a document_message_id), never by the fact that
+  // the fail-open Send node produced an item.
+  ['Send Report XLSX', 'XLSX Sent?'],
+  ['XLSX Sent?', 'Progress: Done', 0],
+  // sendDocument failed but the report is delivered -> «Повторяю отправку…» then retry ONCE with the same binary.
+  ['XLSX Sent?', 'Progress: Retrying', 1],
+  ['Progress: Retrying', 'Edit Progress (Retrying)'],
+  ['Progress: Retrying', 'Send Report XLSX Retry'],
+  ['Send Report XLSX Retry', 'Progress: Done'],
   ['Shape Report Context', 'Upsert Report Context'],
   ['Build Delivery Outbox', 'Append telegram_outbox'],
   // DELIVERY-CHUNKS-001: one item per chunk between outbox and send, so every chunk is actually delivered.
