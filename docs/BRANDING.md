@@ -5,8 +5,8 @@
 | Purpose | Value |
 |---|---|
 | Public product name | **Vinci AI Pilot** |
-| Repository slug / path-safe identifier | `Vinci-Ai-Pilot` |
-| GitHub repository | `https://github.com/CodeVinci8/Vinci-Ai-Pilot` |
+| Repository slug / path-safe identifier | `vinci-ai-pilot` (GitHub normalised the earlier `Vinci-Ai-Pilot`; old-cased URLs redirect) |
+| GitHub repository | `https://github.com/CodeVinci8/vinci-ai-pilot` |
 | Bot self-identification (RU) | «Я Vinci AI Pilot — …» |
 
 “Marketing Scout” / “Marketing Scout Agent” is the **former** product name. It must not appear in any
