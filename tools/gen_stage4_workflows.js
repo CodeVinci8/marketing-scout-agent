@@ -259,6 +259,10 @@ function execWf(id, name, pos, note, inputs, opts) {
   // tolerant dispatch (source collectors only): a CRASHED child degrades to an error item instead of
   // aborting the whole orchestration — the adapter contract turns it into a failed/empty source.
   if (opts && opts.tolerant) node.onError = 'continueRegularOutput';
+  // TERMINAL-ON-ERROR-001: a required stage (report/quality/analyzer/aggregator) that THROWS must not abort the
+  // whole run and freeze the progress bar. continueErrorOutput sends a crash to the node's 2nd output (index 1),
+  // which the caller wires to the honest terminal-error handler; the success output (0) is unchanged.
+  if (opts && opts.errorOutput) node.onError = 'continueErrorOutput';
   return node;
 }
 function httpClaude(id, name, pos) {
@@ -1145,7 +1149,7 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
     platform_filter: '',
     // WF16-WRITE-001: agent runs must PERSIST source_health — WF10/WF12 gate on it fail-closed.
     write_result: 'true'
-  }),
+  }, { errorOutput: true }),
   execWf('wf20-wf08', 'Run WF08 Analyzer', [840, -160], 'WF08 touchpoint analyzer', {
     agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
     source_run_id: "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
@@ -1157,7 +1161,7 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
     // when enable_wf08_llm is set — so riding on the Stage-F flag would spend materially more than the user approved.
     llm_enabled: "={{ $('Approval & Budget Gate').first().json.cfg.enable_wf08_llm === true ? 'true' : 'false' }}",
     llm_approval_token: 'WF08_LLM_APPROVED'
-  }),
+  }, { errorOutput: true }),
   execWf('wf20-wf10', 'Run WF10 Aggregator', [1060, -160], 'WF10 audience aggregator', {
     agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
     source_run_id: "={{ $('Approval & Budget Gate').first().json.idempotency_key }}",
@@ -1166,7 +1170,7 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
     // Set -> scope_policy.resolveScope), never from an ad-hoc ternary here. explicit_source/comparison/monitoring
     // pass ANY (the named source IS the scope); discovery/niche-scan still pass the real requested region.
     region_filter: "={{ $('Resolve Collection Set').first().json.region_filter }}"
-  }),
+  }, { errorOutput: true }),
   execWf('wf20-wf12', 'Run WF12 Report', [1280, -160], 'WF12 report builder', {
     agent_request_id: "={{ $('Approval & Budget Gate').first().json.request.agent_request_id }}",
     data_mode: "={{ $('Approval & Budget Gate').first().json.request.data_mode || 'live' }}",
@@ -1175,7 +1179,7 @@ write('20_agent_orchestrator.json', wf('20 — Agent Orchestrator (approval→co
     // Plan approval covers the guarded Claude RU summary; WF12 still enforces its own budget/endpoint guards.
     enable_llm_summary: "={{ $('Approval & Budget Gate').first().json.cfg.enable_llm_summary === false ? 'false' : 'true' }}",
     llm_approval_token: 'I_APPROVE_CLAUDE_REPORT_SUMMARY'
-  }),
+  }, { errorOutput: true }),
   // ---- Stage F: evidence-bound Claude analysis of the deterministic result (STAGE-F-INTEGRATION) --------------
   // Placed AFTER collection + WF16 quality gate + WF08/WF10 + WF12, so Claude only ever sees bounded, quality-gated,
   // request-scoped CURRENT-RUN facts — never raw pages and never the whole Sheets history. Fail-open by
@@ -1473,7 +1477,23 @@ var fs='completed',rec=0,an=0,ar=0,aix=false,aid=false,aer='';try{var s=($('Buil
 var ed=deliveryTerminalEdit({report_message_id:rmid,document_message_id:dmid,xlsx_expected:xexp,attempts:attempts,max_attempts:2,analysis:{final_state:fs,has_analysis:(an+ar)>0,records:rec},ai:{expected:aix,delivered:aid,reason:aer}});
 if(!mid){return [{json:{progress_skipped:true,delivery_state:ed.delivery_state,telegram_edit_body:JSON.stringify({})}}];}
 return [{json:{progress_skipped:false,delivery_state:ed.delivery_state,telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:ed.text})}}];`),
-  Object.assign(httpTelegramEdit('wf20-editprogdone', 'Edit Progress (Done)', [3040, 160]), { onError: 'continueRegularOutput' })
+  Object.assign(httpTelegramEdit('wf20-editprogdone', 'Edit Progress (Done)', [3040, 160]), { onError: 'continueRegularOutput' }),
+  // TERMINAL-ON-ERROR-001: the honest terminal for a run that aborted in a required stage (report/quality/analyzer/
+  // aggregator threw — e.g. a Google Sheets 429). Reads the origin chat + the ONE progress message id, derives a
+  // short verified reason from the error item, and edits the SAME message to «⚠️ Не удалось завершить анализ: …».
+  // Never says «✅ Готово», never claims a report/file was sent; the request/plan stay approved (preserved for retry).
+  code('wf20-progfailed', 'Progress: Failed (Terminal)', [1280, 220], ['progress_tracker'], `
+var chat='';try{chat=String(($('Approval & Budget Gate').first().json.request||{}).chat_id||'');}catch(e){}
+if(!chat){try{chat=String(($('When Called by Agent').first().json||{}).chat_id||'');}catch(e){}}
+var mid='';try{mid=String(($('When Called by Agent').first().json||{}).progress_message_id||'');}catch(e){}
+if(!mid){try{var r=$('Send Progress').first().json;mid=String(((r||{}).result||{}).message_id||'');}catch(e){}}
+var it=$json||{};var err=(it&&it.error)?it.error:it;
+var emsg='';try{emsg=String((err&&(err.message||err.description))||(err&&err.error&&err.error.message)||'');}catch(e){}
+var hc='';try{hc=String((err&&(err.httpCode||err.statusCode))||(err&&err.context&&err.context.httpCode)||'');}catch(e){}
+var ed=deliveryErrorEdit({error_message:emsg,http_code:hc});
+if(!mid){return [{json:{progress_skipped:true,delivery_state:ed.delivery_state,reason:ed.reason}}];}
+return [{json:{progress_skipped:false,delivery_state:ed.delivery_state,reason:ed.reason,telegram_edit_body:JSON.stringify({chat_id:chat,message_id:Number(mid),text:ed.text})}}];`),
+  Object.assign(httpTelegramEdit('wf20-editprogfailed', 'Edit Progress (Failed)', [1500, 220]), { onError: 'continueRegularOutput' })
 ], [
   ['Manual Start', 'Resolve Agent Config'],
   ['When Called by Agent', 'Resolve Agent Config'],
@@ -1569,6 +1589,14 @@ return [{json:{progress_skipped:false,delivery_state:ed.delivery_state,telegram_
   ['Append telegram_outbox', 'Expand Telegram Chunks'],
   ['Expand Telegram Chunks', 'Send Telegram Report'],
   ['Progress: Done', 'Edit Progress (Done)'],
+  // TERMINAL-ON-ERROR-001: each required report-chain child routes its ERROR output (index 1, continueErrorOutput)
+  // to the honest terminal handler, so a crash (e.g. WF12 Sheets 429) yields «⚠️ Не удалось завершить анализ: …»
+  // instead of a progress bar frozen mid-run. The success output (0) is untouched.
+  ['Run WF16 Quality Gate', 'Progress: Failed (Terminal)', 1],
+  ['Run WF08 Analyzer', 'Progress: Failed (Terminal)', 1],
+  ['Run WF10 Aggregator', 'Progress: Failed (Terminal)', 1],
+  ['Run WF12 Report', 'Progress: Failed (Terminal)', 1],
+  ['Progress: Failed (Terminal)', 'Edit Progress (Failed)'],
   ['Build Blocked Response', 'Send Blocked Reply']
 ]));
 
