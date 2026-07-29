@@ -188,9 +188,24 @@ function escapeSheetValue(v) {
   return s;
 }
 
-// One Telegram update => one idempotency key. A redelivered update_id maps to the same key.
+// One Telegram update => one idempotency key.
+// CALLBACK-DEDUP-001 (DEFECT: 7 rapid clicks of one inline button created 7 plans/runs — live-observed execs
+// 1456–1464, cb:intent:rerun_request). Telegram assigns a UNIQUE update_id AND callback_query.id to EVERY click,
+// so an update_id-scoped key made each repeated click its own "winner". For a callback the idempotent unit is the
+// ACTION, not the click: the same button (same callback_data) on the same source message, from the same user in
+// the same chat, must collapse to exactly ONE accepted action — one plan, one run, one report, one XLSX, one
+// terminal. A genuinely fresh action (a NEW report's button) has a different source message_id, so it is NOT
+// blocked. This ALSO subsumes Telegram re-delivering the identical click (same data+message+user+chat).
+// A MESSAGE keeps the update_id-scoped key (a re-delivered update_id => one request).
 function updateIdempotencyKey(parsed) {
   parsed = parsed || {};
+  var isCallback = str(parsed.kind) === 'callback' || !!str(parsed.callback_data);
+  if (isCallback) {
+    // origin = the message the button lives on (message_id) + user + chat; action = callback_data (carries the
+    // action verb AND, for approve/reject/cancel, the target agent_request_id). callback_query.id is deliberately
+    // NOT in the key — it is unique per click and would defeat the collapse it is meant to enable.
+    return ['cb', str(parsed.callback_data), 'm' + str(parsed.message_id), str(parsed.user_id), str(parsed.chat_id)].join('::');
+  }
   return ['tg', str(parsed.update_id) || ('m' + str(parsed.message_id)), str(parsed.chat_id)].join('::');
 }
 
