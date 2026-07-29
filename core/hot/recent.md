@@ -11,18 +11,31 @@ Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm
 **Read-only runtime-probe (я, uid 1000, docker запрещён):** `health=true, active=17, webhook=1, ingress=200,
 RUNTIME INTEGRITY: OK`.
 
-**Telegram id `219246148`** дописан оператором в `MS_TELEGRAM_ALLOWED_USER_IDS` (`/opt/n8n/n8n.env`; host-grep
-подтвердил `219246148` рядом с уже разрешённым владельцем — существующий id не раскрываем). Загрузка в контейнер + `isAllowedUser(219246148)=true` + `/start` — **ждут
-root-проверки** (доступа к `/opt/n8n` у меня нет).
+**Telegram id `219246148` (Ruslan) — РАБОТАЕТ.** Дописан в `MS_TELEGRAM_ALLOWED_USER_IDS`; подтверждено прод-БД:
+исполнение WF20 `1477` (`req_76722126`, 2026-07-29 12:49) доставило этому пользователю отчёт (msg 695) и XLSX
+(msg 696) в его чат `219246148` — routing КОРРЕКТЕН (owner-fallback НЕТ). Более ранний запрос `req_76722118`
+(exec `1439`, 2026-07-28) **упал** (`status=error` на стадии WF12) → ни отчёта, ни XLSX — это и была «пропавшая
+доставка».
 
-**Дефекты доставки (Evidence A/B, 2026-07-29 18:15–19:01) — reproduce-first.** Прод-данные исполнений
-(`req_76722121` и т.п.) мне read-only недоступны (нет БД/API/docker), не фабрикую. Гипотеза (подтверждена
-насколько возможно): проблемные отчёты — на **предыдущей** версии workflow, т.к. фикс Defect D (независимость
-«собрано заново» от внешних вызовов) отсутствует в `e96bf4a` (`rpFreshCount=0`/`sourceAccounting=0`), есть в
-`main`; n8n применяет импорт лишь после полного рестарта (healthy зафиксирован только сейчас); Defect F
-(телеметрия в клиентском XLSX) уже закрыт; Defect B имеет idempotency-инфраструктуру. Тесты `main` зелёные
-(f2-delivery 110/0, progress-lifecycle 72/0, report-integrity 143/0). **Следующий шаг — один отчёт по
-сохранённым данным на действующем коде, смотреть какие дефекты реально остаются, до правок.**
+**Дефекты доставки — РАССЛЕДОВАНЫ по прод-БД n8n (read-only, docker-доступ выдан оператором).** Прежняя гипотеза
+«отчёты на старом коде» **опровергнута**: дефекты воспроизведены в ТЕКУЩЕМ задеплоенном коде (контейнер поднят с
+07-25, прогоны 07-29 идут на нём).
+- **Главный дефект (AI-контракт), exec `1449` (owner `req_76722121`, crediti.ru):** WF28 сделал свежий вызов
+  Claude → **`error_category=server_error`**, `fallback_used=true`, `quality_status=deterministic_fallback`,
+  `cost=0`, `llm_analyses=0`. Но `Progress: Done` выдал **«✅ Готово. Отчёт и Excel-файл отправлены.»** без
+  единого слова о провале AI. Т.е. обещанный планом AI-анализ провалился, а пользователю показан полный успех.
+- **Роутинг двух пользователей — НЕ сломан** (1477 доставил 219246148 корректно).
+- **Дубли callback:** owner нажал `rerun_request` 7 раз (execs 1456–1464) — подтверждает потребность в дедупе по
+  `callback_query.id`.
+
+**ИСПРАВЛЕНО (AI-CONTRACT-001, ветка `fix/telegram-ai-contract-delivery`).** Канонично: `progress_tracker.js`
+(+состояния `delivered_no_ai`/`delivered_report_only_no_ai`; `deliveryTerminalEdit` получил AI-гейт — при
+`ai_expected && !ai_delivered` терминал = «⚠️ Отчёт и Excel отправлены без AI-анализа: <проверяемая причина>.»);
+`compact_report_ru.js` (Telegram-отчёт добавляет честную строку «AI-анализ не выполнен: …», факты сохраняются);
+генератор `gen_stage4_workflows.js` (Build Execution Summary считает `ai_expected`/`ai_delivered`/
+`ai_error_category`; Progress: Done прокидывает их; Shape Report Bundle помечает лист «Аналитические выводы»
+строкой о невыполненном AI). Регенерированы WF20/WF24 (идемпотентно, побайтово). Новый тест `test_ai_contract`
+(16/0) воспроизводит exec 1449. Полная офлайн-регрессия: **162 набора, 0 провалов, ~9247 assert, $0.**
 
 ## Сессия 76 (2026-07-25) — read-only проверка прод-паритета + выбор пути деплоя + правки правдивости (НИЧЕГО не задеплоено, $0)
 

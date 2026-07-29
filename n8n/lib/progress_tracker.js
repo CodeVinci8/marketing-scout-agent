@@ -115,8 +115,25 @@ function markDelivered(state, deliveryId) {
 // one table and not the others, so a consumer that switches on delivery_state can never meet an unlisted value.
 var DELIVERY_STATES = [
   'processing', 'report_sent', 'document_sending', 'delivered', 'delivered_report_only',
+  'delivered_no_ai', 'delivered_report_only_no_ai',
   'report_failed', 'document_retrying', 'document_failed', 'analysis_failed', 'no_data', 'partial'
 ];
+// AI-CONTRACT-001: when the plan promised AI analysis but it was NOT delivered (a real Claude failure ->
+// deterministic fallback, or no usable reuse), the factual report + XLSX are still delivered, but the terminal
+// must say so honestly instead of the plain success line. The reason is verified (the analyst's error category),
+// mapped to short RU. Never disguise a failed AI call as a successful cache/reuse.
+var AI_REASON_RU = {
+  server_error: 'сервис AI временно недоступен',
+  overloaded_error: 'сервис AI перегружен',
+  rate_limit_error: 'достигнут лимит запросов к AI',
+  timeout: 'AI не ответил вовремя',
+  invalid_response: 'AI вернул некорректный ответ',
+  invalid_request_error: 'AI отклонил запрос',
+  no_evidence: 'недостаточно данных для AI-анализа',
+  disabled: 'AI-анализ отключён настройками',
+  budget: 'исчерпан бюджет на AI-анализ'
+};
+function aiReasonRu(cat) { var c = str(cat); return AI_REASON_RU[c] || 'AI-анализ не выполнен'; }
 // DELIVERY_TEXT is the ONE place every terminal/intermediate string lives (deliveryTerminalEdit reads it rather
 // than inlining literals, so the wording can never drift between the contract and the renderer).
 var DELIVERY_TEXT = {
@@ -124,6 +141,8 @@ var DELIVERY_TEXT = {
   document_sending: '✅ Отчёт готов. Excel-файл отправляется…',
   delivered: '✅ Готово. Отчёт и Excel-файл отправлены.',
   delivered_report_only: '✅ Готово. Отчёт отправлен.',
+  delivered_no_ai: '⚠️ Отчёт и Excel отправлены без AI-анализа:',
+  delivered_report_only_no_ai: '⚠️ Отчёт отправлен без AI-анализа:',
   report_failed: '⚠️ Не удалось отправить отчёт. Попробуйте повторить запрос.',
   document_retrying: '⚠️ Отчёт отправлен, но Excel-файл доставить не удалось. Повторяю отправку…',
   document_failed: '⚠️ Отчёт отправлен, но Excel-файл доставить не удалось. Попробуйте запросить файл повторно.',
@@ -134,7 +153,8 @@ var DELIVERY_TEXT = {
 // Rank for the monotonic guard: a run never goes backwards, and any terminal (rank 9) is sticky.
 var DELIVERY_RANK = {
   processing: 0, report_sent: 1, document_sending: 2, document_retrying: 2,
-  delivered: 9, delivered_report_only: 9, report_failed: 9, document_failed: 9, analysis_failed: 9, no_data: 9, partial: 9
+  delivered: 9, delivered_report_only: 9, delivered_no_ai: 9, delivered_report_only_no_ai: 9,
+  report_failed: 9, document_failed: 9, analysis_failed: 9, no_data: 9, partial: 9
 };
 function isTerminalDelivery(dstate) { return (DELIVERY_RANK[str(dstate)] || 0) >= 9; }
 function deliveryText(dstate) { return DELIVERY_TEXT[str(dstate)] || ''; }
@@ -166,6 +186,19 @@ function deliveryTerminalEdit(ctx) {
   var attempts = num(ctx.attempts, 0);
   var maxAttempts = Math.max(1, num(ctx.max_attempts, 1));
   function T(dstate, text, terminal) { return { delivery_state: dstate, text: text || deliveryText(dstate), is_terminal: terminal !== false }; }
+  // AI-CONTRACT-001: a success terminal is honest only if a promised AI analysis was actually delivered. When the
+  // plan expected AI but it was not delivered (Claude failed -> deterministic fallback, or no compatible reuse),
+  // the facts still ship, but the success line names the verified reason instead of the plain «✅ Готово …».
+  var ai = ctx.ai || {};
+  var aiExpected = ai.expected === true;
+  var aiDelivered = ai.delivered === true;
+  function okTerminal(okState) {
+    if (aiExpected && !aiDelivered) {
+      var st = okState === 'delivered' ? 'delivered_no_ai' : 'delivered_report_only_no_ai';
+      return T(st, deliveryText(st) + ' ' + aiReasonRu(ai.reason) + '.');
+    }
+    return T(okState);
+  }
 
   // The text report never reached Telegram -> claim NOTHING was sent.
   if (!hasReport) return T('report_failed');
@@ -174,10 +207,10 @@ function deliveryTerminalEdit(ctx) {
   if (fs === 'failed' && !hasAnalysis) return T('analysis_failed');
   if (!hasAnalysis && (fs === 'no_data' || records === 0)) return T('no_data');
   if (fs === 'partial') return T('partial');
-  // Successful run with no workbook produced -> report-only terminal.
-  if (!xlsxExpected) return T('delivered_report_only');
+  // Successful run with no workbook produced -> report-only terminal (AI-honest).
+  if (!xlsxExpected) return okTerminal('delivered_report_only');
   // Workbook expected: the terminal is decided ONLY by the real sendDocument result.
-  if (hasDoc) return T('delivered');                                   // BOTH message ids confirmed
+  if (hasDoc) return okTerminal('delivered');                          // BOTH message ids confirmed (AI-honest)
   if (attempts < maxAttempts) return T('document_retrying', null, false); // another attempt follows (NOT terminal)
   return T('document_failed');                                          // retries exhausted
 }
