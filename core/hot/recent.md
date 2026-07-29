@@ -66,6 +66,30 @@ Sheets), а `Run WF12/16/08/10` в WF20 не имели обработки ош�
 изменений). Регенерированы WF20/WF24 (идемпотентно). Новый тест `test_terminal_on_error` (31/0). Полная
 офлайн-регрессия: **163 набора / 0 провалов / 9263 assert / $0.**
 
+**Git + деплой (выполнено).** PR #54 смёржен в `main` (`d93a423`) после зелёного CI. Деплой: **WF20 —
+структурный графт** (`deploy_workflow_structural.js`, 75→77 узлов: +«Progress: Failed (Terminal)»/«Edit Progress
+(Failed)», сохранены id/active/креды 8 узлов/биндинги 9 узлов, 0 placeholder), **WF24 — хирургический jsCode**.
+Бэкап ДО импорта: `/home/node/.n8n/predeploy-20260729-190857/` (в томе; wf20 sha `db1aefc550b9b5a9`, wf24
+`38965b1e7f8661f1`). Импорт → рестарт → republish WF20/WF24. **Пост-деплой (read-only):** `health=true,
+active=17, webhook=1, ingress=200, RUNTIME INTEGRITY: OK`; live WF20 = 77 узлов, `Run WF12` onError=
+continueErrorOutput, error-выход(1)→«Progress: Failed (Terminal)» (deliveryErrorEdit), WF24 Init Progress==main;
+**WF27/28/03/07 не тронуты**. Откат: `import:workflow` из бэкапа + republish.
+
+**Восстановление `req_76722118` — ЗАБЛОКИРОВАНО (нужно одно действие оператора в UI).** Реплей требует либо
+n8n Executions UI → Retry, либо REST `POST /rest/executions/1439/retry`, а REST отдаёт **401**: n8n REST API-ключ
+на VPS отсутствует (env/файлы), извлекать/дешифровать из БД или использовать root-пароль — недопустимо; `n8n
+execute --id` не умеет подать вход WF20. **Это НЕ требование платной подписки.** Точное действие: в n8n UI →
+Executions → исполнение WF20 для `req_76722118` (2026-07-28 12:20, exec 1439) → **Retry → «Retry with currently
+saved workflow»** (перезапуск на ИСПРАВЛЕННОМ коде: при чистой квоте Sheets доставит отчёт+XLSX в чат 219246148;
+при повторной ошибке — новый честный терминал, а не зависание 7/10). Либо создать REST API-ключ в Settings → n8n
+API и повторить эндпоинт выше.
+
+**Открытые пункты приёмки (честно, не PASS без свежих доказательств):** #2 идемпотентный retry транзиентной
+квоты Sheets (корень понятен; terminal-on-error делает сбой ЧЕСТНЫМ, но bounded-retry для ИЗБЕЖАНИЯ сбоя не
+добавлен); #3 дедуп callback/rerun (7× rerun); #4 сохранение цели «проверить изменения» (crediti.ru); #6 живое
+наблюдение `delivered_no_ai`/`run_failed` (нельзя форсировать реальный сбой Anthropic/Sheets). `POST-STAGE-F
+CLEANUP` НЕ объявляется.
+
 ## Сессия 76 (2026-07-25) — read-only проверка прод-паритета + выбор пути деплоя + правки правдивости (НИЧЕГО не задеплоено, $0)
 
 **Только чтение продакшна + офлайн-анализ. Ни импорта, ни активации, ни push/PR/merge, ни внешних вызовов.**
