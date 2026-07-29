@@ -2,6 +2,41 @@
 
 Most recent first. Keep last 3 sessions max. Archive older entries to `core/warm/decisions.md`.
 
+## Сессия 79 (2026-07-29) — пост-Stage-F доставка/callback/AI: 6 фиксов канонично + деплой + валидация (роутинг НЕ сломан)
+
+**Сделано, смёржено (main `a6266e1` → далее docs), задеплоено хирургически, проверено в проде. $0.**
+- **CALLBACK-DEDUP-001 (PR #56):** ключ идемпотентности callback теперь action-scoped
+  (`cb::data::m<msg>::user::chat`), а не update_id — 7 нажатий одной кнопки → 1 победитель claim, 6 дублей
+  завершаются до WF19/плана. Тест `test_callback_dedup` 11/0.
+- **SHEETS-RETRY-CLASS-001 (PR #57):** `sheets_retry_policy` — `isRetryableSheetsError`/`isPermanentSheetsError`/
+  `sheetsRetryDecision` (429/quota/5xx retryable; 400/401/403/validation — никогда). Нативный retry (3×5s) уже
+  на узлах; устойчивая per-minute квота лечится не ретраем, а TERMINAL-ON-ERROR. Тест 49/0.
+- **RECHECK-TARGET-001 (PR #58):** «проверить изменения повторно» сохраняет исходную цель (url/intent/change_report/
+  refresh) из url_registry вместо generic discovery. Тест `test_recheck_target` 17/0.
+- **Items 4–5 (PR #59):** keyboard-disable (editMessageReplyMarkup, gated, fail-open) + missing-origin fail-closed
+  (XLSX-чат = origin отчёта, без owner-fallback) + подтверждён порядок доставки. Тест `test_delivery_invariants` 29/0.
+- **Item 6 (PR #60):** `test_two_user_fixture` 16/0 — изоляция получателей, стабильный origin WF18→19→20, дедуп,
+  ретрай, правдивость AI, паритет Telegram/XLSX (B=219246148, владелец синтетический).
+- **Деплой:** WF18 структурно (+2 keyboard-узла, webhookId сохранён), WF19/20/24 хирургически jsCode; бэкап
+  `/home/node/.n8n/predeploy-20260729-224356` (SHA-256). Пост-деплой: `health=true, active=17, webhook=1,
+  ingress=200, RUNTIME INTEGRITY OK`; **код прод WF18/19/20/24 == main** (parity-«FAIL» был только по флагу
+  `active` опубликованных wf); WF27/28/03/07 не тронуты. Полная офлайн-регрессия: **167 наборов / 0 провалов /
+  9360 assert / $0**.
+
+**Item 8 — валидировано на РЕАЛЬНЫХ данных (exec 1449, owner req_76722121):** WF28 fallback server_error,
+llm_analyses=0, cost=0 → задеплоенный AI-контракт даёт `delivered_no_ai` «⚠️ Отчёт и Excel отправлены без
+AI-анализа: сервис AI временно недоступен» (не «Готово»); счётчики сходятся (ai_calls=0/ai_cost=0 ↔ ai_delivered=false;
+sources_fresh=1 независимо). Роутинг двух пользователей НЕ сломан (exec 1477 доставил 219246148 корректно).
+
+**Item 7 — восстановление `req_76722118` (219246148, упал 07-28 на квоте Sheets в WF12) — ЗАБЛОКИРОВАНО (одно
+действие оператора).** Отчёт-бандл не персистился (прогон умер до Append report_bundles), n8n REST = 401
+(API-ключа на VPS нет — env/config/файлы; создавать ключ через UI и дешифровать БД нельзя; слать
+пользователю несанкционированный устаревший отчёт нельзя). Точное действие: n8n UI → Executions → исполнение
+WF20 `req_76722118` (2026-07-28 12:20, exec 1439) → **Retry → «Retry with currently saved workflow»** — на
+ИСПРАВЛЕННОМ коде: при чистой квоте доставит отчёт+XLSX в чат 219246148, при повторной ошибке — честный терминал
+(не зависание 7/10), переиспользуя одобренный план. Либо создать REST API-ключ (Settings → n8n API) и вызвать
+`POST /rest/executions/1439/retry`. Это НЕ платная подписка.
+
 ## Сессия 77 (2026-07-29) — прод-деплой WIP1 выполнен оператором + Telegram id 219246148; расследование дефектов доставки
 
 **Деплой (оператор, root).** WF20/24/25 развёрнуты в прод (`deploy_n8n.sh --apply`, staged, backup-first). Лог:
