@@ -155,8 +155,9 @@ function inferAnalysisMode(text, extracted) {
   return 'source_analysis';
 }
 
-function deterministicPlan(text, cfg) {
+function deterministicPlan(text, cfg, opts) {
   cfg = cfg || {};
+  opts = opts || {};
   const t = str(text);
   let region = cfg.default_region || 'Москва/МО';
   for (const [rx, v] of REGION_HINTS) { if (rx.test(t)) { region = v; break; } }
@@ -168,7 +169,30 @@ function deterministicPlan(text, cfg) {
   // mention narrows it. Always intersected with the allowlist and capped by max_sources_per_request.
   const allow = (cfg.source_allowlist || ['website']).map(low);
   // URL-INTAKE-002: explicit pasted sources (websites/Telegram/VK) drive the plan to EXACTLY those platforms.
-  const ex = extractExplicitSources(t);
+  let ex = extractExplicitSources(t);
+  // RECHECK-TARGET-001 (DEFECT-C): a "проверить изменения повторно" button carries NO url in its callback text, so
+  // the extractor finds nothing and the plan would degrade to a GENERIC discovery — silently losing the original
+  // target (live: crediti.ru turned into a website+Telegram discovery). When the current text names no source but
+  // the caller supplies the PRIOR report's target (opts.prior), preserve it exactly: same urls/channels/communities,
+  // same niche/region, and treat the run as a change-report re-check (refresh the same target, compare to snapshot).
+  const prior = opts.prior || {};
+  const currentHasSource = ex.websites.length || ex.telegram_channels.length || ex.vk_sources.length;
+  const priorHasSource = (Array.isArray(prior.urls) && prior.urls.length) ||
+    (Array.isArray(prior.telegram_channels) && prior.telegram_channels.length) ||
+    (Array.isArray(prior.vk_communities) && prior.vk_communities.length);
+  let recheck = false;
+  if (!currentHasSource && priorHasSource) {
+    ex = {
+      websites: extractSafeUrls((prior.urls || []).join(' ')),
+      telegram_channels: (function () { const r = extractExplicitSources((prior.telegram_channels || []).join(' ').replace(/@/g, ' t.me/')); return r.telegram_channels; })(),
+      vk_sources: (function () { const r = extractExplicitSources((prior.vk_communities || []).join(' ')); return r.vk_sources; })()
+    };
+    recheck = (ex.websites.length + ex.telegram_channels.length + ex.vk_sources.length) > 0;
+    if (recheck) {
+      if (str(prior.niche)) niche = str(prior.niche);
+      if (str(prior.region)) region = str(prior.region);
+    }
+  }
   const explicitPlatforms = [];
   if (ex.websites.length) explicitPlatforms.push('website');
   if (ex.telegram_channels.length) explicitPlatforms.push('telegram');
@@ -186,7 +210,7 @@ function deterministicPlan(text, cfg) {
   const maxCalls = num(cfg.max_external_calls, 40);
   return normalizePlan({
     intent: 'competitor_market_scan',
-    analysis_mode: inferAnalysisMode(t, ex),
+    analysis_mode: recheck ? 'change_report' : inferAnalysisMode(t, ex),
     niche: niche,
     service: niche,
     region: region,
@@ -212,9 +236,9 @@ function deterministicPlan(text, cfg) {
       if (/discovery/.test(String(t).toLowerCase()) || explicitPlatforms.length === 0) return n >= 2 ? 'comparison' : (n === 1 ? 'explicit_source' : 'discovery');
       return n >= 2 ? 'comparison' : 'explicit_source';
     })(),
-    source_execution_mode: planWantsRefresh(t) ? 'refresh' : 'auto',
-    force_reprocess: planWantsRefresh(t),
-    refresh_reason: planWantsRefresh(t) ? 'user_requested_refresh' : '',
+    source_execution_mode: (recheck || planWantsRefresh(t)) ? 'refresh' : 'auto',
+    force_reprocess: recheck || planWantsRefresh(t),
+    refresh_reason: recheck ? 'recheck_previous_target' : (planWantsRefresh(t) ? 'user_requested_refresh' : ''),
     requires_approval: cfg.require_approval !== false,
     plan_source: 'deterministic'
   }, cfg);
