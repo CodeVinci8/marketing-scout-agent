@@ -4,21 +4,54 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
-## СЕССИЯ 75 (2026-07-24) — пост-гейтовое усиление отчётов + CI + документация (в работе, НЕ смёржено)
+## СЕССИЯ 77 (2026-07-29) — ПРОД-ДЕПЛОЙ ВЫПОЛНЕН оператором + добавлен Telegram id; расследование дефектов доставки
 
-Работа на ветке `fix/stage-f-post-migration-acceptance`. Живых/платных прогонов и деплоя нет.
+**Деплой (оператор, root, 2026-07-29).** WIP1-код (WF20/24/25) **развёрнут в продакшн**. По логу оператора:
+staged-импорт 19 workflow, бэкап ДО импорта `/root/backups/n8n-prerelease-20260725-131917/` (SHA записан),
+`PRODUCTION_SOURCE_PARITY=PASS` 19/19, все 18 биндингов `noop`. Маркер релиза стал `ABORTED` на пост-импортном
+gate-е политики активации из-за **предсуществующего активного legacy `WF14 «Lead Scout»`** — но импорты уже
+персистировались. Затем `--publish-callables` (15 опубликовано) + активация WF18 + пересоздание контейнера.
+**Read-only runtime-probe (я, uid 1000, без docker):** `health=true, active=17, registered_webhooks=1,
+ingress_post=200, RUNTIME INTEGRITY: OK`. Строка «минимальный будущий деплой … НЕ выполнялся» ниже — **устарела:
+деплой ВЫПОЛНЕН 2026-07-29.**
+
+**Telegram id `219246148`.** Оператор дописал id к `MS_TELEGRAM_ALLOWED_USER_IDS` в `/opt/n8n/n8n.env`
+(host-grep подтвердил наличие `219246148` рядом с уже разрешённым владельцем — существующий id не раскрываем). Загрузку в контейнер и `isAllowedUser(219246148)=true` я подтвердить
+read-only не могу (нет доступа к `/opt/n8n`, docker запрещён) — **ждёт root-проверки + `/start`**.
+
+**Дефекты доставки (Evidence A/B, отчёты 2026-07-29 18:15–19:01) — расследование, reproduce-first.** Сильная
+гипотеза (проверено насколько возможно без прод-данных): проблемные отчёты сгенерированы **ПРЕДЫДУЩЕЙ версией
+workflow**, а не задеплоенным сегодня кодом. Доказательства: (1) фикс Defect D (независимость «собрано заново»
+от числа внешних вызовов) **отсутствует** в старом проде `e96bf4a` (`rpFreshCount=0`, `sourceAccounting=0`) и
+**присутствует** в `main`; (2) n8n применяет импорт только после полного рестарта — healthy-состояние
+зафиксировано только сейчас; (3) Defect F (телеметрия в клиентском XLSX) уже закрыт (скрытый лист «Технические
+данные», ev_N не доходит до пользователя); Defect B имеет idempotency-инфраструктуру (`updateIdempotencyKey`,
+`callback_query_id`); дельта-тесты `main` зелёные (f2-delivery 110/0, progress-lifecycle 72/0, report-integrity
+143/0). **Правильный следующий шаг — воспроизведение на уже-действующем коде:** один отчёт по сохранённым данным,
+и смотреть, какие дефекты реально сохраняются, ПЕРЕД любыми правками (дисциплина «reproduce-first, proven facts»).
+
+---
+
+## СЕССИЯ 75 (2026-07-24) — пост-гейтовое усиление отчётов + CI + документация (СМЁРЖЕНО в `main`; продакшн не тронут)
+
+Работа велась на ветке `fix/stage-f-post-migration-acceptance` и **смёржена в `main`** (PR #49 → `8c1bd94`,
+затем PR #50 → `8f4781e`). Живых/платных прогонов и деплоя в продакшн не было.
 
 - **WIP1 — правдивость отчётов (СДЕЛАНО, коммит `cb3c40a`).** Контракт учёта источников WF04→WF20
   (reuse/fresh/rejected/contributing, без вывода из числа вызовов), source-aware качество (fail-closed),
   структурные универсальные заявления с припиской, контракт МСК-времени по `ms_time`. `test_report_integrity`
-  143/0; полная регрессия 156 наборов / 8861 assert / 0 провалов. Три отчёта (1370/1380/1390) перестроены
-  офлайн и проинспектированы.
+  143/0; полная регрессия 156 наборов / 8861 assert / 0 провалов. Три представительных сценария рендера
+  проверены **офлайн по фикстурам** (реальный сохранённый анализ `exec_1349` как фикстура сравнения + честные
+  реконструкции понижения/синтеза) — это **не** точный ре-рендер оригинальных бандлей 1370/1380/1390 (сырые
+  бандли недоступны только для чтения вне контейнера n8n; сами исполнения LIVE-PROVEN в сессии 74).
 - **WIP2 — CI (СДЕЛАНО, коммит `647f56e`).** Исторический провал `offline-regression` был на `make test`
   (deploy-entrypoints, теперь 74/0); секрет-скан больше не ложно срабатывает на фикстурах санитайзера
   (собираются в рантайме, сам скан не тронут). Свежий прогон: PR #49, run `30129297676` — **SUCCESS**.
-- **WIP3 — документация (СДЕЛАНО).** Компактный русскоязычный набор: `README.md`, `docs/GUIDE_RU.md`,
-  `docs/CAPABILITIES_RU.md` (матрица возможностей с уровнями доказанности), `docs/ARCHITECTURE_RU.md`,
-  `docs/OPERATIONS_RU.md`. Исторические стадийные документы сохранены как evidence-архив.
+- **WIP3 — документация (СДЕЛАНО).** **Добавлен** компактный русскоязычный набор **точек входа** (5 новых
+  файлов): `README.md`, `docs/GUIDE_RU.md`, `docs/CAPABILITIES_RU.md` (матрица возможностей с уровнями
+  доказанности), `docs/ARCHITECTURE_RU.md`, `docs/OPERATIONS_RU.md`. **Физической консолидации/сокращения
+  корпуса не было** — исторические стадийные документы полностью сохранены как evidence-архив; число
+  трекаемых `.md` **выросло** (набор пополнен, не уменьшен), навигация упрощена входными файлами.
 - **WIP4 — консервативная чистка (СДЕЛАНО).** Вывод: **конклюзивно мёртвого кода нет.**
   - Слой библиотек: все `n8n/lib/*.js` имеют ≥1 ссылку (генератор/тест/кросс-require); удалять нечего.
   - 5 офлайн-тестов существовали и проходили, но не были в реестре `run_all.js` (устаревший CI-путь):
@@ -30,27 +63,45 @@ Updated at the end of each session. This is the first thing to read after `core/
 - **Первый по-настоящему открытый критерий приёмки после Stage F — начало Stage F.5** (Unified Analysis
   Result / Analyst Agent: обогащение кандидатов WF27 + интерпретация публичных лидов). Stage F.5 / G / H —
   отдельные стадии; F.5 НЕ начинается без команды оператора.
-- **Git-интеграция (СДЕЛАНО).** Ветка `fix/stage-f-post-migration-acceptance` смёржена в `main` через PR #49
-  (merge-коммит `8c1bd94`) после зелёного CI. Локальный `main` == `origin/main` == `8c1bd94`, рабочее дерево
+- **Git-интеграция (СДЕЛАНО).** Ветка `fix/stage-f-post-migration-acceptance` смёржена в `main`: PR #49 →
+  merge-коммит `8c1bd94` (WIP1/CI/доки/чистка), затем PR #50 → **`8f4781e`** (итог сессии + дрейф). Текущий
+  `origin/main` == локальный `main` == **`8f4781e`** (НЕ `8c1bd94` — тот был промежуточным). Рабочее дерево
   чистое, фиче-ветка НЕ удалена. CI `offline-regression` зелёный и на ветке, и на `main` (первый зелёный
-  `main` после красной серии #46–#48). Продакшн НЕ трогали.
-- **Дрейф репозиторий → продакшн (для будущего деплоя, НЕ выполнено).** Относительно гейт-коммита `e96bf4a`
-  (то, что сейчас крутится в проде) изменились ТОЛЬКО **WF20, WF24, WF25** — они несут WIP1-усиление
-  правдивости (учёт источников, source-aware качество, структурные заявления, МСК-время). **WF27 и WF28 не
-  менялись** (паритет с продом сохранён). **Минимальный будущий деплой:** структурный backup-first деплой
-  WF20/WF24/WF25 → `make verify-production` + проверка паритета + runtime-integrity. Требует явного одобрения
-  оператора; в этой сессии НЕ выполнялся.
+  `main` после красной серии #46–#48; финальный прогон `main` — run `30130350678` на `8f4781e`, SUCCESS).
+  Продакшн НЕ трогали.
+- **Дрейф репозиторий → продакшн — ПОДТВЕРЖДЁН read-only экспортом (не предположение).** Живой read-only
+  экспорт продакшна (90 workflow) сопоставлен офлайн: продакшн-версии **WF20/WF24/WF25 побайтово-эквивалентны
+  базе `e96bf4a`** (нормализованный logic-хеш совпал) и отличаются от `main` **только jsCode** конкретных
+  узлов (WF20: Build Execution Summary / Build Delivery Outbox / Shape Report Bundle / Build Report XLSX;
+  WF24: Build Exports & Outbox; WF25: Build Digest Attachments) — набор узлов и топология идентичны. **WF27 и
+  WF28 в проде побайтово совпадают с `main`** (дрейфа нет). **Верный путь деплоя — хирургический
+  `tools/deploy_workflow_jscode.js`** (не структурный): dry-run показал SURGICAL-CLEAN с сохранением
+  id/active/креды/связей/webhookId/sub-workflow-биндингов. Минимальный будущий деплой: backup-first
+  (`scripts/backup.sh --apply`) → jscode-графт WF20/24/25 → `make verify-production` + паритет + runtime-integrity.
+  **ОБНОВЛЕНО (сессия 77): деплой ВЫПОЛНЕН оператором 2026-07-29** через `deploy_n8n.sh --apply` (whole-runtime
+  staged, backup-first) — `PRODUCTION_SOURCE_PARITY=PASS` 19/19, runtime-integrity OK. Хирургический путь
+  остаётся рекомендацией для будущих точечных правок.
+- **Отдельная предсуществующая drift-находка (вне scope WIP1).** Тот же read-only скан выявил, что в проде
+  крутятся **более старые версии двух НЕактивных ручных/тестовых workflow**: WF03 (03 firecrawl single URL) —
+  отличается один code-узел `Normalize + Route`; WF07 (07 manual touchpoint intake) — в проде 14 узлов против
+  16 в репозитории (нет `Append live_source_runs` / `Build live_source_runs Row`, добавленных в эпоху DEC-137).
+  Оба **неактивны**, **не входят в scope WIP1** и **не менялись сессией 75** — это старый недокатанный дрейф
+  ручных workflow. **Над ним НЕ деплоим**; решение по нему — отдельно, с одобрения оператора.
 
 ---
 
-## CURRENT PRIORITY (2026-07-24, session 74) — STAGE F GATED → next is Stage F.5
+## PRIOR (2026-07-24, session 74) — STAGE F GATED [СМЁРЖЕНО В `main` В СЕССИИ 75 — историческая запись]
+
+> Статус на момент сессии 74. Локальный коммит того сеанса позже вошёл в `main` (см. раздел сессии 75 выше):
+> «NOT pushed/merged/PR'd» ниже было верно ТОГДА и историческим больше не отражает текущее состояние.
 
 **Stage F is COMPLETE and gated (`STAGE F COMPLETE — GO FOR F.5`).** All required live proofs are closed:
 2-source comparison, **3-source synthesis (no downgrade, `submit_synthesis`, 3 contributors)**, F-2 terminal
 edit, discovery→comparison handoff — delivered to Telegram + XLSX, persisted to Sheets, within the $0.50 cap
 (~$0.44 spent). The earlier downgraded attempt is root-caused as a legitimate external bot-protection skip
 (`carcapital.ru` KillBot wall) — not a defect, no code change. One focused local commit on
-`fix/stage-f-post-migration-acceptance`. **NOT pushed/merged/PR'd** (operator ruling stands).
+`fix/stage-f-post-migration-acceptance` (на момент сессии 74 — **NOT pushed/merged/PR'd**; позже смёржен в
+сессии 75).
 
 **Immediate next action (do NOT start without operator go):** begin **Stage F.5** (Unified Analysis Result /
 Analyst Agent — WF27 candidate enrichment + public-lead interpretation are the remaining analysis-mode
