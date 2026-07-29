@@ -271,6 +271,17 @@ var CR_MODE_LINE = {
 
 // crCompactReportRu(p) -> { text, length, profile }
 // p: { bundle, analyses (validated), summary, cost_line, next_action, xlsx_expected, state }
+// AI-CONTRACT-001: short RU reason for an AI analysis that was expected but not delivered (embeddable copy of the
+// same mapping the progress terminal uses — no cross-lib require in an embedded node).
+var CR_AI_REASON = {
+  server_error: 'сервис AI временно недоступен', overloaded_error: 'сервис AI перегружен',
+  rate_limit_error: 'достигнут лимит запросов к AI', timeout: 'AI не ответил вовремя',
+  invalid_response: 'AI вернул некорректный ответ', invalid_request_error: 'AI отклонил запрос',
+  no_evidence: 'недостаточно данных для AI-анализа', disabled: 'AI-анализ отключён настройками',
+  budget: 'исчерпан бюджет на AI-анализ'
+};
+function crAiReasonRu(cat) { return CR_AI_REASON[crStr(cat)] || 'AI-анализ не выполнен'; }
+
 function crCompactReportRu(p) {
   p = p || {};
   var bundle = p.bundle || {};
@@ -320,6 +331,12 @@ function crCompactReportRu(p) {
 
   L.push(crHeader(bundle, analyses, summary));
   if (CR_MODE_LINE[mode]) L.push(CR_MODE_LINE[mode]);
+  // AI-CONTRACT-001: the plan promised AI analysis but none was delivered (Claude failed -> deterministic
+  // fallback, or no compatible reuse). Deliver the facts, but say so honestly — never present a fact-only report
+  // as if the promised AI interpretation is present. The XLSX «Аналитические выводы» carries the same note.
+  if (summary.ai_expected === true && !crHasAnalysis) {
+    L.push('⚠️ AI-анализ не выполнен: ' + crAiReasonRu(summary.ai_error_category) + '. Ниже — собранные факты без AI-интерпретации.');
+  }
   if (mode === 'change_report') {
     var changes = Array.isArray(bundle.changes) ? bundle.changes : [];
     if (!changes.length) L.push('Существенных изменений относительно прошлой проверки не обнаружено — это честный результат сравнения, а не сбой.');
