@@ -116,8 +116,32 @@ function markDelivered(state, deliveryId) {
 var DELIVERY_STATES = [
   'processing', 'report_sent', 'document_sending', 'delivered', 'delivered_report_only',
   'delivered_no_ai', 'delivered_report_only_no_ai',
-  'report_failed', 'document_retrying', 'document_failed', 'analysis_failed', 'no_data', 'partial'
+  'report_failed', 'document_retrying', 'document_failed', 'analysis_failed', 'no_data', 'partial', 'run_failed'
 ];
+// TERMINAL-ON-ERROR-001: any required stage (report build, Google Sheets, XLSX, Telegram send, a child workflow)
+// can throw. Without a catch, the ONE progress message stays stuck at an intermediate stage (live-observed:
+// exec 1439/1444 — WF12 "Append agent_requests" hit a Google Sheets 429 and the run aborted at ~7/10, so the
+// user got neither a report nor an honest failure). deliveryErrorEdit() turns any such failure into an HONEST
+// terminal: it names a short verified reason, never says «✅ Готово», never claims a report/file was sent, and
+// states the request is preserved for a safe retry. The reason is derived from the real error (429/quota, timeout,
+// auth, else generic) — never invented.
+var RUN_ERROR_REASON_RU = {
+  quota: 'сервис хранения данных временно перегружен (лимит запросов)',
+  timeout: 'превышено время ожидания сервиса',
+  auth: 'проблема доступа к сервису',
+  network: 'временный сбой сети',
+  generic: 'техническая ошибка'
+};
+function runErrorReasonRu(ctx) {
+  ctx = ctx || {};
+  var code = str(ctx.http_code);
+  var msg = str(ctx.error_message).toLowerCase();
+  if (code === '429' || /quota|too many requests|rate.?limit|resource.?exhausted/.test(msg)) return RUN_ERROR_REASON_RU.quota;
+  if (code === '408' || code === '504' || /timeout|timed out|etimedout|econnreset/.test(msg)) return RUN_ERROR_REASON_RU.timeout;
+  if (code === '401' || code === '403' || /unauthor|forbidden|permission|credential/.test(msg)) return RUN_ERROR_REASON_RU.auth;
+  if (/network|econn|enotfound|socket|dns/.test(msg)) return RUN_ERROR_REASON_RU.network;
+  return RUN_ERROR_REASON_RU.generic;
+}
 // AI-CONTRACT-001: when the plan promised AI analysis but it was NOT delivered (a real Claude failure ->
 // deterministic fallback, or no usable reuse), the factual report + XLSX are still delivered, but the terminal
 // must say so honestly instead of the plain success line. The reason is verified (the analyst's error category),
@@ -148,16 +172,26 @@ var DELIVERY_TEXT = {
   document_failed: '⚠️ Отчёт отправлен, но Excel-файл доставить не удалось. Попробуйте запросить файл повторно.',
   analysis_failed: '⚠️ Анализ не завершён: данные получить не удалось.',
   no_data: '✅ Проверка завершена. Данные для анализа не получены.',
-  partial: '⚠️ Анализ завершён частично. Доступные результаты отправлены.'
+  partial: '⚠️ Анализ завершён частично. Доступные результаты отправлены.',
+  run_failed: '⚠️ Не удалось завершить анализ:'
 };
 // Rank for the monotonic guard: a run never goes backwards, and any terminal (rank 9) is sticky.
 var DELIVERY_RANK = {
   processing: 0, report_sent: 1, document_sending: 2, document_retrying: 2,
   delivered: 9, delivered_report_only: 9, delivered_no_ai: 9, delivered_report_only_no_ai: 9,
-  report_failed: 9, document_failed: 9, analysis_failed: 9, no_data: 9, partial: 9
+  report_failed: 9, document_failed: 9, analysis_failed: 9, no_data: 9, partial: 9, run_failed: 9
 };
 function isTerminalDelivery(dstate) { return (DELIVERY_RANK[str(dstate)] || 0) >= 9; }
 function deliveryText(dstate) { return DELIVERY_TEXT[str(dstate)] || ''; }
+
+// TERMINAL-ON-ERROR-001: honest terminal for a run that aborted in a required stage. ctx:
+//   stage (1..10, best-effort), error_message, http_code. Never claims delivery; preserves the request for retry.
+function deliveryErrorEdit(ctx) {
+  ctx = ctx || {};
+  var reason = runErrorReasonRu(ctx);
+  var text = deliveryText('run_failed') + ' ' + reason + '. Отчёт и файл не отправлены; запрос сохранён — можно повторить.';
+  return { delivery_state: 'run_failed', text: text, reason: reason, is_terminal: true };
+}
 
 // The edit to apply the INSTANT the text-report send attempt resolves. Success REQUIRES a real Telegram message
 // id — a report we cannot prove was delivered is report_failed (truthful), never report_sent.
@@ -230,5 +264,5 @@ module.exports = {
   STAGES, TOTAL, DEFAULT_THROTTLE_MS, initProgress, advance, setMessageId, cancel, fail, applyEditResult,
   canDeliver, markDelivered, bar,
   DELIVERY_STATES, DELIVERY_TEXT, deliveryText, isTerminalDelivery,
-  deliveryReportEdit, deliveryTerminalEdit, advanceDelivery
+  deliveryReportEdit, deliveryTerminalEdit, deliveryErrorEdit, advanceDelivery
 };
