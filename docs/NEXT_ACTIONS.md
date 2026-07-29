@@ -4,6 +4,34 @@ Updated at the end of each session. This is the first thing to read after `core/
 
 ---
 
+## СЕССИЯ 77 (2026-07-29) — ПРОД-ДЕПЛОЙ ВЫПОЛНЕН оператором + добавлен Telegram id; расследование дефектов доставки
+
+**Деплой (оператор, root, 2026-07-29).** WIP1-код (WF20/24/25) **развёрнут в продакшн**. По логу оператора:
+staged-импорт 19 workflow, бэкап ДО импорта `/root/backups/n8n-prerelease-20260725-131917/` (SHA записан),
+`PRODUCTION_SOURCE_PARITY=PASS` 19/19, все 18 биндингов `noop`. Маркер релиза стал `ABORTED` на пост-импортном
+gate-е политики активации из-за **предсуществующего активного legacy `WF14 «Lead Scout»`** — но импорты уже
+персистировались. Затем `--publish-callables` (15 опубликовано) + активация WF18 + пересоздание контейнера.
+**Read-only runtime-probe (я, uid 1000, без docker):** `health=true, active=17, registered_webhooks=1,
+ingress_post=200, RUNTIME INTEGRITY: OK`. Строка «минимальный будущий деплой … НЕ выполнялся» ниже — **устарела:
+деплой ВЫПОЛНЕН 2026-07-29.**
+
+**Telegram id `219246148`.** Оператор дописал id к `MS_TELEGRAM_ALLOWED_USER_IDS` в `/opt/n8n/n8n.env`
+(host-grep подтвердил наличие `219246148` рядом с уже разрешённым владельцем — существующий id не раскрываем). Загрузку в контейнер и `isAllowedUser(219246148)=true` я подтвердить
+read-only не могу (нет доступа к `/opt/n8n`, docker запрещён) — **ждёт root-проверки + `/start`**.
+
+**Дефекты доставки (Evidence A/B, отчёты 2026-07-29 18:15–19:01) — расследование, reproduce-first.** Сильная
+гипотеза (проверено насколько возможно без прод-данных): проблемные отчёты сгенерированы **ПРЕДЫДУЩЕЙ версией
+workflow**, а не задеплоенным сегодня кодом. Доказательства: (1) фикс Defect D (независимость «собрано заново»
+от числа внешних вызовов) **отсутствует** в старом проде `e96bf4a` (`rpFreshCount=0`, `sourceAccounting=0`) и
+**присутствует** в `main`; (2) n8n применяет импорт только после полного рестарта — healthy-состояние
+зафиксировано только сейчас; (3) Defect F (телеметрия в клиентском XLSX) уже закрыт (скрытый лист «Технические
+данные», ev_N не доходит до пользователя); Defect B имеет idempotency-инфраструктуру (`updateIdempotencyKey`,
+`callback_query_id`); дельта-тесты `main` зелёные (f2-delivery 110/0, progress-lifecycle 72/0, report-integrity
+143/0). **Правильный следующий шаг — воспроизведение на уже-действующем коде:** один отчёт по сохранённым данным,
+и смотреть, какие дефекты реально сохраняются, ПЕРЕД любыми правками (дисциплина «reproduce-first, proven facts»).
+
+---
+
 ## СЕССИЯ 75 (2026-07-24) — пост-гейтовое усиление отчётов + CI + документация (СМЁРЖЕНО в `main`; продакшн не тронут)
 
 Работа велась на ветке `fix/stage-f-post-migration-acceptance` и **смёржена в `main`** (PR #49 → `8c1bd94`,
@@ -50,7 +78,9 @@ Updated at the end of each session. This is the first thing to read after `core/
   `tools/deploy_workflow_jscode.js`** (не структурный): dry-run показал SURGICAL-CLEAN с сохранением
   id/active/креды/связей/webhookId/sub-workflow-биндингов. Минимальный будущий деплой: backup-first
   (`scripts/backup.sh --apply`) → jscode-графт WF20/24/25 → `make verify-production` + паритет + runtime-integrity.
-  **Требует явного одобрения оператора; НЕ выполнялся.**
+  **ОБНОВЛЕНО (сессия 77): деплой ВЫПОЛНЕН оператором 2026-07-29** через `deploy_n8n.sh --apply` (whole-runtime
+  staged, backup-first) — `PRODUCTION_SOURCE_PARITY=PASS` 19/19, runtime-integrity OK. Хирургический путь
+  остаётся рекомендацией для будущих точечных правок.
 - **Отдельная предсуществующая drift-находка (вне scope WIP1).** Тот же read-only скан выявил, что в проде
   крутятся **более старые версии двух НЕактивных ручных/тестовых workflow**: WF03 (03 firecrawl single URL) —
   отличается один code-узел `Normalize + Route`; WF07 (07 manual touchpoint intake) — в проде 14 узлов против
