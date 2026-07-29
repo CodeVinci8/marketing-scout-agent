@@ -162,6 +162,7 @@ const JS_SUITES = [
   ['terminal-on-error', 'test_terminal_on_error.js'],
   ['callback-dedup', 'test_callback_dedup.js'],
   ['recheck-target', 'test_recheck_target.js'],
+  ['delivery-invariants', 'test_delivery_invariants.js'],
   ['f8-discovery-comparison', 'test_f8_discovery_comparison.js'],
   ['f8b-telegram-regression', 'test_f8b_telegram_regression.js'],
   // REPORT-TRUTH-E: delivered-XLSX row integrity (no doubled recs/pains) + report-truth fields (mixed mode,

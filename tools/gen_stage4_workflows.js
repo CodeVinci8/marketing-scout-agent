@@ -289,6 +289,19 @@ function httpTelegram(id, name, pos) {
     type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
   };
 }
+// KEYBOARD-DISABLE-001: editMessageReplyMarkup to STRIP the inline keyboard off a used approval message, so the
+// same buttons cannot be tapped again after the action was accepted (defence-in-depth on top of CALLBACK-DEDUP-001).
+// Reads $json.edit_markup_body; fail-open (a keyboard-removal failure must never abort the dispatch pipeline).
+function httpTelegramEditMarkup(id, name, pos) {
+  return {
+    parameters: {
+      method: 'POST', url: '=https://api.telegram.org/bot{{ $env.MS_TELEGRAM_BOT_TOKEN }}/editMessageReplyMarkup',
+      sendBody: true, specifyBody: 'json', jsonBody: '={{ $json.edit_markup_body }}', options: {}
+    },
+    onError: 'continueRegularOutput',
+    type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: pos, id: id, name: name
+  };
+}
 // editMessageText reuses the SAME message (progress edits). Body carries chat_id + message_id + text.
 // Like httpTelegram but the Bot API method is chosen at runtime ($json.tg_method: 'sendMessage'|'editMessageText'),
 // so one node can either post a new message or edit an existing one. Body is the matching JSON payload.
@@ -463,7 +476,7 @@ if(kind==='callback'){
     var __plans=[];try{__plans=extractTab($('Batch Read Sheets').first().json,'execution_plans').map(function(i){return i.json;});}catch(e){__plans=[];}
     var __cls=classifyApprovalCallback(__plans,{owner_user_id:p.user_id,chat_id:p.chat_id,agent_request_id:__arid});
     if(__cls.kind==='apply'){
-      return [{json:{lane:'approve_ack',continue_heavy:true,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:'✅ Принято! Запускаю анализ — прогресс покажу здесь.'}),answer_callback_body:JSON.stringify(answerCallbackBody(String(gate.callback_query_id||''),'Принято'))}}];
+      return [{json:{lane:'approve_ack',continue_heavy:true,has_reply:true,telegram_send_body:JSON.stringify({chat_id:String(p.chat_id||''),text:'✅ Принято! Запускаю анализ — прогресс покажу здесь.'}),answer_callback_body:JSON.stringify(answerCallbackBody(String(gate.callback_query_id||''),'Принято')),edit_markup_body:(Number(p.message_id)?JSON.stringify({chat_id:String(p.chat_id||''),message_id:Number(p.message_id),reply_markup:{inline_keyboard:[]}}):'')}}];
     }
     return [{json:{lane:'approve_ack_dup',continue_heavy:true,has_reply:false,answer_callback_body:JSON.stringify(answerCallbackBody(String(gate.callback_query_id||''),(__cls.kind==='no_plan')?'Готово':approvalDuplicateToastRu(__cls.kind)))}}];
   }
@@ -497,6 +510,10 @@ return [{json:{lane:'status',continue_heavy:false,has_reply:true,telegram_send_b
   ifNode('wf18-ifcmdcont', 'Continue Heavy Path?', [380, -140], "={{ $('Command Lane').first().json.continue_heavy }}"),
   ifNode('wf18-ifcmdack', 'Callback Ack Needed?', [200, -360], '={{ !!$json.answer_callback_body }}'),
   httpTelegramAnswer('wf18-cmdanswer', 'Answer Command Callback', [380, -420]),
+  // KEYBOARD-DISABLE-001: strip the inline keyboard off the used approval message (fires ONLY when the approve
+  // path set edit_markup_body). Gated + fail-open, so it never blocks the dispatch and never touches non-approve taps.
+  ifNode('wf18-ifdiskbd', 'Disable Keyboard?', [200, -500], '={{ !!$json.edit_markup_body }}'),
+  httpTelegramEditMarkup('wf18-diskbd', 'Disable Used Keyboard', [380, -500]),
   // ---- shared safe-stop path (used by ingress reject AND duplicate): no business, fast 200, optional ack ----
   code('wf18-term', 'Terminate Safely', [-520, 260], ['telegram_io'], `
 var inp=$json||{};var gate=inp.gate||{};
@@ -802,6 +819,8 @@ return [{json:{telegram_send_body:JSON.stringify({chat_id:chat,text:text}),inten
   ['Command Lane', 'Command Reply?'],
   ['Command Lane', 'Callback Ack Needed?'],
   ['Callback Ack Needed?', 'Answer Command Callback', 0],
+  ['Command Lane', 'Disable Keyboard?'],
+  ['Disable Keyboard?', 'Disable Used Keyboard', 0],
   ['Command Reply?', 'Send Command Reply', 0],
   ['Command Reply?', 'Continue Heavy Path?', 1],
   ['Send Command Reply', 'Continue Heavy Path?'],
@@ -1382,7 +1401,11 @@ var hasContent=(b.competitors&&b.competitors.length)||(b.offers&&b.offers.length
 // REPORT-TRUTH-C: a skipped workbook still emits ONE item, so the completion edit downstream always fires —
 // «Анализ завершён» must come after the LAST delivery step, not race ahead of the XLSX.
 if(!hasContent||!b.report_id){return [{json:{xlsx_skipped:true}}];}
-var chat=String((s.request&&s.request.chat_id)||b.owner_user_id||'');
+// MISSING-ORIGIN-FAILCLOSED-001: the XLSX goes to the SAME origin chat as the report (report uses request.chat_id
+// with no fallback) — never to owner_user_id. If the origin chat is missing, FAIL CLOSED (skip the file) instead
+// of sending it to the owner.
+var chat=String((s.request&&s.request.chat_id)||'');
+if(!chat){return [{json:{xlsx_skipped:true,xlsx_skip_reason:'missing_origin_chat'}}];}
 var scope={owner_user_id:String(b.owner_user_id||''),agent_request_id:String(b.agent_request_id||''),report_id:String(b.report_id||'')};
 var pkg;try{pkg=buildReportPackage(b,scope,{omit_empty:true});}catch(e){return [{json:{xlsx_skipped:true}}];}
 return [{json:{xlsx_skipped:false,chat_id:chat,caption:'Таблица Excel по анализу конкурентов',xlsx_filename:pkg.filename,xlsx_sheets:pkg.sheet_names},binary:{attachment:{data:Buffer.from(pkg.buffer).toString('base64'),fileName:pkg.filename,mimeType:pkg.mime}}}];`),
