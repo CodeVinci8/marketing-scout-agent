@@ -62,4 +62,31 @@ A.ok('there ARE googleSheets nodes to protect', sheetsNodes > 0, 'sheets nodes='
 A.eq('EVERY googleSheets node has a bounded engine-cap-respecting retry', compliant, sheetsNodes);
 A.eq('NO googleSheets node promises a wait beyond the engine cap (no dishonest clamped value)', overCap, 0);
 
+// ---- SHEETS-RETRY-CLASS-001: bounded, deterministic classifier + decision (only retryable, never permanent) ----
+A.section('classifier — only transient server-side conditions are retryable');
+[['429 Too Many Requests', 't'], ['RATE_LIMIT_EXCEEDED', 't'], ['RESOURCE_EXHAUSTED', 't'],
+ [{ httpCode: 500 }, 't'], [{ httpCode: 502 }, 't'], [{ httpCode: 503 }, 't'], [{ statusCode: 504 }, 't'],
+ ['ETIMEDOUT', 't'], ['UNAVAILABLE', 't'], ['socket hang up', 't']].forEach(function (c) {
+  A.ok('retryable: ' + JSON.stringify(c[0]).slice(0, 28), P.isRetryableSheetsError(c[0]) === true && P.isPermanentSheetsError(c[0]) === false);
+});
+A.section('classifier — validation / auth / not-found are PERMANENT and never retried');
+[{ httpCode: 400 }, { httpCode: 401 }, { httpCode: 403 }, { httpCode: 404 }, 'INVALID_ARGUMENT', 'PERMISSION_DENIED', 'UNAUTHENTICATED'].forEach(function (e) {
+  A.ok('permanent: ' + JSON.stringify(e).slice(0, 28), P.isPermanentSheetsError(e) === true && P.isRetryableSheetsError(e) === false);
+});
+A.section('decision — bounded attempts, deterministic bounded wait, permanent never retries');
+var rng = function () { return 0.5; };
+var d1 = P.sheetsRetryDecision({ httpCode: 429 }, 1, 3, { base_ms: 1000, max_ms: 16000 }, rng);
+A.ok('429 attempt 1/3 -> retry with a positive bounded wait', d1.should_retry === true && d1.wait_ms > 0 && d1.wait_ms <= 16000 && d1.category === 'rate_limit');
+var d2 = P.sheetsRetryDecision({ httpCode: 503 }, 2, 3, {}, rng);
+A.ok('503 attempt 2/3 -> retry, category server_transient', d2.should_retry === true && d2.category === 'server_transient');
+var dExhaust = P.sheetsRetryDecision({ httpCode: 429 }, 3, 3, {}, rng);
+A.ok('429 at the attempt bound -> NO further retry (bounded)', dExhaust.should_retry === false && dExhaust.wait_ms === 0);
+var dPerm = P.sheetsRetryDecision({ httpCode: 403 }, 1, 3, {}, rng);
+A.ok('403 permanent -> never retries regardless of attempt', dPerm.should_retry === false && dPerm.category === 'permanent');
+A.section('backoff — monotonic non-decreasing, truncated at the cap, deterministic under fixed rng');
+var seq = [1, 2, 3, 4, 5, 8].map(function (a) { return P.backoffMs(a, { base_ms: 1000, max_ms: 16000 }, rng); });
+A.ok('backoff never exceeds the cap', seq.every(function (w) { return w <= 16000; }));
+A.ok('backoff is non-decreasing then capped', seq[0] <= seq[1] && seq[1] <= seq[2] && seq[5] === 16000);
+A.ok('backoff is deterministic under a fixed rng', P.backoffMs(2, { base_ms: 1000, max_ms: 16000 }, rng) === P.backoffMs(2, { base_ms: 1000, max_ms: 16000 }, rng));
+
 A.report('sheets-retry-policy');

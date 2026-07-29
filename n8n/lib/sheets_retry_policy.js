@@ -64,7 +64,52 @@ function isRateLimited(e) {
     /too many requests/i.test(s);
 }
 
+// SHEETS-RETRY-CLASS-001: a code-driven retry loop must re-attempt ONLY transient server-side conditions and must
+// NEVER retry a permanent failure (a retry cannot fix a bad request/auth and only amplifies load inside the
+// throttled minute). These classifiers are the ONE source of truth for that decision.
+function errText(e) { return typeof e === 'string' ? e : JSON.stringify(e || ''); }
+function httpCodeOf(e) {
+  if (e && typeof e === 'object') {
+    var c = e.httpCode != null ? e.httpCode : (e.statusCode != null ? e.statusCode : (e.code != null ? e.code : null));
+    var n = Number(c); if (Number.isFinite(n) && n >= 100 && n < 600) return n;
+  }
+  var m = errText(e).match(/(^|[^0-9])([45]\d\d)([^0-9]|$)/);
+  return m ? Number(m[2]) : null;
+}
+// Permanent = the request itself is wrong (validation) or not allowed (auth) or absent (404): retrying is futile.
+function isPermanentSheetsError(e) {
+  if (isRateLimited(e)) return false; // a rate limit is transient even though its message may mention limits
+  var code = httpCodeOf(e);
+  if (code === 400 || code === 401 || code === 403 || code === 404) return true;
+  return /INVALID_ARGUMENT|PERMISSION_DENIED|UNAUTHENTICATED|NOT_FOUND|FAILED_PRECONDITION|\bunauthor|\bforbidden\b|invalid credential/i.test(errText(e));
+}
+// Retryable = per-minute rate limit, HTTP 5xx (server), or a transient network fault. Everything else is not.
+function isRetryableSheetsError(e) {
+  if (isPermanentSheetsError(e)) return false;
+  if (isRateLimited(e)) return true;
+  var code = httpCodeOf(e);
+  if (code === 500 || code === 502 || code === 503 || code === 504) return true;
+  return /\bINTERNAL\b|UNAVAILABLE|DEADLINE_EXCEEDED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|network|\btimeout\b/i.test(errText(e));
+}
+// One deterministic decision for a CODE-driven retry loop. attempt is 1-based; maxAttempts bounds the loop; rng
+// makes the jittered wait deterministic in tests. Never proposes a retry for a permanent error or past the bound.
+function sheetsRetryDecision(e, attempt, maxAttempts, cfg, rng) {
+  var max = Math.max(1, num(maxAttempts, 3));
+  var a = Math.max(1, num(attempt, 1));
+  var permanent = isPermanentSheetsError(e);
+  var retryable = isRetryableSheetsError(e);
+  var should = retryable && !permanent && a < max;
+  return {
+    should_retry: should,
+    wait_ms: should ? backoffMs(a, cfg, rng) : 0,
+    category: permanent ? 'permanent' : (retryable ? (isRateLimited(e) ? 'rate_limit' : 'server_transient') : 'unknown'),
+    attempt: a, max_attempts: max
+  };
+}
+
 module.exports = {
   WINDOW_MS: WINDOW_MS, ENGINE_WAIT_CAP_MS: ENGINE_WAIT_CAP_MS, READ_BUDGET: READ_BUDGET,
-  backoffMs: backoffMs, nativeSheetsRetry: nativeSheetsRetry, isRateLimited: isRateLimited
+  backoffMs: backoffMs, nativeSheetsRetry: nativeSheetsRetry, isRateLimited: isRateLimited,
+  isRetryableSheetsError: isRetryableSheetsError, isPermanentSheetsError: isPermanentSheetsError,
+  sheetsRetryDecision: sheetsRetryDecision
 };
